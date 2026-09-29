@@ -101,6 +101,7 @@ namespace reloadmaker {
         if(_pages->count()>3)_pages->setTabEnabled(3,!loading);
         if(_reloadInspectorDock)_reloadInspectorDock->setEnabled(!loading);
         if(_reloadGraphDock)_reloadGraphDock->setEnabled(!loading);
+        if(_simulationDock)_simulationDock->setEnabled(!loading);
         if (!loading) { _pages->setCurrentIndex(_pageBeforeLoad); }
         _scanLibrary->setEnabled(!loading); _mo2Path->setEnabled(!loading);
         _libraryWeapons->setEnabled(!loading);

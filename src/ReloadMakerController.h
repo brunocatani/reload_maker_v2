@@ -13,6 +13,7 @@
 #include "MechanismScene.h"
 #include "ReloadRecipe.h"
 #include "ReloadDriveViewport.h"
+#include "WeaponSimulation.h"
 
 #include <QHash>
 #include <QCache>
@@ -139,6 +140,37 @@ namespace reloadmaker
         void restoreSessionSelection();
         void startCommandServer();
         QJsonObject studioState() const;
+        void createSimulationUi();
+        void createSimulationViewport();
+        void prepareSimulation();
+        void stopSimulation();
+        void updateSimulationControls();
+        void runSimulationAction(const QString& action);
+        bool selectSimulationClip(bool fire, bool reload);
+        bool applySimulationPose();
+        void applySimulationVisibility();
+        void tickSimulation();
+        bool beginSimulationGrab(QPointF point, ReloadDriveCurve& curve);
+        void dragSimulation(float progress);
+        void releaseSimulation(bool cancel);
+        QJsonObject simulationState() const;
+        QJsonObject exportSimulation() const;
+        QDockWidget* _simulationDock{nullptr};
+        QPushButton* _simulationFire{nullptr};
+        QPushButton* _simulationReload{nullptr};
+        QPushButton* _simulationDrop{nullptr};
+        QPushButton* _simulationReset{nullptr};
+        QLabel* _simulationStatus{nullptr};
+        QLabel* _simulationParts{nullptr};
+        QCheckBox* _simulationSpring{nullptr};
+        QTimer* _simulationTimer{nullptr};
+        QElapsedTimer _simulationClock;
+        ReloadDriveViewport* _simulationDrive{nullptr};
+        std::optional<SimulationRig> _simulationRig;
+        WeaponSimulation _simulation;
+        bool _simulationActive{false};
+        QString _simulationError;
+        QVector<std::pair<QPersistentModelIndex,int>> _simulationVisibility;
         QButtonGroup* _workspaceButtons{nullptr};
         int _workspace{0};
         bool _showPartLabels{false};

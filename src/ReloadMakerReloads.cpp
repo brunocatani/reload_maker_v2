@@ -164,6 +164,7 @@ namespace reloadmaker {
     }
     void ReloadMakerController::invalidateReloadCapture()
     {
+        stopSimulation();_simulationRig.reset();
         if(_reloadCaptureTimer){_reloadCaptureTimer->stop();}
         if(_reloadPreviewTimer){_reloadPreviewTimer->stop();}
         if(_reloadGraph)_reloadGraph->setRecipe(nullptr);
@@ -259,6 +260,7 @@ namespace reloadmaker {
             _pendingReloadDraft = {};
         }
         refreshReloadWindows();if(!recipe.windows.isEmpty())selectReloadWindow(0);else _reloadSummary->setText("This base reload contains no measurable weapon-part movement. No substitute animation was used.");
+        if(_workspace==5)prepareSimulation();
     }
     void ReloadMakerController::refreshReloadWindows()
     {

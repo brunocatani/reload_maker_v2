@@ -31,6 +31,8 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     QJsonObject choices;
     if (const auto* config = configuration()) for (const auto& slot : config->entries()) choices[QString::number(slot.key)] = QString::number(config->selected(slot.key));
     record["choices"] = choices;
+    record["simulationSpringReturn"] = _simulationSpring->isChecked();
+    if(_simulationRig&&_reloadRecipe)record["simulationSetup"]=simulationRigJson(*_reloadRecipe,*_simulationRig,_simulationSpring->isChecked());
     QString error;
     QJsonArray fingers;
     for (const auto& draft : _fingerDrafts) {
@@ -152,7 +154,8 @@ void ReloadMakerController::restoreSessionSelection() {
         }
     }
     (void)applyPose(_playbackTime); updateTimelineText(); refreshFingerEditor();
-    setWorkspace(std::clamp(record["workspace"].toInt(),0,4));
+    _simulationSpring->setChecked(record["simulationSpringReturn"].toBool(true));
+    setWorkspace(std::clamp(record["workspace"].toInt(),0,5));
     if (record.contains("reloadDraft")) {
         // Native recapture establishes live node bindings before restoring the
         // saved trajectory/phase document. Source identity must still match.

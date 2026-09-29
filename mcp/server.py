@@ -79,7 +79,7 @@ def control_playback(changes: dict, expected_revision: int) -> dict:
 
 @mcp.tool()
 def set_workspace(index: int, expected_revision: int) -> dict:
-    """Choose 0 Setup, 1 Preview, 2 Hands/grips, 3 Mechanisms or 4 Reload."""
+    """Choose 0 Setup, 1 Preview, 2 Hands/grips, 3 Mechanisms, 4 Reload or 5 Simulate."""
     return command('workspace',{'index':index},expected_revision)
 
 @mcp.tool()
@@ -162,8 +162,21 @@ def open_project(path: str, expected_revision: int) -> dict:
 
 @mcp.tool()
 def export_authored_record(kind: str, expected_revision: int) -> dict:
-    """Export hand/grip/mechanism/reload to the local exports folder. Never deploys."""
+    """Export hand/grip/mechanism/reload/simulation to the local exports folder. Never deploys."""
     return command('export',{'kind':kind},expected_revision)
+
+@mcp.tool()
+def get_simulation_state() -> dict:
+    """Read direct-operation state, slide source curves, magazine assembly and current part frames."""
+    return command('simulation_state')
+
+@mcp.tool()
+def simulate_weapon(operation: str, expected_revision: int, progress: float | None = None,
+                    cancel: bool = False, enabled: bool = True) -> dict:
+    """In Simulate: fire, reload, drop_magazine, reset, pull (progress 0..1), release (cancel optional), spring (enabled). These are local editor behaviors; ammunition is not counted."""
+    params={'operation':operation,'cancel':cancel,'enabled':enabled}
+    if progress is not None: params['progress']=progress
+    return command('simulate',params,expected_revision)
 
 @mcp.tool()
 def cancel_operation() -> dict:

@@ -11,6 +11,7 @@ namespace reloadmaker {
         void setActive(bool active,bool canDrive);
         void clearCurve();
         void setTime(float time);
+        void setInstructions(const QString& text) { _instructions=text; }
         std::function<bool(QPointF,ReloadDriveCurve&)> begin;
         std::function<void(float)> drive;
         std::function<void(bool)> release; // true cancels to press-time pose.
@@ -22,6 +23,7 @@ namespace reloadmaker {
         bool _active{false},_canDrive{false},_dragging{false};
         SlotPointerGesture _gesture;
         ReloadDriveCurve _curve;
+        QString _instructions;
         QVector<QPointF> _projected;
     };
 }

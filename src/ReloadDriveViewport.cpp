@@ -39,7 +39,7 @@ namespace reloadmaker {
         if(!_active||!_view->glContext)return;
         const auto dpr=_view->devicePixelRatioF();QOpenGLPaintDevice device(QSize(qRound(_view->width()*dpr),qRound(_view->height()*dpr)));device.setDevicePixelRatio(dpr);
         QPainter p(&device);p.setRenderHint(QPainter::Antialiasing);p.setPen(QColor("#f0c88a"));
-        p.drawText(QRectF(18,14,_view->width()-36,42),Qt::AlignLeft|Qt::TextWordWrap,_canDrive?"RELOAD DRIVE · grab a marked part and follow its source path · release holds or returns within this window · background drag orbits":"RELOAD SOURCE · choose a movement window below, then TEST WINDOW to grab its parts");
+        p.drawText(QRectF(18,14,_view->width()-36,42),Qt::AlignLeft|Qt::TextWordWrap,!_instructions.isEmpty()?_instructions:_canDrive?"RELOAD DRIVE · grab a marked part and follow its source path · release holds or returns within this window · background drag orbits":"RELOAD SOURCE · choose a movement window below, then TEST WINDOW to grab its parts");
         if(_curve.points.size()<2)return;
         const auto camera=_view->reloadMakerWorldToClip();const QSizeF size(_view->width(),_view->height());QPointF previous;bool valid=false;
         p.setPen(QPen(QColor("#e6ba76"),2,Qt::DashLine));

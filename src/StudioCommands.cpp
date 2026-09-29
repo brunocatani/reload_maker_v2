@@ -113,9 +113,10 @@ QJsonObject ReloadMakerController::studioState() const {
 }
 QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     const QString method=request["method"].toString();const auto p=request["params"].toObject();
-    const bool reading=method=="state"||method=="pose"||method=="render"||method=="reload"||method=="diagnostics";
+    const bool reading=method=="state"||method=="pose"||method=="render"||method=="reload"||method=="diagnostics"||method=="simulation_state";
     if(!reading&&request.contains("expectedRevision"))require(request["expectedRevision"].toDouble()==double(_revision),"Stale document revision; read state again");
     if(method=="state")return studioState();
+    if(method=="simulation_state")return simulationState();
     if(method=="focus") {if(_window->isMinimized())_window->showNormal();_window->raise();_window->activateWindow();return studioState();}
     if(method=="diagnostics")return {{"text",_details->toPlainText()},{"viewport",_window->getGLView()->studioDiagnostics()}};
     if(method=="pose") {
@@ -133,7 +134,19 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     } else if(method=="open_library") {
         if(p.contains("instance")) { _mo2Path->setText(p["instance"].toString()); }
         startLibraryLoad();
-    } else if(method=="workspace") {const int index=p["index"].toInt(-1);require(index>=0&&index<=4,"Unknown workspace");setWorkspace(index);}
+    } else if(method=="workspace") {const int index=p["index"].toInt(-1);require(index>=0&&index<=5,"Unknown workspace");setWorkspace(index);}
+    else if(method=="simulate") {
+        require(_workspace==5&&_simulationActive,"Open the Simulate workspace and wait until ready");
+        const auto operation=p["operation"].toString();
+        if(operation=="pull") {
+            const float progress=number(p["progress"]);require(progress>=0&&progress<=1,"Slide progress must be between 0 and 1");
+            require(_simulation.action==SimulationAction::Held||_simulation.grab(),"Finish the native action before pulling");
+            _simulationTimer->stop();dragSimulation(progress);
+        } else if(operation=="release")releaseSimulation(p["cancel"].toBool());
+        else if(operation=="spring") {_simulationSpring->setChecked(p["enabled"].toBool(true));}
+        else {require(operation=="fire"||operation=="reload"||operation=="drop_magazine"||operation=="reset","Unknown simulation operation");runSimulationAction(operation);}
+        require(_lastError.isEmpty(),_lastError);++_revision;return simulationState();
+    }
     else if(method=="select_weapon") {
         const int index=p["index"].toInt(-1);require(index>=0&&index<_weaponCombo->count(),"Unknown weapon index");_weaponCombo->setCurrentIndex(index);rebuildWeapon();
     } else if(method=="configure") {
@@ -273,11 +286,12 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     else if(method=="open_project") {openSession(p["path"].toString());}
     else if(method=="export") {
         QString error;QByteArray bytes;const QString kind=p["kind"].toString();QString id;
-        if(kind=="reload"){require(_reloadRecipe.has_value(),"No reload recipe");bytes=encodeReloadRecipe(*_reloadRecipe,error);id=_reloadRecipe->id;}
+        if(kind=="simulation"){const auto record=exportSimulation();require(!record.isEmpty(),"Prepare a simulation before exporting");bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
+        else if(kind=="reload"){require(_reloadRecipe.has_value(),"No reload recipe");bytes=encodeReloadRecipe(*_reloadRecipe,error);id=_reloadRecipe->id;}
         else if(kind=="grip"){require(_partGripDraft.has_value(),"No grip draft");bytes=encodePartGrip(*_partGripDraft,error);id=_partGripDraft->pose.id;}
         else if(kind=="mechanism"){require(_mechanismDraft.has_value(),"No mechanism draft");bytes=encodeMechanism(*_mechanismDraft,error);id=_mechanismDraft->id;}
         else if(kind=="hand"){const auto* pose=selectedHandPose();require(pose,"Choose a saved hand pose");bytes=encodeHandPose(*pose,error);id=pose->id;}
-        else require(false,"Export kind must be hand, grip, mechanism or reload");
+        else require(false,"Export kind must be hand, grip, mechanism, reload or simulation");
         require(error.isEmpty()&&!bytes.isEmpty(),error);const QString path=studioDataPath("exports/"+kind+"-"+id+".json");write(path,bytes);return {{"path",path},{"kind",kind},{"deployed",false}};
     } else require(false,"Unknown studio command: "+method);
     require(_lastError.isEmpty(),_lastError);++_revision;return studioState();

@@ -162,6 +162,7 @@ namespace reloadmaker
         };
         createGripViewport();
         createReloadViewport();
+        createSimulationViewport();
         applyStyle();
         setWorkspace(0);
         startCommandServer();
@@ -174,6 +175,7 @@ namespace reloadmaker
 
     ReloadMakerController::~ReloadMakerController()
     {
+        if(_simulationTimer)_simulationTimer->stop();
         if(_reloadCaptureTimer)_reloadCaptureTimer->stop();
         if(_reloadPreviewTimer)_reloadPreviewTimer->stop();
         _closing = true;
@@ -2477,7 +2479,9 @@ namespace reloadmaker
         // Fixed mode removes this frame's complete Weapon world transform from
         // every branch. Source mode removes only the Ready world frame: Weapon
         // is allowed to translate/rotate, with the very same local articulation.
-        const Transformf frame = _motionMode->currentIndex() == 0
+        const bool simulationNativeAction = _simulationActive &&
+            (_simulation.action == SimulationAction::Fire || _simulation.action == SimulationAction::Reload);
+        const Transformf frame = _motionMode->currentIndex() == 0 && !simulationNativeAction
             ? _globalPose.at(_weaponBoneIndex) : _readyGlobalPose.at(_weaponBoneIndex);
         if (!reframePose(_skeleton, frame, Transformf{}, _localPose, _globalPose, _poseError)) {
             return fail();
@@ -2487,6 +2491,7 @@ namespace reloadmaker
             return fail();
         }
         if (_mechanismPreview && !applyMechanismPreview()) { return fail(); }
+        if (!applySimulationPose()) { return fail(); }
         const bool gripWorkspace = (_workspace == 2 && _handPosePages->currentIndex() == 1) || _workspace == 3 || (_reloadWorkspaceActive && _reloadHeld);
         const bool showGrip=gripWorkspace && _partGripDraft && (!_mechanismPreview || ((_mechanismTeaching||(_mechanismHeld&&_mechanismPoseOnGrab->isChecked())) && _mechanismDraft && sameMechanismPart(_partGripDraft->pose.placement,_mechanismDraft->anchor)));
         if (showGrip && (!_reloadWorkspaceActive||_reloadHeld) && !applyPartGripPreview()) { return fail(); }
@@ -2517,6 +2522,7 @@ namespace reloadmaker
             }
             if (Node* node = scene->getNode(model, nodeIndex)) { node->update(model, nodeIndex); }
         }
+        applySimulationVisibility();
         _window->getGLView()->update();
         return true;
     }

@@ -64,7 +64,7 @@ void ReloadMakerController::createUi() {
     brand->setObjectName("Brand");
     header->addWidget(brand);
     _workspaceButtons = new QButtonGroup(this);
-    const QStringList workspaces{"Setup", "Preview", "Hands & grips", "Mechanisms", "Reload"};
+    const QStringList workspaces{"Setup", "Preview", "Hands & grips", "Mechanisms", "Reload", "Simulate"};
     for (int i = 0; i < workspaces.size(); ++i) {
         auto* button = new QPushButton(workspaces[i], header);
         button->setCheckable(true);
@@ -338,6 +338,7 @@ void ReloadMakerController::createUi() {
                 this, &ReloadMakerController::setArmsVisible);
         createHandPoseUi();
         createReloadUi();
+        createSimulationUi();
 
 
     _handPoseDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
@@ -408,10 +409,16 @@ void ReloadMakerController::createUi() {
 }
 
 void ReloadMakerController::setWorkspace(int workspace) {
-    if (workspace < 0 || workspace > 4 || _loadThread) return;
+    if (workspace < 0 || workspace > 5 || _loadThread) return;
+    if (_workspace == 5 && workspace != 5) stopSimulation();
     _workspace = workspace;
     _workspaceButtons->button(workspace)->setChecked(true);
-    _pages->setCurrentIndex(workspace == 0 ? 0 : workspace == 4 ? 3 : 1);
+    _pages->setCurrentIndex(workspace == 0 ? 0 : workspace >= 4 ? 3 : 1);
+    _packageDock->setVisible(workspace != 5);
+    _simulationDock->setVisible(workspace == 5);
+    _reloadGraphDock->setVisible(workspace == 4);
+    _reloadInspectorDock->setVisible(workspace == 4);
+    if (workspace == 4) startReloadCapture();
     _packageGroup->setVisible(workspace == 0);
     _referenceGroup->setVisible(workspace == 0);
     _reloadSource->setVisible(workspace == 0);
@@ -422,13 +429,14 @@ void ReloadMakerController::setWorkspace(int workspace) {
     _handPosePages->tabBar()->setVisible(workspace == 2);
     if (workspace == 3) _handPosePages->setCurrentIndex(2);
     else if (workspace == 2 && _handPosePages->currentIndex() == 2) _handPosePages->setCurrentIndex(0);
-    _timelineDock->setVisible(workspace != 0 && workspace != 4);
+    _timelineDock->setVisible(workspace != 0 && workspace < 4);
     _packageDock->setWindowTitle(workspace == 0 ? "SOURCE & CONFIGURATION" : workspace == 4 ? "RELOAD PHASES" : "ANIMATION SOURCE");
     _handPoseDock->setWindowTitle(workspace == 3 ? "PART MECHANISM" : "HANDS & GRIPS");
     if (_slotOverlay) _slotOverlay->setActive(workspace == 0 && _showPartLabels);
     updateGripViewport();
     if(_clip.valid()&&!_reloadCapturing)(void)applyPose(_playbackTime);
     refreshFingerEditor();
+    if (workspace == 5) prepareSimulation();
     ++_revision;
 }
 
