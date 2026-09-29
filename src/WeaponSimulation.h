@@ -1,5 +1,6 @@
 #pragma once
 #include "ReloadRecipe.h"
+#include "MagazineInteraction.h"
 
 namespace reloadmaker {
     // Indices belong to this exact captured recipe, never to scene blocks.
@@ -12,7 +13,8 @@ namespace reloadmaker {
     enum class SimulationAction { Idle, Fire, Reload, Held, Returning };
     struct WeaponSimulation {
         SimulationAction action{SimulationAction::Idle};
-        bool magazinePresent{true};
+        MagazineMotion magazine;
+        bool magazinePresent()const{return magazine.seated();}
         float slide{0}, seconds{0}, grabStart{0};
         bool fire();
         bool reload();

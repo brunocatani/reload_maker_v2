@@ -51,6 +51,7 @@ namespace reloadmaker
     class ReloadGraph;
     class SlotOverlay;
     class GripViewport;
+    class MagazineViewport;
     class ReloadMakerController final : public QObject
     {
         Q_OBJECT
@@ -155,6 +156,19 @@ namespace reloadmaker
         void releaseSimulation(bool cancel);
         QJsonObject simulationState() const;
         QJsonObject exportSimulation() const;
+        void prepareMagazineInteraction();
+        void moveFreeMagazine(QVector3D offset);
+        void moveMagazineRail(float distance);
+        void cancelMagazine();
+        void updateMagazinePose();
+        std::optional<MagazineRail> _magazineRail;
+        QString _magazineError;
+        struct MagazineVisual {QPersistentModelIndex node;int flags{0};bool empty{false};};
+        QVector<MagazineVisual> _magazineVisuals;
+        MagazineViewport* _magazineViewport{nullptr};
+        QPushButton* _magazineOut{nullptr};
+        QPushButton* _magazineIn{nullptr};
+        QPushButton* _magazineGrab{nullptr};
         QDockWidget* _simulationDock{nullptr};
         QPushButton* _simulationFire{nullptr};
         QPushButton* _simulationReload{nullptr};

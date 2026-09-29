@@ -172,10 +172,13 @@ def get_simulation_state() -> dict:
 
 @mcp.tool()
 def simulate_weapon(operation: str, expected_revision: int, progress: float | None = None,
-                    cancel: bool = False, enabled: bool = True) -> dict:
-    """In Simulate: fire, reload, drop_magazine, reset, pull (progress 0..1), release (cancel optional), spring (enabled). These are local editor behaviors; ammunition is not counted."""
+                    cancel: bool = False, enabled: bool = True,
+                    position: list[float] | None = None, distance: float | None = None) -> dict:
+    """In Simulate: fire/reload/drop_magazine/reset, pull (progress 0..1), release (cancel), spring (enabled), mag_out, mag_in, grab_magazine, cancel_magazine. move_magazine takes a weapon-local root offset position[3] while free, or an outward distance while on the rail. Read magazineRail for entrance/axis/clearance. Ammunition is not counted."""
     params={'operation':operation,'cancel':cancel,'enabled':enabled}
     if progress is not None: params['progress']=progress
+    if position is not None: params['position']=position
+    if distance is not None: params['distance']=distance
     return command('simulate',params,expected_revision)
 
 @mcp.tool()

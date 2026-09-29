@@ -79,19 +79,19 @@ QJsonObject simulationRigJson(const ReloadRecipe& r,const SimulationRig& rig,boo
         {"springReturn",springReturn},{"slideTracks",records(rig.slideTracks)},{"magazineTracks",records(rig.magazineTracks)}};
 }
 bool WeaponSimulation::fire() {
-    if(action!=SimulationAction::Idle||slide>.001f)return false;
+    if(action!=SimulationAction::Idle||slide>.001f||magazine.busy())return false;
     action=SimulationAction::Fire;seconds=0;return true;
 }
 bool WeaponSimulation::reload() {
-    if(action==SimulationAction::Fire||action==SimulationAction::Reload||action==SimulationAction::Held)return false;
-    action=SimulationAction::Reload;seconds=0;slide=0;magazinePresent=true;return true;
+    if(action==SimulationAction::Fire||action==SimulationAction::Reload||action==SimulationAction::Held||magazine.busy())return false;
+    action=SimulationAction::Reload;seconds=0;slide=0;magazine.reset();return true;
 }
 bool WeaponSimulation::dropMagazine() {
-    if(action==SimulationAction::Fire||action==SimulationAction::Reload||action==SimulationAction::Held||!magazinePresent)return false;
-    magazinePresent=false;return true;
+    if(action==SimulationAction::Fire||action==SimulationAction::Reload||action==SimulationAction::Held||!magazine.visible()||magazine.busy())return false;
+    magazine.drop();return true;
 }
 bool WeaponSimulation::grab() {
-    if(action!=SimulationAction::Idle&&action!=SimulationAction::Returning)return false;
+    if((action!=SimulationAction::Idle&&action!=SimulationAction::Returning)||magazine.busy())return false;
     grabStart=slide;action=SimulationAction::Held;return true;
 }
 void WeaponSimulation::drag(float value) {if(action==SimulationAction::Held&&std::isfinite(value))slide=std::clamp(value,0.f,1.f);}

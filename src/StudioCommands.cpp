@@ -143,8 +143,13 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
             require(_simulation.action==SimulationAction::Held||_simulation.grab(),"Finish the native action before pulling");
             _simulationTimer->stop();dragSimulation(progress);
         } else if(operation=="release")releaseSimulation(p["cancel"].toBool());
+        else if(operation=="move_magazine") {
+            require(_magazineRail.has_value(),"Magazine rail is unavailable");
+            if(p.contains("distance")){require(_simulation.magazine.phase==MagazinePhase::Rail,"The magazine is not on the rail");moveMagazineRail(number(p["distance"]));}
+            else {require(_simulation.magazine.phase==MagazinePhase::Free,"Grab a magazine before moving it freely");const auto a=p["position"].toArray();require(a.size()==3,"Position needs three weapon-local offset components");moveFreeMagazine({number(a[0]),number(a[1]),number(a[2])});}
+        } else if(operation=="cancel_magazine"){require(_simulation.magazine.carried(),"No cursor-held magazine to cancel");cancelMagazine();}
         else if(operation=="spring") {_simulationSpring->setChecked(p["enabled"].toBool(true));}
-        else {require(operation=="fire"||operation=="reload"||operation=="drop_magazine"||operation=="reset","Unknown simulation operation");runSimulationAction(operation);}
+        else {require(operation=="fire"||operation=="reload"||operation=="drop_magazine"||operation=="reset"||operation=="mag_out"||operation=="mag_in"||operation=="grab_magazine","Unknown simulation operation");runSimulationAction(operation);}
         require(_lastError.isEmpty(),_lastError);++_revision;return simulationState();
     }
     else if(method=="select_weapon") {
