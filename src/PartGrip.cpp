@@ -144,7 +144,7 @@ namespace reloadmaker {
 
     bool solvePartGrip(const HkxSkeleton& skeleton, const QVector<Transformf>& nativeLocal,
         const QVector<Transformf>& framedGlobal, const HandPose& pose, const Transformf& handWorld,
-        QVector<Transformf>& solvedLocal, QVector<Transformf>& solvedGlobal, QString& error) {
+        QVector<Transformf>& solvedLocal, QVector<Transformf>& solvedGlobal, QString& error,GripReach reach) {
         error.clear();
         const QString prefix=pose.hand==PoseHand::Left?"LArm_":"RArm_";
         const int upper=skeleton.boneIndex(prefix+"UpperArm");
@@ -168,9 +168,19 @@ namespace reloadmaker {
         }
         // ROCK ArmPresentationPolicy provides the segment ownership and bend-plane
         // construction. Use our quaternion convention; do not copy NiMatrix layout.
-        const auto s=v(framedGlobal[upper].translation), e=v(framedGlobal[fore].translation);
+        const auto sourceShoulder=v(framedGlobal[upper].translation), e=v(framedGlobal[fore].translation);
         const auto w=v(framedGlobal[hand].translation), target=v(handWorld.translation);
-        const float a=(e-s).length(), b=(w-e).length(), distance=(target-s).length();
+        const float a=(e-sourceShoulder).length(), b=(w-e).length();
+        auto s=sourceShoulder;float distance=(target-s).length();
+        if(reach==GripReach::FollowTarget&&a>.0001f&&b>.0001f&&std::isfinite(distance)) {
+            // A cursor-held object is not constrained by the preview torso.
+            // Follow it with the arm base only outside its native reach; keep
+            // segment lengths, the exact wrist, weapon and other hand intact.
+            const float minimum=std::abs(a-b)+std::min(a,b)*.02f,maximum=a+b-std::min(a,b)*.02f;
+            const float reachable=std::clamp(distance,minimum,maximum);
+            const auto direction=distance>.0001f?(target-s)/distance:(w-s).normalized();
+            s=target-direction*reachable;distance=reachable;
+        }
         if (!(a>.0001f && b>.0001f && distance>.0001f) || !std::isfinite(distance) ||
             distance>a+b+.0001f || distance<std::abs(a-b)-.0001f) {
             error=QStringLiteral("Target is outside this arm's reach; move it closer or use the current wrist"); return false;
@@ -181,8 +191,8 @@ namespace reloadmaker {
         if (!invertUniformTransform(framedGlobal[hand],inverse)) { error=QStringLiteral("Invalid wrist frame"); return false; }
         const Transformf handCarry=composed(handWorld,inverse);
         const auto axis=(target-s)/distance;
-        auto oldAxis=(w-s).normalized();
-        auto oldPole=(e-s)-oldAxis*QVector3D::dotProduct(e-s,oldAxis);
+        auto oldAxis=(w-sourceShoulder).normalized();
+        auto oldPole=(e-sourceShoulder)-oldAxis*QVector3D::dotProduct(e-sourceShoulder,oldAxis);
         if (oldPole.lengthSquared()<.000001f) {
             // A straight source arm has no bend plane. Use its own basis, never a
             // hardcoded world up that changes under weapon/world reframing.
@@ -192,13 +202,13 @@ namespace reloadmaker {
                 if (oldPole.lengthSquared()>.1f) { break; }
             }
         }
-        auto pole=fromTo(w-s,target-s,oldPole).rotatedVector(oldPole);
+        auto pole=fromTo(w-sourceShoulder,target-s,oldPole).rotatedVector(oldPole);
         pole=(pole-axis*QVector3D::dotProduct(pole,axis)).normalized();
         const float along=(a*a+distance*distance-b*b)/(2*distance);
         const float height=std::sqrt(std::max(0.f,a*a-along*along));
         const auto elbow=s+axis*along+pole*height;
         const auto planeNormal=QVector3D::crossProduct(oldAxis,oldPole).normalized();
-        const auto upperCarry=carry(fromTo(e-s,elbow-s,planeNormal),s,s);
+        const auto upperCarry=carry(fromTo(e-sourceShoulder,elbow-s,planeNormal),sourceShoulder,s);
         const auto foreCarry=carry(fromTo(w-e,target-elbow,planeNormal),e,elbow);
         auto global=framedGlobal;
         auto local=nativeLocal;

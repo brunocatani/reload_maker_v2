@@ -79,7 +79,32 @@ patch('src/gamemanager.cpp', [
      'bool GameManager::GameResources::get_file( QByteArray & data, const std::string_view & fullPath )\n{\n\tif (game == FALLOUT_4 && reloadmaker::libraryResourcesActive()) return reloadmaker::readLibraryResource(data, fullPath);')])
 # Generic block-type conversion and Starfield mesh conversion are not part of
 # FO4 reload assembly. Keep native branch copy/link without those editor paths.
+patch('src/spells/blocks.h', [
+    ('#include "spellbook.h"', '#include "spellbook.h"\nclass QMimeData;'),
+    ('\tQString name() const override final { return Spell::tr( "Copy Branch" ); }',
+     '\tQModelIndex copyData(NifModel* nif, const QModelIndex& index, QMimeData& payload);\n\tQString name() const override final { return Spell::tr( "Copy Branch" ); }'),
+    ('\tQString name() const override final { return Spell::tr( "Paste Branch" ); }',
+     '\tQModelIndex pasteData(NifModel* nif, const QModelIndex& index, const QMimeData& payload);\n\tQString name() const override final { return Spell::tr( "Paste Branch" ); }')])
 blocks = (source/'src/spells/blocks.cpp').read_text(encoding='utf-8')
+# Reuse native branch serialization through a caller-owned payload. Interactive
+# spell wrappers retain their original clipboard behavior; studio assembly does
+# not depend on clipboard ownership, external contents, or a stale prior copy.
+blocks=blocks.replace('#include <QMimeData>', '#include <QMimeData>\n#include <memory>',1)
+for spell,method,parameter,old,new,wrapper in [
+    ('spCopyBranch','copyData','QMimeData& payload',
+     '\t\tQMimeData * mime = new QMimeData;\n\t\tmime->setData( QString( STR_BR ).arg( nif->getVersion() ), data );\n\t\tQApplication::clipboard()->setMimeData( mime );',
+     '\t\tpayload.setData( QString( STR_BR ).arg( nif->getVersion() ), data );',
+     '\tauto payload=std::make_unique<QMimeData>();\n\tconst auto result=copyData(nif,index,*payload);\n\tif(!payload->formats().isEmpty())QApplication::clipboard()->setMimeData(payload.release());\n\treturn result;'),
+    ('spPasteBranch','pasteData','const QMimeData& payload',
+     '\tconst QMimeData * mime = QApplication::clipboard()->mimeData();',
+     '\tconst QMimeData * mime = &payload;',
+     '\tconst auto* payload=QApplication::clipboard()->mimeData();\n\treturn payload?pasteData(nif,index,*payload):QModelIndex{};')]:
+    signature=f'QModelIndex {spell}::cast( NifModel * nif, const QModelIndex & index )'
+    begin=blocks.index(signature);end=blocks.index(f'REGISTER_SPELL( {spell} )',begin)
+    original=blocks[begin:end]
+    if original.count(old)!=1:raise RuntimeError(f'Native branch transfer marker changed: {spell}')
+    direct=original.replace(signature,f'QModelIndex {spell}::{method}(NifModel* nif, const QModelIndex& index, {parameter})',1).replace(old,new,1)
+    blocks=blocks[:begin]+signature+'\n{\n'+wrapper+'\n}\n\n'+direct+blocks[end:]
 begin = blocks.index('class spConvertBlock final')
 end = blocks.index('REGISTER_SPELL( spConvertBlock )', begin)+len('REGISTER_SPELL( spConvertBlock )')
 write('src/spells/blocks.cpp', blocks[:begin]+blocks[end:])

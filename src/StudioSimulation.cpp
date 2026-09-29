@@ -2,6 +2,7 @@
 #include "StudioWindow.h"
 #include "StudioPaths.h"
 #include "MagazineViewport.h"
+#include "ReloadBundle.h"
 #include "glview.h"
 #include "gl/glscene.h"
 #include "model/nifmodel.h"
@@ -63,6 +64,14 @@ void ReloadMakerController::createSimulationUi() {
     _simulationFire=button("FIRE","fire");_simulationFire->setObjectName("PrimaryButton");
     _simulationSlideRelease=button("SLIDE RELEASE","slide_release");
     _simulationReload=button("AUTOMATIC RELOAD","reload");
+    auto* fixedReload=new QCheckBox("Keep weapon fixed during reload",panel);
+    fixedReload->setChecked(_motionMode->currentIndex()==0);layout->addWidget(fixedReload);
+    fixedReload->setToolTip("Hold the weapon frame still while both hands and moving parts retain their native relative motion.");
+    connect(fixedReload,&QCheckBox::toggled,this,[this](bool fixed){_motionMode->setCurrentIndex(fixed?0:1);});
+    connect(_motionMode,qOverload<int>(&QComboBox::currentIndexChanged),fixedReload,[fixedReload](int mode){const QSignalBlocker block(fixedReload);fixedReload->setChecked(mode==0);});
+    auto* authorGrips=new QPushButton("AUTHOR RELOAD GRIPS",panel);layout->addWidget(authorGrips);
+    authorGrips->setToolTip("Pause at this reload moment and open the hand editor with the weapon fixed and the magazine selected. Scrub to a useful grip, then capture it.");
+    connect(authorGrips,&QPushButton::clicked,this,[this]{(void)authorReloadGrips();});
     _simulationDrop=button("DROP MAGAZINE","drop_magazine");
     auto* magazineRow=new QHBoxLayout;
     _magazineOut=new QPushButton("MAG OUT",panel);_magazineIn=new QPushButton("MAG IN",panel);
@@ -70,6 +79,18 @@ void ReloadMakerController::createSimulationUi() {
     connect(_magazineOut,&QPushButton::clicked,this,[this]{runSimulationAction("mag_out");});
     connect(_magazineIn,&QPushButton::clicked,this,[this]{runSimulationAction("mag_in");});
     _magazineGrab=button("GRAB MAGAZINE","grab_magazine");
+    _simulationMagazineGrip=new QComboBox(panel);layout->addWidget(_simulationMagazineGrip);
+    _simulationMagazineGrip->setToolTip("Saved grip for this magazine. Create one from Hands & grips by selecting a pose and clicking its contact point. Drum magazines stay on their native hand behavior.");
+    connect(_simulationMagazineGrip,qOverload<int>(&QComboBox::activated),this,[this](int index) {
+        if(!_simulationRig||!_reloadRecipe)return;
+        const auto& anchor=_reloadRecipe->tracks[_simulationRig->magazine].anchor;
+        const auto key=magazineGrabKey(poseRecordKey(currentWeapon()->formId),anchor.ownerRecord);
+        const auto previous=_magazineGrabGrips.value(key),id=_simulationMagazineGrip->itemData(index).toString();
+        if(id.isEmpty())_magazineGrabGrips.remove(key);else _magazineGrabGrips[key]=id;
+        for(auto& window:_reloadRecipe->windows)for(auto& member:window.members)
+            if(member.track==_simulationRig->magazine&&(member.gripId.isEmpty()||member.gripId==previous))member.gripId=id;
+        resolveMagazineGrabGrip();(void)applyPose(_simulation.seconds);updateSimulationControls();
+    });
     _simulationReset=button("RESET WEAPON","reset");
     _simulationSpring=new QCheckBox("Return slide when released",panel);_simulationSpring->setChecked(true);layout->addWidget(_simulationSpring);
     auto* arms=new QCheckBox("Show arms / hands",panel);arms->setChecked(_showArmsCheck->isChecked());layout->addWidget(arms);
@@ -160,6 +181,7 @@ void ReloadMakerController::prepareSimulation() {
     _reloadPreviewTimer->stop();_reloadPlaying=false;_reloadHeld=false;_reloadDrive->setActive(false,false);
     if(!selectSimulationClip(false,false)){stopSimulation();updateSimulationControls();return;}
     prepareMagazineInteraction();
+    resolveMagazineGrabGrip();
     (void)applyPose(0);
     _magazineViewport->setActive(true);
     _simulationDrive->clearCurve();_simulationDrive->setActive(true,true);updateSimulationControls();++_revision;
@@ -167,6 +189,7 @@ void ReloadMakerController::prepareSimulation() {
 void ReloadMakerController::stopSimulation() {
     if(_simulationTimer)_simulationTimer->stop();
     _simulationActive=false;_simulation.reset();
+    _magazineGrabGrip.reset();_magazineGrabBinding=-1;_magazineGrabError.clear();
     if(_magazineViewport)_magazineViewport->setActive(false);
     if(_simulationDrive){_simulationDrive->setActive(false,false);_simulationDrive->clearCurve();}
     applySimulationVisibility();_simulationVisibility.clear();_magazineVisuals.clear();_magazineRail.reset();
@@ -251,7 +274,7 @@ void ReloadMakerController::runSimulationAction(const QString& action) {
         if(_simulation.action==SimulationAction::Idle) {
             if(action=="mag_out")accepted=_simulation.magazineOut();
             else if(action=="mag_in")accepted=_simulation.magazineIn(*_magazineRail);
-            else {accepted=_simulation.grabMagazine(*_magazineRail);if(accepted)_magazineViewport->beginCarry();}
+            else {accepted=_simulation.grabMagazine(*_magazineRail);if(accepted){if(_magazineGrabGrip)_showArmsCheck->setChecked(true);_magazineViewport->beginCarry();}}
         }
         if(accepted&&_simulation.magazine.animated()){_simulationClock.restart();_simulationTimer->start();}
     }
@@ -317,6 +340,7 @@ void ReloadMakerController::updateSimulationControls() {
     if(!_simulationStatus)return;
     const bool native=_simulation.action==SimulationAction::Fire||_simulation.action==SimulationAction::Reload;
     const bool busy=native||_simulation.magazine.busy();
+    _simulationMagazineGrip->setEnabled(_simulationActive&&!busy&&_simulation.action==SimulationAction::Idle&&_simulationRig&&_reloadRecipe&&magazineGrabSupported(_reloadRecipe->tracks[_simulationRig->magazine].anchor));
     const bool glock=isGlockConfiguration();
     {const QSignalBlocker block(_simulationReloadSet);_simulationReloadSet->setCurrentIndex(_animationSetCombo->currentIndex());}
     _simulationReloadSet->setEnabled(!busy&&!_loadThread&&!_reloadCapturing&&_simulation.action==SimulationAction::Idle);
@@ -346,9 +370,13 @@ void ReloadMakerController::updateSimulationControls() {
     _simulationParts->setText("MOVING TOGETHER\n"+names.join(" · ")+"\n\nEach part retains its own translation and rotation.");
     if(!_magazineError.isEmpty())_simulationParts->setText(_simulationParts->text()+"\n\nMagazine interaction: "+_magazineError);
     if(!_simulationAmmo.valid())_simulationParts->setText(_simulationParts->text()+"\n\nAmmunition: "+_simulationAmmo.error);
+    if(_magazineGrabGrip)_simulationParts->setText(_simulationParts->text()+"\n\nMAGAZINE GRAB · "+_magazineGrabGrip->pose.name);
+    if(!_magazineGrabError.isEmpty())_simulationParts->setText(_simulationParts->text()+"\n\nMagazine hand: "+_magazineGrabError);
 }
 QJsonObject ReloadMakerController::simulationState() const {
     QJsonObject result{{"active",_simulationActive},{"action",actionName(_simulation.action)},{"magazinePresent",_simulation.magazinePresent()},{"slide",_simulation.slide},{"seconds",_simulation.seconds},{"error",_simulationError}};
+    result["magazineGrip"]=QJsonObject{{"id",_magazineGrabGrip?_magazineGrabGrip->pose.id:QString()},
+        {"name",_magazineGrabGrip?_magazineGrabGrip->pose.name:QString()},{"applied",_magazineGrabGrip&&_simulation.magazine.carried()&&_magazineGrabError.isEmpty()},{"error",_magazineGrabError}};
     result["magazine"]=QJsonObject{{"phase",_simulation.magazineDescription()},{"empty",_simulation.magazineRounds==0},
         {"offset",QJsonArray{_simulation.magazine.offset.x(),_simulation.magazine.offset.y(),_simulation.magazine.offset.z()}},{"distance",_simulation.magazine.distance},{"error",_magazineError}};
     if(_magazineRail)result["magazineRail"]=magazineRailJson(*_magazineRail);

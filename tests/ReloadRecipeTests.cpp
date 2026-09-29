@@ -1,8 +1,10 @@
 #include "ReloadRecipe.h"
+#include "ReloadBundle.h"
 #include "ReloadDriveMath.h"
 #include <QCoreApplication>
 #include <QFile>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QQuaternion>
 #include <QTemporaryDir>
 #include <QTextStream>
@@ -72,6 +74,35 @@ namespace {
         check(std::abs(reloadCurveTime(points,times,{5,0},2.5f)-.5f)<.001f,"Reverse drag failed");
         const QVector<QPointF> crossing{{0,0},{10,0},{0,0}};check(std::abs(reloadCurveTime(crossing,{0,1,2},{5,0},1.6f)-1.5f)<.001f,"Crossing ignored temporal continuity");
     }
+    void bundles(){
+        auto r=capture();r.tracks[2].anchor.anchorName="WeaponMagazine";
+        QString error;check(analyzeReloadWindows(r,error),error);
+        PartGrip grip;grip.weaponRecord=r.source["weaponRecord"].toString();grip.sourcePoseId=QUuid::createUuid().toString(QUuid::WithoutBraces);
+        grip.pose.id=QUuid::createUuid().toString(QUuid::WithoutBraces);grip.pose.name="Chosen magazine grip";grip.pose.createdUtc="2026-09-29T22:00:00.000Z";
+        grip.pose.hand=PoseHand::Left;grip.pose.placement=r.tracks[2].anchor;grip.pose.placement.handInAnchor=pose({1,2,3},37);
+        grip.pose.fingers[0]=pose({.25f,.5f,1.f},61);
+        for(auto& window:r.windows)for(auto& m:window.members)if(m.track==2)m.gripId=grip.pose.id;
+        const QHash<QString,QString> bindings{{magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord),grip.pose.id}};
+        const auto bytes=encodeReloadBundle(r,{grip},{},bindings,error);check(!bytes.isEmpty(),error);
+        const auto bundle=QJsonDocument::fromJson(bytes).object();check(bundle["grips"].toArray().size()==1,"Shared grip exported more than once");
+        PartGrip restored;check(decodePartGrip(QJsonDocument(bundle["grips"].toArray()[0].toObject()).toJson(),restored,error),error);
+        check(encodePartGrip(restored,error)==encodePartGrip(grip,error),"Export changed fingers or part placement");
+        check(bundle["magazineGrabBindings"].toArray().size()==1,"Magazine assignment missing from bundle");
+        check(encodeReloadBundle(r,{}, {},bindings,error).isEmpty(),"Unresolved grip exported");
+        auto bad=grip;bad.weaponRecord="Other.esp:123456";check(encodeReloadBundle(r,{bad},{},bindings,error).isEmpty(),"Cross-weapon grip exported");
+        bad=grip;bad.pose.placement.anchorPath="Wrong/part";check(encodeReloadBundle(r,{bad},{},bindings,error).isEmpty(),"Wrong-part grip exported");
+        bad=grip;bad.mechanismId=QUuid::createUuid().toString(QUuid::WithoutBraces);check(encodeReloadBundle(r,{bad},{},bindings,error).isEmpty(),"Missing part definition exported");
+        PartMechanism part;part.id=bad.mechanismId;part.name="Magazine rail";part.weaponRecord=grip.weaponRecord;part.anchor=grip.pose.placement;part.stages={MechanismStage{}};
+        auto withPart=QJsonDocument::fromJson(encodeReloadBundle(r,{bad},{part},bindings,error)).object();
+        check(withPart["mechanisms"].toArray().size()==1,"Shared part definition was not embedded");
+        auto other=bad;other.pose.id=QUuid::createUuid().toString(QUuid::WithoutBraces);other.pose.placement.ownerRecord="OtherMagazine.esp:123456";
+        auto otherBindings=bindings;otherBindings[magazineGrabKey(grip.weaponRecord,other.pose.placement.ownerRecord)]=other.pose.id;
+        // The valid recipe grip includes the definition before the second
+        // magazine assignment tries to reuse it with a different owner.
+        check(encodeReloadBundle(r,{bad,other},{part},otherBindings,error).isEmpty(),"Reused definition hid a mismatched grip anchor");
+        auto drum=grip.pose.placement;drum.ownerModel="Weapons/Glock19x/Attachments/Glock19x_Mag_50RND.nif";
+        check(!magazineGrabSupported(drum),"Glock drum accepted a stick-magazine grip");
+    }
     void slowAndStatic(){
         auto r=capture();r.tracks.resize(1);r.tracks[0].parent=-1;
         for(int i=0;i<r.frames;++i)r.tracks[0].poses[i]=pose({0,.5f*ramp(r.duration*i/(r.frames-1),.4f,3.6f),0});
@@ -103,4 +134,4 @@ namespace {
         if(args.contains("--windows"))for(const auto& w:r.windows){QStringList members;for(const auto& m:w.members)members.append(r.tracks[m.track].label);QTextStream(stdout)<<r.duration*w.first/(r.frames-1)<<".."<<r.duration*w.last/(r.frames-1)<<" "<<members.join(", ")<<'\n';}
     }
 }
-int main(int argc,char** argv){QCoreApplication app(argc,argv);try{windows();persistence();curve();slowAndStatic();mergeSafety();if(app.arguments().size()>=4)fixture(app.arguments());QTextStream(stdout)<<"PASS complete reload phases, co-timed/rigid groups, visibility gaps, slow/static motion, reload-only identity, saved labels/grabs, safe split/merge and curved/reverse dragging\n";return 0;}catch(const std::exception& e){QTextStream(stderr)<<"FAIL "<<e.what()<<'\n';return 1;}}
+int main(int argc,char** argv){QCoreApplication app(argc,argv);try{windows();persistence();curve();slowAndStatic();mergeSafety();bundles();if(app.arguments().size()>=4)fixture(app.arguments());QTextStream(stdout)<<"PASS complete reload phases, co-timed/rigid groups, visibility gaps, slow/static motion, reload-only identity, saved labels/grabs, safe split/merge, curved/reverse dragging and self-contained grip exports\n";return 0;}catch(const std::exception& e){QTextStream(stderr)<<"FAIL "<<e.what()<<'\n';return 1;}}

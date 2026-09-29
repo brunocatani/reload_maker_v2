@@ -7,3 +7,4 @@ INCLUDEPATH += ../src
 SOURCES += ReloadRecipeTests.cpp ../src/ReloadRecipe.cpp ../src/ReloadDriveMath.cpp ../src/PartGrip.cpp ../src/HandPoseLibrary.cpp ../src/PoseEvaluator.cpp ../src/HkxReader.cpp
 
 SOURCES += ../src/StudioPaths.cpp
+SOURCES += ../src/ReloadBundle.cpp ../src/PartMechanism.cpp

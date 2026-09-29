@@ -147,6 +147,7 @@ namespace reloadmaker
         bool fitWeapon();
         QVector<QVector3D> _weaponFitCorners;
         void createSimulationUi();
+        bool authorReloadGrips();
         void createSimulationViewport();
         bool isGlockConfiguration() const;
         QString glockNoExtenderPath() const;
@@ -287,7 +288,18 @@ namespace reloadmaker
         void refreshHandPoseList();
         void refreshHandPoseAnchors();
         void updateHandPoseControls();
-        void saveCurrentHandPose();
+        bool saveCurrentHandPose();
+        void applySavedPoseToPart();
+        bool useMagazineGrabGrip();
+        int magazineGrabAnchor(const HandPosePlacement& placement) const;
+        void resolveMagazineGrabGrip();
+        bool applyMagazineGrabPose();
+        QHash<QString,QString> _magazineGrabGrips;
+        QComboBox* _simulationMagazineGrip{nullptr};
+        std::optional<PartGrip> _magazineGrabGrip;
+        int _magazineGrabBinding{-1};
+        QString _magazineGrabError;
+        QPushButton* _useMagazineGrip{nullptr};
         void previewSavedHandPose();
         void restoreHandPosePreview();
         [[nodiscard]] const HandPose* selectedHandPose() const;

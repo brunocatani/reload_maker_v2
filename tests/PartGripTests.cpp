@@ -146,6 +146,20 @@ namespace {
         require(nativeMechanismScene(plan,bindings,boundLocal,sceneLocal,world,error),error);
         for(int i=0;i<world.size();++i)expect(world[i],global[i]);
     }
+    void freeMagazineReach(const HkxSkeleton& s,const QVector<Transformf>& local,PoseHand side) {
+        QString error;QVector<Transformf> global,outLocal,outGlobal,rebuilt;require(buildPoseGlobals(s,local,global,error),error);
+        const QString prefix=side==PoseHand::Left?"LArm_":"RArm_";
+        const int hand=s.boneIndex(prefix+"Hand"),fore=s.boneIndex(prefix+"ForeArm1"),upper=s.boneIndex(prefix+"UpperArm");
+        auto target=global[hand];target.translation.x+=100;target.translation.z-=60;
+        const auto p=pose(side);
+        require(!solvePartGrip(s,local,global,p,target,outLocal,outGlobal,error),"Strict authoring reach was weakened");
+        require(solvePartGrip(s,local,global,p,target,outLocal,outGlobal,error,GripReach::FollowTarget),error);
+        expect(outGlobal[hand],target);
+        require(std::abs(distance(global[fore].translation,global[upper].translation)-distance(outGlobal[fore].translation,outGlobal[upper].translation))<.002f,"Free grab stretched upper arm");
+        require(std::abs(distance(global[hand].translation,global[fore].translation)-distance(outGlobal[hand].translation,outGlobal[fore].translation))<.002f,"Free grab stretched forearm");
+        require(buildPoseGlobals(s,outLocal,rebuilt,error),error);
+        for(int i=0;i<s.bones.size();++i){expect(rebuilt[i],outGlobal[i]);if(!s.bones[i].name.startsWith(prefix))expect(global[i],outGlobal[i]);}
+    }
     QByteArray read(const QString& path) { QFile f(path); require(f.open(QIODevice::ReadOnly),path); return f.readAll(); }
     void storage() {
         QTemporaryDir dir; require(dir.isValid(),"temp dir unavailable");
@@ -170,6 +184,7 @@ int main(int argc,char** argv) {
         const auto s=rig(); QVector<Transformf> local; for(auto& bone:s.bones) local.append(bone.referenceLocal);
         for(auto side:{PoseHand::Left,PoseHand::Right}) solveCase(s,local,side);
         for(auto side:{PoseHand::Left,PoseHand::Right}) movingPartGrip(s,local,side);
+        for(auto side:{PoseHand::Left,PoseHand::Right}) freeMagazineReach(s,local,side);
         for(auto side:{PoseHand::Left,PoseHand::Right}) local[s.boneIndex(side==PoseHand::Left?"LArm_ForeArm1":"RArm_ForeArm1")].rotation={};
         for(auto side:{PoseHand::Left,PoseHand::Right}) solveCase(s,local,side);
         storage();

@@ -3,6 +3,7 @@
 #include <optional>
 
 namespace reloadmaker {
+    enum class GripReach { FixedShoulder, FollowTarget };
     struct PartGrip {
         HandPose pose; // Frozen fingers and editable placement; independent of source pose file.
         QString weaponRecord;
@@ -34,9 +35,12 @@ namespace reloadmaker {
     // Presentation only: world-space arm solve followed by reconstruction of
     // locals against the actual target globals. Non-arm globals (especially the
     // Weapon child of RArm_Hand) stay exactly where native evaluation put them.
-    // Unreachable/invalid targets fail without changing either output.
+    // FixedShoulder rejects unreachable targets. FollowTarget is for a freely
+    // carried preview object: move the arm base only as far as needed without
+    // stretching its segments. Invalid targets leave both outputs unchanged.
     [[nodiscard]] bool solvePartGrip(const HkxSkeleton& skeleton,
         const QVector<Transformf>& nativeLocal, const QVector<Transformf>& framedGlobal,
         const HandPose& pose, const Transformf& handWorld,
-        QVector<Transformf>& solvedLocal, QVector<Transformf>& solvedGlobal, QString& error);
+        QVector<Transformf>& solvedLocal, QVector<Transformf>& solvedGlobal, QString& error,
+        GripReach reach=GripReach::FixedShoulder);
 }

@@ -1,4 +1,5 @@
 #include "ReloadMakerController.h"
+#include "ReloadBundle.h"
 #include "StudioWindow.h"
 #include "model/nifmodel.h"
 #include <QCheckBox>
@@ -31,16 +32,17 @@ namespace reloadmaker {
         auto* intro=new QLabel(QStringLiteral("PART GRIP EDITOR\nPosition and rotate one saved hand around a reference part. The elbow follows; the weapon stays independent. Editing pauses animation."),page);
         intro->setWordWrap(true); layout->addWidget(intro);
         auto* form=new QFormLayout();
+        form->setRowWrapPolicy(QFormLayout::WrapLongRows);
         _gripPoseCombo=new QComboBox(page);
         _gripReferenceCombo=new QComboBox(page);
         for(auto* combo:{_gripPoseCombo,_gripReferenceCombo}) {
-            combo->setMinimumContentsLength(20); combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+            combo->setMinimumContentsLength(12); combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
         }
         _gripReferenceCombo->setToolTip(QStringLiteral("The part's coordinate frame, not an automatic contact point. Position and angles below define where the wrist sits relative to it."));
         form->addRow(QStringLiteral("Finger pose"),_gripPoseCombo);
         form->addRow(QStringLiteral("Reference part"),_gripReferenceCombo);
         layout->addLayout(form);
-        auto* starts=new QHBoxLayout();
+        auto* starts=new QVBoxLayout();
         _gripCapturedStart=new QPushButton(QStringLiteral("USE CAPTURED OFFSET"),page);
         _gripCurrentStart=new QPushButton(QStringLiteral("USE CURRENT WRIST"),page);
         _gripCapturedStart->setToolTip(QStringLiteral("Apply the saved position AND angle relative to the selected reference part. Different part origins may require adjustment; this is not automatic grip fitting."));
@@ -93,6 +95,10 @@ namespace reloadmaker {
         _gripSave=new QPushButton(QStringLiteral("SAVE PART GRIP"),page); _gripSave->setObjectName("PrimaryButton");
         _gripEnd=new QPushButton(QStringLiteral("END PREVIEW"),page);
         actions->addWidget(_gripSave); actions->addWidget(_gripEnd); layout->addLayout(actions);
+        _useMagazineGrip=new QPushButton(QStringLiteral("SAVE & USE FOR MAGAZINE GRAB"),page);
+        _useMagazineGrip->setToolTip(QStringLiteral("Assign this placement to the current magazine and its reload phases. It follows the magazine during Grab Magazine and is included in Reload + grips export. Glock drums are excluded."));
+        layout->addWidget(_useMagazineGrip);
+        connect(_useMagazineGrip,&QPushButton::clicked,this,[this]{(void)useMagazineGrabGrip();});
         _gripStatus=new QLabel(page); _gripStatus->setTextFormat(Qt::PlainText); _gripStatus->setWordWrap(true); layout->addWidget(_gripStatus);
         layout->addWidget(new QLabel(QStringLiteral("SAVED GRIPS · CURRENT WEAPON"),page));
         _gripList=new QListWidget(page); _gripList->setAlternatingRowColors(true); layout->addWidget(_gripList,1);
@@ -194,6 +200,7 @@ namespace reloadmaker {
         for(auto* spin:_gripPosition) spin->setEnabled(editing);
         for(auto* spin:_gripAngles) spin->setEnabled(editing);
         _gripSave->setEnabled(editing && _gripPreviewValid && !_gripName->text().trimmed().isEmpty());
+        if(_useMagazineGrip)_useMagazineGrip->setEnabled(_gripSave->isEnabled()&&magazineGrabAnchor(_partGripDraft->pose.placement)>=0);
         _gripEnd->setEnabled(editing);
         _gripLoad->setEnabled(frame && selectedPartGrip());
         if(editing) {

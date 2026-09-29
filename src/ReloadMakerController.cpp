@@ -26,6 +26,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMimeData>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSettings>
@@ -1309,21 +1310,22 @@ namespace reloadmaker
                                                              const QModelIndex& parent,
                                                              const QString& rootName)
     {
-        if (!sourceRoot.isValid() || !parent.isValid()) {
+        NifModel* destination = activeModel();
+        if (!sourceRoot.isValid() || !parent.isValid() || !destination || source.getVersionNumber()!=destination->getVersionNumber()) {
             return {};
         }
         const QString originalName = source.get<QString>(sourceRoot, "Name");
         if (!rootName.isEmpty()) { source.set<QString>(sourceRoot, "Name", rootName); }
         spCopyBranch copy;
+        QMimeData payload;
         QElapsedTimer transferClock;
         transferClock.start();
-        copy.cast(&source, sourceRoot);
+        copy.copyData(&source, sourceRoot, payload);
         _copyMilliseconds += transferClock.restart();
         if (!rootName.isEmpty()) { source.set<QString>(sourceRoot, "Name", originalName); }
+        if(payload.formats().isEmpty())return {};
         spPasteBranch paste;
-        NifModel* destination = activeModel();
-        const QPersistentModelIndex result = destination ? QPersistentModelIndex(paste.cast(destination, parent))
-                                                         : QPersistentModelIndex{};
+        const QPersistentModelIndex result(paste.pasteData(destination, parent, payload));
         _pasteMilliseconds += transferClock.elapsed();
         return result;
     }
@@ -2549,9 +2551,10 @@ namespace reloadmaker
         // Fixed mode removes this frame's complete Weapon world transform from
         // every branch. Source mode removes only the Ready world frame: Weapon
         // is allowed to translate/rotate, with the very same local articulation.
-        const bool simulationNativeAction = _simulationActive &&
-            (_simulation.action == SimulationAction::Fire || _simulation.action == SimulationAction::Reload);
-        const Transformf frame = _motionMode->currentIndex() == 0 && !simulationNativeAction
+        // Reload authoring must honor the fixed Weapon frame for hands and
+        // internal parts alike. Firing retains its native recoil presentation.
+        const bool simulationFire = _simulationActive && _simulation.action == SimulationAction::Fire;
+        const Transformf frame = _motionMode->currentIndex() == 0 && !simulationFire
             ? _globalPose.at(_weaponBoneIndex) : _readyGlobalPose.at(_weaponBoneIndex);
         if (!reframePose(_skeleton, frame, Transformf{}, _localPose, _globalPose, _poseError)) {
             return fail();
@@ -2562,6 +2565,7 @@ namespace reloadmaker
         }
         if (_mechanismPreview && !applyMechanismPreview()) { return fail(); }
         if (!applySimulationPose()) { return fail(); }
+        if (!applyMagazineGrabPose()) { return fail(); }
         const bool gripWorkspace = (_workspace == 2 && _handPosePages->currentIndex() == 1) || _workspace == 3 || (_reloadWorkspaceActive && _reloadHeld);
         const bool showGrip=gripWorkspace && _partGripDraft && (!_mechanismPreview || ((_mechanismTeaching||(_mechanismHeld&&_mechanismPoseOnGrab->isChecked())) && _mechanismDraft && sameMechanismPart(_partGripDraft->pose.placement,_mechanismDraft->anchor)));
         if (showGrip && (!_reloadWorkspaceActive||_reloadHeld) && !applyPartGripPreview()) { return fail(); }

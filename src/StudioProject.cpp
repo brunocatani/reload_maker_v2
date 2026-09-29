@@ -8,6 +8,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
+#include <QUuid>
 #include <QJsonDocument>
 #include <QListWidget>
 #include <QLineEdit>
@@ -52,6 +53,8 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     const auto animationIdentity=animationSetIdentity(_animationSetCombo->currentIndex());
     if(!animationIdentity.isEmpty())record["animationSetIdentity"] = animationIdentity;
     record["glockReloadNoExtender"] = _glockNoExtender;
+    QJsonObject magazineGrabs;for(auto it=_magazineGrabGrips.cbegin();it!=_magazineGrabGrips.cend();++it)magazineGrabs[it.key()]=it.value();
+    record["magazineGrabGrips"]=magazineGrabs;
     if(_simulationRig&&_reloadRecipe)record["simulationSetup"]=simulationRigJson(*_reloadRecipe,*_simulationRig,_simulationSpring->isChecked());
     if(_magazineRail)record["magazineInteraction"]=magazineRailJson(*_magazineRail);
     if(_simulationAmmo.valid())record["ammunitionConfiguration"]=_simulationAmmo.json();
@@ -106,6 +109,12 @@ void ReloadMakerController::openSession(const QString& path) {
     // Validate all authored data before changing source or replacing a draft.
     QString error;
     const auto fingerDrafts=record["fingerDrafts"].toArray();
+    if(record.contains("magazineGrabGrips")&&!record["magazineGrabGrips"].isObject()){setStatus("Invalid magazine grip assignments.",true);return;}
+    const auto magazineGrabs=record["magazineGrabGrips"].toObject();
+    if(magazineGrabs.size()>512){setStatus("Too many magazine grip assignments.",true);return;}
+    for(auto it=magazineGrabs.begin();it!=magazineGrabs.end();++it)if(!it.key().contains('|')||it.key().size()>1024||!it.value().isString()||QUuid(it.value().toString()).isNull()) {
+        setStatus("Invalid magazine grip assignment identity.",true);return;
+    }
     if(fingerDrafts.size()>2){setStatus("Invalid physical-hand draft count.",true);return;}
     for (int i=0;i<fingerDrafts.size();++i) {
         const auto v=fingerDrafts[i];
@@ -154,6 +163,8 @@ void ReloadMakerController::restoreSessionSelection() {
     if (animationSet < 0 && _animationSetCombo->count() > 0) { setStatus("The project's animation set no longer exists.",true); return; }
     { const QSignalBlocker block(_animationSetCombo); _animationSetCombo->setCurrentIndex(animationSet); }
     _glockNoExtender=record["glockReloadNoExtender"].toBool(false);
+    _magazineGrabGrips.clear();const auto magazineGrabs=record["magazineGrabGrips"].toObject();
+    for(auto it=magazineGrabs.begin();it!=magazineGrabs.end();++it)_magazineGrabGrips[it.key().toLower()]=it.value().toString();
     rebuildWeapon();
     if (!_clip.valid()) return;
     for (int i = 0; i < _animationList->count(); ++i) if (_animationList->item(i)->data(Qt::UserRole).toString() == record["animation"].toString()) { _animationList->setCurrentRow(i); selectAnimation(_animationList->item(i)); break; }

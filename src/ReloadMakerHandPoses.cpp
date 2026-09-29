@@ -43,6 +43,7 @@ namespace reloadmaker {
         layout->addWidget(intro);
         auto* capture = new QGroupBox(QStringLiteral("CAPTURE CURRENT HAND"), panel);
         auto* form = new QFormLayout(capture);
+        form->setRowWrapPolicy(QFormLayout::WrapLongRows);
         _handPoseName = new QLineEdit(capture);
         _handPoseName->setMaxLength(128);
         _handPoseName->setPlaceholderText(QStringLiteral("e.g. Bolt pinch · relaxed"));
@@ -50,7 +51,7 @@ namespace reloadmaker {
         _handPoseSide->addItem(QStringLiteral("Right hand"), static_cast<int>(PoseHand::Right));
         _handPoseSide->addItem(QStringLiteral("Left hand"), static_cast<int>(PoseHand::Left));
         _handPoseAnchor = new QComboBox(capture);
-        _handPoseAnchor->setMinimumContentsLength(20);
+        _handPoseAnchor->setMinimumContentsLength(12);
         _handPoseAnchor->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
         _handPoseAnchor->setToolTip(QStringLiteral("Save the wrist relative to this actual assembled frame, plus a separate weapon-relative reference. Does not move the hand."));
         _handPoseNotes = new QPlainTextEdit(capture);
@@ -82,9 +83,10 @@ namespace reloadmaker {
         _previewHandPose->setToolTip(QStringLiteral("Pauses and applies this pose to its original left/right hand at the current wrist. Does not apply saved placement, mirror hands or move weapon parts."));
         preview->addWidget(_previewHandPose); preview->addWidget(_restoreHandPose);
         layout->addLayout(preview);
-        auto* partGrip = new QPushButton(QStringLiteral("CONFIGURE PART GRIP…"), panel);
+        auto* partGrip = new QPushButton(QStringLiteral("USE POSE ON A WEAPON PART…"), panel);
+        partGrip->setToolTip(QStringLiteral("Choose a saved pose, then click the magazine or other part where the palm should hold. Adjust the placement and save the grip."));
         layout->addWidget(partGrip);
-        connect(partGrip, &QPushButton::clicked, this, &ReloadMakerController::openPartGripEditor);
+        connect(partGrip, &QPushButton::clicked, this, &ReloadMakerController::applySavedPoseToPart);
         _handPoseStatus = new QLabel(panel);
         _handPoseStatus->setTextFormat(Qt::PlainText);
         _handPoseStatus->setWordWrap(true);
@@ -107,6 +109,7 @@ namespace reloadmaker {
         connect(_handPoseList, &QListWidget::currentItemChanged, this, &ReloadMakerController::updateHandPoseControls);
         connect(_handPoseList, &QListWidget::itemActivated, this, [this]() { previewSavedHandPose(); });
         connect(_saveHandPose, &QPushButton::clicked, this, &ReloadMakerController::saveCurrentHandPose);
+        connect(_handPoseAnchor,qOverload<int>(&QComboBox::currentIndexChanged),this,&ReloadMakerController::updateHandPoseControls);
         connect(_previewHandPose, &QPushButton::clicked, this, &ReloadMakerController::previewSavedHandPose);
         connect(_restoreHandPose, &QPushButton::clicked, this, &ReloadMakerController::restoreHandPosePreview);
         connect(refresh, &QPushButton::clicked, this, &ReloadMakerController::refreshHandPoseLibrary);
@@ -298,19 +301,19 @@ namespace reloadmaker {
         return false;
     }
 
-    void ReloadMakerController::saveCurrentHandPose()
+    bool ReloadMakerController::saveCurrentHandPose()
     {
         updateHandPoseControls();
-        if (!_saveHandPose->isEnabled()) { return; }
-        if (_handPoseNotes->toPlainText().size() > 4096) { setStatus(QStringLiteral("Keep pose notes below 4097 characters."),true); return; }
+        if (!_saveHandPose->isEnabled()) { return false; }
+        if (_handPoseNotes->toPlainText().size() > 4096) { setStatus(QStringLiteral("Keep pose notes below 4097 characters."),true); return false; }
         _playing = false; _playbackTimer->stop(); _playButton->setText(QStringLiteral("PLAY"));
-        if (!applyPose(_playbackTime)) { updateHandPoseControls(); return; }
+        if (!applyPose(_playbackTime)) { updateHandPoseControls(); return false; }
         const int selection = _handPoseAnchor->currentData().toInt();
-        if (selection < 0 || selection >= _handPoseAnchors.size()) { return; }
+        if (selection < 0 || selection >= _handPoseAnchors.size()) { return false; }
         const auto& anchor = _handPoseAnchors[selection];
         Transformf frame = _globalPose[_weaponBoneIndex];
         QString error;
-        if (anchor.description.anchorKind != "weapon" && !sceneNodeWorld(anchor.node,frame,error)) { setStatus(error,true); return; }
+        if (anchor.description.anchorKind != "weapon" && !sceneNodeWorld(anchor.node,frame,error)) { setStatus(error,true); return false; }
         HandPose pose;
         pose.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
         pose.name = _handPoseName->text().trimmed(); pose.notes = _handPoseNotes->toPlainText();
@@ -319,7 +322,7 @@ namespace reloadmaker {
         pose.placement = anchor.description;
         pose.source = currentPoseSource();
         if (!captureHandPose(_skeleton,_localPose,_globalPose,frame,pose,error) || !_handPoseLibrary.save(pose,error)) {
-            setStatus(QStringLiteral("Hand pose was not saved: %1").arg(error),true); return;
+            setStatus(QStringLiteral("Hand pose was not saved: %1").arg(error),true); return false;
         }
         _handPoseSearch->clear();
         refreshHandPoseLibrary();
@@ -330,6 +333,7 @@ namespace reloadmaker {
         _handPoseName->clear();
         setStatus(QStringLiteral("Saved %1 hand pose “%2”. It will remain available after restart.")
             .arg(pose.hand==PoseHand::Left ? "left" : "right",pose.name));
+        return true;
     }
 
     QJsonObject ReloadMakerController::currentPoseSource() const

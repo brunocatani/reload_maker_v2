@@ -44,7 +44,7 @@ def get_diagnostics() -> dict:
 
 @mcp.tool()
 def inspect_pose() -> dict:
-    """Read sampled native local and world bone frames at the current time."""
+    """Read current local/world bone frames and owner-qualified rendered part frames, including active hand and mechanism composition."""
     return command('pose')
 
 @mcp.tool()
@@ -101,9 +101,21 @@ def restore_hand_animation(hand: str, expected_revision: int) -> dict:
     return command('restore_hand',{'hand':hand},expected_revision)
 
 @mcp.tool()
-def save_hand_pose(hand: str, name: str, expected_revision: int, notes: str = '') -> dict:
+def save_hand_pose(hand: str, name: str, expected_revision: int, notes: str = '', anchor: int | None = None) -> dict:
     """Capture the current exact hand and reference placement as a new library pose."""
-    return command('save_hand_pose',{'hand':hand,'name':name,'notes':notes},expected_revision)
+    params={'hand':hand,'name':name,'notes':notes}
+    if anchor is not None: params['anchor']=anchor
+    return command('save_hand_pose',params,expected_revision)
+
+@mcp.tool()
+def author_reload_grips(expected_revision: int) -> dict:
+    """Pause a prepared reload at its current moment and open hand authoring with the weapon fixed and moving magazine selected. Then scrub, choose either hand, and save a pose."""
+    return command('author_reload_grips',revision=expected_revision)
+
+@mcp.tool()
+def use_for_magazine_grab(expected_revision: int) -> dict:
+    """Save the current part-grip placement and assign it to this magazine's Grab Magazine and reload phases. Target WeaponMagazine or its matching WeaponExtra3 reload copy; auxiliary placement is converted through authored model frames. Glock drums are excluded. Save the project to persist assignments; reload_bundle exports all required grip records."""
+    return command('use_magazine_grip',revision=expected_revision)
 
 @mcp.tool()
 def start_part_grip(pose_id: str, anchor: int, expected_revision: int, captured: bool = True) -> dict:
@@ -162,7 +174,7 @@ def open_project(path: str, expected_revision: int) -> dict:
 
 @mcp.tool()
 def export_authored_record(kind: str, expected_revision: int) -> dict:
-    """Export hand/grip/mechanism/reload/simulation to the local exports folder. Never deploys."""
+    """Export hand/grip/mechanism/reload/simulation or reload_bundle to the local exports folder. reload_bundle embeds the native recipe, assigned grips, their part definitions and magazine-grab bindings; unresolved references reject export. Never deploys."""
     return command('export',{'kind':kind},expected_revision)
 
 @mcp.tool()
