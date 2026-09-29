@@ -7,6 +7,7 @@ namespace reloadmaker {
         QString connectionName;
         Transformf connection;
         int fullTrack{-1}, emptyTrack{-1};
+        bool sharedBody()const{return fullTrack==emptyTrack;}
         QVector3D outward, handle;
         float travel{0}, captureRadius{0}, releaseMargin{0};
         float magazineMinProjection{0}, weaponMaxProjection{0}, clearance{0};

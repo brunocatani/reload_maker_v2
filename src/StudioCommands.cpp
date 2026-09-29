@@ -20,6 +20,7 @@
 #include <QPushButton>
 #include <QQuaternion>
 #include <QSaveFile>
+#include <QScopeGuard>
 #include <QSlider>
 #include <QStatusBar>
 #include <QTabWidget>
@@ -93,7 +94,7 @@ QJsonObject ReloadMakerController::studioState() const {
     QJsonArray weapons,actions,sets,configurationSlots,anchors,poses,grips;
     for(int i=0;i<_weaponSelections.size();++i){const auto& selection=_weaponSelections[i];const auto& plugin=_plugins[selection.pluginIndex];const auto& w=plugin.weapons[selection.weaponIndex];weapons.append(QJsonObject{{"index",i},{"name",w.name},{"editorId",w.editorId},{"formId",QString::number(w.formId,16)},{"plugin",plugin.fileName}});}
     for(int i=0;i<_animationList->count();++i)actions.append(QJsonObject{{"index",i},{"name",_animationList->item(i)->text()},{"path",_animationList->item(i)->data(Qt::UserRole).toString()}});
-    for(int i=0;i<_animationSetCombo->count();++i)sets.append(QJsonObject{{"index",i},{"name",_animationSetCombo->itemText(i)}});
+    for(int i=0;i<_animationSetCombo->count();++i)sets.append(QJsonObject{{"index",i},{"name",_animationSetCombo->itemText(i)},{"details",_animationSetCombo->itemData(i,Qt::ToolTipRole).toString()},{"identity",animationSetIdentity(i)}});
     if(const auto* config=configuration())for(const auto& slot:config->entries()){
         QJsonArray choices;for(auto id:slot.choices)if(const auto* m=config->mod(id))choices.append(QJsonObject{{"id",QString::number(id)},{"name",m->name},{"editorId",m->editorId},{"model",m->modelPath}});
         configurationSlots.append(QJsonObject{{"key",QString::number(slot.key)},{"name",slot.label},{"selected",QString::number(config->selected(slot.key))},{"choices",choices}});
@@ -109,7 +110,7 @@ QJsonObject ReloadMakerController::studioState() const {
         {"playing",_playing||_reloadPlaying},{"motionMode",_motionMode->currentIndex()},{"anchors",anchors},
         {"handPoses",poses},{"partGrips",grips},{"recipeWindows",_reloadRecipe?int(_reloadRecipe->windows.size()):0},
         {"recipeTracks",_reloadRecipe?int(_reloadRecipe->tracks.size()):0},{"status",_window->statusBar()->currentMessage()},
-        {"lastError",_lastError},{"project",_sessionPath},{"nativeApplicationShell",false}};
+        {"lastError",_lastError},{"project",_sessionPath},{"camera",_window->getGLView()->studioCameraState()},{"nativeApplicationShell",false}};
 }
 QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     const QString method=request["method"].toString();const auto p=request["params"].toObject();
@@ -170,6 +171,12 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
         if(p.contains("slot"))require(slotOk&&modOk&&p["slot"].isString()&&p["mod"].isString(),"Slot and modification IDs must be decimal strings from the current state");
         if(p.contains("body"))require(_bodyCombo->findData(p["body"].toString())>=0,"Unknown body");
         if(p.contains("animationSet"))require(p["animationSet"].toInt(-1)>=0&&p["animationSet"].toInt(-1)<_animationSetCombo->count(),"Invalid animation set");
+        if(p.contains("reloadNoExtender")) {
+            require(p["reloadNoExtender"].isBool(),"reloadNoExtender must be a boolean");
+            require(!p.contains("slot")&&!p.contains("animationSet"),"Select parts and animation set before choosing the optional reload clip");
+            require(!p["reloadNoExtender"].toBool()||!glockNoExtenderPath().isEmpty(),"NoExtender requires the standard Glock magazine and a QuickHands set");
+            _glockNoExtender=p["reloadNoExtender"].toBool();
+        }
         if(p.contains("body")){const int index=_bodyCombo->findData(p["body"].toString());require(index>=0,"Unknown body");_bodyCombo->setCurrentIndex(index);}
         if(p.contains("slot")){auto* config=configuration();require(config&&config->select(slot,mod),"Invalid slot or modification");refreshAttachments();refreshConfigurationChoices();}
         if(p.contains("animationSet")){int index=p["animationSet"].toInt(-1);require(index>=0&&index<_animationSetCombo->count(),"Invalid animation set");_animationSetCombo->setCurrentIndex(index);}
@@ -186,6 +193,10 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
         }
         if(p.contains("loop"))_loopCheck->setChecked(p["loop"].toBool());
     } else if(method=="view"||method=="render") {
+        auto* viewport=_window->getGLView();const auto previousCamera=viewport->studioCameraState();
+        const bool preserve=method=="render"&&p["preserveCamera"].toBool();
+        const auto restoreCamera=qScopeGuard([&]{if(preserve)(void)viewport->studioRestoreCamera(previousCamera);});
+        if(p.contains("camera"))require(viewport->studioRestoreCamera(p["camera"].toObject()),"Invalid camera state");
         const QString view=p["view"].toString("current");
         const QHash<QString,GLView::ViewState> views{{"front",GLView::ViewFront},{"back",GLView::ViewBack},{"side",GLView::ViewRight},{"top",GLView::ViewTop},{"iso",GLView::ViewDefault}};
         if(view!="current"){
@@ -193,7 +204,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
             _window->getGLView()->setOrientation(views[view],false);
             if(view=="iso")_window->getGLView()->setRotation(-65,0,135);
         }
-        if(p["fit"].toBool())_window->getGLView()->center();
+        if(p["fit"].toBool())require(fitWeapon(),"No weapon bounds available for Fit");
         if(p.contains("zoom")){float z=number(p["zoom"]);require(z>.05f&&z<20,"Zoom outside supported range");_window->getGLView()->setZoom(z);}
         if(method=="render"){
             const QString path=studioDataPath("evidence/view-"+QString::number(_revision)+"-"+view+".png");

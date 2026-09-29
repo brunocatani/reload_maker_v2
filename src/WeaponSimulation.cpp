@@ -83,8 +83,10 @@ bool WeaponSimulation::fire() {
     chambered=false;++shotsFired;_cycleArmed=false;
     action=SimulationAction::Fire;seconds=0;return true;
 }
-bool WeaponSimulation::reload() {
+bool WeaponSimulation::reload(float rackAt,float feedAt) {
     if(!ammoKnown()||action==SimulationAction::Fire||action==SimulationAction::Reload||action==SimulationAction::Held||magazine.busy())return false;
+    reloadStartedLoaded=chambered;reloadStartedOpen=slideLocked||slide>=.95f;
+    reloadRackAt=rackAt;reloadFeedAt=feedAt;reloadCycled=false;reloadFed=false;
     action=SimulationAction::Reload;seconds=0;slide=0;magazine.reset();return true;
 }
 bool WeaponSimulation::dropMagazine() {
@@ -125,9 +127,18 @@ bool WeaponSimulation::tick(float delta,float duration) {
     if(action==SimulationAction::Returning){slide=std::max(0.f,slide-delta*4.f);if(slide==0){finishClosing();action=SimulationAction::Idle;}}
     else if(action==SimulationAction::Fire||action==SimulationAction::Reload) {
         seconds=std::min(seconds+delta,duration);
+        if(action==SimulationAction::Reload) {
+            if(!reloadCycled&&reloadRackAt>=0&&seconds>=reloadRackAt) {
+                if(chambered){chambered=false;++roundsEjected;}
+                reloadCycled=true;
+            }
+            if(!reloadFed&&reloadFeedAt>=0&&seconds>=reloadFeedAt) {
+                magazineRounds=capacity;_cycleArmed=true;finishClosing();reloadFed=true;
+            }
+        }
         if(seconds>=duration){
             const bool lastShot=willLockAfterShot();
-            if(action==SimulationAction::Reload){magazine.reset();magazineRounds=capacity;slideLocked=false;}
+            if(action==SimulationAction::Reload){magazine.reset();if(!reloadFed)magazineRounds=capacity;slideLocked=false;}
             action=SimulationAction::Idle;seconds=0;_cycleArmed=true;
             if(lastShot){slide=1;slideLocked=true;}
             else {slide=0;finishClosing();}

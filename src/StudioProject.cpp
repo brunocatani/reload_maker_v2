@@ -1,5 +1,7 @@
 #include "ReloadMakerController.h"
 #include "StudioPaths.h"
+#include "StudioWindow.h"
+#include "glview.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
@@ -16,6 +18,20 @@
 #include <algorithm>
 
 namespace reloadmaker {
+QJsonObject ReloadMakerController::animationSetIdentity(int index)const {
+    if(index<0||index>=_animationSubgraphSelections.size())return {};
+    const auto selection=_animationSubgraphSelections[index];
+    if(selection.automatic())return {{"mode","automatic"}};
+    const auto* plugin=currentPlugin();
+    if(selection.prompt()||!plugin||selection.recordIndex<0||selection.recordIndex>=plugin->animationSubgraphs.size())return {};
+    const auto& record=plugin->animationSubgraphs[selection.recordIndex];
+    if(selection.entryIndex<0||selection.entryIndex>=record.entries.size())return {};
+    const auto& entry=record.entries[selection.entryIndex];QStringList keywords;
+    for(auto id:entry.requiredKeywords)keywords.append(recordIdentity(*plugin,id));
+    keywords.sort(Qt::CaseInsensitive);
+    return {{"mode","explicit"},{"record",recordIdentity(*plugin,record.formId)},{"keywords",QJsonArray::fromStringList(keywords)},
+        {"paths",QJsonArray::fromStringList(entry.animationSearchPaths)},{"behavior",entry.behaviorPath}};
+}
 bool ReloadMakerController::saveSession(const QString& requested) {
     if (!currentWeapon() || _loadThread) return true;
     const QString path = requested.isEmpty() ? (_sessionPath.isEmpty() ? studioDataPath("workspace/current.project.json") : _sessionPath) : requested;
@@ -32,6 +48,10 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     if (const auto* config = configuration()) for (const auto& slot : config->entries()) choices[QString::number(slot.key)] = QString::number(config->selected(slot.key));
     record["choices"] = choices;
     record["simulationSpringReturn"] = _simulationSpring->isChecked();
+    record["camera"] = _window->getGLView()->studioCameraState();
+    const auto animationIdentity=animationSetIdentity(_animationSetCombo->currentIndex());
+    if(!animationIdentity.isEmpty())record["animationSetIdentity"] = animationIdentity;
+    record["glockReloadNoExtender"] = _glockNoExtender;
     if(_simulationRig&&_reloadRecipe)record["simulationSetup"]=simulationRigJson(*_reloadRecipe,*_simulationRig,_simulationSpring->isChecked());
     if(_magazineRail)record["magazineInteraction"]=magazineRailJson(*_magazineRail);
     if(_simulationAmmo.valid())record["ammunitionConfiguration"]=_simulationAmmo.json();
@@ -125,9 +145,15 @@ void ReloadMakerController::restoreSessionSelection() {
         }
     }
     refreshAttachments(); refreshConfigurationChoices();
-    const int animationSet = _animationSetCombo->findText(record["animationSet"].toString());
+    int animationSet = _animationSetCombo->findText(record["animationSet"].toString());
+    if(record.contains("animationSetIdentity")) {
+        animationSet=-1;const auto identity=record["animationSetIdentity"].toObject();
+        for(int i=0;i<_animationSetCombo->count();++i)if(!identity.isEmpty()&&animationSetIdentity(i)==identity){animationSet=i;break;}
+        if(animationSet<0){setStatus("The saved animation set's exact source conditions are no longer available.",true);return;}
+    }
     if (animationSet < 0 && _animationSetCombo->count() > 0) { setStatus("The project's animation set no longer exists.",true); return; }
     { const QSignalBlocker block(_animationSetCombo); _animationSetCombo->setCurrentIndex(animationSet); }
+    _glockNoExtender=record["glockReloadNoExtender"].toBool(false);
     rebuildWeapon();
     if (!_clip.valid()) return;
     for (int i = 0; i < _animationList->count(); ++i) if (_animationList->item(i)->data(Qt::UserRole).toString() == record["animation"].toString()) { _animationList->setCurrentRow(i); selectAnimation(_animationList->item(i)); break; }
@@ -158,6 +184,7 @@ void ReloadMakerController::restoreSessionSelection() {
     (void)applyPose(_playbackTime); updateTimelineText(); refreshFingerEditor();
     _simulationSpring->setChecked(record["simulationSpringReturn"].toBool(true));
     setWorkspace(std::clamp(record["workspace"].toInt(),0,5));
+    if(record.contains("camera")&&!_window->getGLView()->studioRestoreCamera(record["camera"].toObject()))appendDiagnostic("PROJECT: invalid saved camera ignored.");
     if (record.contains("reloadDraft")) {
         // Native recapture establishes live node bindings before restoring the
         // saved trajectory/phase document. Source identity must still match.

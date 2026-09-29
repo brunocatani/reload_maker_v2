@@ -64,7 +64,7 @@ def select_weapon(index: int, expected_revision: int) -> dict:
 
 @mcp.tool()
 def configure_weapon(changes: dict, expected_revision: int) -> dict:
-    """Change body male/female, animationSet index, or slot and mod decimal-string IDs."""
+    """Change body male/female, animationSet index, or slot and mod decimal-string IDs. Glock: after selecting the standard magazine and a QuickHands set, reloadNoExtender enables the package's optional unextended-magazine clip. Set it separately from slots/animationSet. Configuration changes rebuild the native interaction source."""
     return command('configure',changes,expected_revision)
 
 @mcp.tool()
@@ -83,9 +83,9 @@ def set_workspace(index: int, expected_revision: int) -> dict:
     return command('workspace',{'index':index},expected_revision)
 
 @mcp.tool()
-def render_view(view: str = 'current', fit: bool = False, zoom: float | None = None) -> Image:
-    """Return a fresh native viewport image: current/front/back/side/top/iso."""
-    args={'view':view,'fit':fit}
+def render_view(view: str = 'current', fit: bool = False, zoom: float | None = None, preserve_camera: bool = False) -> Image:
+    """Return a fresh native viewport image: current/front/back/side/top/iso. Fit always references the assembled weapon. preserve_camera restores the user's camera after taking the requested inspection view."""
+    args={'view':view,'fit':fit,'preserveCamera':preserve_camera}
     if zoom is not None: args['zoom']=zoom
     result=command('render',args)
     return Image(path=result['path'])

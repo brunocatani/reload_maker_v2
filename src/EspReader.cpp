@@ -275,6 +275,8 @@ namespace reloadmaker
                 const auto id=readLittle<std::uint16_t>(data,offset+8);
                 if(id==12||id==61)mod.ammoProperties.append({id,static_cast<std::uint8_t>(data[offset]),static_cast<std::uint8_t>(data[offset+4]),
                     readLittle<std::uint32_t>(data,offset+12),readLittle<std::uint32_t>(data,offset+16),readLittle<std::uint32_t>(data,offset+20)});
+                if(id==25)mod.firingProperties.append({id,static_cast<std::uint8_t>(data[offset]),static_cast<std::uint8_t>(data[offset+4]),
+                    readLittle<std::uint32_t>(data,offset+12),readLittle<std::uint32_t>(data,offset+16),readLittle<std::uint32_t>(data,offset+20)});
                 if(id==31&&static_cast<uchar>(data[offset])==4&&static_cast<uchar>(data[offset+4])==1)
                     appendUnique(mod.removedKeywords,readLittle<std::uint32_t>(data,offset+12));
                 if (readLittle<std::uint32_t>(data, offset) == 4 &&
@@ -449,6 +451,7 @@ namespace reloadmaker
                     if(const auto* d=firstSubrecord(record,"DNAM");d&&d->data.size()>=55) {
                         pending.weapon.ammo=readLittle<std::uint32_t>(d->data,0);
                         pending.weapon.ammoCapacity=readLittle<std::uint16_t>(d->data,52);
+                        pending.weapon.automatic=(readLittle<std::uint32_t>(d->data,48)&0x8000u)!=0;
                         pending.weapon.ammoDataKnown=true;
                     }
                     if (const Subrecord* keywords = firstSubrecord(

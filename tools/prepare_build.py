@@ -38,8 +38,8 @@ def remove_method(text, signature):
 
 patch('src/glview.h', [
     ('\tQModelIndex indexAt( const QPointF & p, bool shiftModifier = false );',
-     '\tQModelIndex indexAt( const QPointF & p, bool shiftModifier = false );\n\tQMatrix4x4 reloadMakerWorldToClip() const;\n\tQImage studioCaptureFrame();\n\tQJsonObject studioDiagnostics() const;\n\tbool reloadMakerSurfaceAt(const QPointF& point, const QVector<int>& allowedBlocks, int& block, Vector3& world);'),
-    ('#include <QOpenGLWindow> // Inherited', '#include <QOpenGLWindow> // Inherited\n#include <QMatrix4x4>\n#include <QJsonObject>'),
+     '\tQModelIndex indexAt( const QPointF & p, bool shiftModifier = false );\n\tQMatrix4x4 reloadMakerWorldToClip() const;\n\tQImage studioCaptureFrame();\n\tQJsonObject studioDiagnostics() const;\n\tQVector<QVector3D> studioGeometryBounds(const QVector<int>& blocks);\n\tbool studioFitBounds(const QVector<QVector3D>& points);\n\tQJsonObject studioCameraState() const;\n\tbool studioRestoreCamera(const QJsonObject& value);\n\tbool reloadMakerSurfaceAt(const QPointF& point, const QVector<int>& allowedBlocks, int& block, Vector3& world);'),
+    ('#include <QOpenGLWindow> // Inherited', '#include <QOpenGLWindow> // Inherited\n#include <QMatrix4x4>\n#include <QJsonObject>\n#include <QVector3D>'),
     ('\tstatic bool selectPBRCubeMapForGame( quint32 bsVersion );', ''),
     ('\tvoid selectPBRCubeMap();', '')])
 patch('src/gl/glshape.h', [
@@ -51,6 +51,8 @@ patch('src/glview.cpp', [
     ('settings.value( "General/Camera/Field Of View" )', 'settings.value( "General/Camera/Field Of View", 60 )'),
     ('settings.value( "General/Camera/Movement Speed" )', 'settings.value( "General/Camera/Movement Speed", 350 )'),
     ('settings.value( "General/Camera/Rotation Speed" )', 'settings.value( "General/Camera/Rotation Speed", 45 )'),
+    ('\t\taxis = (scene->bounds().radius <= 0) ? 1024.0 * scale() : scene->bounds().radius;',
+     '\t\t// Studio assembly supplies weapon-only navigation bounds; retain them on recompilation.'),
     ('\tconnect( NifSkope::getOptions(), &SettingsDialog::flush3D, textures, &TexCache::flush );', ''),
     ('\tconnect( NifSkope::getOptions(), &SettingsDialog::update3D, this, &GLView::update3D );', ''),
     ('\tif ( NifSkope::getOptions() )\n\t\tNifSkope::getOptions()->apply();', ''),

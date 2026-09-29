@@ -49,12 +49,12 @@ void ReloadMakerController::prepareMagazineInteraction() {
     if(!buildMagazineRail(*_reloadRecipe,rig.magazine,connectionName,connection,body,frame,rail,_magazineError))return;
     bool empty=false,fullBody=false;
     for(const auto& shape:shapes) {
-        const bool isEmpty=shape.track==rail.emptyTrack;
+        const bool isEmpty=!rail.sharedBody()&&shape.track==rail.emptyTrack;
         if(isEmpty)empty=true;
         if(shape.track==rig.magazine)fullBody=true;
         _magazineVisuals.append({shape.node,model->get<int>(shape.node,"Flags"),isEmpty,shape.track});
     }
-    if(!empty||!fullBody){_magazineVisuals.clear();_magazineError="Separate full and empty magazine geometry could not be resolved.";return;}
+    if((!empty&&!rail.sharedBody())||!fullBody){_magazineVisuals.clear();_magazineError="Magazine body geometry could not be resolved.";return;}
     _magazineRail=rail;
 }
 void ReloadMakerController::updateMagazinePose() {

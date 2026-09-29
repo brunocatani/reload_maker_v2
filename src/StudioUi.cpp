@@ -377,7 +377,7 @@ void ReloadMakerController::createUi() {
             if(view==GLView::ViewDefault)_window->getGLView()->setRotation(-65,0,135);
         });
     }
-    connect(camera->addAction("Fit"), &QAction::triggered, this, [this] { _window->getGLView()->center(); });
+    connect(camera->addAction("Fit weapon"), &QAction::triggered, this, [this] { (void)fitWeapon(); });
     auto* grid = new QCheckBox("Grid", camera);
     camera->addWidget(grid);
     connect(grid,&QCheckBox::toggled,this,[this](bool show) {
@@ -401,7 +401,7 @@ void ReloadMakerController::createUi() {
     auto* saveShortcut = new QShortcut(QKeySequence::Save, _window);
     connect(saveShortcut, &QShortcut::activated, this, [this] { saveSession(); });
     auto* fitShortcut = new QShortcut(QKeySequence("F"), _window);
-    connect(fitShortcut, &QShortcut::activated, this, [this] { _window->getGLView()->center(); });
+    connect(fitShortcut, &QShortcut::activated, this, [this] { (void)fitWeapon(); });
     for (int i = 0; i < workspaces.size(); ++i) {
         auto* shortcut = new QShortcut(QKeySequence(QString("Ctrl+%1").arg(i+1)), _window);
         connect(shortcut, &QShortcut::activated, this, [this, i] { setWorkspace(i); });

@@ -8,6 +8,7 @@ struct WeaponAmmunition {
     int capacity{0};
     std::uint32_t ammo{0};
     bool pistol{false};
+    bool automatic{false};
     QString ammoName,ammoRecord,error;
     QJsonArray sources;
     bool valid()const{return error.isEmpty()&&capacity>0&&ammo!=0;}

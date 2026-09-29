@@ -142,8 +142,14 @@ namespace reloadmaker
         void restoreSessionSelection();
         void startCommandServer();
         QJsonObject studioState() const;
+        QJsonObject animationSetIdentity(int index) const;
+        void cacheWeaponFitBounds();
+        bool fitWeapon();
+        QVector<QVector3D> _weaponFitCorners;
         void createSimulationUi();
         void createSimulationViewport();
+        bool isGlockConfiguration() const;
+        QString glockNoExtenderPath() const;
         void prepareSimulation();
         void stopSimulation();
         void updateSimulationControls();
@@ -177,6 +183,11 @@ namespace reloadmaker
         QPushButton* _simulationReset{nullptr};
         QLabel* _simulationStatus{nullptr};
         QLabel* _simulationParts{nullptr};
+        QComboBox* _simulationReloadSet{nullptr};
+        QCheckBox* _simulationNoExtender{nullptr};
+        QLabel* _simulationSource{nullptr};
+        bool _glockNoExtender{false};
+        float _glockReloadRackAt{-1}, _glockReloadFeedAt{-1};
         QCheckBox* _simulationSpring{nullptr};
         QTimer* _simulationTimer{nullptr};
         QElapsedTimer _simulationClock;

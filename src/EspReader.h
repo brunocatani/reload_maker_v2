@@ -31,6 +31,7 @@ namespace reloadmaker
         QString targetType;
         QVector<AmmoProperty> ammoProperties;
         QVector<std::uint32_t> removedKeywords;
+        QVector<AmmoProperty> firingProperties;
     };
 
     struct WeaponRecord
@@ -45,6 +46,7 @@ namespace reloadmaker
         std::uint32_t ammo{0};
         int ammoCapacity{0};
         bool ammoDataKnown{false};
+        bool automatic{false};
     };
 
     struct AnimationSubgraphEntry

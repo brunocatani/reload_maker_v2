@@ -111,10 +111,22 @@ void ammunitionTransitions() {
     s.grab();s.drag(1);s.release(false,true);check(s.slideLocked,"Empty seated follower must relock on full rack");
     s.configureAmmunition(0,true);check(!s.fire()&&!s.reload()&&!s.magazineIn(rail),"Unknown ammunition must not fabricate firing or replenishment");
 }
+void nativeReloadEvents() {
+    WeaponSimulation s;s.configureAmmunition(17,true);
+    check(s.reload(.4f,1.8f)&&s.reloadStartedLoaded&&!s.reloadStartedOpen,"Loaded native reload classification wrong");
+    s.tick(.2f,3);check(s.chambered&&s.magazineRounds==16,"Native reload changed ammo before cycle");
+    s.tick(.3f,3);check(!s.chambered&&s.roundsEjected==1&&s.reloadCycled,"Native rack failed to eject live chamber");
+    s.tick(1.4f,3);check(s.chambered&&s.magazineRounds==16&&s.reloadFed&&!s.canFire(),"Completion marker must feed once while animation retains control");
+    s.tick(2,3);check(s.canFire()&&s.magazineRounds==16&&s.roundsEjected==1,"End of clip refilled/ejected twice");
+    s.configureAmmunition(1,true);s.fire();s.tick(1,1);
+    check(s.reload(.4f,.8f)&&s.reloadStartedOpen&&!s.reloadStartedLoaded,"Empty open reload classification wrong");
+    s.tick(2,1);check(s.chambered&&s.magazineRounds==0&&s.roundsEjected==0,"Large frame step lost empty reload events");
+    s.reset();check(!s.reloadCycled&&!s.reloadFed&&s.reloadRackAt<0,"Reset retained reload event state");
+}
 }
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
-    try {stateTransitions();ammunitionTransitions();check(app.arguments().size()==2,"Pass the Glock project fixture");fixture(app.arguments()[1]);
+    try {stateTransitions();ammunitionTransitions();nativeReloadEvents();check(app.arguments().size()==2,"Pass the Glock project fixture");fixture(app.arguments()[1]);
         QTextStream(stdout)<<"PASS simulation state ownership, drop/fire persistence, regrab/cancel/return/reset, actual slide/barrel/cartridge curves and complete magazine ownership\n";return 0;
     }catch(const std::exception& e){QTextStream(stderr)<<"FAIL "<<e.what()<<'\n';return 1;}
 }

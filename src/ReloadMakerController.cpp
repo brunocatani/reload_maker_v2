@@ -1024,7 +1024,11 @@ namespace reloadmaker
             if (!clip || baselineResource.isEmpty()) {
                 return;
             }
-            const QString resource = resolveAnimationPath(clip->animationPath);
+            QString resource = resolveAnimationPath(clip->animationPath);
+            if(aliases.contains("WPNReload",Qt::CaseInsensitive)&&_glockNoExtender) {
+                const auto alternative=glockNoExtenderPath();
+                if(!alternative.isEmpty())resource=alternative;else _glockNoExtender=false;
+            }
             if (!resource.isEmpty()) {
                 _animationActions.append(AnimationAction{
                     label, clip->nodeName, resource, baselineResource,
@@ -1140,6 +1144,7 @@ namespace reloadmaker
     {
         invalidateReloadCapture();
         _referenceNames.clear();
+        _weaponFitCorners.clear();
         _handPosePreview.reset();
         _partGripDraft.reset();
         _gripPreviewValid = false;
@@ -2151,7 +2156,6 @@ namespace reloadmaker
         setArmsVisible(_showArmsCheck->isChecked());
         refreshSlotCallouts();
         _window->getGLView()->updateScene();
-        if (!sameWeapon) { _window->getGLView()->center(); }
         refreshAnimations();
         QListWidgetItem* initialAnimation = _animationList->count() > 0
             ? _animationList->item(0)
@@ -2174,6 +2178,10 @@ namespace reloadmaker
         }
         _stateBaselineLocalPose = _readyLocalPose;
         _stateBaselineAnimationPath = _readyAnimationPath;
+        // Cache the assembled weapon in Ready before any firing/reload pose.
+        // Fit never includes arms, detached magazines or parked source copies.
+        selectAnimation(initialAnimation);
+        cacheWeaponFitBounds();
         appendDiagnostic(QStringLiteral("BASE  Ready pose=%1 sample=0.000s")
                              .arg(_readyAnimationPath));
         if (sameWeapon && !previousAction.isEmpty()) {
@@ -2184,7 +2192,7 @@ namespace reloadmaker
         _animationList->setCurrentItem(initialAnimation);
         selectAnimation(initialAnimation);
         refreshHandPoseAnchors();
-        if (!sameWeapon) { _window->getGLView()->center(); }
+        if (!sameWeapon) { (void)fitWeapon(); }
         _window->getGLView()->update();
         QApplication::restoreOverrideCursor();
         appendDiagnostic(QStringLiteral("CONFIGURATION %1 ms · %2 · %3 source decodes (warm data retained)")

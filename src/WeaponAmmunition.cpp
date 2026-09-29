@@ -5,17 +5,24 @@
 namespace reloadmaker {
 WeaponAmmunition resolveWeaponAmmunition(const PluginContent& plugin,const WeaponRecord& weapon,
     const WeaponConfiguration& configuration,const QHash<QString,QString>& referenceNames) {
-    WeaponAmmunition result;result.ammo=weapon.ammo;result.capacity=weapon.ammoCapacity;
+    WeaponAmmunition result;result.ammo=weapon.ammo;result.capacity=weapon.ammoCapacity;result.automatic=weapon.automatic;
     const auto fail=[&](const QString& message){result.error=message;return result;};
     if(!weapon.ammoDataKnown)return fail("Weapon ammunition data is missing or truncated.");
     result.sources.append(QJsonObject{{"record",recordIdentity(plugin,weapon.formId)},{"capacity",weapon.ammoCapacity},{"ammo",recordIdentity(plugin,weapon.ammo)}});
     std::optional<int> setCapacity;std::optional<std::uint32_t> setAmmo;std::int64_t added=0;bool hasAdd=false;
+    std::optional<bool> setAutomatic;
     QSet<std::uint32_t> keywords(weapon.keywords.cbegin(),weapon.keywords.cend()),addedKeywords,removedKeywords;
     for(auto id:configuration.activeMods()) {
         const auto* mod=configuration.mod(id);if(!mod)continue;
         if(!mod->metadataWarning.isEmpty())return fail("Cannot fully resolve ammunition properties for "+mod->editorId+": "+mod->metadataWarning);
         for(auto keyword:mod->removedKeywords)removedKeywords.insert(keyword);
         for(auto keyword:mod->addedKeywords)addedKeywords.insert(keyword);
+        for(const auto& p:mod->firingProperties) {
+            if(p.valueType!=2||p.function!=0||p.value1>1||p.stepBits!=0)return fail("Unsupported automatic-fire property in "+mod->editorId);
+            const bool value=p.value1!=0;
+            if(setAutomatic&&*setAutomatic!=value)return fail("Conflicting automatic-fire overrides in selected parts.");
+            setAutomatic=value;
+        }
         for(const auto& p:mod->ammoProperties) {
             if(p.stepBits!=0||p.value2!=0)return fail("Rank-scaled ammunition property needs explicit support: "+mod->editorId);
             if(p.property==12) {
@@ -35,6 +42,7 @@ WeaponAmmunition resolveWeaponAmmunition(const PluginContent& plugin,const Weapo
     const std::int64_t capacity=setCapacity?*setCapacity:std::int64_t(weapon.ammoCapacity)+added;
     if(capacity<1||capacity>65535)return fail("Configured magazine capacity is outside the supported range.");
     result.capacity=int(capacity);if(setAmmo)result.ammo=*setAmmo;
+    if(setAutomatic)result.automatic=*setAutomatic;
     if(!result.ammo)return fail("This configuration has no ammunition type.");
     result.ammoRecord=recordIdentity(plugin,result.ammo);
     result.ammoName=plugin.ammoNames.value(result.ammo,referenceNames.value(result.ammoRecord.toLower()));
@@ -50,6 +58,6 @@ WeaponAmmunition resolveWeaponAmmunition(const PluginContent& plugin,const Weapo
     return result;
 }
 QJsonObject WeaponAmmunition::json()const {
-    return {{"resolved",valid()},{"capacity",capacity},{"ammoRecord",ammoRecord},{"ammoName",ammoName},{"pistolSlideLock",pistol},{"sources",sources},{"error",error}};
+    return {{"resolved",valid()},{"capacity",capacity},{"ammoRecord",ammoRecord},{"ammoName",ammoName},{"pistolSlideLock",pistol},{"automatic",automatic},{"sources",sources},{"error",error}};
 }
 }

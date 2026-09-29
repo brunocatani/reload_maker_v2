@@ -21,7 +21,9 @@ bool buildMagazineRail(const ReloadRecipe& r,int full,const QString& name,const 
             if(rail.emptyTrack>=0){error="Several empty-magazine copies share this attachment; identify the intended one.";return false;}rail.emptyTrack=i;
         }
     }
-    if(rail.emptyTrack<0){error="No separate empty-magazine branch was identified in this reload.";return false;}
+    // The Glock drum uses one body and a separate cartridge. Its own native
+    // extraction track supplies the rail; ammunition controls the cartridge.
+    if(rail.emptyTrack<0)rail.emptyTrack=full;
     QVector3D low=body.front(),high=low;
     for(const auto& p:body){if(!finite(p)){error="Invalid native magazine vertex.";return false;}for(int a=0;a<3;++a){low[a]=std::min(low[a],p[a]);high[a]=std::max(high[a],p[a]);}}
     rail.handle=(low+high)*.5f;
@@ -29,14 +31,19 @@ bool buildMagazineRail(const ReloadRecipe& r,int full,const QString& name,const 
     if(size<.01f){error="Magazine geometry has no extent.";return false;}
     const auto& empty=r.tracks[rail.emptyTrack];
     const auto& rest=empty.poses.front();
-    for(const auto& pose:empty.poses) {
+    for(int sample=0;sample<empty.poses.size();++sample) {
+        // A shared drum body begins rotating as soon as it is removed. Its
+        // final approach to the seated frame gives the aligned insertion
+        // direction, reversed here for extraction. Use a shorter sample
+        // distance because the drum's bulk is much wider than its magwell stem.
+        const auto& pose=empty.poses[rail.sharedBody()?empty.poses.size()-1-sample:sample];
         const auto delta=v(pose.translation)-v(rest.translation);const float length=delta.length();
         const auto& a=pose.rotation;const auto& b=rest.rotation;
         const float dot=std::abs(a.x*b.x+a.y*b.y+a.z*b.z+a.w*b.w);
         // Use motion while the empty magazine remains aligned with the well,
         // before the hand's free rotation/throw. A connection has no universal
         // axis convention; source motion establishes its outward direction.
-        if(length>=size*.12f&&length<=size*.4f&&dot>.9998f&&reloadPoseVisible(pose)){rail.outward=delta.normalized();break;}
+        if(length>=size*(rail.sharedBody()?.035f:.12f)&&length<=size*.4f&&dot>.9998f&&reloadPoseVisible(pose)){rail.outward=delta.normalized();break;}
     }
     if(rail.outward.lengthSquared()<.9f){error="No aligned magazine extraction segment was found.";return false;}
     float magazineMin=std::numeric_limits<float>::max(),weaponMax=-magazineMin;
@@ -89,7 +96,7 @@ QJsonObject magazineRailJson(const MagazineRail& r) {
     if(invertUniformTransform(r.connection,inverse))localAxis=v(rotated(inverse.rotation,{r.outward.x(),r.outward.y(),r.outward.z()}));
     return {{"version",1},{"connectionName",r.connectionName},{"connection",connection},{"outwardInWeapon",array(r.outward)},
         {"outwardInConnection",array(localAxis)},{"handleInWeapon",array(r.handle)},{"travel",r.travel},{"captureRadius",r.captureRadius},
-        {"releaseMargin",r.releaseMargin},{"fullTrack",r.fullTrack},{"emptyTrack",r.emptyTrack},{"animationSeconds",.6},
+        {"releaseMargin",r.releaseMargin},{"fullTrack",r.fullTrack},{"emptyTrack",r.emptyTrack},{"sharedBody",r.sharedBody()},{"animationSeconds",.6},
         {"magazineMinProjection",r.magazineMinProjection},{"weaponMaxProjection",r.weaponMaxProjection},{"clearance",r.clearance}};
 }
 }

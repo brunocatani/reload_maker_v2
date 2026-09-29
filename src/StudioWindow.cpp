@@ -40,6 +40,6 @@ QJsonObject GLView::studioDiagnostics() const {
     }
     return {{"renderer",bool(scene&&scene->haveRenderer())},{"validContext",isValid()},
         {"disabled",isDisabled},{"compilePending",int(doCompile)},{"modelBlocks",model?model->getBlockCount():0},
-        {"meshes",meshes},{"fieldOfView",cfg.fov},{"distance",Dist},{"zoom",Zoom},{"position",QJsonArray{Pos[0],Pos[1],Pos[2]}},
+        {"meshes",meshes},{"fieldOfView",cfg.fov},{"navigationScale",axis},{"distance",Dist},{"zoom",Zoom},{"position",QJsonArray{Pos[0],Pos[1],Pos[2]}},
         {"rotation",QJsonArray{Rot[0],Rot[1],Rot[2]}},{"width",width()},{"height",height()}};
 }

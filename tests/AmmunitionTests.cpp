@@ -63,6 +63,13 @@ void glock(const QString& path) {
         check(a.capacity==pair.second&&a.ammoName=="Ammo10mm"&&a.pistol,"Actual Glock capacity/type/grip mismatch");
         QTextStream(stdout)<<mod->editorId<<": "<<a.capacity<<" rounds, "<<a.ammoName<<'\n';
     }
+    int receivers=0,automatic=0;
+    for(const auto& mod:p.objectMods)if(mod.editorId.startsWith("mod_Glock19x_Receiver_")) {
+        c.select(configurationSlotKey(mod),mod.formId);const auto a=resolveWeaponAmmunition(p,*w,c,names);
+        check(a.valid(),a.error);const bool expected=mod.editorId.contains("Automatic1");
+        check(a.automatic==expected,"Actual receiver firing property mismatch");++receivers;if(a.automatic)++automatic;
+    }
+    check(receivers==28&&automatic==10,"Receiver coverage omitted a Glock configuration");
 }
 }
 int main(int argc,char** argv){QCoreApplication app(argc,argv);try{parser();resolution();check(argc==2,"Pass the original Glock ESP");glock(app.arguments()[1]);QTextStream(stdout)<<"PASS ammunition parsing, property resolution, fail-closed unsupported modifiers, and actual configured Glock magazines\n";return 0;}catch(const std::exception& e){QTextStream(stderr)<<"FAIL "<<e.what()<<'\n';return 1;}}

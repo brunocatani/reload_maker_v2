@@ -18,6 +18,8 @@ namespace reloadmaker {
         float slide{0}, seconds{0}, grabStart{0};
         int capacity{0}, magazineRounds{0}, shotsFired{0}, roundsEjected{0};
         bool chambered{false}, slideLocked{false}, pistolLock{false};
+        bool reloadStartedLoaded{false}, reloadStartedOpen{false}, reloadCycled{false}, reloadFed{false};
+        float reloadRackAt{-1}, reloadFeedAt{-1};
         bool ammoKnown()const{return capacity>0;}
         bool canFire()const{return ammoKnown()&&chambered&&!slideLocked&&action==SimulationAction::Idle&&slide<=.001f&&!magazine.busy();}
         bool willLockAfterShot()const{return action==SimulationAction::Fire&&pistolLock&&magazine.seated()&&magazineRounds==0&&!chambered;}
@@ -30,7 +32,7 @@ namespace reloadmaker {
         void cancelMagazine();
         QString magazineDescription()const;
         bool fire();
-        bool reload();
+        bool reload(float rackAt=-1, float feedAt=-1);
         bool dropMagazine();
         bool grab();
         void drag(float progress);
