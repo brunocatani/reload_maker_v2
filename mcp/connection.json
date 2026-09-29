@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "reload-maker-v2": {
+      "command": "py",
+      "args": ["-3.14", "F:/fo4dev/personal_devtools/reload_maker_v2/mcp/server.py"],
+      "env": {
+        "TEMP": "F:/fo4dev/personal_devtools/reload_maker_v2/local/tmp",
+        "TMP": "F:/fo4dev/personal_devtools/reload_maker_v2/local/tmp",
+        "PYTHONPYCACHEPREFIX": "F:/fo4dev/personal_devtools/reload_maker_v2/local/pycache"
+      }
+    }
+  }
+}

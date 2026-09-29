@@ -1,0 +1,32 @@
+if(NOT DEFINED STAGE_SOURCE OR NOT IS_DIRECTORY "${STAGE_SOURCE}")
+    message(FATAL_ERROR "Reload Maker staging source is unavailable: ${STAGE_SOURCE}")
+endif()
+if(NOT DEFINED STAGE_DESTINATION OR STAGE_DESTINATION STREQUAL "")
+    message(FATAL_ERROR "Reload Maker staging destination is unavailable")
+endif()
+
+file(MAKE_DIRECTORY "${STAGE_DESTINATION}")
+file(GLOB_RECURSE stage_files LIST_DIRECTORIES false RELATIVE "${STAGE_SOURCE}" "${STAGE_SOURCE}/*")
+foreach(attempt RANGE 1 5)
+    set(copy_error "")
+    foreach(stage_file IN LISTS stage_files)
+        get_filename_component(stage_parent "${STAGE_DESTINATION}/${stage_file}" DIRECTORY)
+        file(MAKE_DIRECTORY "${stage_parent}")
+        # Do not rewrite unchanged runtime libraries. Report the exact failing
+        # destination instead of hiding sharing errors behind copy_directory.
+        file(COPY_FILE "${STAGE_SOURCE}/${stage_file}" "${STAGE_DESTINATION}/${stage_file}"
+            ONLY_IF_DIFFERENT RESULT file_copy_result)
+        if(NOT file_copy_result STREQUAL "0")
+            set(copy_error "${STAGE_DESTINATION}/${stage_file}: ${file_copy_result}")
+            break()
+        endif()
+    endforeach()
+    if(copy_error STREQUAL "")
+        return()
+    endif()
+    if(attempt LESS 5)
+        execute_process(COMMAND "${CMAKE_COMMAND}" -E sleep 1)
+    endif()
+endforeach()
+
+message(FATAL_ERROR "Cannot stage Reload Maker after five attempts: ${copy_error}")

@@ -1,0 +1,15 @@
+Reload Maker V2 local development provenance
+
+New application shell and workflows; native domain algorithms derived from
+F:/fo4dev/personal_devtools/reload_maker at c7a0ad1. Existing package, plugin,
+HKX, assembly, pose, grip, mechanism and reload recipe contracts are retained.
+The original checkout remains unchanged.
+
+Native model/render dependency: F:/fo4dev/devtools/nifskope-upgraded/nifskope-cli.
+Only an isolated staged dependency is adapted. Native rendering, materials,
+skinning and model transfer remain authoritative. The NifSkope application,
+entry point, generic CLI and unrelated editing operations are not built.
+Dependency license files are retained in staging/distribution. No license for
+the combined application is selected and no remote/publication is configured.
+
+Bethesda/mod assets are user-installed read-only inputs, never committed.

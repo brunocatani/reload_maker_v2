@@ -1,0 +1,8 @@
+/build*/
+/local/
+/workspace/
+/exports/
+/evidence/
+__pycache__/
+*.pyc
+CMakeUserPresets.json

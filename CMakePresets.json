@@ -1,0 +1,5 @@
+{
+  "version": 6,
+  "configurePresets": [{"name":"custom-fast","generator":"Ninja","binaryDir":"${sourceDir}/build-fast","cacheVariables":{"CMAKE_BUILD_TYPE":"Release"}}],
+  "buildPresets": [{"name":"custom-fast","configurePreset":"custom-fast","jobs":2}]
+}
