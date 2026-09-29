@@ -69,6 +69,7 @@ namespace reloadmaker
 
     struct PluginContent
     {
+        struct NodeRemap { QString node, point; };
         QString filePath;
         QString fileName;
         QStringList masters;
@@ -76,6 +77,7 @@ namespace reloadmaker
         QVector<ObjectModRecord> objectMods;
         QVector<AnimationSubgraphRecord> animationSubgraphs;
         QHash<std::uint32_t, QString> keywordNames;
+        QHash<std::uint32_t, NodeRemap> nodeRemaps;
         QHash<std::uint32_t, QString> ammoNames;
         QStringList diagnostics;
         // File-local IDs until LoadOrderLibrary maps them through MAST. Includes

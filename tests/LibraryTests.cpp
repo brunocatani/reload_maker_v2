@@ -28,6 +28,7 @@ namespace {
     void mergeTests() {
         PluginContent base; base.fileName = "Base.esm"; base.parsed = true;
         base.keywordNames.insert(0x123, "attach"); base.keywordNames.insert(0x124, "weapon");
+        base.keywordNames.insert(0x125,"remapNode_Sights_P-Slide");base.nodeRemaps.insert(0x125,{"Sights","P-Slide"});
         base.ammoNames.insert(0x700,"Base ammunition");
         WeaponRecord weapon; weapon.formId = 0x456; weapon.name = "Base weapon";
         weapon.keywords = {0x124}; weapon.attachParentSlots = {0x123}; weapon.defaultObjectMods = {0x500};
@@ -58,6 +59,7 @@ namespace {
         const WeaponRecord* target = nullptr;
         for (const auto& entry : merged.weapons) { if (entry.name == "Base weapon") { target = &entry; } }
         require(target, "base weapon lost");
+        require(merged.nodeRemaps.size()==1&&merged.nodeRemaps.cbegin()->node=="Sights","Remap keyword identity lost during merge");
         WeaponConfiguration config; config.initialize(merged, *target);
         require(config.activeMods().size() == 1, "cross-plugin default not resolved");
         require(config.mod(config.activeMods().first())->modelPath == "winner.model", "patch-only ESP did not override base OMOD");
@@ -70,9 +72,11 @@ namespace {
         auto emptyOverride = mergeLoadOrder({base, extra, patch}, error);
         require(!emptyOverride.resolveFirstPersonSubgraph(target->keywords), "empty RACE resurrected earlier graph");
         patch.deletedRecords = {0x01000456,0x01000700};
+        patch.keywordNames.insert(0x01000125,"No longer a function");
         patch.ammoNames.remove(0x01000700);
         auto deleted = mergeLoadOrder({base, extra, patch}, error);
         require(deleted.weapons.size() == 1 && deleted.weapons.first().name == unrelated.name, "deleted WEAP reappeared or deleted unrelated local ID");
+        require(deleted.nodeRemaps.isEmpty(),"Keyword override resurrected an obsolete remap function");
         require(!deleted.ammoNames.values().contains("Winning base ammunition")&&!deleted.ammoNames.values().contains("Base ammunition"),"Deleted ammo label resurrected an earlier winner");
         auto invalid = mergeLoadOrder({patch}, error);
         require(!error.isEmpty() && !invalid.parsed, "missing master accepted");

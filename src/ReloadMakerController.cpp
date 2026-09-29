@@ -511,6 +511,49 @@ namespace reloadmaker
         _partSurfaces.insert(slot, std::move(surfaces));
     }
 
+    bool ReloadMakerController::remapAttachmentNodes(const ObjectModRecord& mod,int firstBlock,int lastBlock,QString& error)
+    {
+        auto* model=activeModel();const auto* plugin=currentPlugin();
+        if(!model||!plugin){error="No assembly for attachment remapping";return false;}
+        QSet<int> moved;
+        for(auto keyword:mod.addedKeywords) {
+            const auto remap=plugin->nodeRemaps.constFind(keyword);if(remap==plugin->nodeRemaps.cend())continue;
+            QPersistentModelIndex node;
+            for(int block=firstBlock;block<lastBlock;++block) {
+                const auto candidate=model->getBlockIndex(block);
+                if(!model->blockInherits(candidate,"NiNode")||model->get<QString>(candidate,"Name").compare(remap->node,Qt::CaseInsensitive)!=0)continue;
+                if(node.isValid()){error="Ambiguous remapped branch: "+remap->node;return false;}
+                node=candidate;
+            }
+            if(!node.isValid()){error="Missing remapped branch: "+remap->node;return false;}
+            const auto target=findConnectTarget("C-"+remap->point.mid(2),nullptr,configurationSlotKey(mod));
+            if(!target.valid()){error=target.error;return false;}
+            const int block=model->getBlockNumber(node);
+            if(moved.contains(block)){error="Conflicting remaps for branch: "+remap->node;return false;}
+            auto ancestor=QModelIndex(target.parent);
+            for(int depth=0;ancestor.isValid()&&depth<model->getBlockCount();++depth) {
+                if(ancestor==node){error="Cyclic attachment remap: "+remap->node;return false;}
+                ancestor=model->getBlockIndex(model->getParent(ancestor));
+            }
+            if(ancestor.isValid()){error="Cyclic remap destination ancestry";return false;}
+            const QPersistentModelIndex oldParent=model->getBlockIndex(model->getParent(node));
+            Transformf authored;
+            if(!oldParent.isValid()||!readNodeTransform(node,authored)){error="Invalid remapped branch parent or transform";return false;}
+            const Transformf connection{target.translation,target.rotation,{target.scale,target.scale,target.scale}};
+            // Move only the explicitly named branch. A rail-mounted optic can
+            // share this attachment with iron sights but stay on the receiver.
+            delLink(model,oldParent,"Children",block);
+            if(!addLink(model,target.parent,"Children",block)||!setNodeTransform(node,composed(connection,authored))) {
+                error="Cannot attach remapped branch: "+remap->node;return false;
+            }
+            moved.insert(block);
+            const auto name=plugin->keywordNames.value(keyword);
+            _remappedAttachments.append({node,target.parent,name,remap->point,configurationSlotKey(mod)});
+            appendDiagnostic(QString("NODE REMAP %1 · node=%2 parent=%3 via %4").arg(name).arg(block).arg(model->getBlockNumber(target.parent)).arg(remap->point));
+        }
+        return true;
+    }
+
     bool ReloadMakerController::recordPartAlignment(int firstBlock, int lastBlock, int anchorBone, QString& error)
     {
         const auto* model = activeModel();
@@ -1130,6 +1173,7 @@ namespace reloadmaker
         _partSurfaces.clear();
         _partAlignmentAnchors.clear();
         _attachmentConnections.clear();
+        _remappedAttachments.clear();
         if (_slotOverlay) { _slotOverlay->setCallouts({}); }
         if (auto* model = activeModel()) { model->clear(); }
         _window->getGLView()->flush();
@@ -1732,6 +1776,7 @@ namespace reloadmaker
         for (const auto* mod : configuredObjectMods()) {
             if (!mod->modelPath.isEmpty()) {
                 geometryParts.append(QString::number(configurationSlotKey(*mod)) + QLatin1Char(':') + normalizeNifPath(mod->modelPath));
+                for(auto keyword:mod->addedKeywords)if(plugin->nodeRemaps.contains(keyword))geometryParts.append("remap:"+recordIdentity(*plugin,keyword));
             }
         }
         const QString geometrySignature = geometryParts.join(QLatin1Char('|'));
@@ -1772,6 +1817,7 @@ namespace reloadmaker
             _partSurfaces.clear();
             _partAlignmentAnchors.clear();
             _attachmentConnections.clear();
+            _remappedAttachments.clear();
             _slotOverlay->setCallouts({});
             _nodeBindings.clear();
             _weaponRoot = QPersistentModelIndex{};
@@ -2067,6 +2113,9 @@ namespace reloadmaker
                         QApplication::restoreOverrideCursor();
                         setStatus(QStringLiteral("Cannot align attachment %1: %2").arg(it->record->editorId, error), true);
                         return;
+                    }
+                    if(!remapAttachmentNodes(*it->record,firstBlock,destination->getBlockCount(),error)) {
+                        QApplication::restoreOverrideCursor();setStatus("Cannot remap attachment "+it->record->editorId+": "+error,true);return;
                     }
                     (void)mergeWeaponModelNodes(collectCanonicalNodes(firstBlock));
                     _partRoots.insert(configurationSlotKey(*it->record), root);

@@ -118,7 +118,16 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     if(method=="state")return studioState();
     if(method=="simulation_state")return simulationState();
     if(method=="focus") {if(_window->isMinimized())_window->showNormal();_window->raise();_window->activateWindow();return studioState();}
-    if(method=="diagnostics")return {{"text",_details->toPlainText()},{"viewport",_window->getGLView()->studioDiagnostics()}};
+    if(method=="diagnostics") {
+        QJsonArray remaps;
+        for(const auto& r:_remappedAttachments) {
+            Transformf world,parent,root;QString error;
+            if(!sceneNodeWorld(r.node,world,error)||!sceneNodeWorld(r.parent,parent,error)||!sceneNodeWorld(_partRoots.value(r.slot),root,error))continue;
+            remaps.append(QJsonObject{{"keyword",r.keyword},{"point",r.point},{"slot",QString::number(r.slot)},
+                {"world",frame(world)},{"parentWorld",frame(parent)},{"attachmentWorld",frame(root)}});
+        }
+        return {{"text",_details->toPlainText()},{"viewport",_window->getGLView()->studioDiagnostics()},{"attachmentRemaps",remaps}};
+    }
     if(method=="pose") {
         QJsonArray bones;
         for(int i=0;i<_localPose.size();++i)bones.append(QJsonObject{{"index",i},{"name",_skeleton.bones[i].name},{"local",frame(_localPose[i])},{"world",frame(_globalPose[i])}});

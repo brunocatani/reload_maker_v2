@@ -111,7 +111,11 @@ namespace
         QByteArray malformed = data; u32(malformed, 20, 0xffffffffU);
         QByteArray obts(25, '\0'); u32(obts, 0, 1); u32(obts, 18, 1);
         QByteArray roots(4, '\0'); u32(roots, 0, 10);
+        QByteArray functionType(4,'\0');u32(functionType,0,8);
         const QByteArray bytes = record("TES4", 0, {}) +
+            record("KYWD",77,sub("EDID","remapNode_Sights_Test_P-SlideSights")+sub("TNAM",functionType))+
+            record("KYWD",78,sub("EDID","remapNode_Unrelated_P-SlideSights"))+
+            record("KYWD",79,sub("EDID","remapNode_P-Laser_P-LaserMount")+sub("TNAM",functionType))+
             record("OMOD", 1, sub("EDID", "TestPart") + sub("DATA", data) + sub("MNAM", association)) +
             record("OMOD", 2, sub("EDID", "Truncated") + sub("DATA", malformed)) +
             record("WEAP", 3, sub("EDID", "Weapon") + sub("APPR", roots) + sub("OBTS", obts));
@@ -127,6 +131,9 @@ namespace
         require(!plugin.findObjectMod(2)->metadataWarning.isEmpty(), "malformed array was not surfaced");
         require(plugin.weapons.first().defaultObjectMods == QVector<std::uint32_t>({1}), "declared default include not decoded");
         require(plugin.weapons.first().attachParentSlots == QVector<std::uint32_t>({10}), "weapon root slot missing");
+        require(plugin.nodeRemaps.value(77).node=="Sights_Test"&&plugin.nodeRemaps.value(77).point=="P-SlideSights", "FunctionCall remap did not preserve its node/connection");
+        require(!plugin.nodeRemaps.contains(78),"Untyped keyword became an executable remap");
+        require(!plugin.nodeRemaps.contains(79),"Connection metadata remap was treated as an incoming model node");
     }
 
     void layoutTests()
@@ -206,6 +213,12 @@ int main(int argc, char** argv)
                         << " selected=" << QString::number(config.selected(slot.key), 16)
                         << " available=" << config.availableSlots().contains(slot.key) << '\n';
                 }
+            }
+            if(plugin.fileName=="Glock19x.esp") {
+                const auto remap=plugin.nodeRemaps.value(0x01003616);
+                require(remap.node=="SightsGlock19x"&&remap.point=="P-Glock19xSights","Actual Glock remap keyword differs from inspected source");
+                for(auto id:{0x01000fb1u,0x0100177du,0x010026b5u,0x01001f46u,0x0100363du})
+                    require(plugin.findObjectMod(id)&&plugin.findObjectMod(id)->addedKeywords.contains(0x01003616),"Glock sight variant lost its selected remap");
             }
             if (plugin.fileName == QStringLiteral("[DeltaForce]M4A1.esp")) {
                 const auto* magazine = plugin.findObjectMod(0x01001ed3);

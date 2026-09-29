@@ -190,7 +190,7 @@ namespace reloadmaker {
                 const auto winner = [&](std::uint32_t id) { result.origins[id].winner = plugin.fileName; };
                 for (const auto raw : plugin.deletedRecords) {
                     const auto id = resolve(raw);
-                    weapons.remove(id); mods.remove(id); graphs.remove(id); result.keywordNames.remove(id);result.ammoNames.remove(id); winner(id);
+                    weapons.remove(id); mods.remove(id); graphs.remove(id); result.keywordNames.remove(id);result.nodeRemaps.remove(id);result.ammoNames.remove(id); winner(id);
                 }
                 for (auto weapon : plugin.weapons) {
                     weapon.formId = resolve(weapon.formId);
@@ -212,6 +212,8 @@ namespace reloadmaker {
                 }
                 for (auto it = plugin.keywordNames.cbegin(); it != plugin.keywordNames.cend(); ++it) {
                     const auto id = resolve(it.key()); winner(id); result.keywordNames.insert(id, it.value());
+                    result.nodeRemaps.remove(id);
+                    if(plugin.nodeRemaps.contains(it.key()))result.nodeRemaps.insert(id,plugin.nodeRemaps.value(it.key()));
                 }
                 for(auto it=plugin.ammoNames.cbegin();it!=plugin.ammoNames.cend();++it){const auto id=resolve(it.key());winner(id);result.ammoNames.insert(id,it.value());}
                 loaded.insert(plugin.fileName.toLower());

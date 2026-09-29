@@ -297,6 +297,9 @@ namespace reloadmaker
         void refreshSlotChoices();
         void refreshSlotCallouts();
         void recordPartSurfaces(SlotKey slot, int firstBlock, int lastBlock);
+        bool remapAttachmentNodes(const ObjectModRecord& mod, int firstBlock, int lastBlock, QString& error);
+        struct RemappedAttachment {QPersistentModelIndex node, parent;QString keyword, point;SlotKey slot{0};};
+        QVector<RemappedAttachment> _remappedAttachments;
         [[nodiscard]] bool recordPartAlignment(int firstBlock, int lastBlock, int anchorBone, QString& error);
         void scheduleRebuild();
         void clearAssetCaches();

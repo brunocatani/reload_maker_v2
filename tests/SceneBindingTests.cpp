@@ -98,6 +98,28 @@ namespace
         require(connections.anchor({}, 99, error) == -1, "invalid match accepted");
     }
 
+    void remappedSightInheritance()
+    {
+        HkxSkeleton skeleton;
+        skeleton.bones={{"Weapon",-1,false,{}},{"WeaponBolt",0,false,{}}};
+        // Scope root stays on the receiver. Only the named sight sub-branch
+        // has been moved to the slide; a sibling rail optic stays stationary.
+        QVector<ScenePoseNode> nodes{{-1,0,{}},{0,1,{}},{0,-1,{}},
+            {1,-1,transform({.2f,3,4})},{3,-1,transform({0,1,0})},{2,-1,transform({0,2,6})}};
+        QVector<ScenePoseBinding> bindings;QString error;
+        require(compileSceneBindings(skeleton,0,nodes,{0,1},bindings,error),error);
+        const QVector<Transformf> baseline(2);QVector<Transformf> local,global,boundLocal,boundGlobal;
+        for(auto slide:{Transformf{},transform({0,-3,0}),transform({2,-2,1},8,13,5),Transformf{}}) {
+            local={transform({8,4,-2},5,15,10),slide};
+            require(buildPoseGlobals(skeleton,local,global,error),error);
+            require(evaluateSceneBindings(skeleton,bindings,local,baseline,global,boundLocal,boundGlobal,error),error);
+            auto posed=nodes;for(int i=0;i<bindings.size();++i)posed[bindings[i].nodeIndex].restLocal=boundLocal[i];
+            const std::function<QMatrix4x4(int)> world=[&](int n){return n<0?QMatrix4x4{}:world(posed[n].parent)*matrix(posed[n].restLocal);};
+            expect(world(4),matrix(global[1])*matrix(nodes[3].restLocal)*matrix(nodes[4].restLocal));
+            expect(world(5),matrix(global[0])*matrix(nodes[5].restLocal));
+        }
+    }
+
     void runCase(const Transformf& magazineRest, const Transformf& connection, bool auxiliaryUnderMagazine)
     {
         HkxSkeleton skeleton;
@@ -314,6 +336,7 @@ int main(int argc, char** argv)
     QCoreApplication app(argc, argv);
     try {
         connectionOwnershipCases();
+        remappedSightInheritance();
         sharedAlignmentCases();
         for (const Transformf connection : {Transformf{}, transform({3, -2, 4}, 15, 25, -35)}) {
             for (bool auxiliaryUnderMagazine : {false, true}) {

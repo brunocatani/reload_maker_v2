@@ -467,6 +467,17 @@ namespace reloadmaker
                     if(label.isEmpty()||label.startsWith("String "))label=textSubrecord(record,"EDID",false);
                     content.ammoNames.insert(record.formId,label);
                 } else if (record.type == QByteArrayLiteral("KYWD")) {
+                    const QString editorId=textSubrecord(record,"EDID",false);
+                    const auto* kind=firstSubrecord(record,"TNAM");
+                    // FO4 FunctionCall (TNAM=8): the Glock declares a named
+                    // sub-branch and an explicit parent connection, not a bone alias.
+                    const int split=editorId.lastIndexOf("_P-",-1,Qt::CaseInsensitive);
+                    if(kind&&kind->data.size()==4&&readLittle<std::uint32_t>(kind->data,0)==8&&
+                        editorId.startsWith("remapNode_",Qt::CaseInsensitive)&&split>10&&split+3<editorId.size()&&
+                        !editorId.mid(10,split-10).startsWith("P-",Qt::CaseInsensitive))
+                        content.nodeRemaps.insert(record.formId,{editorId.mid(10,split-10),editorId.mid(split+1)});
+                    // P-* sources remap connection metadata (e.g. the Glock's
+                    // laser mount), not a node inside the incoming model.
                     QString label = textSubrecord(record, QByteArrayLiteral("FULL"), localized);
                     if (label.isEmpty()) { label = textSubrecord(record, QByteArrayLiteral("EDID"), false); }
                     content.keywordNames.insert(record.formId, label);
@@ -508,6 +519,7 @@ namespace reloadmaker
             content.objectMods.clear();
             content.animationSubgraphs.clear();
             content.keywordNames.clear();
+            content.nodeRemaps.clear();
             content.ammoNames.clear();
             content.deletedRecords.clear();
         }
