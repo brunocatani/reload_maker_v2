@@ -97,7 +97,7 @@ QJsonObject ReloadMakerController::studioState() const {
     for(int i=0;i<_animationList->count();++i)actions.append(QJsonObject{{"index",i},{"name",_animationList->item(i)->text()},{"path",_animationList->item(i)->data(Qt::UserRole).toString()}});
     for(int i=0;i<_animationSetCombo->count();++i)sets.append(QJsonObject{{"index",i},{"name",_animationSetCombo->itemText(i)},{"details",_animationSetCombo->itemData(i,Qt::ToolTipRole).toString()},{"identity",animationSetIdentity(i)}});
     if(const auto* config=configuration())for(const auto& slot:config->entries()){
-        QJsonArray choices;for(auto id:slot.choices)if(const auto* m=config->mod(id))choices.append(QJsonObject{{"id",QString::number(id)},{"name",m->name},{"editorId",m->editorId},{"model",m->modelPath}});
+        QJsonArray choices;for(auto id:slot.choices)if(const auto* m=config->mod(id))choices.append(QJsonObject{{"id",QString::number(id)},{"record",poseRecordKey(id)},{"name",m->name},{"editorId",m->editorId},{"model",m->modelPath}});
         configurationSlots.append(QJsonObject{{"key",QString::number(slot.key)},{"name",slot.label},{"selected",QString::number(config->selected(slot.key))},{"choices",choices}});
     }
     for(int i=0;i<_handPoseAnchors.size();++i)anchors.append(QJsonObject{{"index",i},{"name",_handPoseAnchor->itemText(i)},{"kind",_handPoseAnchors[i].description.anchorKind}});
@@ -321,13 +321,14 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     else if(method=="open_project") {openSession(p["path"].toString());}
     else if(method=="export") {
         QString error;QByteArray bytes;const QString kind=p["kind"].toString();QString id;
-        if(kind=="simulation"){const auto record=exportSimulation();require(!record.isEmpty(),"Prepare a simulation before exporting");bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
+        if(kind=="slide"){const auto record=exportSlideProfile();require(!record.isEmpty(),"Prepare a Glock simulation with native rig bindings before exporting");bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
+        else if(kind=="simulation"){const auto record=exportSimulation();require(!record.isEmpty(),"Prepare a simulation before exporting");bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
         else if(kind=="reload_bundle"){require(_reloadRecipe.has_value(),"Learn the configured reload first");bytes=encodeReloadBundle(*_reloadRecipe,_partGrips,_mechanisms,_magazineGrabGrips,error);id=_reloadRecipe->id;}
         else if(kind=="reload"){require(_reloadRecipe.has_value(),"No reload recipe");bytes=encodeReloadRecipe(*_reloadRecipe,error);id=_reloadRecipe->id;}
         else if(kind=="grip"){require(_partGripDraft.has_value(),"No grip draft");bytes=encodePartGrip(*_partGripDraft,error);id=_partGripDraft->pose.id;}
         else if(kind=="mechanism"){require(_mechanismDraft.has_value(),"No mechanism draft");bytes=encodeMechanism(*_mechanismDraft,error);id=_mechanismDraft->id;}
         else if(kind=="hand"){const auto* pose=selectedHandPose();require(pose,"Choose a saved hand pose");bytes=encodeHandPose(*pose,error);id=pose->id;}
-        else require(false,"Export kind must be hand, grip, mechanism, reload, reload_bundle or simulation");
+        else require(false,"Export kind must be hand, grip, mechanism, reload, reload_bundle, simulation or slide");
         require(error.isEmpty()&&!bytes.isEmpty(),error);const QString path=studioDataPath("exports/"+kind+"-"+id+".json");write(path,bytes);return {{"path",path},{"kind",kind},{"deployed",false}};
     } else require(false,"Unknown studio command: "+method);
     require(_lastError.isEmpty(),_lastError);++_revision;return studioState();

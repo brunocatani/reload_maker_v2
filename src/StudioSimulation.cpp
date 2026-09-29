@@ -401,6 +401,36 @@ QJsonObject ReloadMakerController::simulationState() const {
     QJsonArray visuals;if(auto* model=activeModel())for(const auto& v:_magazineVisuals)if(v.node.isValid())visuals.append(QJsonObject{{"block",model->getBlockNumber(v.node)},{"emptyVersion",v.empty},{"flags",model->get<int>(v.node,"Flags")},{"originalFlags",v.flags}});
     result["magazineShapes"]=visuals;return result;
 }
+QJsonObject ReloadMakerController::exportSlideProfile() const {
+    if(!isGlockConfiguration()||!_simulationRig||!_reloadRecipe||_weaponBoneIndex<0)return {};
+    const auto& rig=*_simulationRig;const auto& recipe=*_reloadRecipe;
+    QString error;const auto encoded=encodeReloadRecipe(recipe,error);if(!error.isEmpty())return {};
+    const auto original=QJsonDocument::fromJson(encoded).object()["tracks"].toArray();
+    QJsonArray tracks;
+    for(const int index:rig.slideTracks) {
+        if(index<0||index>=_reloadTrackNodes.size())return {};
+        const auto binding=std::find_if(_nodeBindings.cbegin(),_nodeBindings.cend(),[&](const auto& b){return b.nodeIndex==_reloadTrackNodes[index];});
+        if(binding==_nodeBindings.cend())return {};
+        // A model-relative NIF path is not a path in the game's assembled rig.
+        // Keep the model identity and export the HKX bone ancestry separately.
+        QStringList path;int bone=binding->boneIndex;
+        for(int depth=0;bone>=0&&bone<_skeleton.bones.size()&&depth<64;++depth) {
+            path.prepend(_skeleton.bones[bone].name);
+            if(bone==_weaponBoneIndex)break;
+            bone=_skeleton.bones[bone].parentIndex;
+        }
+        if(bone!=_weaponBoneIndex)return {};
+        const auto source=original[index].toObject();const auto poses=source["poses"].toArray();QJsonArray stroke;
+        for(int f=rig.openFrame;f<=rig.closedFrame;++f)stroke.append(poses[f]);
+        tracks.append(QJsonObject{{"anchor",source["anchor"]},{"runtimePath",path.join('/')},{"poses",stroke}});
+    }
+    return {{"format","reload-maker-slide-profile"},{"version",1},{"recipeId",recipe.id},{"source",recipe.source},
+        {"framePath",_skeleton.bones[_weaponBoneIndex].name},{"space","weapon-local"},
+        {"sourceFirstFrame",rig.openFrame},{"sourceLastFrame",rig.closedFrame},{"sourceFrames",recipe.frames},
+        {"frames",rig.closedFrame-rig.openFrame+1},{"duration",recipe.duration*(rig.closedFrame-rig.openFrame)/(recipe.frames-1)},
+        {"slideTrack",rig.slideTracks.indexOf(rig.slide)},{"openFrame",0},{"closedFrame",rig.closedFrame-rig.openFrame},
+        {"springReturn",_simulationSpring->isChecked()},{"tracks",tracks}};
+}
 QJsonObject ReloadMakerController::exportSimulation() const {
     if(!_simulationRig||!_reloadRecipe)return {};
     QString error;const auto bytes=encodeReloadRecipe(*_reloadRecipe,error);if(!error.isEmpty())return {};

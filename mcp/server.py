@@ -174,7 +174,7 @@ def open_project(path: str, expected_revision: int) -> dict:
 
 @mcp.tool()
 def export_authored_record(kind: str, expected_revision: int) -> dict:
-    """Export hand/grip/mechanism/reload/simulation or reload_bundle to the local exports folder. reload_bundle embeds the native recipe, assigned grips, their part definitions and magazine-grab bindings; unresolved references reject export. Never deploys."""
+    """Export hand/grip/mechanism/reload/simulation, slide or reload_bundle to the local exports folder. slide retains every closing-stroke sample and the native rig paths for DIAMOND. reload_bundle embeds the native recipe, assigned grips, their part definitions and magazine-grab bindings; unresolved references reject export. Never deploys."""
     return command('export',{'kind':kind},expected_revision)
 
 @mcp.tool()
@@ -197,6 +197,12 @@ def simulate_weapon(operation: str, expected_revision: int, progress: float | No
 def cancel_operation() -> dict:
     """Cancel the current source load or reload capture."""
     return command('cancel')
+
+@mcp.tool()
+def export_glock_runtime_slides() -> dict:
+    """Capture every available Glock 19X receiver/magazine pair into a native-rig slide pack for DIAMOND. Takes several minutes, restores the current project, and writes only to the local exports folder. Keep the editor idle during capture. Includes the complete sampled slide/barrel/follower stroke; no game deployment."""
+    from glock_slide_pack import export_glock_slide_pack
+    return export_glock_slide_pack(command)
 
 @mcp.tool()
 def import_authored_records(paths: list[str], expected_revision: int) -> dict:

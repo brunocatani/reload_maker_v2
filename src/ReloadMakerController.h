@@ -164,6 +164,7 @@ namespace reloadmaker
         void releaseSimulation(bool cancel);
         QJsonObject simulationState() const;
         QJsonObject exportSimulation() const;
+        QJsonObject exportSlideProfile() const;
         void prepareMagazineInteraction();
         void moveFreeMagazine(QVector3D offset);
         void moveMagazineRail(float distance);

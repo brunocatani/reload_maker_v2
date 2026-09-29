@@ -92,7 +92,7 @@ void ReloadMakerController::createUi() {
     exportRecords->setText("Export");
     exportRecords->setPopupMode(QToolButton::InstantPopup);
     auto* exportMenu = new QMenu(exportRecords);
-    for(const auto& pair : {std::pair{"Saved hand pose","hand"},std::pair{"Current part grip","grip"},std::pair{"Current mechanism","mechanism"},std::pair{"Current reload recipe","reload"},std::pair{"Reload + grips (self-contained)","reload_bundle"}}) {
+    for(const auto& pair : {std::pair{"Saved hand pose","hand"},std::pair{"Current part grip","grip"},std::pair{"Current mechanism","mechanism"},std::pair{"Current reload recipe","reload"},std::pair{"Reload + grips (self-contained)","reload_bundle"},std::pair{"Current slide for DIAMOND","slide"}}) {
         connect(exportMenu->addAction(pair.first),&QAction::triggered,this,[this,kind=QString(pair.second)] {
             try {const auto result=executeCommand({{"method","export"},{"params",QJsonObject{{"kind",kind}}}});setStatus("Exported · "+result["path"].toString());}
             catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}
