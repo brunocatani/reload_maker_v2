@@ -190,16 +190,19 @@ namespace reloadmaker {
                 const auto winner = [&](std::uint32_t id) { result.origins[id].winner = plugin.fileName; };
                 for (const auto raw : plugin.deletedRecords) {
                     const auto id = resolve(raw);
-                    weapons.remove(id); mods.remove(id); graphs.remove(id); result.keywordNames.remove(id); winner(id);
+                    weapons.remove(id); mods.remove(id); graphs.remove(id); result.keywordNames.remove(id);result.ammoNames.remove(id); winner(id);
                 }
                 for (auto weapon : plugin.weapons) {
                     weapon.formId = resolve(weapon.formId);
                     remap(weapon.keywords); remap(weapon.defaultObjectMods); remap(weapon.attachParentSlots);
+                    weapon.ammo=resolve(weapon.ammo);
                     winner(weapon.formId); weapons.insert(weapon.formId, std::move(weapon));
                 }
                 for (auto mod : plugin.objectMods) {
                     mod.formId = resolve(mod.formId); mod.attachPoint = resolve(mod.attachPoint);
                     remap(mod.addedKeywords); remap(mod.attachParentSlots); remap(mod.targetKeywords);
+                    remap(mod.removedKeywords);
+                    for(auto& property:mod.ammoProperties)if(property.property==61&&property.valueType==4)property.value1=resolve(property.value1);
                     winner(mod.formId); mods.insert(mod.formId, std::move(mod));
                 }
                 for (auto graph : plugin.animationSubgraphs) {
@@ -210,6 +213,7 @@ namespace reloadmaker {
                 for (auto it = plugin.keywordNames.cbegin(); it != plugin.keywordNames.cend(); ++it) {
                     const auto id = resolve(it.key()); winner(id); result.keywordNames.insert(id, it.value());
                 }
+                for(auto it=plugin.ammoNames.cbegin();it!=plugin.ammoNames.cend();++it){const auto id=resolve(it.key());winner(id);result.ammoNames.insert(id,it.value());}
                 loaded.insert(plugin.fileName.toLower());
                 for (const auto& diagnostic : plugin.diagnostics) {
                     result.diagnostics.append(QStringLiteral("%1: %2").arg(plugin.fileName, diagnostic));

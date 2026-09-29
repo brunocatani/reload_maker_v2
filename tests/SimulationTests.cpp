@@ -9,8 +9,8 @@ using namespace reloadmaker;
 namespace {
 void check(bool valid,const QString& error){if(!valid)throw std::runtime_error(error.toStdString());}
 void stateTransitions() {
-    WeaponSimulation s;check(s.dropMagazine(),"Drop must work at rest");
-    check(!s.magazinePresent()&&s.fire(),"Removing magazine must not disable visual fire");
+    WeaponSimulation s;s.configureAmmunition(17,true);check(s.dropMagazine(),"Drop must work at rest");
+    check(!s.magazinePresent()&&s.fire(),"Removing magazine must retain the chambered shot");
     check(!s.grab()&&!s.reload()&&!s.dropMagazine(),"A native action must own the scene until complete");
     check(s.tick(1,.2f)&&!s.magazinePresent(),"Fire must preserve a removed magazine");
     check(s.grab(),"Grab failed");s.drag(.6f);s.release(false,true);
@@ -68,10 +68,53 @@ void fixture(const QString& path) {
     magazine.moveRail(rail,0);check(magazine.seated()&&magazine.offset.isNull(),"Cursor insertion did not latch");
     magazine.drop();magazine.grab(rail);magazine.cancel();check(!magazine.visible()&&!magazine.carried(),"Cancel left cursor ownership or geometry behind");
 }
+void ammunitionTransitions() {
+    WeaponSimulation s;s.configureAmmunition(3,true);
+    const auto fire=[&]{check(s.fire(),"Loaded shot rejected");check(s.tick(1,.2f),"Shot failed to finish");};
+    check(s.magazineRounds==2&&s.chambered&&s.canFire(),"Reset must split native loaded capacity into magazine and chamber");
+    fire();check(s.magazineRounds==1&&s.chambered&&s.shotsFired==1,"First shot did not feed exactly once");
+    fire();check(s.magazineRounds==0&&s.chambered&&!s.slideLocked,"Last chambered round must remain fireable");
+    fire();check(s.slideLocked&&s.slide==1&&!s.chambered&&s.shotsFired==3&&!s.fire(),"Empty pistol must lock and reject firing");
+    check(s.grab(),"Locked slide grab failed");s.drag(1);s.release(false,true);
+    check(s.slideLocked&&s.action==SimulationAction::Idle,"Touching the catch must not release it");
+    check(s.dropMagazine()&&s.slideLocked,"Removing empty magazine released the slide");
+    MagazineRail rail;rail.travel=10;rail.outward={0,0,-1};rail.captureRadius=1;rail.releaseMargin=2;
+    check(s.magazineIn(rail),"Fresh magazine rejected");s.magazine.tick(rail,1);
+    check(s.magazineRounds==3&&!s.chambered&&s.slideLocked&&!s.canFire(),"Seating must not chamber or unlock");
+    check(s.slideRelease(),"Slide release rejected");s.tick(1,1);
+    check(s.magazineRounds==2&&s.chambered&&s.slide==0&&!s.slideLocked,"Slide release failed to transfer a single round");
+    fire();fire();fire();check(s.slideLocked,"Second cycle failed to lock");
+    s.dropMagazine();check(s.grabMagazine(rail),"Cursor magazine failed");s.magazine.moveFree(rail,rail.outward*rail.travel);s.magazine.moveRail(rail,0);
+    check(s.magazinePresent()&&s.magazineRounds==3&&s.slideLocked&&!s.chambered,"Cursor seating changed chamber/catch");
+    s.grab();s.drag(1.08f);s.release(true,true);
+    check(s.slideLocked&&s.magazineRounds==3&&!s.chambered,"Cancelled slingshot changed ammo or catch");
+    s.grab();s.drag(1.08f);s.release(false,true);s.tick(1,1);
+    check(!s.slideLocked&&s.chambered&&s.magazineRounds==2,"Slingshot failed to chamber");
+    s.grab();s.drag(.5f);s.release(false,true);s.tick(1,1);
+    check(s.chambered&&s.magazineRounds==2&&s.roundsEjected==0,"Partial pull changed ammo");
+    s.grab();s.drag(1);check(!s.chambered&&s.roundsEjected==1,"Full rack did not eject chamber");s.drag(1);
+    check(s.roundsEjected==1,"Repeated pull ejected twice");s.release(true,true);
+    check(s.chambered&&s.magazineRounds==2&&s.roundsEjected==0,"Cancel did not restore ammunition");
+    s.grab();s.drag(1);s.release(false,true);s.tick(.1f,1);s.grab();s.drag(.9f);s.release(false,true);s.tick(1,1);
+    check(s.chambered&&s.magazineRounds==1&&s.roundsEjected==1,"Regrab during feed duplicated a round");
+    s.dropMagazine();check(s.chambered&&s.magazineRounds==0,"Tactical drop lost chamber");fire();
+    check(!s.slideLocked&&s.slide==0&&!s.fire(),"Absent magazine must allow only the chambered shot, without follower lock");
+    s.grab();s.drag(1);s.release(false,true);s.tick(1,1);check(!s.chambered,"Racking empty weapon fabricated a round");
+    s.grabMagazine(rail);s.cancelMagazine();check(s.magazineRounds==0&&!s.magazine.visible(),"Cancelled spare retained ammo");
+    check(s.reload(),"Automatic reload failed");check(!s.chambered&&s.magazineRounds==0,"Automatic reload credited ammunition before completion");
+    s.tick(1,1);check(s.chambered&&s.magazineRounds==2,"Automatic empty reload count wrong");
+    s.dropMagazine();s.magazineIn(rail);s.magazine.tick(rail,1);
+    check(s.chambered&&s.magazineRounds==3,"Tactical fresh magazine must retain the extra chambered round");
+    s.reset();s.configureAmmunition(1,false);fire();check(!s.slideLocked&&!s.chambered,"Non-pistol must not receive pistol follower lock");
+    s.configureAmmunition(1,true);fire();s.slideRelease();s.tick(1,1);
+    check(!s.chambered&&s.slide==0&&!s.canFire(),"Release over empty magazine fabricated a round");
+    s.grab();s.drag(1);s.release(false,true);check(s.slideLocked,"Empty seated follower must relock on full rack");
+    s.configureAmmunition(0,true);check(!s.fire()&&!s.reload()&&!s.magazineIn(rail),"Unknown ammunition must not fabricate firing or replenishment");
+}
 }
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
-    try {stateTransitions();check(app.arguments().size()==2,"Pass the Glock project fixture");fixture(app.arguments()[1]);
+    try {stateTransitions();ammunitionTransitions();check(app.arguments().size()==2,"Pass the Glock project fixture");fixture(app.arguments()[1]);
         QTextStream(stdout)<<"PASS simulation state ownership, drop/fire persistence, regrab/cancel/return/reset, actual slide/barrel/cartridge curves and complete magazine ownership\n";return 0;
     }catch(const std::exception& e){QTextStream(stderr)<<"FAIL "<<e.what()<<'\n';return 1;}
 }

@@ -68,7 +68,7 @@ async def run():
             assert rejected.isError,'Firing accepted an open held slide'
             await operation('release');returned=await finished();assert returned['slide']==0
             removed=await operation('drop_magazine');assert hidden(removed) and not removed['magazinePresent']
-            await operation('pull',progress=1);assert hidden(await call('get_simulation_state'))
+            await operation('pull',progress=.8);assert hidden(await call('get_simulation_state'))
             await capture('03-dropped-and-racked')
             await operation('release');await finished()
             fire=await operation('fire');assert fire['action']=='Firing' and hidden(fire)

@@ -139,7 +139,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
         require(_workspace==5&&_simulationActive,"Open the Simulate workspace and wait until ready");
         const auto operation=p["operation"].toString();
         if(operation=="pull") {
-            const float progress=number(p["progress"]);require(progress>=0&&progress<=1,"Slide progress must be between 0 and 1");
+            const float progress=number(p["progress"]);require(progress>=0&&progress<=1.08f,"Slide pull must be between 0 and 1.08; above 1 releases the catch");
             require(_simulation.action==SimulationAction::Held||_simulation.grab(),"Finish the native action before pulling");
             _simulationTimer->stop();dragSimulation(progress);
         } else if(operation=="release")releaseSimulation(p["cancel"].toBool());
@@ -149,7 +149,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
             else {require(_simulation.magazine.phase==MagazinePhase::Free,"Grab a magazine before moving it freely");const auto a=p["position"].toArray();require(a.size()==3,"Position needs three weapon-local offset components");moveFreeMagazine({number(a[0]),number(a[1]),number(a[2])});}
         } else if(operation=="cancel_magazine"){require(_simulation.magazine.carried(),"No cursor-held magazine to cancel");cancelMagazine();}
         else if(operation=="spring") {_simulationSpring->setChecked(p["enabled"].toBool(true));}
-        else {require(operation=="fire"||operation=="reload"||operation=="drop_magazine"||operation=="reset"||operation=="mag_out"||operation=="mag_in"||operation=="grab_magazine","Unknown simulation operation");runSimulationAction(operation);}
+        else {require(operation=="fire"||operation=="reload"||operation=="drop_magazine"||operation=="reset"||operation=="mag_out"||operation=="mag_in"||operation=="grab_magazine"||operation=="slide_release","Unknown simulation operation");runSimulationAction(operation);}
         require(_lastError.isEmpty(),_lastError);++_revision;return simulationState();
     }
     else if(method=="select_weapon") {

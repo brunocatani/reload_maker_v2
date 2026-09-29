@@ -273,6 +273,7 @@ namespace reloadmaker
             PreparedPackage package;
             ResourceArchive resources, meshes, animations;
             QVector<PluginContent> plugins;
+            QHash<QString,QString> referenceNames;
             QString data, error;
             bool cancelled{false};
         };
@@ -306,6 +307,16 @@ namespace reloadmaker
                         progress(QStringLiteral("Reading %1").arg(QFileInfo(pluginPath).fileName()));
                         result->plugins.append(EspReader::read(pluginPath, cancelled));
                     }
+                    QSet<QString> readCatalogs;
+                    for(const auto& plugin:result->plugins)for(const auto& master:plugin.masters) {
+                        if(readCatalogs.contains(master.toLower())||cancelled())continue;
+                        readCatalogs.insert(master.toLower());const auto file=QDir(data).filePath(master);
+                        if(!QFileInfo::exists(file))continue;
+                        progress("Reading ammunition and keyword catalog: "+master);
+                        const auto catalog=EspReader::read(file,cancelled,true);
+                        for(auto it=catalog.ammoNames.cbegin();it!=catalog.ammoNames.cend();++it)result->referenceNames.insert(recordIdentity(catalog,it.key()).toLower(),it.value());
+                        for(auto it=catalog.keywordNames.cbegin();it!=catalog.keywordNames.cend();++it)result->referenceNames.insert(recordIdentity(catalog,it.key()).toLower(),it.value());
+                    }
                 }
                 result->cancelled = cancelled();
             } catch (const std::exception& exception) { result->error = QString::fromUtf8(exception.what()); }
@@ -328,6 +339,7 @@ namespace reloadmaker
             _gameAnimations = std::move(result->animations);
             _gameData = result->data;
             _plugins = std::move(result->plugins);
+            _referenceNames = std::move(result->referenceNames);
             _packagePath->setText(_package.sourcePath);
             _gameDataPath->setText(_gameData);
             QSettings settings;
@@ -1084,6 +1096,7 @@ namespace reloadmaker
     void ReloadMakerController::clearAssetCaches()
     {
         invalidateReloadCapture();
+        _referenceNames.clear();
         _handPosePreview.reset();
         _partGripDraft.reset();
         _gripPreviewValid = false;

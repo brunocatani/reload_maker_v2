@@ -164,7 +164,7 @@ namespace reloadmaker {
     }
     void ReloadMakerController::invalidateReloadCapture()
     {
-        stopSimulation();_simulationRig.reset();
+        stopSimulation();_simulationRig.reset();_simulationAmmo={};_simulation.configureAmmunition(0,false);
         if(_reloadCaptureTimer){_reloadCaptureTimer->stop();}
         if(_reloadPreviewTimer){_reloadPreviewTimer->stop();}
         if(_reloadGraph)_reloadGraph->setRecipe(nullptr);

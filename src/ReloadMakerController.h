@@ -14,6 +14,7 @@
 #include "ReloadRecipe.h"
 #include "ReloadDriveViewport.h"
 #include "WeaponSimulation.h"
+#include "WeaponAmmunition.h"
 
 #include <QHash>
 #include <QCache>
@@ -163,7 +164,7 @@ namespace reloadmaker
         void updateMagazinePose();
         std::optional<MagazineRail> _magazineRail;
         QString _magazineError;
-        struct MagazineVisual {QPersistentModelIndex node;int flags{0};bool empty{false};};
+        struct MagazineVisual {QPersistentModelIndex node;int flags{0};bool empty{false};int track{-1};};
         QVector<MagazineVisual> _magazineVisuals;
         MagazineViewport* _magazineViewport{nullptr};
         QPushButton* _magazineOut{nullptr};
@@ -184,6 +185,9 @@ namespace reloadmaker
         WeaponSimulation _simulation;
         bool _simulationActive{false};
         QString _simulationError;
+        WeaponAmmunition _simulationAmmo;
+        QHash<QString,QString> _referenceNames;
+        QPushButton* _simulationSlideRelease{nullptr};
         QVector<std::pair<QPersistentModelIndex,int>> _simulationVisibility;
         QButtonGroup* _workspaceButtons{nullptr};
         int _workspace{0};

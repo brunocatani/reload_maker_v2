@@ -52,7 +52,7 @@ void ReloadMakerController::prepareMagazineInteraction() {
         const bool isEmpty=shape.track==rail.emptyTrack;
         if(isEmpty)empty=true;
         if(shape.track==rig.magazine)fullBody=true;
-        _magazineVisuals.append({shape.node,model->get<int>(shape.node,"Flags"),isEmpty});
+        _magazineVisuals.append({shape.node,model->get<int>(shape.node,"Flags"),isEmpty,shape.track});
     }
     if(!empty||!fullBody){_magazineVisuals.clear();_magazineError="Separate full and empty magazine geometry could not be resolved.";return;}
     _magazineRail=rail;
@@ -73,6 +73,6 @@ void ReloadMakerController::moveMagazineRail(float distance) {
     if(!before&&_simulation.magazine.seated())setStatus("Full magazine seated.");
 }
 void ReloadMakerController::cancelMagazine() {
-    _simulation.magazine.cancel();updateMagazinePose();setStatus("Magazine placement cancelled.");
+    _simulation.cancelMagazine();updateMagazinePose();setStatus("Magazine placement cancelled.");
 }
 }

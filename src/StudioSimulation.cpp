@@ -50,6 +50,7 @@ void ReloadMakerController::createSimulationUi() {
         connect(b,&QPushButton::clicked,this,[this,action]{runSimulationAction(action);});return b;
     };
     _simulationFire=button("FIRE","fire");_simulationFire->setObjectName("PrimaryButton");
+    _simulationSlideRelease=button("SLIDE RELEASE","slide_release");
     _simulationReload=button("AUTOMATIC RELOAD","reload");
     _simulationDrop=button("DROP MAGAZINE","drop_magazine");
     auto* magazineRow=new QHBoxLayout;
@@ -70,7 +71,7 @@ void ReloadMakerController::createSimulationUi() {
         try{const auto result=executeCommand({{"method","export"},{"params",QJsonObject{{"kind","simulation"}}}});setStatus("Exported · "+result["path"].toString());}
         catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}
     });
-    auto* help=new QLabel("Mouse: pull slide · drag background to orbit\nGrab Magazine: move mouse, wheel for depth\nGuide a full magazine to the entrance ring, then push it in. Esc cancels.\n\nVisual interaction preview; ammunition is not counted.",panel);
+    auto* help=new QLabel("Empty pistol: insert a fresh magazine, then use Slide Release or pull the slide slightly farther back and let go.\n\nGrab Magazine: move mouse, wheel for depth. Guide it to the entrance ring, then push in. Esc cancels.\nSpare magazines are supplied full.",panel);
     help->setWordWrap(true);help->setObjectName("Hint");layout->addWidget(help);
     auto* scroll=new QScrollArea(_simulationDock);scroll->setWidgetResizable(true);scroll->setFrameShape(QFrame::NoFrame);scroll->setWidget(panel);
     _simulationDock->setWidget(scroll);_window->addDockWidget(Qt::LeftDockWidgetArea,_simulationDock);_simulationDock->hide();
@@ -117,7 +118,9 @@ void ReloadMakerController::prepareSimulation() {
         _simulationError="The complete magazine assembly could not be resolved; simulation is unavailable.";
         _simulationRig.reset();updateSimulationControls();return;
     }
-    _simulation.reset();_simulationActive=true;
+    _simulationAmmo=resolveWeaponAmmunition(*currentPlugin(),*currentWeapon(),*config,_referenceNames);
+    _simulation.configureAmmunition(_simulationAmmo.valid()?_simulationAmmo.capacity:0,_simulationAmmo.pistol);
+    _simulationActive=true;
     _reloadPreviewTimer->stop();_reloadPlaying=false;_reloadHeld=false;_reloadDrive->setActive(false,false);
     if(!selectSimulationClip(false,false)){stopSimulation();updateSimulationControls();return;}
     prepareMagazineInteraction();
@@ -144,7 +147,9 @@ void ReloadMakerController::applySimulationVisibility() {
     }
     const bool authored=_simulation.action==SimulationAction::Reload;
     for(const auto& visual:_magazineVisuals)if(visual.node.isValid()) {
-        const bool hide=_simulationActive&&!authored&&(visual.empty!=_simulation.magazine.empty());
+        const bool cartridge=_simulationRig&&!visual.empty&&visual.track!=_simulationRig->magazine;
+        const bool noRound=_simulation.magazine.seated()?(!_simulation.chambered&&_simulation.magazineRounds==0):_simulation.magazineRounds==0;
+        const bool hide=_simulationActive&&!authored&&(cartridge?noRound:(visual.empty!=(_simulation.magazineRounds==0)));
         const int desired=hide?visual.flags|1:visual.flags;
         if(model->get<int>(visual.node,"Flags")!=desired){model->set<int>(visual.node,"Flags",desired);if(auto* node=scene->getNode(model,visual.node))node->update(model,visual.node);}
     }
@@ -155,7 +160,13 @@ bool ReloadMakerController::applySimulationPose() {
     QVector<Transformf> local,world;
     if(!nativeMechanismScene(_reloadScenePlan,_nodeBindings,_boundLocalPose,local,world,_poseError))return false;
     QHash<int,Transformf> targets;
-    if(_simulation.action!=SimulationAction::Fire)for(int track:_simulationRig->slideTracks)targets.insert(_reloadTrackNodes[track],simulationTrackPose(*_reloadRecipe,*_simulationRig,track,_simulation.slide));
+    if(_simulation.action!=SimulationAction::Fire||_simulation.willLockAfterShot())for(int track:_simulationRig->slideTracks)
+        targets.insert(_reloadTrackNodes[track],simulationTrackPose(*_reloadRecipe,*_simulationRig,track,_simulation.willLockAfterShot()?1.f:_simulation.slide));
+    // A newly seated magazine has a top round, not a magically loaded chamber.
+    // The source feed curve takes over only during a completed rack/return cycle.
+    if(_simulation.action!=SimulationAction::Fire&&!_simulation.chambered&&!_simulation.feedCycleActive())
+        for(const auto& visual:_magazineVisuals)if(!visual.empty&&visual.track>=0&&visual.track!=_simulationRig->magazine)
+            targets.insert(_reloadTrackNodes[visual.track],_reloadRecipe->tracks[visual.track].poses.front());
     QSet<int> fixedMagazine;
     if(_magazineRail&&!_simulation.magazine.seated())for(int track:_simulationRig->magazineTracks) {
         auto pose=_reloadRecipe->tracks[track].poses.front();const auto offset=_simulation.magazine.offset;
@@ -179,12 +190,16 @@ void ReloadMakerController::runSimulationAction(const QString& action) {
     _simulationError.clear();bool accepted=false;
     if(action=="reset") {_simulation.reset();_simulationTimer->stop();_simulationDrive->clearCurve();accepted=selectSimulationClip(false,false);}
     else if(action=="drop_magazine")accepted=_simulation.dropMagazine();
+    else if(action=="slide_release") {
+        accepted=_simulation.slideRelease();
+        if(accepted){_simulationClock.restart();_simulationTimer->start();}
+    }
     else if(action=="mag_out"||action=="mag_in"||action=="grab_magazine") {
         if(!_magazineRail){setStatus(_magazineError,true);return;}
         if(_simulation.action==SimulationAction::Idle) {
-            if(action=="mag_out")accepted=_simulation.magazine.animateOut();
-            else if(action=="mag_in")accepted=_simulation.magazine.animateIn(*_magazineRail);
-            else {accepted=_simulation.magazine.grab(*_magazineRail);if(accepted)_magazineViewport->beginCarry();}
+            if(action=="mag_out")accepted=_simulation.magazineOut();
+            else if(action=="mag_in")accepted=_simulation.magazineIn(*_magazineRail);
+            else {accepted=_simulation.grabMagazine(*_magazineRail);if(accepted)_magazineViewport->beginCarry();}
         }
         if(accepted&&_simulation.magazine.animated()){_simulationClock.restart();_simulationTimer->start();}
     }
@@ -194,7 +209,7 @@ void ReloadMakerController::runSimulationAction(const QString& action) {
         if(accepted&&!selectSimulationClip(action=="fire",action=="reload")){_simulation=previous;accepted=false;}
         if(accepted){_simulationDrive->clearCurve();_simulationClock.restart();_simulationTimer->start();}
     }
-    if(!accepted){setStatus(_simulationError.isEmpty()?"Finish the current action and close the slide before firing.":_simulationError,true);return;}
+    if(!accepted){setStatus(!_simulationAmmo.valid()?_simulationAmmo.error:action=="fire"&&!_simulation.chambered?"Chamber empty. Insert a magazine and cycle or release the slide.":"Finish the current interaction; the slide must be closed and chamber loaded to fire.",true);return;}
     if(!applyPose(_simulation.seconds)){_simulationError=_lastError;stopSimulation();updateSimulationControls();return;}
     applySimulationVisibility();updateSimulationControls();++_revision;
     setStatus(action=="drop_magazine"?"Magazine assembly removed. Rack the slide, or use Automatic reload to restore it.":actionName(_simulation.action));
@@ -228,6 +243,9 @@ bool ReloadMakerController::beginSimulationGrab(QPointF point,ReloadDriveCurve& 
         const auto p=composed(simulationTrackPose(*_reloadRecipe,rig,rig.slide,progress),Transformf{contact}).translation;
         curve.points.append({p.x,p.y,p.z});curve.times.append(progress);
     }
+    // Gesture travel beyond the catch lets a locked-open slide be pulled and
+    // released. Geometry remains clamped to the verified source stroke.
+    curve.points.append(curve.points.back()+(curve.points.back()-curve.points.front())*.08f);curve.times.append(1.08f);
     updateSimulationControls();setStatus("Slide grabbed · drag along its travel · Esc cancels");++_revision;return true;
 }
 void ReloadMakerController::dragSimulation(float progress) {
@@ -247,25 +265,31 @@ void ReloadMakerController::updateSimulationControls() {
     if(!_simulationStatus)return;
     const bool native=_simulation.action==SimulationAction::Fire||_simulation.action==SimulationAction::Reload;
     const bool busy=native||_simulation.magazine.busy();
-    _simulationFire->setEnabled(_simulationActive&&!busy&&_simulation.action==SimulationAction::Idle&&_simulation.slide<=.001f);
-    _simulationReload->setEnabled(_simulationActive&&!busy&&_simulation.action!=SimulationAction::Held);
+    _simulationFire->setEnabled(_simulationActive&&_simulation.canFire());
+    _simulationSlideRelease->setEnabled(_simulationActive&&_simulation.ammoKnown()&&!busy&&_simulation.action==SimulationAction::Idle&&_simulation.slide>.001f);
+    _simulationReload->setEnabled(_simulationActive&&_simulation.ammoKnown()&&!busy&&_simulation.action!=SimulationAction::Held);
     _simulationDrop->setEnabled(_simulationActive&&!busy&&_simulation.action!=SimulationAction::Held&&_simulation.magazine.visible());
     const bool magazineReady=_simulationActive&&_magazineRail&&_simulation.action==SimulationAction::Idle&&!_simulation.magazine.busy();
     _magazineOut->setEnabled(magazineReady&&_simulation.magazine.seated());
-    _magazineIn->setEnabled(magazineReady&&!_simulation.magazine.seated());
-    _magazineGrab->setEnabled(magazineReady&&!_simulation.magazine.seated());
+    _magazineIn->setEnabled(magazineReady&&_simulation.ammoKnown()&&!_simulation.magazine.seated());
+    _magazineGrab->setEnabled(magazineReady&&_simulation.ammoKnown()&&!_simulation.magazine.seated());
     _simulationReset->setEnabled(_simulationActive);
     if(!_simulationActive){_simulationStatus->setText(_simulationError.isEmpty()?"Preparing native part motion…":_simulationError);_simulationParts->clear();return;}
-    _simulationStatus->setText(QString("%1\n%2\nSlide: %3% open").arg(actionName(_simulation.action),magazinePhaseName(_simulation.magazine.phase)).arg(qRound(_simulation.slide*100)));
+    _simulationStatus->setText(QString("%1\n%2\n%3\nMagazine: %4 / %5\nChamber: %6 · shots: %7\nSlide: %8").arg(actionName(_simulation.action),_simulation.magazineDescription(),_simulationAmmo.ammoName)
+        .arg(_simulation.magazineRounds).arg(_simulation.capacity).arg(_simulation.chambered?"loaded":"empty").arg(_simulation.shotsFired)
+        .arg(_simulation.slideLocked?"LOCKED OPEN":QString::number(qRound(_simulation.slide*100))+"% open"));
     QStringList names;for(int i:_simulationRig->slideTracks)names.append(_reloadRecipe->tracks[i].anchor.anchorName);
     _simulationParts->setText("MOVING TOGETHER\n"+names.join(" · ")+"\n\nEach part retains its own translation and rotation.");
     if(!_magazineError.isEmpty())_simulationParts->setText(_simulationParts->text()+"\n\nMagazine interaction: "+_magazineError);
+    if(!_simulationAmmo.valid())_simulationParts->setText(_simulationParts->text()+"\n\nAmmunition: "+_simulationAmmo.error);
 }
 QJsonObject ReloadMakerController::simulationState() const {
     QJsonObject result{{"active",_simulationActive},{"action",actionName(_simulation.action)},{"magazinePresent",_simulation.magazinePresent()},{"slide",_simulation.slide},{"seconds",_simulation.seconds},{"error",_simulationError}};
-    result["magazine"]=QJsonObject{{"phase",magazinePhaseName(_simulation.magazine.phase)},{"empty",_simulation.magazine.empty()},
+    result["magazine"]=QJsonObject{{"phase",_simulation.magazineDescription()},{"empty",_simulation.magazineRounds==0},
         {"offset",QJsonArray{_simulation.magazine.offset.x(),_simulation.magazine.offset.y(),_simulation.magazine.offset.z()}},{"distance",_simulation.magazine.distance},{"error",_magazineError}};
     if(_magazineRail)result["magazineRail"]=magazineRailJson(*_magazineRail);
+    auto ammo=_simulationAmmo.json();ammo["magazineRounds"]=_simulation.magazineRounds;ammo["chambered"]=_simulation.chambered;ammo["slideLocked"]=_simulation.slideLocked;
+    ammo["shotsFired"]=_simulation.shotsFired;ammo["roundsEjected"]=_simulation.roundsEjected;ammo["canFire"]=_simulation.canFire();result["ammunition"]=ammo;
     if(_simulationRig&&_reloadRecipe)result["setup"]=simulationRigJson(*_reloadRecipe,*_simulationRig,_simulationSpring->isChecked());
     QJsonArray parts;
     if(_simulationActive&&_reloadRecipe&&_simulationRig)for(int i=0;i<_reloadTrackNodes.size();++i) {
@@ -286,6 +310,7 @@ QJsonObject ReloadMakerController::exportSimulation() const {
     QString error;const auto bytes=encodeReloadRecipe(*_reloadRecipe,error);if(!error.isEmpty())return {};
     auto result=simulationRigJson(*_reloadRecipe,*_simulationRig,_simulationSpring->isChecked());
     if(_magazineRail)result["magazineInteraction"]=magazineRailJson(*_magazineRail);
+    result["ammunitionConfiguration"]=_simulationAmmo.json();
     result["sourceRecipe"]=QJsonDocument::fromJson(bytes).object();return result;
 }
 }

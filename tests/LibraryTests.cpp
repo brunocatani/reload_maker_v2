@@ -28,8 +28,10 @@ namespace {
     void mergeTests() {
         PluginContent base; base.fileName = "Base.esm"; base.parsed = true;
         base.keywordNames.insert(0x123, "attach"); base.keywordNames.insert(0x124, "weapon");
+        base.ammoNames.insert(0x700,"Base ammunition");
         WeaponRecord weapon; weapon.formId = 0x456; weapon.name = "Base weapon";
         weapon.keywords = {0x124}; weapon.attachParentSlots = {0x123}; weapon.defaultObjectMods = {0x500};
+        weapon.ammo=0x700;weapon.ammoCapacity=8;weapon.ammoDataKnown=true;
         base.weapons.append(weapon);
         ObjectModRecord mod; mod.formId = 0x500; mod.attachPoint = 0x123; mod.weaponModification = true;
         mod.targetKeywords = {0x124}; mod.modelPath = "base.model";
@@ -43,6 +45,9 @@ namespace {
         extra.weapons.append(unrelated);
         PluginContent patch; patch.fileName = "Patch.esp"; patch.masters = {"Unrelated.esl", "BASE.esm"}; patch.parsed = true;
         mod.formId = 0x01000500; mod.attachPoint = 0x01000123; mod.targetKeywords = {0x01000124}; mod.modelPath = "winner.model";
+        mod.ammoProperties={{61,4,0,0x02000800,0,0}};mod.removedKeywords={0x01000124};
+        patch.ammoNames.insert(0x02000800,"Patched ammunition");
+        patch.ammoNames.insert(0x01000700,"Winning base ammunition");
         patch.objectMods.append(mod); // No WEAP records in this attachment patch.
         graph.formId = 0x01000600; graph.entries[0].requiredKeywords = {0x01000124}; graph.entries[0].animationSearchPaths = {"animations/replacement"};
         patch.animationSubgraphs.append(graph);
@@ -56,13 +61,19 @@ namespace {
         WeaponConfiguration config; config.initialize(merged, *target);
         require(config.activeMods().size() == 1, "cross-plugin default not resolved");
         require(config.mod(config.activeMods().first())->modelPath == "winner.model", "patch-only ESP did not override base OMOD");
+        require(merged.ammoNames.value(target->ammo)=="Winning base ammunition"&&target->ammoCapacity==8&&target->ammoDataKnown,"Weapon ammo link/winner was not remapped");
+        const auto* winningMod=config.mod(config.activeMods().first());
+        require(merged.ammoNames.value(winningMod->ammoProperties[0].value1)=="Patched ammunition","Ammo override link lost its plugin master mapping");
+        require(merged.keywordNames.value(winningMod->removedKeywords[0])=="weapon","Removed keyword was not remapped");
         require(merged.resolveFirstPersonSubgraph(target->keywords)->animationSearchPaths.first() == "animations/replacement", "RACE patch lost");
         patch.animationSubgraphs[0].entries.clear();
         auto emptyOverride = mergeLoadOrder({base, extra, patch}, error);
         require(!emptyOverride.resolveFirstPersonSubgraph(target->keywords), "empty RACE resurrected earlier graph");
-        patch.deletedRecords = {0x01000456};
+        patch.deletedRecords = {0x01000456,0x01000700};
+        patch.ammoNames.remove(0x01000700);
         auto deleted = mergeLoadOrder({base, extra, patch}, error);
         require(deleted.weapons.size() == 1 && deleted.weapons.first().name == unrelated.name, "deleted WEAP reappeared or deleted unrelated local ID");
+        require(!deleted.ammoNames.values().contains("Winning base ammunition")&&!deleted.ammoNames.values().contains("Base ammunition"),"Deleted ammo label resurrected an earlier winner");
         auto invalid = mergeLoadOrder({patch}, error);
         require(!error.isEmpty() && !invalid.parsed, "missing master accepted");
         patch.keywordNames.insert(0x02000801, "SelfKeyword");

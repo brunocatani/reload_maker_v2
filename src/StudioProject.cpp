@@ -34,6 +34,7 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     record["simulationSpringReturn"] = _simulationSpring->isChecked();
     if(_simulationRig&&_reloadRecipe)record["simulationSetup"]=simulationRigJson(*_reloadRecipe,*_simulationRig,_simulationSpring->isChecked());
     if(_magazineRail)record["magazineInteraction"]=magazineRailJson(*_magazineRail);
+    if(_simulationAmmo.valid())record["ammunitionConfiguration"]=_simulationAmmo.json();
     QString error;
     QJsonArray fingers;
     for (const auto& draft : _fingerDrafts) {

@@ -71,6 +71,7 @@ namespace reloadmaker
             qsizetype subrecordCount{ 0 };
             QVector<RawRecord> records;
             std::function<bool()> cancelled;
+            bool referenceCatalogOnly{false};
         };
 
         [[nodiscard]] QByteArray decompressRecord(const QByteArray& recordData)
@@ -153,7 +154,8 @@ namespace reloadmaker
             }
             // A full Data library includes the base ESM. Skip irrelevant payloads
             // before decompression/copying, while still checking record bounds.
-            if (type != "TES4" && type != "WEAP" && type != "OMOD" && type != "KYWD" && type != "RACE") {
+            if ((state.referenceCatalogOnly && type!="TES4" && type!="AMMO" && type!="KYWD") ||
+                (type != "TES4" && type != "WEAP" && type != "OMOD" && type != "KYWD" && type != "RACE" && type!="AMMO")) {
                 return dataStart + static_cast<qsizetype>(dataSize);
             }
             QByteArray recordData = file.mid(dataStart, static_cast<qsizetype>(dataSize));
@@ -267,6 +269,14 @@ namespace reloadmaker
             }
             for (std::uint32_t i = 0; i < properties; ++i) {
                 const qsizetype offset = propertyStart + static_cast<qsizetype>(i) * 24;
+                // xEdit wbObjectModProperties: byte type/function, uint16 ID,
+                // two typed 32-bit values, then a float step. Keep raw values
+                // until the owning configuration resolves the supported types.
+                const auto id=readLittle<std::uint16_t>(data,offset+8);
+                if(id==12||id==61)mod.ammoProperties.append({id,static_cast<std::uint8_t>(data[offset]),static_cast<std::uint8_t>(data[offset+4]),
+                    readLittle<std::uint32_t>(data,offset+12),readLittle<std::uint32_t>(data,offset+16),readLittle<std::uint32_t>(data,offset+20)});
+                if(id==31&&static_cast<uchar>(data[offset])==4&&static_cast<uchar>(data[offset+4])==1)
+                    appendUnique(mod.removedKeywords,readLittle<std::uint32_t>(data,offset+12));
                 if (readLittle<std::uint32_t>(data, offset) == 4 &&
                     readLittle<std::uint32_t>(data, offset + 4) == 2 &&
                     readLittle<std::uint32_t>(data, offset + 8) == 31) {
@@ -348,7 +358,15 @@ namespace reloadmaker
         return best;
     }
 
-    PluginContent EspReader::read(const QString& path, const std::function<bool()>& cancelled)
+    QString recordIdentity(const PluginContent& plugin,std::uint32_t formId) {
+        if(!formId)return {};
+        const auto found=plugin.origins.constFind(formId);
+        if(found!=plugin.origins.cend())return QStringLiteral("%1:%2").arg(found->plugin).arg(found->objectId,6,16,QLatin1Char('0'));
+        const auto index=formId>>24;
+        const auto origin=index<static_cast<std::uint32_t>(plugin.masters.size())?plugin.masters[index]:plugin.fileName;
+        return QStringLiteral("%1:%2").arg(origin).arg(formId&0xffffffU,6,16,QLatin1Char('0'));
+    }
+    PluginContent EspReader::read(const QString& path, const std::function<bool()>& cancelled,bool referenceCatalogOnly)
     {
         PluginContent content;
         content.filePath = QFileInfo(path).absoluteFilePath();
@@ -377,6 +395,7 @@ namespace reloadmaker
             }
             ParseState state;
             state.cancelled = cancelled;
+            state.referenceCatalogOnly = referenceCatalogOnly;
             const qsizetype afterHeader = parseRecord(data, 0, data.size(), state);
             if (state.records.isEmpty()) {
                 throw std::runtime_error("plugin header is missing");
@@ -425,6 +444,13 @@ namespace reloadmaker
                     pending.weapon.editorId = textSubrecord(record, QByteArrayLiteral("EDID"), false);
                     pending.weapon.name = textSubrecord(record, QByteArrayLiteral("FULL"), localized);
                     pending.weapon.baseModelPath = textSubrecord(record, QByteArrayLiteral("MODL"), false);
+                    // FO4 WEAP DNAM: Ammo FormID at 0, Flags at 48, Capacity
+                    // uint16 at 52. Verified with local xEdit and Spriggit.
+                    if(const auto* d=firstSubrecord(record,"DNAM");d&&d->data.size()>=55) {
+                        pending.weapon.ammo=readLittle<std::uint32_t>(d->data,0);
+                        pending.weapon.ammoCapacity=readLittle<std::uint16_t>(d->data,52);
+                        pending.weapon.ammoDataKnown=true;
+                    }
                     if (const Subrecord* keywords = firstSubrecord(
                             record, QByteArrayLiteral("KWDA"))) {
                         pending.weapon.keywords = formIdArray(keywords->data);
@@ -436,6 +462,10 @@ namespace reloadmaker
                         pending.weapon.attachParentSlots = formIdArray(parentSlots->data);
                     }
                     pendingWeapons.append(std::move(pending));
+                } else if(record.type=="AMMO") {
+                    QString label=textSubrecord(record,"FULL",localized);
+                    if(label.isEmpty()||label.startsWith("String "))label=textSubrecord(record,"EDID",false);
+                    content.ammoNames.insert(record.formId,label);
                 } else if (record.type == QByteArrayLiteral("KYWD")) {
                     QString label = textSubrecord(record, QByteArrayLiteral("FULL"), localized);
                     if (label.isEmpty()) { label = textSubrecord(record, QByteArrayLiteral("EDID"), false); }
@@ -478,6 +508,7 @@ namespace reloadmaker
             content.objectMods.clear();
             content.animationSubgraphs.clear();
             content.keywordNames.clear();
+            content.ammoNames.clear();
             content.deletedRecords.clear();
         }
         return content;

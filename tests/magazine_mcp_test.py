@@ -49,6 +49,15 @@ async def run():
             assert rail['connectionName']=='P-Mag' and rail['emptyTrack']==3 and rail['fullTrack']==4
             assert rail['magazineMinProjection']+rail['travel']>rail['weaponMaxProjection']
             assert len(visible(initial))==2 and not any(p['emptyVersion'] for p in visible(initial))
+            # Empty geometry follows consumed ammunition, not the extraction button.
+            for _ in range(initial['ammunition']['capacity']):
+                await operation('fire')
+                for _ in range(120):
+                    if (await call('get_simulation_state'))['action']=='Ready':break
+                    await asyncio.sleep(.025)
+                else:raise AssertionError('Shot did not complete')
+            initial=await call('get_simulation_state')
+            assert initial['ammunition']['slideLocked'] and not initial['ammunition']['chambered']
             initial_parts={p['track']:p['world'] for p in initial['parts']}
             await operation('mag_out');await asyncio.sleep(.2)
             moving=await call('get_simulation_state')

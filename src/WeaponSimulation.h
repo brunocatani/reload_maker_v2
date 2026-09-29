@@ -16,6 +16,19 @@ namespace reloadmaker {
         MagazineMotion magazine;
         bool magazinePresent()const{return magazine.seated();}
         float slide{0}, seconds{0}, grabStart{0};
+        int capacity{0}, magazineRounds{0}, shotsFired{0}, roundsEjected{0};
+        bool chambered{false}, slideLocked{false}, pistolLock{false};
+        bool ammoKnown()const{return capacity>0;}
+        bool canFire()const{return ammoKnown()&&chambered&&!slideLocked&&action==SimulationAction::Idle&&slide<=.001f&&!magazine.busy();}
+        bool willLockAfterShot()const{return action==SimulationAction::Fire&&pistolLock&&magazine.seated()&&magazineRounds==0&&!chambered;}
+        bool feedCycleActive()const{return _cycleArmed;}
+        void configureAmmunition(int magazineCapacity,bool lockPistol);
+        bool slideRelease();
+        bool magazineOut();
+        bool magazineIn(const MagazineRail& rail);
+        bool grabMagazine(const MagazineRail& rail);
+        void cancelMagazine();
+        QString magazineDescription()const;
         bool fire();
         bool reload();
         bool dropMagazine();
@@ -25,6 +38,10 @@ namespace reloadmaker {
         // Returns true when a native action has finished and needs idle pose.
         bool tick(float delta, float duration);
         void reset();
+    private:
+        void finishClosing();
+        bool _cycleArmed{false},_pullFromLock{false},_pulledRearward{false};
+        struct PullSnapshot {bool chambered{false},locked{false},cycle{false};int rounds{0},ejected{0};} _pullSnapshot;
     };
     bool buildSimulationRig(const ReloadRecipe& recipe, SimulationRig& rig, QString& error);
     Transformf simulationTrackPose(const ReloadRecipe& recipe, const SimulationRig& rig, int track, float progress);

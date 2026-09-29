@@ -174,7 +174,7 @@ def get_simulation_state() -> dict:
 def simulate_weapon(operation: str, expected_revision: int, progress: float | None = None,
                     cancel: bool = False, enabled: bool = True,
                     position: list[float] | None = None, distance: float | None = None) -> dict:
-    """In Simulate: fire/reload/drop_magazine/reset, pull (progress 0..1), release (cancel), spring (enabled), mag_out, mag_in, grab_magazine, cancel_magazine. move_magazine takes a weapon-local root offset position[3] while free, or an outward distance while on the rail. Read magazineRail for entrance/axis/clearance. Ammunition is not counted."""
+    """In Simulate: fire/reload/drop_magazine/reset/slide_release, pull (0..1; use 1.08 to retract a locked-open slide), release (cancel), spring (enabled), mag_out/mag_in/grab_magazine/cancel_magazine. move_magazine takes weapon-local offset position[3] while free, or outward distance on the rail. Read ammunition for configured capacity, magazine/chamber counts and lock state. Fresh insertion does not chamber; release or cycle the slide."""
     params={'operation':operation,'cancel':cancel,'enabled':enabled}
     if progress is not None: params['progress']=progress
     if position is not None: params['position']=position

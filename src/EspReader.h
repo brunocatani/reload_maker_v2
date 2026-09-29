@@ -11,6 +11,11 @@
 
 namespace reloadmaker
 {
+    struct AmmoProperty {
+        std::uint16_t property{0};
+        std::uint8_t valueType{0}, function{0};
+        std::uint32_t value1{0}, value2{0}, stepBits{0};
+    };
     struct ObjectModRecord
     {
         std::uint32_t formId{ 0 };
@@ -24,6 +29,8 @@ namespace reloadmaker
         QString metadataWarning;
         bool weaponModification{ false };
         QString targetType;
+        QVector<AmmoProperty> ammoProperties;
+        QVector<std::uint32_t> removedKeywords;
     };
 
     struct WeaponRecord
@@ -35,6 +42,9 @@ namespace reloadmaker
         QVector<std::uint32_t> keywords;
         QVector<std::uint32_t> defaultObjectMods;
         QVector<std::uint32_t> attachParentSlots;
+        std::uint32_t ammo{0};
+        int ammoCapacity{0};
+        bool ammoDataKnown{false};
     };
 
     struct AnimationSubgraphEntry
@@ -66,6 +76,7 @@ namespace reloadmaker
         QVector<ObjectModRecord> objectMods;
         QVector<AnimationSubgraphRecord> animationSubgraphs;
         QHash<std::uint32_t, QString> keywordNames;
+        QHash<std::uint32_t, QString> ammoNames;
         QStringList diagnostics;
         // File-local IDs until LoadOrderLibrary maps them through MAST. Includes
         // deleted and empty overrides so an earlier definition cannot reappear.
@@ -83,6 +94,7 @@ namespace reloadmaker
     {
     public:
         [[nodiscard]] static PluginContent read(const QString& path,
-                                                const std::function<bool()>& cancelled = {});
+                                                const std::function<bool()>& cancelled = {}, bool referenceCatalogOnly = false);
     };
+    [[nodiscard]] QString recordIdentity(const PluginContent& plugin,std::uint32_t formId);
 }
