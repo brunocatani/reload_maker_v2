@@ -176,6 +176,7 @@ namespace reloadmaker {
     }
     void ReloadMakerController::startReloadCapture()
     {
+        _reloadCaptureQueued=false;
         if(!reloadCaptureAllowed()||_loadThread||_rebuildTimer->isActive()||_reloadCapturing)return;
         const auto action=std::find_if(_animationActions.cbegin(),_animationActions.cend(),[](const auto& a){return a.baseReload;});
         if(action==_animationActions.cend()||_nodeBindings.isEmpty()||_renderedWeapon!=_weaponCombo->currentIndex()){

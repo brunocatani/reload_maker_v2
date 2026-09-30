@@ -459,7 +459,7 @@ namespace reloadmaker
         } _partGripFrame;
         bool _gripPreviewValid{false};
         QString _gripError;
-        bool _reloadWorkspaceActive{false},_reloadCapturing{false},_reloadUpdating{false};
+        bool _reloadWorkspaceActive{false},_reloadCapturing{false},_reloadCaptureQueued{false},_reloadUpdating{false};
         bool _reloadHeld{false},_reloadPlaying{false},_reloadReturning{false};
         bool _reloadIgnoreSavedOnce{false};
         int _reloadOldMotionMode{0},_reloadWindow{-1},_reloadTrack{-1},_reloadCaptureFrame{0};

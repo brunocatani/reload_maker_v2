@@ -104,7 +104,7 @@ QJsonObject ReloadMakerController::studioState() const {
     for(const auto& p:_savedHandPoses)poses.append(QJsonObject{{"id",p.id},{"name",p.name},{"hand",p.hand==PoseHand::Left?"left":"right"}});
     for(const auto& p:_partGrips)grips.append(QJsonObject{{"id",p.pose.id},{"name",p.pose.name},{"part",p.pose.placement.anchorName}});
     QJsonObject magazineGrabs;for(auto it=_magazineGrabGrips.cbegin();it!=_magazineGrabGrips.cend();++it)magazineGrabs[it.key()]=it.value();
-    return {{"revision",double(_revision)},{"busy",bool(_loadThread)||_reloadCapturing||_rebuildTimer->isActive()},{"loading",bool(_loadThread)},
+    return {{"revision",double(_revision)},{"busy",bool(_loadThread)||_reloadCapturing||_reloadCaptureQueued||_rebuildTimer->isActive()},{"loading",bool(_loadThread)},
         {"capturing",_reloadCapturing},{"source",_package.sourcePath},{"gameData",_gameData},{"library",_libraryMode},
         {"workspace",_workspace},{"weaponIndex",_weaponCombo->currentIndex()},{"weapons",weapons},{"slots",configurationSlots},
         {"body",_bodyCombo->currentData().toString()},{"animationSets",sets},{"animationSet",_animationSetCombo->currentIndex()},
