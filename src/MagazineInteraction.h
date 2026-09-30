@@ -11,13 +11,13 @@ namespace reloadmaker {
         QVector3D outward, handle;
         float travel{0}, captureRadius{0}, releaseMargin{0};
         float magazineMinProjection{0}, weaponMaxProjection{0}, clearance{0};
-        QVector<Transformf> guide; // Seated-to-clear rigid deltas in weapon space.
-        QVector<float> guideDistances;
+        QVector<Transformf> motion; // Visual motion, independent of the straight input axis.
+        QVector<float> motionDistances;
     };
     enum class MagazinePhase { Seated, Absent, Outgoing, OutsideEmpty, Incoming, Free, Rail };
     struct MagazineMotion {
         MagazinePhase phase{MagazinePhase::Seated};
-        QVector3D offset;
+        QVector3D offset; // Free: visual center offset. Guided: straight input offset.
         float distance{0}, elapsed{0};
         bool seated()const{return phase==MagazinePhase::Seated;}
         bool visible()const{return phase!=MagazinePhase::Absent;}
@@ -38,9 +38,10 @@ namespace reloadmaker {
     bool buildMagazineRail(const ReloadRecipe& recipe,int magazineTrack,const QString& connectionName,
         const Transformf& connection,const QVector<QVector3D>& magazineVertices,
         const QVector<QVector3D>& weaponVertices,MagazineRail& rail,QString& error,bool finalApproach=false);
-    bool buildMagazineGuide(const ReloadRecipe& recipe,float entrySeconds,const QVector<QVector3D>& body,MagazineRail& rail,QString& error);
-    Transformf magazineGuideDelta(const MagazineRail& rail,float distance);
-    QVector3D magazineGuideOffset(const MagazineRail& rail,float distance);
+    bool buildMagazineAnimation(const ReloadRecipe& recipe,float entrySeconds,const QVector<QVector3D>& body,MagazineRail& rail,QString& error);
+    Transformf magazineAnimationDelta(const MagazineRail& rail,float distance);
+    QVector3D magazineAnimationOffset(const MagazineRail& rail,float distance);
+    QVector3D magazineInputOffset(const MagazineRail& rail,float distance);
     QString magazinePhaseName(MagazinePhase phase);
     QJsonObject magazineRailJson(const MagazineRail& rail);
 }

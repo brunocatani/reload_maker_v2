@@ -305,9 +305,9 @@ bool ReloadMakerController::applySimulationPose() {
     QSet<int> fixedMagazine;
     if(_magazineRail&&!_simulation.magazine.seated()) {
         const auto& rail=*_magazineRail;const auto offset=_simulation.magazine.offset;
-        auto delta=magazineGuideDelta(rail,_simulation.magazine.distance);
+        auto delta=magazineAnimationDelta(rail,_simulation.magazine.distance);
         if(_simulation.magazine.phase==MagazinePhase::Free) {
-            delta=magazineGuideDelta(rail,rail.travel);
+            delta=magazineAnimationDelta(rail,rail.travel);
             const auto rotatedHandle=rotated(delta.rotation,{rail.handle.x(),rail.handle.y(),rail.handle.z()});
             delta.translation={rail.handle.x()+offset.x()-rotatedHandle.x,rail.handle.y()+offset.y()-rotatedHandle.y,rail.handle.z()+offset.z()-rotatedHandle.z};
         }
@@ -420,7 +420,7 @@ void ReloadMakerController::updateSimulationControls() {
     const bool busy=native||_simulation.magazine.busy();
     _simulationMagazineGrip->setEnabled(_simulationActive&&!busy&&_simulation.action==SimulationAction::Idle&&_simulationRig&&_reloadRecipe&&magazineGrabSupported(_reloadRecipe->tracks[_simulationRig->magazine].anchor));
     const bool ar=isRifleConfiguration();
-    _simulationInstructions->setText(isM1AConfiguration()?"Drag the operating handle to rack. FIRE shoots once per press. GRAB: move into the guide, then follow it or use the wheel to seat the magazine. Esc cancels.":ar?"Drag the charging handle to rack. Hold FIRE for automatic fire. GRAB: move the mouse, wheel for depth, enter the guide and push in. Esc cancels.":"Drag the slide to rack. GRAB: move the mouse, wheel for depth, enter the guide and push in. Esc cancels.");
+    _simulationInstructions->setText(isM1AConfiguration()?"Drag the operating handle to rack. FIRE shoots once per press. GRAB: enter the angled line, then move straight along it or use the wheel. The magazine follows its reload motion. Esc cancels.":ar?"Drag the charging handle to rack. Hold FIRE for automatic fire. GRAB: move the mouse, wheel for depth, enter the guide and push in. Esc cancels.":"Drag the slide to rack. GRAB: move the mouse, wheel for depth, enter the guide and push in. Esc cancels.");
     _simulationSlideRelease->setText(ar?"BOLT RELEASE":"SLIDE RELEASE");
     _simulationSpring->setText(ar?"Charging handle returns when released":"Slide returns when released");
     _simulationFire->setToolTip(ar&&_simulationAmmo.automatic?"Press for one shot; hold for automatic fire.":"Fire one shot.");

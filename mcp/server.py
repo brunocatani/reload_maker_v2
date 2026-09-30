@@ -207,7 +207,7 @@ def simulate_weapon(operation: str, expected_revision: int, progress: float | No
                     cancel: bool = False, enabled: bool = True,
                     position: list[float] | None = None, distance: float | None = None,
                     seconds: float | None = None) -> dict:
-    """Operate: fire/reload/drop_magazine/reset/slide_release or bolt_release, pull, release(cancel), spring(enabled), mag_out/mag_in/grab_magazine/cancel_magazine. AR-15 uses an independent charging handle (pull 0..1) and bolt catch; trigger_down/up controls held automatic fire. step(seconds 0..30) pauses the live clock and advances the same simulation deterministically. move_magazine takes weapon-local offset position[3] while free or outward distance on its rail. Fresh insertion does not chamber until the bolt/slide closes."""
+    """Operate: fire/reload/drop_magazine/reset/slide_release or bolt_release, pull, release(cancel), spring(enabled), mag_out/mag_in/grab_magazine/cancel_magazine. AR-15 uses an independent charging handle (pull 0..1) and bolt catch; trigger_down/up controls held automatic fire. step(seconds 0..30) pauses the live clock and advances the same simulation deterministically. move_magazine takes weapon-local offset position[3] while free or outward distance on its straight, weapon-angled input rail. Linear progress drives any sampled magazine rotation/translation; never trace the visual motion path. Fresh insertion does not chamber until the bolt/slide closes."""
     params={'operation':operation,'cancel':cancel,'enabled':enabled}
     if progress is not None: params['progress']=progress
     if position is not None: params['position']=position

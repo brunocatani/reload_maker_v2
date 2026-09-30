@@ -181,22 +181,32 @@ void m1aFixture(const QString& path) {
     for(float x:{-1.f,1.f})for(float y:{7.f,14.f})for(float z:{-4.f,3.f})body.append({x,y,z});
     for(float x:{-2.f,2.f})for(float y:{-15.f,30.f})for(float z:{-6.f,5.f})frame.append({x,y,z});
     MagazineRail rail;check(buildMagazineRail(r,4,"P-Mag",{},body,frame,rail,error,true),error);
-    check(buildMagazineGuide(r,1.9f,body,rail,error),error);
-    check(rail.guide.size()>20&&reloadPoseDistance(magazineGuideDelta(rail,0),{})<1e-5f,"Guide did not preserve a seated identity");
-    bool rotates=false;for(const auto& delta:rail.guide)rotates|=std::abs(delta.rotation.w)<.995f;
+    check(buildMagazineAnimation(r,1.9f,body,rail,error),error);
+    check(rail.motion.size()>20&&reloadPoseDistance(magazineAnimationDelta(rail,0),{})<1e-5f,"Guide did not preserve a seated identity");
+    bool rotates=false;for(const auto& delta:rail.motion)rotates|=std::abs(delta.rotation.w)<.995f;
     check(rotates,"M1A magazine insertion lost native rotation");
-    for(const auto& p:body){const auto q=composed(magazineGuideDelta(rail,rail.travel),Transformf{{p.x(),p.y(),p.z()}}).translation;
+    for(const auto& p:body){const auto q=composed(magazineAnimationDelta(rail,rail.travel),Transformf{{p.x(),p.y(),p.z()}}).translation;
         check(QVector3D::dotProduct({q.x,q.y,q.z},rail.outward)>rail.weaponMaxProjection,"Curved magazine did not fully clear the weapon");}
     MagazineMotion mag;mag.drop();mag.grab(rail);
-    const auto middle=magazineGuideOffset(rail,rail.travel*.7f),side=QVector3D::crossProduct(rail.outward,{0,1,0}).normalized()*rail.captureRadius*3;
-    mag.offset=middle+side;mag.moveFree(rail,middle-side);check(mag.phase==MagazinePhase::Rail,"Swept curved-guide entry failed");
-    mag.moveRail(rail,rail.travel*.4f);check((mag.offset-magazineGuideOffset(rail,mag.distance)).length()<1e-4f,"Guided magazine left its sampled path");
-    mag.moveRail(rail,rail.travel+rail.releaseMargin+1);check(mag.phase==MagazinePhase::Free,"Curved guide could not disengage");
-    mag.moveFree(rail,magazineGuideOffset(rail,rail.travel));mag.moveRail(rail,0);check(mag.seated(),"Curved guide did not seat");
-    check(magazineRailJson(rail)["version"]==2,"Curved export retained straight-rail version");
+    const auto middle=magazineInputOffset(rail,rail.travel*.7f),side=QVector3D::crossProduct(rail.outward,{0,1,0}).normalized()*rail.captureRadius*3;
+    mag.offset=middle+side;mag.moveFree(rail,middle-side);check(mag.phase==MagazinePhase::Rail&&std::abs(mag.distance-rail.travel*.7f)<1e-4f,"Angled straight-guide entry lost its depth");
+    for(float progress:{.1f,.4f,.8f,.4f}) {
+        mag.moveRail(rail,rail.travel*progress);
+        check((mag.offset-rail.outward*mag.distance).length()<1e-5f,"Input followed the curved animation instead of a straight line");
+    }
+    for(int i=0;i<rail.motion.size();++i) {
+        const float input=rail.travel*rail.motionDistances[i]/rail.motionDistances.back();
+        check(reloadPoseDistance(magazineAnimationDelta(rail,input),rail.motion[i])<.0005f,"Linear input lost a native motion sample");
+    }
+    check((magazineAnimationOffset(rail,rail.travel*.4f)-magazineInputOffset(rail,rail.travel*.4f)).length()>.1f,"Animation was flattened into the input line");
+    mag.moveRail(rail,rail.travel+rail.releaseMargin+1);check(mag.phase==MagazinePhase::Free,"Straight guide could not disengage");
+    check((mag.offset-magazineAnimationOffset(rail,mag.distance)).length()<1e-4f,"Disengaging snapped the visual magazine to the input line");
+    mag.moveFree(rail,magazineInputOffset(rail,rail.travel));mag.moveRail(rail,0);check(mag.seated(),"Straight guide did not seat");
+    const auto exported=magazineRailJson(rail);
+    check(exported["version"]==3&&exported["inputPath"]=="straight"&&!exported.contains("guide"),"Export confuses input with visual motion");
     WeaponSimulation s;s.configureAmmunition(2,false,WeaponMechanism::M1A);
     s.fire();s.tick(1,.74f);s.fire();s.tick(1,.74f);check(s.slideLocked,"M1A last shot did not hold open");
-    s.dropMagazine();s.grabMagazine(rail);s.magazine.moveFree(rail,magazineGuideOffset(rail,rail.travel));s.magazine.moveRail(rail,0);
+    s.dropMagazine();s.grabMagazine(rail);s.magazine.moveFree(rail,magazineInputOffset(rail,rail.travel));s.magazine.moveRail(rail,0);
     s.grab();s.drag(1.08f);s.release(true,true);check(s.slideLocked&&!s.chambered,"M1A cancel lost its catch/chamber state");
     s.grab();s.drag(1.08f);s.release(false,true);s.tick(1,1);check(s.chambered&&s.magazineRounds==1&&!s.slideLocked,"M1A release did not feed once");
 }

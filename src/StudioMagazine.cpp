@@ -62,7 +62,7 @@ void ReloadMakerController::prepareMagazineInteraction() {
         }
         if(empty<0){_magazineError="Native empty-magazine frame is unavailable.";return;}
         _m1aEmptyMagazineFrame=std::clamp(qRound(empty/_reloadRecipe->duration*(_reloadRecipe->frames-1)),0,_reloadRecipe->frames-1);
-        if(!buildMagazineGuide(*_reloadRecipe,entry,body,rail,_magazineError))return;
+        if(!buildMagazineAnimation(*_reloadRecipe,entry,body,rail,_magazineError))return;
     }
     bool empty=false,fullBody=false;
     for(const auto& shape:shapes) {

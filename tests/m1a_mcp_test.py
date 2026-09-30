@@ -61,7 +61,7 @@ try:
             edit('configure',slot=magazine['key'],mod=choice['id']);ready();s=op('reset');sim()
             capacity=20 if 'Extended' in choice['name'] else 10
             assert s['ammunition']['capacity']==capacity and not s['ammunition']['automatic']
-            assert s['magazineRail']['version']==2 and len(s['magazineRail']['guide'])>10
+            assert s['magazineRail']['version']==3 and s['magazineRail']['inputPath']=='straight' and len(s['magazineRail']['motionSamples'])>10
             closed=relative('WeaponBolt');handle=relative('WeaponExtra1');receiver_pose=relative('WeaponExtra3')
             op('trigger_down');op('step',seconds=.075)
             assert math.dist(closed[0],relative('WeaponBolt')[0])>1,'Missing firing bolt motion'
@@ -81,9 +81,13 @@ try:
             grabbed=op('grab_magazine');assert grabbed['magazineGrip']['applied'],grabbed['magazineGrip']
             assert all(not a['flags']&1 for a in grabbed['magazineShapes'] if a['cartridge'])
             if animation==sets[0]:photo(choice['record'].split(':')[1]+'-held')
-            rail=grabbed['magazineRail'];sample=min(rail['guide'],key=lambda p:abs(p['distance']-rail['travel']*.6))
-            capture=op('move_magazine',position=sample['offset']);assert capture['magazine']['phase']=='Full magazine on rail'
-            op('move_magazine',distance=sample['distance'])
+            rail=grabbed['magazineRail'];axis=rail['outwardInWeapon'];distance=rail['travel']*.6
+            capture=op('move_magazine',position=[a*distance for a in axis]);assert capture['magazine']['phase']=='Full magazine on rail'
+            op('move_magazine',distance=distance)
+            a=relative('Mag')
+            moved=op('move_magazine',distance=rail['travel']*.1)
+            assert math.dist(moved['magazine']['offset'],[v*rail['travel']*.1 for v in axis])<.0001
+            b=relative('Mag');assert max(abs(x-y) for ra,rb in zip(a[1],b[1]) for x,y in zip(ra,rb))>.05,'Linear input flattened native magazine rotation'
             seated=op('move_magazine',distance=0)
             assert seated['magazinePresent'] and seated['m1a']['boltLocked'] and not seated['ammunition']['chambered']
             op('pull',progress=1.08);op('release',cancel=True);assert sim()['m1a']['boltLocked']
@@ -93,7 +97,7 @@ try:
             op('release');op('step',seconds=1)
             op('reload');loaded=op('step',seconds=10)
             assert loaded['ammunition']['canFire'] and loaded['ammunition']['magazineRounds']==capacity-1
-            results['magazines'].append({'record':choice['record'],'animationSet':animation['name'],'capacity':capacity,'guideSamples':len(rail['guide'])})
+            results['magazines'].append({'record':choice['record'],'animationSet':animation['name'],'capacity':capacity,'motionSamples':len(rail['motionSamples'])})
             print('PASS magazine',choice['name'],'set',animation['index'],flush=True)
     for choice in receiver['choices']:
         edit('configure',slot=receiver['key'],mod=choice['id']);ready();s=op('reset')
@@ -105,7 +109,7 @@ try:
         if next(a for a in command('state')['slots'] if a['key']==key)['selected']!=value:edit('configure',slot=key,mod=value);ready()
     edit('configure',animationSet=initial_set);ready()
     exported=edit('export',kind='simulation');payload=json.loads(Path(exported['path']).read_text(encoding='utf-8'))
-    assert payload['format']=='reload-maker-m1a-simulation' and payload['reciprocatingHandle'] and payload['magazineInteraction']['version']==2
+    assert payload['format']=='reload-maker-m1a-simulation' and payload['reciprocatingHandle'] and payload['magazineInteraction']['version']==3
     bundled=edit('export',kind='reload_bundle');bundle=json.loads(Path(bundled['path']).read_text(encoding='utf-8'))
     assert len(bundle['magazineGrabBindings'])==4
     assert {g['pose']['hand'] for g in bundle['grips']}=={'right'}
@@ -114,6 +118,6 @@ try:
     for name in ['glock','ru556']:
         edit('testbed',name=name);s=ready();assert s['magazineGrabGrips']==preserved[name];sim()
     (OUT/'validated.json').write_text(json.dumps(results,indent=2),encoding='utf-8')
-    print('PASS M1A normal/Quick reloads, all magazines/receivers, source bolt rotation and handle coupling, curved guide, payload states, native fits and exports')
+    print('PASS M1A normal/Quick reloads, all magazines/receivers, source bolt rotation and handle coupling, straight input with animated magazine, payload states, native fits and exports')
 finally:
     edit('open_project',path=str(backup));ready();edit('save_project',path=original)
