@@ -5,9 +5,9 @@
 #include <cmath>
 
 namespace reloadmaker {
-QStringList soundTriggers(){return {"opening","closing","extraction","insertion","magazine_release","magazine_seated","magazine_grab","dry_fire"};}
+QStringList soundTriggers(){return {"opening","closing","extraction","insertion","magazine_release","magazine_seated","magazine_grab","dry_fire","bolt_release"};}
 QString soundTriggerLabel(const QString& trigger){
-    static const QStringList labels{"Pulling back / unlocking","Moving forward / locking","Magazine moving out","Magazine moving in","Magazine release","Magazine seated","Magazine grabbed","Empty trigger press"};
+    static const QStringList labels{"Pulling back / unlocking","Moving forward / locking","Magazine moving out","Magazine moving in","Magazine release","Magazine seated","Magazine grabbed","Empty trigger press","Bolt catch release"};
     const int i=soundTriggers().indexOf(trigger);return i<0?trigger:labels[i];
 }
 QJsonObject soundProfileJson(const SoundProfile& p){

@@ -92,6 +92,8 @@ void ReloadMakerController::prepareSounds(){
     const auto dryKey=recordIdentity(*currentPlugin(),currentWeapon()->attackFailSound).toLower();const auto dry=_soundCatalog.value(dryKey);
     add("dry","Dry fire","dry_fire",0,dry.editorId);
     if(_savedSounds.contains(key)){_soundProfile=_savedSounds.value(key);_soundProfile.magazine=magazine;}
+    if(ru&&std::none_of(_soundProfile.cues.cbegin(),_soundProfile.cues.cend(),[](const auto& c){return c.id=="bolt-release";}))
+        add("bolt-release","Bolt catch release","bolt_release",0,"WPNRU556BoltRelease");
     // Resolve current winning descriptors on each assembly; saved identities do
     // not pin obsolete file paths from a previous override or package version.
     for(auto& c:_soundProfile.cues)if(!c.record.isEmpty()){
@@ -138,6 +140,7 @@ void ReloadMakerController::updateSimulationSounds(){
     const auto& old=_soundPrevious;
     const auto cross=[&](const QString& event,float a,float b){for(const int i:_soundGate.cross(_soundProfile,event,a,b))(void)playSound(_soundProfile.cues[i]);};
     if(old.action!=SimulationAction::Fire&&old.action!=SimulationAction::Reload&&_simulation.action!=SimulationAction::Fire&&_simulation.action!=SimulationAction::Reload){
+        if(_simulation.mechanism==WeaponMechanism::Ar15&&old.slideLocked&&!_simulation.slideLocked&&_simulation.inputProgress()<=.001f)emitSoundEvent("bolt_release");
         cross("opening",old.inputProgress(),_simulation.inputProgress());cross("closing",old.inputProgress(),_simulation.inputProgress());
         if(old.magazine.seated()&&!_simulation.magazine.seated()){emitSoundEvent("magazine_release");if(_simulation.magazine.phase==MagazinePhase::Absent)cross("extraction",0,1);}
         if(_magazineRail){

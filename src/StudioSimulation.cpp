@@ -369,7 +369,7 @@ void ReloadMakerController::runSimulationAction(const QString& action) {
         if(accepted&&_simulation.magazine.animated()){_simulationClock.restart();_simulationTimer->start();}
     }
     else if(action=="fire"||action=="reload") {
-        if(action=="fire"&&!_simulation.chambered&&_simulation.action==SimulationAction::Idle&&_simulation.inputProgress()<=.001f&&!_simulation.magazine.busy()) {
+        if(action=="fire"&&!_simulation.chambered&&_simulation.action==SimulationAction::Idle&&_simulation.inputProgress()<=.001f&&_simulation.slide<=.001f&&!_simulation.magazine.busy()) {
             emitSoundEvent("dry_fire");refreshSoundsUi();setStatus("Dry fire · chamber empty");++_revision;return;
         }
         const auto previous=_simulation;
@@ -477,7 +477,7 @@ void ReloadMakerController::updateSimulationControls() {
         _simulationSource->setText("Reload source · "+relative+" · "+(bolt?"manual bolt action":_simulationAmmo.automatic?"automatic receiver":"semi-automatic receiver"));
         _simulationSource->setToolTip(path);
     }
-    _simulationFire->setEnabled(_simulationActive&&(_simulation.canFire()||(ar&&_simulation.action==SimulationAction::Fire)||(!_simulation.chambered&&_simulation.action==SimulationAction::Idle&&_simulation.inputProgress()<=.001f&&!busy)));
+    _simulationFire->setEnabled(_simulationActive&&(_simulation.canFire()||(ar&&_simulation.action==SimulationAction::Fire)||(!_simulation.chambered&&_simulation.action==SimulationAction::Idle&&_simulation.inputProgress()<=.001f&&_simulation.slide<=.001f&&!busy)));
     _simulationSlideRelease->setEnabled(_simulationActive&&_simulation.ammoKnown()&&!busy&&_simulation.action==SimulationAction::Idle&&_simulation.slide>.001f);
     _simulationReload->setEnabled(_simulationActive&&_simulation.ammoKnown()&&!busy&&_simulation.action!=SimulationAction::Held);
     _simulationDrop->setEnabled(_simulationActive&&!busy&&_simulation.action!=SimulationAction::Held&&_simulation.magazine.visible());
