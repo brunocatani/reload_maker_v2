@@ -41,7 +41,14 @@ void MagazineViewport::updatePointer(QPointF point,float wheel) {
     } else if(before.phase==MagazinePhase::Rail) {
         float distance=before.distance;
         if(wheel)distance-=wheel*r->captureRadius*.5f;
-        else if(!gripAxisParameter(ray,r->handle,r->outward,distance))return;
+        else if(r->guide.isEmpty()){if(!gripAxisParameter(ray,r->handle,r->outward,distance))return;}
+        else {
+            const float step=std::max(.01f,r->captureRadius*.1f);
+            const auto tangent=(magazineGuideOffset(*r,before.distance+step)-magazineGuideOffset(*r,std::max(0.f,before.distance-step))).normalized();
+            float movement=0;
+            if(tangent.lengthSquared()<.9f||!gripAxisParameter(ray,r->handle+before.offset,tangent,movement))return;
+            distance+=movement;
+        }
         if(railMove)railMove(distance);
         if(state().phase==MagazinePhase::Free)_planeReady=false;
     }
@@ -53,10 +60,15 @@ void MagazineViewport::paint() {
     QPainter painter(&device);painter.setRenderHint(QPainter::Antialiasing);
     const auto camera=_view->reloadMakerWorldToClip();const QSizeF size(_view->width(),_view->height());
     QPointF seated,entrance;
-    if(projectGripPoint(camera,size,r->handle,seated)&&projectGripPoint(camera,size,r->handle+r->outward*r->travel,entrance)) {
-        painter.setPen(QPen(QColor("#84d9c2"),2,Qt::DashLine));painter.drawLine(seated,entrance);
+    if(projectGripPoint(camera,size,r->handle,seated)&&projectGripPoint(camera,size,r->handle+magazineGuideOffset(*r,r->travel),entrance)) {
+        painter.setPen(QPen(QColor("#84d9c2"),2,Qt::DashLine));
+        if(r->guide.isEmpty())painter.drawLine(seated,entrance);
+        else {
+            QPointF previous=seated;
+            for(const float distance:r->guideDistances){QPointF next;if(projectGripPoint(camera,size,r->handle+magazineGuideOffset(*r,distance),next)){painter.drawLine(previous,next);previous=next;}}
+        }
         painter.setBrush(Qt::NoBrush);painter.drawEllipse(entrance,12,12);painter.drawEllipse(seated,5,5);
-        painter.drawText(entrance+QPointF(18,0),s.phase==MagazinePhase::Rail?"GUIDED · push toward the weapon":"Align anywhere along this line");
+        painter.drawText(entrance+QPointF(18,0),s.phase==MagazinePhase::Rail?"GUIDED · push toward the weapon":r->guide.isEmpty()?"Align anywhere along this line":"Align anywhere along this guide");
     }
     if(s.carried()) {
         painter.fillRect(QRectF(12,8,_view->width()-24,38),QColor("#263a36"));painter.setPen(QColor("#c3f3e3"));

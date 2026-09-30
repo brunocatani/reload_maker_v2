@@ -171,7 +171,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
         require(_simulationActive,_simulationError.isEmpty()?"Wait until the Operate workspace is ready":_simulationError);
         const auto operation=p["operation"].toString();
         if(operation=="trigger_down"||operation=="trigger_up") {
-            require(isAr15Configuration(),"Held trigger is available in the AR-15 testbed");setSimulationTrigger(operation=="trigger_down");
+            require(isRifleConfiguration(),"Held trigger is available in the rifle testbeds");setSimulationTrigger(operation=="trigger_down");
         } else if(operation=="step") {
             const float delta=number(p["seconds"]);require(delta>=0&&delta<=30,"Simulation step must be between 0 and 30 seconds");
             _simulationTimer->stop();advanceSimulation(delta);

@@ -64,7 +64,7 @@ def select_weapon(index: int, expected_revision: int) -> dict:
 
 @mcp.tool()
 def select_testbed(name: str, expected_revision: int) -> dict:
-    """Switch glock/ru556 saved testbeds, retaining the outgoing project. State becomes busy while the source loads."""
+    """Switch glock/ru556/m1a saved testbeds, retaining the outgoing project. State becomes busy while the source loads."""
     return command('testbed',{'name':name},expected_revision)
 
 @mcp.tool()

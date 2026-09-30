@@ -23,7 +23,7 @@ bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& err
     for(int i=0;i<r.tracks.size();++i) {
         const auto& t=r.tracks[i];
         if(t.poses.size()!=r.frames||t.parent>=r.tracks.size()||t.parent< -1){error="Invalid simulation source tracks.";return false;}
-        if(t.surface&&t.anchor.anchorName.compare(profile==WeaponMechanism::Ar15?"WeaponExtra1":"WeaponBolt",Qt::CaseInsensitive)==0) {
+        if(t.surface&&t.anchor.anchorName.compare(profile!=WeaponMechanism::PistolSlide?"WeaponExtra1":"WeaponBolt",Qt::CaseInsensitive)==0) {
             if(rig.slide>=0){error="This assembly has multiple slide owners.";return false;}rig.slide=i;
         }
         if(t.surface&&t.anchor.anchorName.compare("WeaponBolt",Qt::CaseInsensitive)==0)rig.bolt=i;
@@ -35,7 +35,7 @@ bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& err
     if(profile==WeaponMechanism::PistolSlide&&sameOwner(r.tracks[rig.slide],r.tracks[rig.magazine])) {
         error="This weapon shares one mesh owner for slide and magazine; separate magazine visibility is required.";return false;
     }
-    if(profile==WeaponMechanism::Ar15&&rig.bolt<0){error="The AR-15 bolt track is missing.";return false;}
+    if(profile!=WeaponMechanism::PistolSlide&&rig.bolt<0){error="The rifle bolt track is missing.";return false;}
     const auto& slide=r.tracks[rig.slide].poses;const auto& rest=slide.back();
     float travel=0;QVector<float> distance;distance.reserve(r.frames);
     for(const auto& p:slide) {
@@ -56,9 +56,9 @@ bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& err
     }
     for(int i=0;i<r.tracks.size();++i) {
         const auto& t=r.tracks[i];
-        if(profile==WeaponMechanism::Ar15) {
+        if(profile!=WeaponMechanism::PistolSlide) {
             if(descendant(r,i,rig.magazine))rig.magazineTracks.append(i);
-            if(i==rig.slide)rig.slideTracks.append(i);
+            if(i==rig.slide||(profile==WeaponMechanism::M1A&&i==rig.bolt))rig.slideTracks.append(i);
             continue;
         }
         if(sameOwner(t,r.tracks[rig.magazine]))rig.magazineTracks.append(i);
@@ -194,7 +194,7 @@ void WeaponSimulation::finishClosing() {
     if(_cycleArmed&&!chambered&&magazine.seated()&&magazineRounds>0){--magazineRounds;chambered=true;}
     _cycleArmed=false;slideLocked=false;
 }
-void WeaponSimulation::configureAmmunition(int count,bool lockPistol,WeaponMechanism profile){capacity=std::clamp(count,0,65535);mechanism=profile;pistolLock=lockPistol||profile==WeaponMechanism::Ar15;reset();}
+void WeaponSimulation::configureAmmunition(int count,bool lockPistol,WeaponMechanism profile){capacity=std::clamp(count,0,65535);mechanism=profile;pistolLock=lockPistol||profile!=WeaponMechanism::PistolSlide;reset();}
 void WeaponSimulation::reset(){const int count=capacity;const bool lock=pistolLock;const auto profile=mechanism;const float cycle=fireCycleSeconds;*this={};capacity=count;pistolLock=lock;mechanism=profile;fireCycleSeconds=cycle;chambered=count>0;magazineRounds=std::max(0,count-1);}
 bool WeaponSimulation::slideRelease() {
     if(!ammoKnown()||action!=SimulationAction::Idle||magazine.busy()||(!slideLocked&&slide<=.001f))return false;

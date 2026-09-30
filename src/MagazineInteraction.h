@@ -11,6 +11,8 @@ namespace reloadmaker {
         QVector3D outward, handle;
         float travel{0}, captureRadius{0}, releaseMargin{0};
         float magazineMinProjection{0}, weaponMaxProjection{0}, clearance{0};
+        QVector<Transformf> guide; // Seated-to-clear rigid deltas in weapon space.
+        QVector<float> guideDistances;
     };
     enum class MagazinePhase { Seated, Absent, Outgoing, OutsideEmpty, Incoming, Free, Rail };
     struct MagazineMotion {
@@ -35,7 +37,10 @@ namespace reloadmaker {
     };
     bool buildMagazineRail(const ReloadRecipe& recipe,int magazineTrack,const QString& connectionName,
         const Transformf& connection,const QVector<QVector3D>& magazineVertices,
-        const QVector<QVector3D>& weaponVertices,MagazineRail& rail,QString& error);
+        const QVector<QVector3D>& weaponVertices,MagazineRail& rail,QString& error,bool finalApproach=false);
+    bool buildMagazineGuide(const ReloadRecipe& recipe,float entrySeconds,const QVector<QVector3D>& body,MagazineRail& rail,QString& error);
+    Transformf magazineGuideDelta(const MagazineRail& rail,float distance);
+    QVector3D magazineGuideOffset(const MagazineRail& rail,float distance);
     QString magazinePhaseName(MagazinePhase phase);
     QJsonObject magazineRailJson(const MagazineRail& rail);
 }

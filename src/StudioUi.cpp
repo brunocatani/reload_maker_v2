@@ -417,6 +417,7 @@ void ReloadMakerController::createSourceBar(QToolBar* bar) {
     _testbedPicker->addItem("Current source",QString());
     _testbedPicker->addItem("Glock · pistol",QString("glock"));
     _testbedPicker->addItem("RU556 · AR-15",QString("ru556"));
+    _testbedPicker->addItem("Springfield M1A",QString("m1a"));
     _testbedPicker->setToolTip("Switch saved testbeds. Each keeps its own equipped parts and authored hand fits.");
     bar->addWidget(_testbedPicker);
     connect(_testbedPicker,qOverload<int>(&QComboBox::activated),this,[this](int i){
@@ -464,7 +465,7 @@ void ReloadMakerController::createSourceBar(QToolBar* bar) {
 void ReloadMakerController::refreshSourceBar() {
     if(_testbedPicker) {
         const QSignalBlocker block(_testbedPicker);
-        _testbedPicker->setCurrentIndex(isGlockConfiguration()?1:isAr15Configuration()?2:0);
+        _testbedPicker->setCurrentIndex(std::max(0,_testbedPicker->findData(currentTestbed())));
         _testbedPicker->setEnabled(!_loadThread&&!_reloadCapturing);
     }
     if (!_sourceLabel) return;

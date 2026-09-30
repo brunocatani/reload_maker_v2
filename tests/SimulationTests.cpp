@@ -168,10 +168,42 @@ void ar15Fixture(const QString& path) {
     check(rig.slideTracks==QVector<int>({1})&&!rig.magazineTracks.contains(rig.bolt)&&!rig.magazineTracks.contains(2),"Magazine/handle ownership included the receiver bolt or release");
     check(reloadPoseDistance(simulationTrackPose(recipe,rig,1,0),simulationTrackPose(recipe,rig,1,1))>3.8f,"RU556 handle lost its source travel");
 }
+void m1aFixture(const QString& path) {
+    QFile file(path);check(file.open(QIODevice::ReadOnly),"Missing M1A fixture");
+    ReloadRecipe r;QString error;check(decodeReloadRecipe(file.readAll(),r,error),error);
+    SimulationRig rig;check(buildSimulationRig(r,rig,error,WeaponMechanism::M1A),error);
+    check(rig.slide==1&&rig.bolt==0&&rig.magazine==4&&rig.slideTracks==QVector<int>({0,1}),"M1A operating handle/bolt roles were lost");
+    check(!rig.magazineTracks.contains(0)&&!rig.magazineTracks.contains(2),"M1A magazine contains receiver parts");
+    const auto open=simulationTrackPose(r,rig,0,1),closed=simulationTrackPose(r,rig,0,0);
+    const float dot=std::abs(open.rotation.x*closed.rotation.x+open.rotation.y*closed.rotation.y+open.rotation.z*closed.rotation.z+open.rotation.w*closed.rotation.w);
+    check(dot<.99f&&reloadPoseDistance(open,closed)>5,"M1A bolt rotation/stroke was flattened");
+    QVector<QVector3D> body,frame;
+    for(float x:{-1.f,1.f})for(float y:{7.f,14.f})for(float z:{-4.f,3.f})body.append({x,y,z});
+    for(float x:{-2.f,2.f})for(float y:{-15.f,30.f})for(float z:{-6.f,5.f})frame.append({x,y,z});
+    MagazineRail rail;check(buildMagazineRail(r,4,"P-Mag",{},body,frame,rail,error,true),error);
+    check(buildMagazineGuide(r,1.9f,body,rail,error),error);
+    check(rail.guide.size()>20&&reloadPoseDistance(magazineGuideDelta(rail,0),{})<1e-5f,"Guide did not preserve a seated identity");
+    bool rotates=false;for(const auto& delta:rail.guide)rotates|=std::abs(delta.rotation.w)<.995f;
+    check(rotates,"M1A magazine insertion lost native rotation");
+    for(const auto& p:body){const auto q=composed(magazineGuideDelta(rail,rail.travel),Transformf{{p.x(),p.y(),p.z()}}).translation;
+        check(QVector3D::dotProduct({q.x,q.y,q.z},rail.outward)>rail.weaponMaxProjection,"Curved magazine did not fully clear the weapon");}
+    MagazineMotion mag;mag.drop();mag.grab(rail);
+    const auto middle=magazineGuideOffset(rail,rail.travel*.7f),side=QVector3D::crossProduct(rail.outward,{0,1,0}).normalized()*rail.captureRadius*3;
+    mag.offset=middle+side;mag.moveFree(rail,middle-side);check(mag.phase==MagazinePhase::Rail,"Swept curved-guide entry failed");
+    mag.moveRail(rail,rail.travel*.4f);check((mag.offset-magazineGuideOffset(rail,mag.distance)).length()<1e-4f,"Guided magazine left its sampled path");
+    mag.moveRail(rail,rail.travel+rail.releaseMargin+1);check(mag.phase==MagazinePhase::Free,"Curved guide could not disengage");
+    mag.moveFree(rail,magazineGuideOffset(rail,rail.travel));mag.moveRail(rail,0);check(mag.seated(),"Curved guide did not seat");
+    check(magazineRailJson(rail)["version"]==2,"Curved export retained straight-rail version");
+    WeaponSimulation s;s.configureAmmunition(2,false,WeaponMechanism::M1A);
+    s.fire();s.tick(1,.74f);s.fire();s.tick(1,.74f);check(s.slideLocked,"M1A last shot did not hold open");
+    s.dropMagazine();s.grabMagazine(rail);s.magazine.moveFree(rail,magazineGuideOffset(rail,rail.travel));s.magazine.moveRail(rail,0);
+    s.grab();s.drag(1.08f);s.release(true,true);check(s.slideLocked&&!s.chambered,"M1A cancel lost its catch/chamber state");
+    s.grab();s.drag(1.08f);s.release(false,true);s.tick(1,1);check(s.chambered&&s.magazineRounds==1&&!s.slideLocked,"M1A release did not feed once");
+}
 }
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
-    try {stateTransitions();ammunitionTransitions();nativeReloadEvents();ar15Transitions();check(app.arguments().size()>=2,"Pass the Glock project fixture");fixture(app.arguments()[1]);if(app.arguments().size()>2)ar15Fixture(app.arguments()[2]);
+    try {stateTransitions();ammunitionTransitions();nativeReloadEvents();ar15Transitions();check(app.arguments().size()>=2,"Pass the Glock project fixture");fixture(app.arguments()[1]);if(app.arguments().size()>2)ar15Fixture(app.arguments()[2]);if(app.arguments().size()>3)m1aFixture(app.arguments()[3]);
         QTextStream(stdout)<<"PASS simulation state ownership, drop/fire persistence, regrab/cancel/return/reset, actual slide/barrel/cartridge curves and complete magazine ownership\n";return 0;
     }catch(const std::exception& e){QTextStream(stderr)<<"FAIL "<<e.what()<<'\n';return 1;}
 }

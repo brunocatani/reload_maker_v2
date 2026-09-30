@@ -45,7 +45,7 @@ void ReloadMakerController::applySavedPoseToPart() {
 }
 
 int ReloadMakerController::magazineGrabAnchor(const HandPosePlacement& placement)const {
-    if(isAr15Configuration()) {
+    if(isRifleConfiguration()) {
         const int index=currentMagazineAnchor();
         return index>=0&&sameGripAnchor(placement,_handPoseAnchors[index].description)?index:-1;
     }
@@ -130,7 +130,7 @@ void ReloadMakerController::resolveMagazineGrabGrip() {
     _magazineGrabBridge={};
     for(int i=0;i<_nodeBindings.size();++i)if(_nodeBindings[i].nodeIndex==_reloadTrackNodes[_simulationRig->magazine]){_magazineGrabBinding=i;break;}
     if(_magazineGrabBinding<0){_magazineGrabError="The magazine grip has no live binding.";return;}
-    if(isAr15Configuration()) {
+    if(isRifleConfiguration()) {
         Transformf world,inverse;
         if(!sceneNodeWorld(_partRoots.value(_simulationMagazineSlot),world,_magazineGrabError)||
            !invertUniformTransform(_boundGlobalPose[_magazineGrabBinding],inverse)){_magazineGrabError="The magazine attachment frame is unavailable.";return;}
