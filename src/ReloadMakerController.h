@@ -47,6 +47,9 @@ class QProgressBar;
 class QGroupBox;
 class QDoubleSpinBox;
 class QButtonGroup;
+class QToolButton;
+class QToolBar;
+class QAction;
 
 namespace reloadmaker
 {
@@ -69,7 +72,6 @@ namespace reloadmaker
     private slots:
         void browsePackage();
         void browseGameData();
-        void openPackageFromField();
         void rebuildWeapon();
         void selectAnimation(QListWidgetItem* item);
         void togglePlayback();
@@ -136,9 +138,15 @@ namespace reloadmaker
         };
 
         // Stable ids: persisted in projects and used by MCP clients (DIAMOND's
-        // importer uses OperateWorkspace = 5). Id 1 (the old Preview) is retired.
-        enum Workspace : int { SourceWorkspace = 0, GripsWorkspace = 2, MechanismWorkspace = 3, PhasesWorkspace = 4, OperateWorkspace = 5 };
-        static constexpr int kLoadoutPage = 0, kLibraryPage = 1, kReloadPage = 2;
+        // importer uses OperateWorkspace = 5). Retired ids (0 Source, 1 Preview,
+        // 3 Mechanisms) are rejected; projects saved on them reopen in Operate.
+        enum Workspace : int { GripsWorkspace = 2, PhasesWorkspace = 4, OperateWorkspace = 5 };
+        static constexpr int kLoadoutPage = 0, kReloadPage = 1;
+        void createSourceBar(QToolBar* bar);
+        void refreshSourceBar();
+        void refreshWeaponPicker();
+        void restoreReloadClip();
+        [[nodiscard]] bool mechanismPageActive() const;
         [[nodiscard]] static bool validWorkspace(int workspace);
         void createUi();
         void setWorkspace(int workspace);
@@ -315,9 +323,7 @@ namespace reloadmaker
         [[nodiscard]] const HandPose* selectedHandPose() const;
         [[nodiscard]] bool sceneNodeWorld(const QModelIndex& node, Transformf& world, QString& error) const;
         [[nodiscard]] QString poseRecordKey(std::uint32_t formId) const;
-        void createLibraryPage();
         void startLibraryLoad();
-        void refreshLibraryWeapons();
         void setLoading(bool loading, const QString& message = {});
         void startPackageLoad(const QString& path, const QString& dataPath);
         [[nodiscard]] const ResourceArchive& referenceMeshes() const;
@@ -327,7 +333,7 @@ namespace reloadmaker
         void refreshWeapons();
         void refreshAttachments();
         void refreshConfigurationChoices();
-        void refreshSlotChoices();
+        void scrollToFocusedSlot();
         void refreshSlotCallouts();
         void recordPartSurfaces(SlotKey slot, int firstBlock, int lastBlock);
         bool remapAttachmentNodes(const ObjectModRecord& mod, int firstBlock, int lastBlock, QString& error);
@@ -537,35 +543,34 @@ namespace reloadmaker
         QVector<ScenePoseNode> _assemblyNodes;
         MechanismScenePlan _mechanismScene;
         QVector<Transformf> _mechanismLocal,_mechanismWorld;
-        QLineEdit* _packagePath{ nullptr };
-        QLineEdit* _gameDataPath{ nullptr };
+        // Requested source paths (the loaded ones live in _package/_gameData).
+        QString _packageText;
+        QString _gameDataText;
+        QString _mo2Instance;
+        QToolButton* _sourceButton{nullptr};
+        QLabel* _sourceLabel{nullptr};
+        QLabel* _pluginLabel{nullptr};
+        QAction* _pluginAction{nullptr};
+        QAction* _pluginFilterAction{nullptr};
+        QComboBox* _weaponPicker{nullptr};
+        QComboBox* _clipCombo{nullptr};
+        QLabel* _loadoutTitle{nullptr};
         QComboBox* _weaponCombo{ nullptr };
         QComboBox* _bodyCombo{ nullptr };
         QComboBox* _animationSetCombo{ nullptr };
         QTabWidget* _pages{ nullptr };
-        QGroupBox* _packageGroup{nullptr};
-        QGroupBox* _referenceGroup{nullptr};
-        QLineEdit* _mo2Path{nullptr};
         QComboBox* _pluginFilter{nullptr};
-        QLineEdit* _weaponSearch{nullptr};
-        QListWidget* _libraryWeapons{nullptr};
-        QLabel* _librarySummary{nullptr};
         QLabel* _loadingLabel{nullptr};
         QProgressBar* _loadingProgress{nullptr};
         QPushButton* _cancelLoading{nullptr};
-        QPushButton* _scanLibrary{nullptr};
-        QPushButton* _reloadSource{nullptr};
         QThread* _loadThread{nullptr};
         bool _libraryMode{false};
         bool _closing{false};
         int _pageBeforeLoad{0};
         LoadOrderSnapshot _launchSnapshot;
         QVector<LibraryPlugin> _libraryPlugins;
-        QTreeWidget* _slotTree{ nullptr };
         QListWidget* _partList{ nullptr };
         QLineEdit* _partSearch{ nullptr };
-        QLabel* _slotDescription{ nullptr };
-        QComboBox* _childSlotCombo{ nullptr };
         QLabel* _configurationSummary{ nullptr };
         QTimer* _rebuildTimer{ nullptr };
         SlotOverlay* _slotOverlay{ nullptr };

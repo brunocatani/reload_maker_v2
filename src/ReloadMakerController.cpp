@@ -2,6 +2,7 @@
 #include "PoseEvaluator.h"
 #include "SlotOverlay.h"
 #include "LibraryResources.h"
+#include "LoadoutView.h"
 
 #include "data/niftypes.h"
 #include "gamemanager.h"
@@ -29,6 +30,7 @@
 #include <QMimeData>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QScrollBar>
 #include <QSettings>
 #include <QScopeGuard>
 #include <QSet>
@@ -57,7 +59,6 @@ namespace reloadmaker
     namespace
     {
         constexpr int kTimelineMaximum = 100'000;
-        constexpr int kFormIdRole = Qt::UserRole + 1;
         constexpr int kAnimationNodeRole = Qt::UserRole + 2;
         constexpr int kAnimationBaselineRole = Qt::UserRole + 4;
         constexpr int kActionBlendInRole = Qt::UserRole + 6;
@@ -160,12 +161,13 @@ namespace reloadmaker
             _focusedSlot = slot;
             _partSearch->clear();
             refreshAttachments();
+            scrollToFocusedSlot();
         };
         createGripViewport();
         createReloadViewport();
         createSimulationViewport();
         applyStyle();
-        setWorkspace(0);
+        setWorkspace(OperateWorkspace);
         startCommandServer();
         _window->prepareClose = [this] { return saveSession(); };
         _playbackTimer->setTimerType(Qt::PreciseTimer);
@@ -200,10 +202,9 @@ namespace reloadmaker
         if (game.isEmpty() || !QFileInfo(game).isDir()) {
             game = defaultGameDataPath();
         }
-        _gameDataPath->setText(game);
-        if (!mo2Instance.isEmpty()) { _mo2Path->setText(mo2Instance); }
+        _gameDataText = game;
+        if (!mo2Instance.isEmpty()) { _mo2Instance = mo2Instance; }
         if (library || (insideMo2VirtualFilesystem() && packagePath.isEmpty())) {
-            _pages->setCurrentIndex(kLibraryPage);
             startLibraryLoad();
             return;
         }
@@ -213,7 +214,7 @@ namespace reloadmaker
             package = settings.value(QStringLiteral("paths/lastPackage")).toString();
         }
         if (!package.isEmpty() && QFileInfo(package).exists()) {
-            _packagePath->setText(package);
+            _packageText = package;
             startPackageLoad(package, game);
         } else if (!game.isEmpty()) {
             startPackageLoad({}, game);
@@ -223,10 +224,10 @@ namespace reloadmaker
     void ReloadMakerController::browsePackage()
     {
         const QString folder = QFileDialog::getExistingDirectory(
-            _window, QStringLiteral("Open mod folder"), _packagePath->text(),
+            _window, QStringLiteral("Open mod folder"), _packageText,
             QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
         if (!folder.isEmpty()) {
-            _packagePath->setText(folder);
+            _packageText = folder;
             openPackage(folder);
         }
     }
@@ -235,23 +236,18 @@ namespace reloadmaker
     {
         const QString folder = QFileDialog::getExistingDirectory(
             _window, QStringLiteral("Select Fallout 4 VR Data folder"),
-            _gameDataPath->text(), QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+            _gameDataText, QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
         if (!folder.isEmpty()) {
-            _gameDataPath->setText(folder);
+            _gameDataText = folder;
             setGameData(folder);
         }
-    }
-
-    void ReloadMakerController::openPackageFromField()
-    {
-        openPackage(_packagePath->text());
     }
 
     void ReloadMakerController::setGameData(const QString& path)
     {
         if (_loadThread) { return; }
         if (_libraryMode) {
-            _gameDataPath->setText(path);
+            _gameDataText = path;
             startLibraryLoad();
             return;
         }
@@ -260,7 +256,7 @@ namespace reloadmaker
 
     void ReloadMakerController::openPackage(const QString& path)
     {
-        startPackageLoad(path, _gameDataPath->text());
+        startPackageLoad(path, _gameDataText);
     }
 
     /* Source indexing is worker-owned; installation and every NifModel/GL call
@@ -333,7 +329,6 @@ namespace reloadmaker
             setLibraryResources(nullptr);
             clearAssetCaches();
             _libraryMode = false;
-            _packageGroup->setTitle(QStringLiteral("PACKAGE"));
             _package = result->package;
             _packageResources = std::move(result->resources);
             _gameMeshes = std::move(result->meshes);
@@ -341,8 +336,8 @@ namespace reloadmaker
             _gameData = result->data;
             _plugins = std::move(result->plugins);
             _referenceNames = std::move(result->referenceNames);
-            _packagePath->setText(_package.sourcePath);
-            _gameDataPath->setText(_gameData);
+            _packageText = _package.sourcePath;
+            _gameDataText = _gameData;
             QSettings settings;
             settings.setValue("paths/gameData", _gameData);
             settings.setValue("paths/lastPackage", _package.sourcePath);
@@ -353,9 +348,7 @@ namespace reloadmaker
             }
             configureResourcePaths();
             refreshWeapons(); refreshAnimations();
-            _librarySummary->setText(QStringLiteral("Standalone package active. Load the MO2 library to browse the whole profile."));
-            _libraryWeapons->clear();
-            if (_pages->currentIndex() == kLibraryPage && !_plugins.isEmpty()) { _pages->setCurrentIndex(kLoadoutPage); }
+            refreshSourceBar();
             setStatus(QStringLiteral("Source indexed. Select a weapon configuration and action."));
             restoreSessionSelection();
         });
@@ -418,52 +411,85 @@ namespace reloadmaker
 
     void ReloadMakerController::refreshAttachments()
     {
-        const QSignalBlocker blocker(_slotTree);
-        _slotTree->clear();
+        // One flat workbench list: category headers, a header per slot and
+        // every option under it. Slot nesting (muzzle on barrel on receiver)
+        // is deliberately not shown; unavailable slots are grouped instead.
+        const QSignalBlocker blocker(_partList);
+        const int scroll = _partList->verticalScrollBar()->value();
+        _partList->clear();
         const auto* config = configuration();
-        if (!config) { _partList->clear(); return; }
+        const auto* weapon = currentWeapon();
+        _loadoutTitle->setText(weapon ? (weapon->name.isEmpty() ? weapon->editorId : weapon->name) : QStringLiteral("No weapon"));
+        if (!config) { _configurationSummary->setText(QStringLiteral("Choose a source and weapon in the bar above.")); return; }
+        if (!config->slot(_focusedSlot) && !config->entries().isEmpty()) { _focusedSlot = config->entries().first().key; }
         const auto available = config->availableSlots();
-        QHash<SlotKey, QTreeWidgetItem*> items;
-        auto* unavailable = new QTreeWidgetItem({QStringLiteral("UNAVAILABLE SLOTS"), QStringLiteral("Choices retained")});
-        for (const auto& slot : config->entries()) {
-            auto* item = new QTreeWidgetItem();
-            item->setText(0, slot.label);
-            const auto* mod = config->mod(config->selected(slot.key));
-            item->setText(1, mod ? (mod->name.isEmpty() ? mod->editorId : mod->name) : QStringLiteral("— Empty"));
-            item->setData(0, kFormIdRole, QVariant::fromValue<qulonglong>(slot.key));
-            item->setToolTip(0, QStringLiteral("Attach point: %1\n%2%3")
-                .arg(formIdText(slot.attachPoint),
-                     slot.hasModels ? QStringLiteral("Physical part slot") : QStringLiteral("Configuration-only slot"),
-                     slot.unverified ? QStringLiteral("\nPartial metadata — verify this selection") : QString{}));
-            if (mod) { item->setToolTip(1, displayName(*mod) + QLatin1Char('\n') + mod->modelPath); }
-            items.insert(slot.key, item);
-        }
-        for (const auto& slot : config->entries()) {
-            auto* item = items.value(slot.key);
-            if (!available.contains(slot.key)) {
-                unavailable->addChild(item);
-                item->setForeground(0, QColor(QStringLiteral("#92979c")));
-            } else if (auto* parent = items.value(available.value(slot.key))) {
-                parent->addChild(item);
-            } else {
-                _slotTree->addTopLevelItem(item);
+        const QString query = _partSearch->text().trimmed();
+        const auto partName = [](const ObjectModRecord& mod) { return cleanPartName(mod.name.isEmpty() ? mod.editorId : mod.name); };
+        const auto addRow = [this](const QString& text, int section) {
+            auto* item = new QListWidgetItem(text, _partList);
+            item->setData(kSectionRole, section);
+            return item;
+        };
+        enum class Group { Parts, Finish, Unavailable };
+        const auto groupOf = [&](const ConfigurationSlot& slot) {
+            return !available.contains(slot.key) ? Group::Unavailable : slot.hasModels ? Group::Parts : Group::Finish;
+        };
+        const std::pair<Group, QString> groups[] = {{Group::Parts, QStringLiteral("Parts")},
+            {Group::Finish, QStringLiteral("Stats & finish")}, {Group::Unavailable, QStringLiteral("Needs another part installed")}};
+        for (const auto& [group, title] : groups) {
+            QListWidgetItem* header = nullptr;
+            for (const auto& slot : config->entries()) {
+                if (groupOf(slot) != group) { continue; }
+                const bool slotMatch = query.isEmpty() || slot.label.contains(query, Qt::CaseInsensitive);
+                QVector<const ObjectModRecord*> options;
+                for (auto id : slot.choices) {
+                    const auto* mod = config->mod(id);
+                    if (mod && (slotMatch || partName(*mod).contains(query, Qt::CaseInsensitive)
+                                || mod->editorId.contains(query, Qt::CaseInsensitive))) { options.append(mod); }
+                }
+                if (!slotMatch && options.isEmpty()) { continue; }
+                if (!header) { header = addRow(title, kCategoryHeader); header->setFlags(Qt::ItemIsEnabled); }
+                const bool enabled = group != Group::Unavailable;
+                const auto selected = config->selected(slot.key);
+                auto* slotRow = addRow(slot.label, kSlotHeader);
+                slotRow->setData(kSlotRole, QVariant::fromValue<qulonglong>(slot.key));
+                slotRow->setData(kFocusedRole, slot.key == _focusedSlot);
+                slotRow->setData(kCaptionRole, enabled ? QStringLiteral("%1 options").arg(slot.choices.size()) : QStringLiteral("unavailable"));
+                slotRow->setFlags(Qt::ItemIsEnabled);
+                if (slot.unverified) { slotRow->setToolTip(QStringLiteral("Partial slot/association metadata; compatibility needs review.")); }
+                const auto addOption = [&](std::uint32_t id, const QString& text, const QString& tip) {
+                    auto* item = addRow(text, 0);
+                    item->setData(kSlotRole, QVariant::fromValue<qulonglong>(slot.key));
+                    item->setData(kFormIdRole, id);
+                    item->setData(kInstalledRole, id == selected);
+                    item->setToolTip(tip);
+                    item->setFlags(enabled ? Qt::ItemIsEnabled | Qt::ItemIsSelectable : Qt::NoItemFlags);
+                };
+                if (slotMatch) { addOption(0, QStringLiteral("Empty"), QStringLiteral("Remove this part. Attachments on it become unavailable; their choices are kept.")); }
+                for (const auto* mod : options) {
+                    addOption(mod->formId, partName(*mod), QStringLiteral("%1\n%2\n%3%4").arg(mod->editorId, formIdText(mod->formId),
+                        mod->modelPath.isEmpty() ? QStringLiteral("Configuration only; no mesh") : mod->modelPath,
+                        mod->metadataWarning.isEmpty() ? QString() : QStringLiteral("\n") + mod->metadataWarning));
+                }
             }
         }
-        if (unavailable->childCount()) { _slotTree->addTopLevelItem(unavailable); }
-        else { delete unavailable; unavailable = nullptr; }
-        _slotTree->expandAll();
-        if (unavailable) { unavailable->setExpanded(false); }
-        auto* focus = items.value(_focusedSlot);
-        if (!focus && !config->entries().isEmpty()) {
-            _focusedSlot = config->entries().first().key;
-            focus = items.value(_focusedSlot);
-        }
-        _slotTree->setCurrentItem(focus);
-        if (focus) { _slotTree->scrollToItem(focus); }
-        _configurationSummary->setText(QStringLiteral("%1 available slots · %2 installed parts / settings\nSelect a slot, then choose its part. Changes apply automatically.")
-            .arg(available.size()).arg(config->activeMods().size()));
-        refreshSlotChoices();
+        _partList->verticalScrollBar()->setValue(scroll);
+        const auto* plugin = currentPlugin();
+        _configurationSummary->setText(QStringLiteral("%1 · %2 parts installed")
+            .arg(plugin ? (_libraryMode ? plugin->origins.value(weapon->formId).plugin : plugin->fileName) : QString())
+            .arg(config->activeMods().size()));
         if (_slotOverlay) { _slotOverlay->setSelected(_focusedSlot); }
+    }
+
+    void ReloadMakerController::scrollToFocusedSlot()
+    {
+        for (int row = 0; row < _partList->count(); ++row) {
+            auto* item = _partList->item(row);
+            if (item->data(kSectionRole).toInt() == kSlotHeader && item->data(kSlotRole).toULongLong() == _focusedSlot) {
+                _partList->scrollToItem(item, QAbstractItemView::PositionAtTop);
+                return;
+            }
+        }
     }
 
     void ReloadMakerController::refreshSlotCallouts()
@@ -589,50 +615,6 @@ namespace reloadmaker
         // Descendant cartridge tracks and other imported models stay independent.
         for (int block : siblings) { _partAlignmentAnchors.insert(block, anchor); }
         return true;
-    }
-
-    void ReloadMakerController::refreshSlotChoices()
-    {
-        const QSignalBlocker blocker(_partList);
-        _partList->clear();
-        const auto* config = configuration();
-        const auto* slot = config ? config->slot(_focusedSlot) : nullptr;
-        const QSignalBlocker childBlocker(_childSlotCombo);
-        _childSlotCombo->clear();
-        _childSlotCombo->hide();
-        if (!slot) { _slotDescription->setText(QStringLiteral("Select a slot to view its parts")); return; }
-        const auto exposed = config->availableSlots();
-        const bool available = exposed.contains(slot->key);
-        _childSlotCombo->addItem(QStringLiteral("ATTACHMENTS ON THIS PART…"), 0);
-        for (const auto& child : config->entries()) {
-            if (exposed.contains(child.key) && exposed.value(child.key) == slot->key) {
-                _childSlotCombo->addItem(child.label, QVariant::fromValue<qulonglong>(child.key));
-            }
-        }
-        _childSlotCombo->setVisible(_childSlotCombo->count() > 1);
-        _slotDescription->setText(QStringLiteral("%1 · %2 choices%3%4").arg(slot->label).arg(slot->choices.size())
-            .arg(available ? QString{} : QStringLiteral(" · Not exposed by installed parts"),
-                 slot->unverified ? QStringLiteral("\nPartial slot/association metadata; compatibility needs review.") : QString{}));
-        if (!slot->hasModels) {
-            _slotDescription->setText(_slotDescription->text() + QStringLiteral("\nNo mesh: decoded animation keywords apply; material/stat effects are not previewed."));
-        }
-        _partList->setEnabled(available);
-        const auto add = [this, config, slot](std::uint32_t id, const QString& text, const QString& tip) {
-            auto* item = new QListWidgetItem(text, _partList);
-            item->setData(kFormIdRole, id);
-            item->setToolTip(tip);
-            if (id == config->selected(slot->key)) { _partList->setCurrentItem(item); }
-        };
-        add(0, QStringLiteral("— Empty slot"), QStringLiteral("Remove this part. Child slots become unavailable; their choices are retained."));
-        const QString query = _partSearch->text().trimmed();
-        for (auto id : slot->choices) {
-            const auto* mod = config->mod(id);
-            if (!mod || (!query.isEmpty() && !displayName(*mod).contains(query, Qt::CaseInsensitive))) { continue; }
-            add(id, mod->name.isEmpty() ? mod->editorId : mod->name,
-                QStringLiteral("%1\n%2\n%3\n%4").arg(mod->editorId, formIdText(id),
-                    mod->modelPath.isEmpty() ? QStringLiteral("Configuration only; no mesh") : mod->modelPath,
-                    mod->metadataWarning));
-        }
     }
 
     void ReloadMakerController::refreshConfigurationChoices()
@@ -2171,6 +2153,9 @@ namespace reloadmaker
     void ReloadMakerController::selectAnimation(QListWidgetItem* item)
     {
         if (_loadThread || !item || !_skeleton.valid()) { return; }
+        // Internal selections (Operate, reload learning) block the list's
+        // signals; keep the transport's clip picker on the loaded clip.
+        if (_clipCombo) { const QSignalBlocker block(_clipCombo); _clipCombo->setCurrentIndex(_animationList->row(item)); }
         const auto poseControls = qScopeGuard([this]() { updateHandPoseControls(); });
         restoreHandPosePreview();
         // A failed request must never leave the previous clip playing under the new label.
@@ -2527,7 +2512,7 @@ namespace reloadmaker
         if (_mechanismPreview && !applyMechanismPreview()) { return fail(); }
         if (!applySimulationPose()) { return fail(); }
         if (!applyMagazineGrabPose()) { return fail(); }
-        const bool gripWorkspace = (_workspace == 2 && _handPosePages->currentIndex() == 1) || _workspace == 3 || (_reloadWorkspaceActive && _reloadHeld);
+        const bool gripWorkspace = (_workspace == 2 && _handPosePages->currentIndex() == 1) || mechanismPageActive() || (_reloadWorkspaceActive && _reloadHeld);
         const bool showGrip=gripWorkspace && _partGripDraft && (!_mechanismPreview || ((_mechanismTeaching||(_mechanismHeld&&_mechanismPoseOnGrab->isChecked())) && _mechanismDraft && sameMechanismPart(_partGripDraft->pose.placement,_mechanismDraft->anchor)));
         if (showGrip && (!_reloadWorkspaceActive||_reloadHeld) && !applyPartGripPreview()) { return fail(); }
         if (_mechanismPreview && showGrip && !applyMechanismPreview()) { return fail(); }

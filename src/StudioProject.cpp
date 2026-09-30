@@ -39,7 +39,7 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     const QString absolute = QFileInfo(path).absoluteFilePath();
     if (!absolute.startsWith(QDir(studioRoot()).absolutePath()+"/", Qt::CaseInsensitive)) { setStatus("Save projects inside the Reload Maker V2 workspace.", true); return false; }
     QJsonObject record{{"format",1},{"kind","reload-maker-v2-project"},{"package",_package.sourcePath},{"gameData",_gameData},
-        {"library",_libraryMode},{"mo2Instance",_mo2Path->text()},{"weapon",poseRecordKey(currentWeapon()->formId)},
+        {"library",_libraryMode},{"mo2Instance",_mo2Instance},{"weapon",poseRecordKey(currentWeapon()->formId)},
         {"body",_bodyCombo->currentData().toString()},{"animationSet",_animationSetCombo->currentText()},
         {"animation",_activeAnimationPath},{"seconds",_playbackTime},{"motionMode",_motionMode->currentIndex()},
         {"transitions",_transitionCheck->isChecked()},{"showArms",_showArmsCheck->isChecked()},{"workspace",_workspace},
@@ -130,8 +130,8 @@ void ReloadMakerController::openSession(const QString& path) {
     _pendingSession = record;
     _pendingReloadDraft = {};
     _sessionPath = QFileInfo(path).absoluteFilePath();
-    _gameDataPath->setText(record["gameData"].toString());
-    _mo2Path->setText(record["mo2Instance"].toString());
+    _gameDataText = record["gameData"].toString();
+    if (!record["mo2Instance"].toString().isEmpty()) _mo2Instance = record["mo2Instance"].toString();
     if (record["library"].toBool()) startLibraryLoad();
     else startPackageLoad(record["package"].toString(), record["gameData"].toString());
 }

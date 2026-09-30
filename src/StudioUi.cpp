@@ -3,6 +3,11 @@
 #include "StudioPaths.h"
 #include "SlotOverlay.h"
 #include "glview.h"
+#include "LoadoutView.h"
+#include <QCompleter>
+#include <QDir>
+#include <QFileInfo>
+#include <QSettings>
 #include <QButtonGroup>
 #include <QCheckBox>
 #include <QComboBox>
@@ -37,7 +42,6 @@
 
 namespace reloadmaker {
 namespace {
-constexpr int kFormIdRole = Qt::UserRole + 1;
 constexpr int kTimelineMaximum = 100000;
 QLabel* hint(const QString& text, QWidget* parent) {
     auto* label = new QLabel(text, parent);
@@ -66,8 +70,8 @@ void ReloadMakerController::createUi() {
     _workspaceButtons = new QButtonGroup(this);
     // Stable workspace ids are persisted in projects and used by MCP clients;
     // display order is independent of the id.
-    const std::pair<QString, int> workspaces[]{{"Source", SourceWorkspace}, {"Operate", OperateWorkspace},
-        {"Hands && grips", GripsWorkspace}, {"Mechanisms", MechanismWorkspace}, {"Reload phases", PhasesWorkspace}};
+    const std::pair<QString, int> workspaces[]{{"Operate", OperateWorkspace},
+        {"Hands && grips", GripsWorkspace}, {"Reload phases", PhasesWorkspace}};
     for (const auto& [title, id] : workspaces) {
         auto* button = new QPushButton(title, header);
         button->setCheckable(true);
@@ -114,39 +118,18 @@ void ReloadMakerController::createUi() {
         catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}
     });
 
-    _packageDock = dock(_window, "SOURCE & CONFIGURATION", Qt::LeftDockWidgetArea);
-    _packageDock->setMinimumWidth(310);
+    // ---- Loadout rail: the weapon as a workbench ----
+    _packageDock = dock(_window, "LOADOUT", Qt::LeftDockWidgetArea);
+    _packageDock->setMinimumWidth(320);
     _packageDock->setMaximumWidth(440);
     auto* packagePanel = new QWidget(_packageDock);
     auto* packageLayout = new QVBoxLayout(packagePanel);
     packageLayout->setContentsMargins(12, 12, 12, 12);
-    packageLayout->setSpacing(10);
-    _packageGroup = new QGroupBox("Mod source", packagePanel);
-    auto* sourceLayout = new QVBoxLayout(_packageGroup);
-    _packagePath = new QLineEdit(_packageGroup);
-    _packagePath->setPlaceholderText("Folder or ZIP containing a weapon mod");
-    sourceLayout->addWidget(_packagePath);
-    auto* sourceButtons = new QHBoxLayout;
-    auto* folderButton = new QPushButton("Open folder", _packageGroup);
-    auto* zipButton = new QPushButton("Open ZIP", _packageGroup);
-    auto* libraryButton = new QPushButton("Installed library", _packageGroup);
-    for (auto* b : {folderButton, zipButton, libraryButton}) sourceButtons->addWidget(b);
-    sourceLayout->addLayout(sourceButtons);
-    packageLayout->addWidget(_packageGroup);
-    _referenceGroup = new QGroupBox("Reference game data", packagePanel);
-    auto* gameLayout = new QHBoxLayout(_referenceGroup);
-    _gameDataPath = new QLineEdit(_referenceGroup);
-    _gameDataPath->setPlaceholderText("Fallout 4 VR / Data");
-    auto* gameButton = new QPushButton("Browse", _referenceGroup);
-    gameLayout->addWidget(_gameDataPath, 1);
-    gameLayout->addWidget(gameButton);
-    packageLayout->addWidget(_referenceGroup);
-    auto* weaponForm = new QFormLayout;
-    _weaponCombo = new QComboBox(packagePanel);
-    _weaponCombo->setMinimumContentsLength(16);
-    _weaponCombo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-    weaponForm->addRow("Weapon", _weaponCombo);
-    packageLayout->addLayout(weaponForm);
+    packageLayout->setSpacing(8);
+    // Hidden selection authority: index into _weaponSelections. The visible
+    // header pickers filter and drive it.
+    _weaponCombo = new QComboBox(_window);
+    _weaponCombo->hide();
     _pages = new QTabWidget(packagePanel);
     _pages->tabBar()->hide();
     packageLayout->addWidget(_pages, 1);
@@ -154,8 +137,27 @@ void ReloadMakerController::createUi() {
     auto* setup = new QWidget(_pages);
     auto* setupLayout = new QVBoxLayout(setup);
     setupLayout->setContentsMargins(0, 0, 0, 0);
-    _configurationSummary = hint("Open a mod to assemble its weapon and attachments.", setup);
+    setupLayout->setSpacing(6);
+    _loadoutTitle = new QLabel("No weapon", setup);
+    _loadoutTitle->setObjectName("LoadoutTitle");
+    _loadoutTitle->setWordWrap(true);
+    setupLayout->addWidget(_loadoutTitle);
+    _configurationSummary = hint("Choose a source and weapon in the bar above.", setup);
     setupLayout->addWidget(_configurationSummary);
+    auto* delegate = new LoadoutDelegate(this);
+    _partSearch = new QLineEdit(setup);
+    _partSearch->setPlaceholderText("Search parts or slots…");
+    _partSearch->setClearButtonEnabled(true);
+    setupLayout->addWidget(_partSearch);
+    _partList = new QListWidget(setup);
+    _partList->setItemDelegate(delegate);
+    _partList->setMouseTracking(true);
+    _partList->setObjectName("Loadout");
+    _partList->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    setupLayout->addWidget(_partList, 1);
+    auto* previewTitle = new QLabel("PREVIEW", setup);
+    previewTitle->setObjectName("Section");
+    setupLayout->addWidget(previewTitle);
     auto* animationForm = new QFormLayout;
     _bodyCombo = new QComboBox(setup);
     _bodyCombo->addItem("Male arms", "male");
@@ -164,35 +166,15 @@ void ReloadMakerController::createUi() {
     _animationSetCombo->setMinimumContentsLength(18);
     _animationSetCombo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     _animationSetCombo->setMaxVisibleItems(24);
-    _animationSetCombo->setToolTip("Animation / reload set. Automatic follows the equipped parts' keywords.");
+    _animationSetCombo->setToolTip("Animation / reload set. Automatic follows the installed parts' keywords.");
     animationForm->addRow("Arms", _bodyCombo);
-    animationForm->addRow("Animation set", _animationSetCombo);
+    animationForm->addRow("Animations", _animationSetCombo);
     setupLayout->addLayout(animationForm);
-    auto* slotSplitter = new QSplitter(Qt::Vertical, setup);
-    _slotTree = new QTreeWidget(slotSplitter);
-    _slotTree->setHeaderLabels({"Attachment slot", "Installed part"});
-    _slotTree->setIndentation(14);
-    _slotTree->header()->setSectionResizeMode(QHeaderView::ResizeToContents);
-    _slotTree->header()->setStretchLastSection(true);
-    auto* choices = new QWidget(slotSplitter);
-    auto* choicesLayout = new QVBoxLayout(choices);
-    choicesLayout->setContentsMargins(0, 8, 0, 0);
-    _slotDescription = hint("Select a slot to see compatible parts.", choices);
-    _childSlotCombo = new QComboBox(choices);
-    _partSearch = new QLineEdit(choices);
-    _partSearch->setPlaceholderText("Filter compatible parts…");
-    _partSearch->setClearButtonEnabled(true);
-    _partList = new QListWidget(choices);
-    for (QWidget* w : std::initializer_list<QWidget*>{static_cast<QWidget*>(_slotDescription), _childSlotCombo, _partSearch, _partList}) choicesLayout->addWidget(w);
-    slotSplitter->setStretchFactor(0, 3);
-    slotSplitter->setStretchFactor(1, 2);
-    setupLayout->addWidget(slotSplitter, 1);
     _pages->addTab(setup, "Loadout");
-    // The native clip list is shown in the Operate panel. It is created here
-    // because loadout/graph resolution populates it before that panel exists.
+    // One native clip list; Reload phases shows it, Hands & grips uses the
+    // transport's clip picker over the same model.
     _animationList = new QListWidget(_window);
     _animationList->hide();
-    createLibraryPage();
     _loadingLabel = hint({}, packagePanel);
     _loadingProgress = new QProgressBar(packagePanel);
     _cancelLoading = new QPushButton("Cancel load", packagePanel);
@@ -202,8 +184,6 @@ void ReloadMakerController::createUi() {
         _cancelLoading->setEnabled(false);
         _loadingLabel->setText("Cancelling; keeping the previous source…");
     });
-    auto* reloadButton = _reloadSource = new QPushButton("Refresh source files", packagePanel);
-    packageLayout->addWidget(reloadButton);
     _packageDock->setWidget(packagePanel);
 
     _detailsDock = dock(_window, "DIAGNOSTICS", Qt::BottomDockWidgetArea);
@@ -221,6 +201,11 @@ void ReloadMakerController::createUi() {
     auto* timelineLayout = new QVBoxLayout(timelinePanel);
     timelineLayout->setContentsMargins(12, 8, 12, 10);
     auto* transport = new QHBoxLayout;
+    _clipCombo = new QComboBox(timelinePanel);
+    _clipCombo->setModel(_animationList->model());
+    _clipCombo->setMinimumContentsLength(16);
+    _clipCombo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    _clipCombo->setToolTip("Native clip shown on the timeline.");
     _playButton = new QPushButton("Play", timelinePanel);
     _playButton->setObjectName("PrimaryButton");
     auto* replayButton = new QPushButton("Restart", timelinePanel);
@@ -233,7 +218,7 @@ void ReloadMakerController::createUi() {
     _timeline->setRange(0, kTimelineMaximum);
     _timeline->setEnabled(false);
     _timeLabel = new QLabel("0.000 / 0.000 s", timelinePanel);
-    transport->addWidget(_playButton); transport->addWidget(replayButton); transport->addWidget(_loopCheck); transport->addWidget(_speedCombo);
+    transport->addWidget(_clipCombo); transport->addWidget(_playButton); transport->addWidget(replayButton); transport->addWidget(_loopCheck); transport->addWidget(_speedCombo);
     transport->addWidget(_timeline, 1); transport->addWidget(_timeLabel);
     timelineLayout->addLayout(transport);
     auto* viewOptions = new QHBoxLayout;
@@ -252,24 +237,9 @@ void ReloadMakerController::createUi() {
     _showArmsCheck = new QCheckBox("Arms && hands", _window);
     _showArmsCheck->setChecked(true);
 
-        connect(folderButton, &QPushButton::clicked, this, &ReloadMakerController::browsePackage);
-        connect(zipButton, &QPushButton::clicked, this, [this]() {
-            const QString file = QFileDialog::getOpenFileName(
-                _window, QStringLiteral("Open mod ZIP"), _packagePath->text(),
-                QStringLiteral("ZIP archives (*.zip)"));
-            if (!file.isEmpty()) {
-                _packagePath->setText(file);
-                openPackage(file);
-            }
-        });
-        connect(_packagePath, &QLineEdit::returnPressed,
-                this, &ReloadMakerController::openPackageFromField);
-        connect(gameButton, &QPushButton::clicked, this, &ReloadMakerController::browseGameData);
-        connect(_gameDataPath, &QLineEdit::returnPressed, this, [this]() {
-            setGameData(_gameDataPath->text());
-        });
         connect(_weaponCombo, qOverload<int>(&QComboBox::currentIndexChanged),
                 this, [this](int) {
+                    refreshWeaponPicker();
                     refreshAttachments();
                     refreshConfigurationChoices();
                     scheduleRebuild();
@@ -278,26 +248,18 @@ void ReloadMakerController::createUi() {
                 this, [this](int) { rebuildWeapon(); });
         connect(_animationSetCombo, qOverload<int>(&QComboBox::currentIndexChanged),
                 this, [this](int) { scheduleRebuild(); });
-        connect(_slotTree, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem* item) {
-            _focusedSlot = item ? item->data(0, kFormIdRole).toULongLong() : 0;
-            _partSearch->clear();
-            refreshSlotChoices();
-            if (_slotOverlay) { _slotOverlay->setSelected(_focusedSlot); }
-        });
-        connect(_partSearch, &QLineEdit::textChanged, this, [this]() { refreshSlotChoices(); });
-        connect(_childSlotCombo, qOverload<int>(&QComboBox::activated), this, [this](int index) {
-            const auto key = _childSlotCombo->itemData(index).toULongLong();
-            if (!key) { return; }
-            _focusedSlot = key;
-            _partSearch->clear();
-            refreshAttachments();
-        });
+        connect(_partSearch, &QLineEdit::textChanged, this, [this]() { refreshAttachments(); });
+        // Clicking an option installs it; clicking a slot header only
+        // highlights that slot in the viewport.
         const auto choosePart = [this](QListWidgetItem* item) {
+            if (!item) return;
+            const int section = item->data(kSectionRole).toInt();
+            if (section == kCategoryHeader) return;
+            _focusedSlot = item->data(kSlotRole).toULongLong();
             auto* config = configuration();
-            if (item && config && config->select(_focusedSlot, item->data(kFormIdRole).toUInt())) {
-                refreshAttachments();
-                scheduleRebuild();
-            }
+            const bool changed = section == 0 && config && config->select(_focusedSlot, item->data(kFormIdRole).toUInt());
+            refreshAttachments();
+            if (changed) scheduleRebuild();
         };
         connect(_partList, &QListWidget::itemClicked, this, choosePart);
         connect(_partList, &QListWidget::itemActivated, this, choosePart);
@@ -312,9 +274,9 @@ void ReloadMakerController::createUi() {
                 this, [this](QListWidgetItem* item) { previewNativeClip(_animationList->row(item)); });
         connect(_animationList, &QListWidget::itemClicked,
                 this, [this](QListWidgetItem* item) { previewNativeClip(_animationList->row(item)); });
-        connect(reloadButton, &QPushButton::clicked, this, [this]() {
-            if (_libraryMode) { startLibraryLoad(); }
-            else { openPackageFromField(); }
+        connect(_clipCombo, qOverload<int>(&QComboBox::activated), this, [this](int row) { previewNativeClip(row); });
+        connect(_animationList, &QListWidget::currentRowChanged, this, [this](int row) {
+            const QSignalBlocker block(_clipCombo); _clipCombo->setCurrentIndex(row);
         });
         _timelineDock->hide();
         connect(_playButton, &QPushButton::clicked, this, &ReloadMakerController::togglePlayback);
@@ -348,6 +310,7 @@ void ReloadMakerController::createUi() {
     _handPoseDock->setMaximumWidth(450);
     _window->removeDockWidget(_handPoseDock);
     _window->addDockWidget(Qt::RightDockWidgetArea, _handPoseDock);
+    _handPoseDock->setWindowTitle("HANDS && GRIPS");
     _handPosePages->setTabText(0, "Finger poses");
     _handPosePages->setTabText(1, "Part grip");
     _handPosePages->setTabText(2, "Mechanism");
@@ -368,8 +331,12 @@ void ReloadMakerController::createUi() {
     _reloadGraphDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
     _reloadGraphDock->setMinimumHeight(170);
     _reloadGraphDock->setMaximumHeight(360);
-    auto* camera = new QToolBar("Camera", _window);
+
+    // ---- Context bar: source, plugin and weapon, then the view controls ----
+    auto* camera = new QToolBar("Context", _window);
     camera->setMovable(false); _window->addToolBarBreak(); _window->addToolBar(camera);
+    createSourceBar(camera);
+    camera->addSeparator();
     camera->addWidget(new QLabel("  VIEW  ", camera));
     const std::pair<const char*, GLView::ViewState> views[]{{"Front",GLView::ViewFront},{"Side",GLView::ViewRight},{"Top",GLView::ViewTop},{"Perspective",GLView::ViewDefault}};
     for (const auto& [label, view] : views) {
@@ -379,7 +346,7 @@ void ReloadMakerController::createUi() {
             if(view==GLView::ViewDefault)_window->getGLView()->setRotation(-65,0,135);
         });
     }
-    connect(camera->addAction("Fit weapon"), &QAction::triggered, this, [this] { (void)fitWeapon(); });
+    connect(camera->addAction("Fit"), &QAction::triggered, this, [this] { (void)fitWeapon(); });
     auto* grid = new QCheckBox("Grid", camera);
     camera->addWidget(grid);
     connect(grid,&QCheckBox::toggled,this,[this](bool show) {
@@ -396,7 +363,6 @@ void ReloadMakerController::createUi() {
         _showPartLabels=show;if(_slotOverlay)_slotOverlay->setActive(show&&_pages->currentIndex()==kLoadoutPage);
     });
     connect(_workspaceButtons, &QButtonGroup::idClicked, this, &ReloadMakerController::setWorkspace);
-    connect(libraryButton, &QPushButton::clicked, this, [this] { setWorkspace(SourceWorkspace); _pages->setCurrentIndex(kLibraryPage); });
     connect(diagnostics, &QPushButton::toggled, _detailsDock, &QWidget::setVisible);
     connect(saveProject, &QToolButton::clicked, this, [this] { saveSession(); });
     connect(openProject, &QPushButton::clicked, this, [this] {
@@ -413,9 +379,130 @@ void ReloadMakerController::createUi() {
     }
 }
 
+void ReloadMakerController::createSourceBar(QToolBar* bar) {
+    _mo2Instance = QSettings().value("paths/mo2Instance", "D:/FO4").toString();
+    _sourceButton = new QToolButton(bar);
+    _sourceButton->setText("SOURCE");
+    _sourceButton->setObjectName("SourceButton");
+    _sourceButton->setPopupMode(QToolButton::InstantPopup);
+    auto* menu = new QMenu(_sourceButton);
+    connect(menu->addAction("Open mod folder…"), &QAction::triggered, this, &ReloadMakerController::browsePackage);
+    connect(menu->addAction("Open mod ZIP…"), &QAction::triggered, this, [this] {
+        const QString file = QFileDialog::getOpenFileName(_window, "Open mod ZIP", _packageText, "ZIP archives (*.zip)");
+        if (!file.isEmpty()) { _packageText = file; openPackage(file); }
+    });
+    menu->addSeparator();
+    auto* library = menu->addAction("Load MO2 profile (all mods)");
+    connect(library, &QAction::triggered, this, &ReloadMakerController::startLibraryLoad);
+    connect(menu->addAction("Choose MO2 instance…"), &QAction::triggered, this, [this] {
+        const auto folder = QFileDialog::getExistingDirectory(_window, "Select MO2 instance", _mo2Instance);
+        if (folder.isEmpty()) return;
+        _mo2Instance = folder;
+        QSettings().setValue("paths/mo2Instance", folder);
+        startLibraryLoad();
+    });
+    menu->addSeparator();
+    connect(menu->addAction("Game Data folder…"), &QAction::triggered, this, &ReloadMakerController::browseGameData);
+    connect(menu->addAction("Reload source files"), &QAction::triggered, this, [this] {
+        if (_libraryMode) startLibraryLoad(); else openPackage(_packageText);
+    });
+    connect(menu, &QMenu::aboutToShow, this, [this, library] {
+        library->setText(QStringLiteral("Load MO2 profile (all mods) · %1").arg(QDir::toNativeSeparators(_mo2Instance)));
+    });
+    _sourceButton->setMenu(menu);
+    bar->addWidget(_sourceButton);
+    _sourceLabel = new QLabel("No source", bar);
+    _sourceLabel->setObjectName("SourceLabel");
+    bar->addWidget(_sourceLabel);
+    _pluginLabel = new QLabel("  Plugin", bar);
+    _pluginAction = bar->addWidget(_pluginLabel);
+    _pluginFilter = new QComboBox(bar);
+    _pluginFilter->setMinimumContentsLength(22);
+    _pluginFilter->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    _pluginFilter->setMaxVisibleItems(30);
+    _pluginFilter->setEditable(true);
+    _pluginFilter->setInsertPolicy(QComboBox::NoInsert);
+    _pluginFilter->completer()->setFilterMode(Qt::MatchContains);
+    _pluginFilter->completer()->setCompletionMode(QCompleter::PopupCompletion);
+    _pluginFilterAction = bar->addWidget(_pluginFilter);
+    _pluginAction->setVisible(false); _pluginFilterAction->setVisible(false);
+    bar->addWidget(new QLabel("  Weapon", bar));
+    _weaponPicker = new QComboBox(bar);
+    _weaponPicker->setMinimumContentsLength(22);
+    _weaponPicker->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    _weaponPicker->setMaxVisibleItems(30);
+    _weaponPicker->setPlaceholderText("Select a weapon…");
+    bar->addWidget(_weaponPicker);
+    connect(_pluginFilter, qOverload<int>(&QComboBox::activated), this, [this](int) {
+        refreshWeaponPicker();
+        // One weapon in the plugin selects itself; several open the picker.
+        if (_weaponPicker->count() == 1) {
+            const int selection = _weaponPicker->itemData(0).toInt();
+            if (selection != _weaponCombo->currentIndex()) _weaponCombo->setCurrentIndex(selection);
+        } else if (_weaponPicker->count() > 1 && _weaponPicker->currentIndex() < 0) {
+            _weaponPicker->showPopup();
+        }
+    });
+    connect(_weaponPicker, qOverload<int>(&QComboBox::activated), this, [this](int row) {
+        const int selection = _weaponPicker->itemData(row).toInt();
+        if (selection >= 0 && selection != _weaponCombo->currentIndex() && !_loadThread) _weaponCombo->setCurrentIndex(selection);
+    });
+}
+
+void ReloadMakerController::refreshSourceBar() {
+    if (!_sourceLabel) return;
+    if (_libraryMode && _launchSnapshot.valid()) {
+        _sourceLabel->setText(QStringLiteral("MO2 · %1").arg(_launchSnapshot.profileName));
+        _sourceLabel->setToolTip(QStringLiteral("%1 / %2\n%3 weapons · %4 plugins · %5 winning resources\nGame Data: %6")
+            .arg(QDir::toNativeSeparators(_launchSnapshot.instancePath), _launchSnapshot.profileName)
+            .arg(_plugins.isEmpty() ? 0 : _plugins.first().weapons.size()).arg(_libraryPlugins.size()).arg(_packageResources.files().size())
+            .arg(QDir::toNativeSeparators(_gameData)));
+    } else if (!_package.sourcePath.isEmpty()) {
+        _sourceLabel->setText(QFileInfo(_package.sourcePath).fileName());
+        _sourceLabel->setToolTip(QStringLiteral("%1\nGame Data: %2").arg(QDir::toNativeSeparators(_package.sourcePath), QDir::toNativeSeparators(_gameData)));
+    } else {
+        _sourceLabel->setText(QStringLiteral("No source"));
+        _sourceLabel->setToolTip(QStringLiteral("Open a mod folder or ZIP, or load the MO2 profile from SOURCE."));
+    }
+    _pluginAction->setVisible(_libraryMode);
+    _pluginFilterAction->setVisible(_libraryMode);
+    if (_libraryMode) {
+        const QSignalBlocker blocker(_pluginFilter);
+        const QString previous = _pluginFilter->currentData().toString();
+        _pluginFilter->clear();
+        _pluginFilter->addItem(QStringLiteral("All plugins"), QString());
+        for (const auto& plugin : _libraryPlugins)
+            if (plugin.weapons > 0) _pluginFilter->addItem(QStringLiteral("%1  ·  %2").arg(plugin.name).arg(plugin.weapons), plugin.name);
+        _pluginFilter->setCurrentIndex(std::max(0, _pluginFilter->findData(previous)));
+    }
+    refreshWeaponPicker();
+}
+
+void ReloadMakerController::refreshWeaponPicker() {
+    if (!_weaponPicker) return;
+    const QSignalBlocker blocker(_weaponPicker);
+    _weaponPicker->clear();
+    const QString filter = _libraryMode ? _pluginFilter->currentData().toString() : QString();
+    for (int index = 0; index < _weaponSelections.size(); ++index) {
+        const auto& selection = _weaponSelections[index];
+        const auto& plugin = _plugins[selection.pluginIndex];
+        const auto& weapon = plugin.weapons[selection.weaponIndex];
+        const QString origin = _libraryMode ? plugin.origins.value(weapon.formId).plugin : plugin.fileName;
+        if (!filter.isEmpty() && origin.compare(filter, Qt::CaseInsensitive) != 0 &&
+            plugin.origins.value(weapon.formId).winner.compare(filter, Qt::CaseInsensitive) != 0) continue;
+        _weaponPicker->addItem(weapon.name.isEmpty() ? weapon.editorId : weapon.name, index);
+        _weaponPicker->setItemData(_weaponPicker->count() - 1, QStringLiteral("%1 · %2").arg(weapon.editorId, origin), Qt::ToolTipRole);
+    }
+    _weaponPicker->setCurrentIndex(_weaponPicker->findData(_weaponCombo->currentIndex()));
+    _weaponPicker->setEnabled(_weaponPicker->count() > 0 && !_loadThread);
+}
+
 bool ReloadMakerController::validWorkspace(int workspace) {
-    return workspace == SourceWorkspace || workspace == GripsWorkspace || workspace == MechanismWorkspace ||
-           workspace == PhasesWorkspace || workspace == OperateWorkspace;
+    return workspace == GripsWorkspace || workspace == PhasesWorkspace || workspace == OperateWorkspace;
+}
+
+bool ReloadMakerController::mechanismPageActive() const {
+    return _workspace == GripsWorkspace && _handPosePages && _handPosePages->currentIndex() == 2;
 }
 
 void ReloadMakerController::setWorkspace(int workspace) {
@@ -432,27 +519,18 @@ void ReloadMakerController::setWorkspace(int workspace) {
     }
     _workspace = workspace;
     _workspaceButtons->button(workspace)->setChecked(true);
-    // Only Reload phases uses the reload page. Every other workspace keeps the
-    // loadout rail so parts can be swapped in place; Source may show the library.
+    // Reload phases replaces the loadout rail with its phase list and the
+    // native clip list; Operate and Hands & grips keep the loadout.
     const bool phases = workspace == PhasesWorkspace;
-    if (phases) _pages->setCurrentIndex(kReloadPage);
-    else if (workspace != SourceWorkspace || _pages->currentIndex() == kReloadPage) _pages->setCurrentIndex(kLoadoutPage);
-    _packageDock->setWindowTitle(phases ? "RELOAD PHASES" : workspace == SourceWorkspace ? "SOURCE & LOADOUT" : "LOADOUT");
-    _packageGroup->setVisible(workspace == SourceWorkspace);
-    _referenceGroup->setVisible(workspace == SourceWorkspace);
-    _reloadSource->setVisible(workspace == SourceWorkspace);
+    _pages->setCurrentIndex(phases ? kReloadPage : kLoadoutPage);
+    _packageDock->setWindowTitle(phases ? "RELOAD PHASES" : "LOADOUT");
     _simulationDock->setVisible(workspace == OperateWorkspace);
     _reloadGraphDock->setVisible(phases);
     _reloadInspectorDock->setVisible(phases);
-    _handPoseDock->setVisible(workspace == GripsWorkspace || workspace == MechanismWorkspace);
-    _handPosePages->setTabVisible(0, workspace == GripsWorkspace);
-    _handPosePages->setTabVisible(1, workspace == GripsWorkspace);
-    _handPosePages->setTabVisible(2, workspace == MechanismWorkspace);
-    _handPosePages->tabBar()->setVisible(workspace == GripsWorkspace);
-    if (workspace == MechanismWorkspace) _handPosePages->setCurrentIndex(2);
-    else if (workspace == GripsWorkspace && _handPosePages->currentIndex() == 2) _handPosePages->setCurrentIndex(0);
-    _timelineDock->setVisible(workspace == OperateWorkspace || workspace == GripsWorkspace || workspace == MechanismWorkspace);
-    _handPoseDock->setWindowTitle(workspace == MechanismWorkspace ? "PART MECHANISM" : "HANDS & GRIPS");
+    _handPoseDock->setVisible(workspace == GripsWorkspace);
+    // Hands & grips needs a frame to capture from; phases shows the transport
+    // only while a non-reload clip is being previewed.
+    _timelineDock->setVisible(workspace == GripsWorkspace);
     if (_slotOverlay) _slotOverlay->setActive(_pages->currentIndex() == kLoadoutPage && _showPartLabels);
     updateGripViewport();
     if(_clip.valid()&&!_reloadCapturing)(void)applyPose(_playbackTime);
@@ -468,8 +546,22 @@ void ReloadMakerController::previewNativeClip(int row) {
     // Previewing a native clip leaves the interactive weapon state; the next
     // Operate action starts a fresh simulation from Ready.
     if (_simulationActive) { stopSimulation(); updateSimulationControls(); }
+    if (_reloadWorkspaceActive) {
+        // In Reload phases the reload itself belongs to the phase graph; other
+        // clips are inspected on the transport until a phase is selected again.
+        const bool reload = _animationList->item(row)->data(Qt::UserRole).toString() == _reloadExpectedPath;
+        _reloadPreviewTimer->stop(); _reloadPlaying = false; _reloadPlay->setText("PLAY RELOAD");
+        if (reload) { restoreReloadClip(); return; }
+        _timelineDock->setVisible(true);
+    }
     _animationList->setCurrentRow(row);
     selectAnimation(_animationList->item(row));
+}
+
+void ReloadMakerController::restoreReloadClip() {
+    if (!_reloadWorkspaceActive) return;
+    if (_workspace == PhasesWorkspace) _timelineDock->setVisible(false);
+    if (_activeAnimationPath != _reloadExpectedPath || !_clip.valid()) startReloadCapture();
 }
 
 void ReloadMakerController::applyStyle() {
@@ -480,6 +572,11 @@ void ReloadMakerController::applyStyle() {
         QLabel#Brand { font-size:20px; font-weight:700; padding:0 20px 0 5px; }
         QLabel#Hint { color:#91a4ae; }
         QLabel#Section { color:#7fb3ac; font-weight:700; letter-spacing:1px; padding-top:6px; }
+        QLabel#LoadoutTitle { font-size:19px; font-weight:700; color:#e6f5f2; }
+        QLabel#SourceLabel { color:#a6c9c4; padding:0 6px; }
+        QToolButton#SourceButton { font-weight:700; color:#91ddd0; }
+        QTreeWidget#Loadout, QListWidget#Loadout { background:transparent; border:0; }
+        QTreeWidget#Loadout::item, QListWidget#Loadout::item { padding:0; }
         QLabel#StatusCard { padding:10px 12px; background:#1f3533; color:#d3f7ec; border-radius:5px; }
         QDockWidget::title { background:#202a32; color:#93b8b9; padding:9px 12px; font-weight:600; }
         QGroupBox { border:1px solid #344149; border-radius:5px; margin-top:12px; padding:10px 6px 5px; }

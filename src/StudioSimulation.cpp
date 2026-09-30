@@ -92,11 +92,9 @@ void ReloadMakerController::createSimulationUi() {
     auto* authorGrips=new QPushButton("AUTHOR RELOAD GRIPS",panel);layout->addWidget(authorGrips);
     authorGrips->setToolTip("Pause at this reload moment and open the hand editor with the weapon fixed and the magazine selected.");
     connect(authorGrips,&QPushButton::clicked,this,[this]{(void)authorReloadGrips();});
-    auto* clipsTitle=new QLabel("NATIVE CLIPS",panel);clipsTitle->setObjectName("Section");layout->addWidget(clipsTitle);
-    layout->addWidget(hint("Play a native clip on the timeline. Any action above returns to the interactive weapon.",panel));
-    _animationList->setParent(panel);_animationList->setMinimumHeight(150);_animationList->show();layout->addWidget(_animationList,1);
     _simulationSource=hint({},panel);layout->addWidget(_simulationSource);
     _simulationParts=hint({},panel);layout->addWidget(_simulationParts);
+    layout->addStretch(1);
     layout->addWidget(hint("Drag the slide in the viewport to rack it. GRAB: move the mouse, wheel for depth, guide it into the ring and push in. Esc cancels.",panel));
     auto* scroll=new QScrollArea(_simulationDock);scroll->setWidgetResizable(true);scroll->setFrameShape(QFrame::NoFrame);scroll->setWidget(panel);
     _simulationDock->setWidget(scroll);_window->addDockWidget(Qt::RightDockWidgetArea,_simulationDock);_simulationDock->hide();
@@ -358,7 +356,7 @@ void ReloadMakerController::updateSimulationControls() {
     _magazineGrab->setEnabled(magazineReady&&_simulation.ammoKnown()&&!_simulation.magazine.seated());
     _simulationReset->setEnabled(_simulationActive);
     if(!_simulationActive) {
-        const QString idle=_reloadCapturing?"Learning the native reload…":_clip.valid()&&_workspace==OperateWorkspace&&_reloadRecipe?"Previewing a native clip. Press any action to operate the weapon.":"Preparing native part motion…";
+        const QString idle=_reloadCapturing?"Learning the native reload…":_clip.valid()&&_workspace==OperateWorkspace&&_reloadRecipe?"Press any action to operate the weapon.":"Preparing native part motion…";
         _simulationStatus->setText(_simulationError.isEmpty()?idle:_simulationError);_simulationParts->clear();return;
     }
     // Compact state card: the numbers the user acts on, then the phase text.

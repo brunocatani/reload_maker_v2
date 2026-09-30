@@ -40,6 +40,9 @@ namespace reloadmaker {
         connect(_handPosePages,&QTabWidget::currentChanged,this,[this](int page){
             if(page!=2){_workshopPicking=false;_workshopHandEditing=false;_gripViewport->setPicking(false);if(_mechanismPreview){stopMechanismPreview();if(_clip.valid())(void)applyPose(_playbackTime);}}
             updatePartGripControls();
+            // Finger, grip and mechanism previews depend on the visible tab.
+            if(_clip.valid()&&!_reloadCapturing)(void)applyPose(_playbackTime);
+            refreshFingerEditor();updateGripViewport();
         });
         connect(_handPoseDock,&QDockWidget::visibilityChanged,this,[this](){updateGripViewport();});
         updateGripViewport();

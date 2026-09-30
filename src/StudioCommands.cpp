@@ -145,9 +145,9 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     _lastError.clear();
     if(method=="open_source") {
         const QString path=p["path"].toString();require(QFileInfo(path).exists(),"Source folder or ZIP does not exist");
-        startPackageLoad(path,p["gameData"].toString(_gameDataPath->text()));
+        startPackageLoad(path,p["gameData"].toString(_gameDataText));
     } else if(method=="open_library") {
-        if(p.contains("instance")) { _mo2Path->setText(p["instance"].toString()); }
+        if(p.contains("instance")) { _mo2Instance=p["instance"].toString(); }
         startLibraryLoad();
     } else if(method=="workspace") {const int index=p["index"].toInt(-1);require(validWorkspace(index),"Unknown workspace");setWorkspace(index);}
     else if(method=="author_reload_grips") {require(authorReloadGrips(),_lastError);}
@@ -257,7 +257,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
         }
         showPartGripValues();
     } else if(method=="save_grip") {require(_partGripDraft.has_value(),"No grip draft");require(savePartGrip(),_lastError);}
-    else if(method=="select_part") {int anchor=p["anchor"].toInt(-1);require(anchor>0&&anchor<_handPoseAnchors.size(),"Choose a concrete part");setWorkspace(3);selectWorkshopPart(anchor);}
+    else if(method=="select_part") {int anchor=p["anchor"].toInt(-1);require(anchor>0&&anchor<_handPoseAnchors.size(),"Choose a concrete part");setWorkspace(GripsWorkspace);_handPosePages->setCurrentIndex(2);selectWorkshopPart(anchor);}
     else if(method=="mechanism") {
         require(_mechanismDraft.has_value(),"Select a part in Mechanisms first");
         if(p.contains("record")){PartMechanism candidate;QString error;require(decodeMechanism(QJsonDocument(p["record"].toObject()).toJson(),candidate,error),error);require(sameMechanismPart(candidate.anchor,_mechanismDraft->anchor),"Mechanism targets another part");_mechanismDraft=candidate;displayMechanism();}

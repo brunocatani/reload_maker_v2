@@ -46,6 +46,9 @@ namespace reloadmaker {
         _reloadWindowProgress=new QSlider(Qt::Horizontal,page);_reloadWindowProgress->setRange(0,10000);layout->addWidget(_reloadWindowProgress);
         auto* edits=new QHBoxLayout();auto* split=new QPushButton("SPLIT AT CURSOR",page);auto* merge=new QPushButton("MERGE NEXT",page);edits->addWidget(split);edits->addWidget(merge);layout->addLayout(edits);
         _reloadSave=new QPushButton("SAVE RELOAD SETUP",page);_reloadSave->setObjectName("PrimaryButton");layout->addWidget(_reloadSave);
+        auto* clips=new QLabel("NATIVE CLIPS",page);clips->setObjectName("Section");layout->addWidget(clips);
+        auto* clipsHint=new QLabel("Inspect other native clips on the timeline. Selecting a phase or PLAY RELOAD returns to the reload.",page);clipsHint->setWordWrap(true);clipsHint->setObjectName("Hint");layout->addWidget(clipsHint);
+        _animationList->setParent(page);_animationList->setMinimumHeight(140);_animationList->setMaximumHeight(220);_animationList->show();layout->addWidget(_animationList);
         _pages->addTab(page,"04  RELOAD");
 
         _reloadGraphDock=new QDockWidget("RELOAD GRAPH · gold = grabbable · blue = rigid timing · green = co-timed",_window);
@@ -74,6 +77,7 @@ namespace reloadmaker {
         connect(_reloadAnalyze,&QPushButton::clicked,this,[this](){invalidateReloadCapture();_reloadIgnoreSavedOnce=true;startReloadCapture();});
         connect(_reloadPlay,&QPushButton::clicked,this,[this](){
             if(!_reloadRecipe||_reloadCapturing)return;
+            restoreReloadClip();
             _reloadPlaying=!_reloadPlaying;_reloadHeld=false;_reloadReturning=false;_partGripDraft.reset();_reloadDrive->clearCurve();_reloadTest->setChecked(false);_reloadDrive->setActive(_reloadWorkspaceActive,false);
             if(_reloadPlaying){if(_playbackTime>=_reloadRecipe->duration)seekReload(0);_reloadClock.restart();_reloadPreviewTimer->start();}else _reloadPreviewTimer->stop();
             _reloadPlay->setText(_reloadPlaying?"PAUSE RELOAD":"PLAY RELOAD");
@@ -274,6 +278,7 @@ namespace reloadmaker {
     void ReloadMakerController::selectReloadWindow(int window,int track)
     {
         if(!_reloadRecipe||_reloadCapturing||window<0||window>=_reloadRecipe->windows.size())return;
+        restoreReloadClip();
         _reloadPreviewTimer->stop();_reloadPlaying=false;_reloadReturning=false;_reloadHeld=false;_reloadPlay->setText("PLAY RELOAD");_reloadDrive->clearCurve();_partGripDraft.reset();
         _reloadWindow=window;_reloadTrack=track;{const QSignalBlocker b(_reloadWindows);_reloadWindows->setCurrentRow(window);}
         refreshReloadMembers();const auto& w=_reloadRecipe->windows[window];seekReload(_reloadRecipe->duration*w.first/(_reloadRecipe->frames-1));
