@@ -53,12 +53,12 @@ void ReloadMakerController::prepareMagazineInteraction() {
         for(const auto& vertex:shape->verts){const auto point=composed(world,Transformf{{vertex[0],vertex[1],vertex[2]}}).translation;output.append({point.x,point.y,point.z});}
     }
     MagazineRail rail;
-    if(!buildMagazineRail(*_reloadRecipe,rig.magazine,connectionName,connection,body,frame,rail,_magazineError,isM1AConfiguration()))return;
-    if(isM1AConfiguration()) {
+    if(!buildMagazineRail(*_reloadRecipe,rig.magazine,connectionName,connection,body,frame,rail,_magazineError,isM1AConfiguration()||isBoltActionConfiguration()))return;
+    if(isM1AConfiguration()||isBoltActionConfiguration()) {
         float entry=-1,empty=-1;
         for(const auto& event:_reloadClip.annotations) {
-            if(event.text.endsWith("WPNM1AMagIn",Qt::CaseInsensitive))entry=event.timeSeconds;
-            if(event.text.endsWith("WPNM1AMagOut",Qt::CaseInsensitive))empty=event.timeSeconds;
+            if(event.text.endsWith(isBoltActionConfiguration()?"C14_MagInserting":"WPNM1AMagIn",Qt::CaseInsensitive))entry=event.timeSeconds;
+            if(event.text.endsWith(isBoltActionConfiguration()?"C14_MagOut":"WPNM1AMagOut",Qt::CaseInsensitive))empty=event.timeSeconds;
         }
         if(empty<0){_magazineError="Native empty-magazine frame is unavailable.";return;}
         _m1aEmptyMagazineFrame=std::clamp(qRound(empty/_reloadRecipe->duration*(_reloadRecipe->frames-1)),0,_reloadRecipe->frames-1);
@@ -70,7 +70,16 @@ void ReloadMakerController::prepareMagazineInteraction() {
         if(isEmpty)empty=true;
         if(shape.track==rig.magazine)fullBody=true;
         const auto name=model->get<QString>(shape.node,"Name");
-        const bool cartridge=isRifleConfiguration()?name.startsWith(isM1AConfiguration()?"Bullet:":"MagBullet:",Qt::CaseInsensitive):!isEmpty&&shape.track!=rig.magazine;
+        bool cartridge=isRifleConfiguration()?name.startsWith(isM1AConfiguration()?"Bullet:":"MagBullet:",Qt::CaseInsensitive):!isEmpty&&shape.track!=rig.magazine;
+        if(isBoltActionConfiguration()) {
+            // The source culls this static round stack and Child1's top round
+            // on an empty reload. Magazine body/follower helpers are separate.
+            auto node=shape.node;
+            for(int depth=0;node.isValid()&&depth<model->getBlockCount();++depth) {
+                if(model->get<QString>(node,"Name").compare("MagHelperNode",Qt::CaseInsensitive)==0){cartridge=true;break;}
+                node=model->getBlockIndex(model->getParent(node));
+            }
+        }
         _magazineVisuals.append({shape.node,model->get<int>(shape.node,"Flags"),isEmpty,shape.track,cartridge});
     }
     if((!empty&&!rail.sharedBody())||!fullBody){_magazineVisuals.clear();_magazineError="Magazine body geometry could not be resolved.";return;}

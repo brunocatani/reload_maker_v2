@@ -3,7 +3,7 @@
 #include "MagazineInteraction.h"
 
 namespace reloadmaker {
-    enum class WeaponMechanism { PistolSlide, Ar15, M1A };
+    enum class WeaponMechanism { PistolSlide, Ar15, M1A, BoltAction };
     // Indices belong to this exact captured recipe, never to scene blocks.
     struct SimulationRig {
         QString recipeId;
@@ -22,6 +22,9 @@ namespace reloadmaker {
         WeaponMechanism mechanism{WeaponMechanism::PistolSlide};
         float handle{0}, shotSeconds{0}, fireCycleSeconds{0};
         bool triggerHeld{false};
+        bool spentCase{false},boltClosing{false};
+        int casesEjected{0};
+        float boltEjectProgress{1};
         float inputProgress()const{return mechanism==WeaponMechanism::Ar15?handle:slide;}
         int capacity{0}, magazineRounds{0}, shotsFired{0}, roundsEjected{0};
         bool chambered{false}, slideLocked{false}, pistolLock{false};
@@ -50,7 +53,7 @@ namespace reloadmaker {
     private:
         void finishClosing();
         bool _cycleArmed{false},_pullFromLock{false},_pulledRearward{false};
-        struct PullSnapshot {bool chambered{false},locked{false},cycle{false};int rounds{0},ejected{0};float bolt{0},handle{0};} _pullSnapshot;
+        struct PullSnapshot {bool chambered{false},locked{false},cycle{false};int rounds{0},ejected{0};float bolt{0},handle{0};bool spent{false},closing{false};int cases{0};} _pullSnapshot;
     };
     bool buildSimulationRig(const ReloadRecipe& recipe, SimulationRig& rig, QString& error,WeaponMechanism profile=WeaponMechanism::PistolSlide);
     Transformf simulationTrackPose(const ReloadRecipe& recipe, const SimulationRig& rig, int track, float progress);

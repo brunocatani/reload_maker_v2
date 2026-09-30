@@ -6,3 +6,4 @@ TARGET = SimulationTests
 INCLUDEPATH += ../src
 SOURCES += SimulationTests.cpp ../src/WeaponSimulation.cpp ../src/ReloadRecipe.cpp ../src/PartGrip.cpp ../src/HandPoseLibrary.cpp ../src/PoseEvaluator.cpp ../src/HkxReader.cpp ../src/StudioPaths.cpp
 SOURCES += ../src/MagazineInteraction.cpp
+SOURCES += ../src/BoltCycle.cpp

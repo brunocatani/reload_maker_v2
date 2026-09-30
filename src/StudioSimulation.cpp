@@ -33,11 +33,11 @@ QLabel* hint(const QString& text, QWidget* parent) {
     label->setObjectName("Hint");
     return label;
 }
-QString actionName(SimulationAction action,bool ar=false) {
+QString actionName(SimulationAction action,bool ar=false,bool bolt=false) {
     switch(action) {
     case SimulationAction::Fire:return "Firing";
     case SimulationAction::Reload:return "Automatic reload";
-    case SimulationAction::Held:return ar?"Charging handle held":"Slide held";
+    case SimulationAction::Held:return bolt?"Bolt held":ar?"Charging handle held":"Slide held";
     case SimulationAction::Returning:return ar?"Bolt / handle returning":"Slide returning";
     default:return "Ready";
     }
@@ -54,7 +54,7 @@ void ReloadMakerController::createSimulationUi() {
     _simulationStatus->setTextFormat(Qt::RichText);layout->addWidget(_simulationStatus);
     const auto button=[&](const QString& text,const QString& action) {
         auto* b=new QPushButton(text,panel);b->setMinimumHeight(36);
-        connect(b,&QPushButton::clicked,this,[this,action]{if(action!="fire"||!isRifleConfiguration())runSimulationAction(action);});return b;
+        connect(b,&QPushButton::clicked,this,[this,action]{if(action!="fire"||(!isRifleConfiguration()&&!isBoltActionConfiguration()))runSimulationAction(action);});return b;
     };
     // Primary weapon actions first, then magazine handling: everything used
     // repeatedly stays above the fold.
@@ -156,7 +156,7 @@ void ReloadMakerController::prepareSimulation() {
     if(_workspace!=5||_loadThread||_reloadCapturing||!_reloadRecipe){updateSimulationControls();return;}
     if(_simulationActive)return;
     SimulationRig rig;_simulationError.clear();
-    if(!buildSimulationRig(*_reloadRecipe,rig,_simulationError,isM1AConfiguration()?WeaponMechanism::M1A:isAr15Configuration()?WeaponMechanism::Ar15:WeaponMechanism::PistolSlide)){updateSimulationControls();return;}
+    if(!buildSimulationRig(*_reloadRecipe,rig,_simulationError,isBoltActionConfiguration()?WeaponMechanism::BoltAction:isM1AConfiguration()?WeaponMechanism::M1A:isAr15Configuration()?WeaponMechanism::Ar15:WeaponMechanism::PistolSlide)){updateSimulationControls();return;}
     _simulationRig=rig;_simulationVisibility.clear();
     const auto& owner=_reloadRecipe->tracks[rig.magazine].anchor;
     const auto* config=configuration();auto* model=activeModel();
@@ -196,7 +196,13 @@ void ReloadMakerController::prepareSimulation() {
         }
         _glockReloadFeedAt=_reloadRecipe->duration*rig.closedFrame/(_reloadRecipe->frames-1);
     }
+    if(isBoltActionConfiguration()) {
+        if(!prepareBoltActionMotion()){updateSimulationControls();return;}
+        _glockReloadRackAt=_reloadRecipe->duration*rig.openFrame/(_reloadRecipe->frames-1);
+        _glockReloadFeedAt=_reloadRecipe->duration*rig.closedFrame/(_reloadRecipe->frames-1);
+    }
     _simulation.configureAmmunition(_simulationAmmo.valid()?_simulationAmmo.capacity:0,_simulationAmmo.pistol,rig.mechanism);
+    if(isBoltActionConfiguration())_simulation.boltEjectProgress=_boltCycle.ejectProgress;
     if(isRifleConfiguration())_simulation.fireCycleSeconds=_simulationAmmo.automatic?_rifleFireInterval:_rifleSingleDuration;
     _simulationActive=true;
     _reloadPreviewTimer->stop();_reloadPlaying=false;_reloadHeld=false;_reloadDrive->setActive(false,false);
@@ -229,7 +235,7 @@ void ReloadMakerController::applySimulationVisibility() {
     const bool authored=_simulation.action==SimulationAction::Reload;
     for(const auto& visual:_magazineVisuals)if(visual.node.isValid()) {
         const bool cartridge=visual.cartridge;
-        const bool noRound=isRifleConfiguration()?_simulation.magazineRounds==0:_simulation.magazine.seated()?(!_simulation.chambered&&_simulation.magazineRounds==0):_simulation.magazineRounds==0;
+        const bool noRound=isRifleConfiguration()||isBoltActionConfiguration()?_simulation.magazineRounds==0:_simulation.magazine.seated()?(!_simulation.chambered&&_simulation.magazineRounds==0):_simulation.magazineRounds==0;
         bool hide=_simulationActive&&!authored&&(cartridge?noRound:(!_magazineRail||!_magazineRail->sharedBody())&&(visual.empty!=(_simulation.magazineRounds==0)));
         if(_simulationActive&&authored&&_reloadRecipe) {
             // Evaluate source visibility afresh at the current time so reverse
@@ -286,6 +292,7 @@ bool ReloadMakerController::applySimulationPose() {
         // trajectory follows the measured firing bolt stroke, including lock.
         targets.insert(_reloadTrackNodes[rig.slide],simulationTrackPose(*_reloadRecipe,rig,rig.slide,progress));
     }
+    if(isBoltActionConfiguration())applyBoltActionTargets(targets);
     // A newly seated magazine has a top round, not a magically loaded chamber.
     // The source feed curve takes over only during a completed rack/return cycle.
     if(!isM1AConfiguration()&&_simulation.action!=SimulationAction::Fire&&_simulation.action!=SimulationAction::Reload&&!_simulation.chambered&&!_simulation.feedCycleActive())
@@ -354,10 +361,10 @@ void ReloadMakerController::runSimulationAction(const QString& action) {
         if(accepted&&!selectSimulationClip(action=="fire",action=="reload")){_simulation=previous;accepted=false;}
         if(accepted){_simulation.triggerHeld=false;_simulationDrive->clearCurve();_simulationClock.restart();_simulationTimer->start();}
     }
-    if(!accepted){setStatus(!_simulationAmmo.valid()?_simulationAmmo.error:action=="fire"&&!_simulation.chambered?"Chamber empty. Insert a magazine and cycle or release the slide.":"Finish the current interaction; the slide must be closed and chamber loaded to fire.",true);return;}
+    if(!accepted){setStatus(!_simulationAmmo.valid()?_simulationAmmo.error:isBoltActionConfiguration()?"Cycle the bolt fully back and forward to load and lock the next round.":action=="fire"&&!_simulation.chambered?"Chamber empty. Insert a magazine and cycle or release the slide.":"Finish the current interaction; the slide must be closed and chamber loaded to fire.",true);return;}
     if(!applyPose(simulationPoseSeconds())){_simulationError=_lastError;stopSimulation();updateSimulationControls();return;}
     applySimulationVisibility();updateSimulationControls();++_revision;
-    setStatus(action=="drop_magazine"?"Magazine removed. Grab a fresh magazine and guide it into the well.":actionName(_simulation.action,isRifleConfiguration()));
+    setStatus(action=="drop_magazine"?"Magazine removed. Grab a fresh magazine and guide it into the well.":actionName(_simulation.action,isRifleConfiguration(),isBoltActionConfiguration()));
 }
 void ReloadMakerController::tickSimulation() {
     if(!_simulationActive||_workspace!=5){_simulationTimer->stop();return;}
@@ -378,9 +385,19 @@ bool ReloadMakerController::beginSimulationGrab(QPointF point,ReloadDriveCurve& 
     int automatic=-1;Vec3f hit;QString surface,error;QVector<int> candidates;
     if(!pickWeaponPart(point,automatic,hit,surface,candidates,error))return false;
     const auto& rig=*_simulationRig;const auto& track=_reloadRecipe->tracks[rig.slide];
-    const bool slide=std::any_of(candidates.cbegin(),candidates.cend(),[&](int i){return sameMechanismPart(_handPoseAnchors[i].description,track.anchor);});
+    const bool slide=std::any_of(candidates.cbegin(),candidates.cend(),[&](int i){
+        if(sameMechanismPart(_handPoseAnchors[i].description,track.anchor))return true;
+        return isBoltActionConfiguration()&&std::any_of(_boltCycle.tracks.cbegin(),_boltCycle.tracks.cend(),[&](int t){return sameMechanismPart(_handPoseAnchors[i].description,_reloadRecipe->tracks[t].anchor);});
+    });
     if(!slide||!_simulation.grab())return true;
     _simulationTimer->stop();
+    if(isBoltActionConfiguration()) {
+        const auto axis=rotated(_globalPose[_weaponBoneIndex].rotation,_boltCycle.inputAxis);
+        const QVector3D stroke(axis.x*_boltCycle.inputTravel,axis.y*_boltCycle.inputTravel,axis.z*_boltCycle.inputTravel);
+        const QVector3D start=QVector3D(hit.x,hit.y,hit.z)-stroke*_simulation.slide;
+        curve.points={start,start+stroke};curve.times={0,1};curve.current=_simulation.slide;
+        updateSimulationControls();setStatus("Bolt grabbed · pull back to open, push forward to lock · release holds position");++_revision;return true;
+    }
     Transformf world,inverse;
     if(!sceneNodeWorld(_sceneNodes[_reloadTrackNodes[rig.slide]],world,error)||!invertUniformTransform(world,inverse)){_simulation.release(true,false);setStatus(error,true);return true;}
     const auto contact=composed(inverse,Transformf{hit}).translation;
@@ -419,20 +436,21 @@ void ReloadMakerController::updateSimulationControls() {
     const bool native=_simulation.action==SimulationAction::Fire||_simulation.action==SimulationAction::Reload;
     const bool busy=native||_simulation.magazine.busy();
     _simulationMagazineGrip->setEnabled(_simulationActive&&!busy&&_simulation.action==SimulationAction::Idle&&_simulationRig&&_reloadRecipe&&magazineGrabSupported(_reloadRecipe->tracks[_simulationRig->magazine].anchor));
-    const bool ar=isRifleConfiguration();
-    _simulationInstructions->setText(isM1AConfiguration()?"Drag the operating handle to rack. FIRE shoots once per press. GRAB: enter the angled line, then move straight along it or use the wheel. The magazine follows its reload motion. Esc cancels.":ar?"Drag the charging handle to rack. Hold FIRE for automatic fire. GRAB: move the mouse, wheel for depth, enter the guide and push in. Esc cancels.":"Drag the slide to rack. GRAB: move the mouse, wheel for depth, enter the guide and push in. Esc cancels.");
+    const bool bolt=isBoltActionConfiguration(),ar=isRifleConfiguration()||bolt;
+    _simulationInstructions->setText(bolt?"After firing, pull the bolt back to eject, then push it forward to feed and lock. Release holds its position. Magazine: enter the angled line and push straight in.":isM1AConfiguration()?"Drag the operating handle to rack. FIRE shoots once per press. GRAB: enter the angled line, then move straight along it or use the wheel. The magazine follows its reload motion. Esc cancels.":ar?"Drag the charging handle to rack. Hold FIRE for automatic fire. GRAB: move the mouse, wheel for depth, enter the guide and push in. Esc cancels.":"Drag the slide to rack. GRAB: move the mouse, wheel for depth, enter the guide and push in. Esc cancels.");
+    _simulationSlideRelease->setVisible(!bolt);_simulationSpring->setVisible(!bolt);
     _simulationSlideRelease->setText(ar?"BOLT RELEASE":"SLIDE RELEASE");
     _simulationSpring->setText(ar?"Charging handle returns when released":"Slide returns when released");
     _simulationFire->setToolTip(ar&&_simulationAmmo.automatic?"Press for one shot; hold for automatic fire.":"Fire one shot.");
-    _simulationDrive->setInstructions(isM1AConfiguration()?"OPERATE · pull the operating handle to rack · bolt release closes the action · background drag orbits":ar?"OPERATE · grab the charging handle to rack · bolt release closes the bolt · hold FIRE for automatic fire":"SIMULATE · grab the slide to rack it · linked parts follow · background drag orbits");
+    _simulationDrive->setInstructions(bolt?"OPERATE · grab the bolt · pull back to lift/open · push forward to close/lock · release holds position":isM1AConfiguration()?"OPERATE · pull the operating handle to rack · bolt release closes the action · background drag orbits":ar?"OPERATE · grab the charging handle to rack · bolt release closes the bolt · hold FIRE for automatic fire":"SIMULATE · grab the slide to rack it · linked parts follow · background drag orbits");
     const bool glock=isGlockConfiguration();
     _simulationNoExtender->setVisible(glock);_simulationNoExtender->setEnabled(!busy&&!_loadThread&&!_reloadCapturing&&!glockNoExtenderPath().isEmpty());
     {const QSignalBlocker block(_simulationNoExtender);_simulationNoExtender->setChecked(_glockNoExtender);}
     _simulationSource->setVisible(glock||ar);
     if((glock||ar)&&_reloadRecipe) {
         const auto path=_reloadRecipe->source["animation"].toString();
-        const auto relative=path.section(isM1AConfiguration()?"m1aanims/":ar?"ru556anims/":"glock19xanims/",1);
-        _simulationSource->setText("Reload source · "+relative+" · "+(_simulationAmmo.automatic?"automatic receiver":"semi-automatic receiver"));
+        const auto relative=path.section(bolt?"c14timb/":isM1AConfiguration()?"m1aanims/":ar?"ru556anims/":"glock19xanims/",1);
+        _simulationSource->setText("Reload source · "+relative+" · "+(bolt?"manual bolt action":_simulationAmmo.automatic?"automatic receiver":"semi-automatic receiver"));
         _simulationSource->setToolTip(path);
     }
     _simulationFire->setEnabled(_simulationActive&&(_simulation.canFire()||(ar&&_simulation.action==SimulationAction::Fire)));
@@ -454,11 +472,11 @@ void ReloadMakerController::updateSimulationControls() {
         "<table cellspacing=0 cellpadding=1><tr><td>Magazine&nbsp;</td><td><b>%2 / %3</b> %4</td></tr>"
         "<tr><td>Chamber&nbsp;</td><td><b>%5</b></td></tr><tr><td>%9&nbsp;</td><td>%6</td></tr>"
         "<tr><td>Shots&nbsp;</td><td>%7</td></tr></table><span style='color:#91a4ae'>%8</span>")
-        .arg(actionName(_simulation.action,ar)).arg(_simulation.magazineRounds).arg(_simulation.capacity).arg(_simulationAmmo.ammoName.toHtmlEscaped())
-        .arg(_simulation.chambered?"loaded":"empty").arg(slide).arg(_simulation.shotsFired)
+        .arg(actionName(_simulation.action,ar,bolt)).arg(_simulation.magazineRounds).arg(_simulation.capacity).arg(_simulationAmmo.ammoName.toHtmlEscaped())
+        .arg(_simulation.spentCase?"spent case":_simulation.chambered?"loaded":"empty").arg(slide).arg(_simulation.shotsFired)
         .arg(_simulation.magazine.seated()?QString("Magazine seated"):_simulation.magazineDescription().toHtmlEscaped()).arg(ar?"Bolt":"Slide"));
     QStringList names;for(int i:_simulationRig->slideTracks)names.append(_reloadRecipe->tracks[i].anchor.anchorName);
-    _simulationParts->setText(isM1AConfiguration()?QString("M1A · reciprocating operating handle and rotating bolt\nSemi-automatic · one shot per press"):
+    _simulationParts->setText(bolt?QString("C14 Timberwolf · manual bolt cycle\nLift / pull / push / lock follow the native animation\nCases ejected: %1").arg(_simulation.casesEjected):isM1AConfiguration()?QString("M1A · reciprocating operating handle and rotating bolt\nSemi-automatic · one shot per press"):
         ar?QString("AR-15 · independent bolt and charging handle\nHandle %1% · automatic cadence %2 rounds/min").arg(qRound(_simulation.handle*100)).arg(qRound(60/_rifleFireInterval)):"Moving with the slide: "+names.join(" · "));
     if(!_magazineError.isEmpty())_simulationParts->setText(_simulationParts->text()+"\n\nMagazine interaction: "+_magazineError);
     if(!_simulationAmmo.valid())_simulationParts->setText(_simulationParts->text()+"\n\nAmmunition: "+_simulationAmmo.error);
@@ -466,7 +484,9 @@ void ReloadMakerController::updateSimulationControls() {
     if(!_magazineGrabError.isEmpty())_simulationParts->setText(_simulationParts->text()+"\n\nMagazine hand: "+_magazineGrabError);
 }
 QJsonObject ReloadMakerController::simulationState() const {
-    QJsonObject result{{"active",_simulationActive},{"action",actionName(_simulation.action,isRifleConfiguration())},{"magazinePresent",_simulation.magazinePresent()},{"slide",_simulation.slide},{"seconds",_simulation.seconds},{"error",_simulationError}};
+    QJsonObject result{{"active",_simulationActive},{"action",actionName(_simulation.action,isRifleConfiguration(),isBoltActionConfiguration())},{"magazinePresent",_simulation.magazinePresent()},{"slide",_simulation.slide},{"seconds",_simulation.seconds},{"error",_simulationError}};
+    if(isBoltActionConfiguration())result["boltAction"]=QJsonObject{{"progress",_simulation.slide},{"closingPath",_simulation.boltClosing},{"spentCase",_simulation.spentCase},
+        {"casesEjected",_simulation.casesEjected},{"ejectProgress",_simulation.boltEjectProgress},{"source",_boltCycleSource},{"manualReturn",true}};
     if(isAr15Configuration())result["ar15"]=QJsonObject{{"bolt",_simulation.slide},{"handle",_simulation.handle},{"boltLocked",_simulation.slideLocked},
         {"triggerHeld",_simulation.triggerHeld},{"shotSeconds",_simulation.shotSeconds},{"fireInterval",_rifleFireInterval},{"boltSource",_rifleBoltSource},{"boltSamples",_rifleBoltCycle.size()},
         {"magazineRecord",simulationMagazineAnchor().ownerRecord}};
@@ -550,6 +570,11 @@ QJsonObject ReloadMakerController::exportSimulation() const {
         }
     }
     if(isGlockConfiguration())result["glockReloadProfile"]=simulationState()["reloadProfile"];
+    if(isBoltActionConfiguration()) {
+        const auto motion=exportBoltActionMotion();if(motion.isEmpty())return {};
+        result["format"]="reload-maker-bolt-action-simulation";result["mechanismProfile"]="manual-bolt-action";
+        result["springReturn"]=false;result["boltMotion"]=motion;
+    }
     result["sourceRecipe"]=QJsonDocument::fromJson(bytes).object();return result;
 }
 }

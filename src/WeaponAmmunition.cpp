@@ -24,14 +24,17 @@ WeaponAmmunition resolveWeaponAmmunition(const PluginContent& plugin,const Weapo
             setAutomatic=value;
         }
         for(const auto& p:mod->ammoProperties) {
-            if(p.stepBits!=0||p.value2!=0)return fail("Rank-scaled ammunition property needs explicit support: "+mod->editorId);
+            if(p.stepBits!=0)return fail("Rank-scaled ammunition property needs explicit support: "+mod->editorId);
             if(p.property==12) {
+                if(p.value2!=0)return fail("Ranged capacity property needs explicit support: "+mod->editorId);
                 if(p.valueType!=0||(p.function!=0&&p.function!=2))return fail("Unsupported capacity operation in "+mod->editorId);
                 const auto value=static_cast<std::int32_t>(p.value1);
                 if(p.function==0){if(setCapacity&&*setCapacity!=value)return fail("Conflicting capacity overrides in selected parts.");setCapacity=value;}
                 else {hasAdd=true;added+=value;}
                 result.sources.append(QJsonObject{{"record",recordIdentity(plugin,id)},{"name",mod->name},{"capacityOperation",p.function==0?"set":"add"},{"value",value}});
             } else if(p.property==61) {
+                // FormID,Int stores the selected form in value1. Its companion
+                // integer is not an alternate capacity or a rank range.
                 if(p.valueType!=4||p.function!=0)return fail("Unsupported ammo-type operation in "+mod->editorId);
                 if(setAmmo&&*setAmmo!=p.value1)return fail("Conflicting ammo overrides in selected parts.");
                 setAmmo=p.value1;result.sources.append(QJsonObject{{"record",recordIdentity(plugin,id)},{"ammo",recordIdentity(plugin,p.value1)}});

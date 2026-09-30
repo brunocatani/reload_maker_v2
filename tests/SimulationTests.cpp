@@ -1,7 +1,9 @@
 #include "WeaponSimulation.h"
+#include "BoltCycle.h"
 #include <QCoreApplication>
 #include <QFile>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QTextStream>
 #include <stdexcept>
 #include <cmath>
@@ -160,6 +162,54 @@ void ar15Transitions() {
     s.reset();s.dropMagazine();s.fire();s.tick(1,1);check(!s.slideLocked&&!s.chambered,"Absent magazine fabricated follower lock");
     s.reset();s.grab();s.drag(.4f);s.release(false,false);check(!s.canFire(),"Open charging handle allowed fire");
 }
+void boltActionTransitions() {
+    WeaponSimulation s;s.configureAmmunition(5,false,WeaponMechanism::BoltAction);s.boltEjectProgress=.8f;
+    check(s.fire()&&s.tick(1,1),"Bolt-action shot failed");
+    check(s.spentCase&&!s.chambered&&s.magazineRounds==4&&s.slide==0&&!s.slideLocked&&!s.canFire(),"Firing automatically cycled the bolt action");
+    s.grab();s.drag(.4f);s.release(false,true);s.tick(3,1);
+    check(s.slide==.4f&&s.spentCase&&s.casesEjected==0,"Partial bolt must hold without ejecting or springing closed");
+    s.grab();s.drag(.85f);check(!s.spentCase&&s.casesEjected==1,"Source ejection threshold was not honored");
+    s.drag(.9f);check(s.casesEjected==1,"One opening ejected multiple cases");s.release(true,true);
+    check(s.slide==.4f&&s.spentCase&&s.casesEjected==0,"Cancelled bolt pull lost case/position state");
+    s.grab();s.drag(.85f);s.drag(0);s.release(false,true);
+    check(!s.chambered&&s.magazineRounds==4,"Short stroke fed a round without reaching the rear");
+    s.grab();s.drag(1);s.release(false,true);s.tick(5,1);
+    check(s.slide==1&&s.boltClosing&&!s.chambered&&!s.slideRelease(),"Manual bolt acquired an automatic release/return");
+    s.grab();s.drag(.2f);check(!s.canFire()&&!s.chambered,"Unlocked bolt allowed firing or credited chambering");
+    s.drag(0);s.release(false,true);check(s.canFire()&&s.chambered&&s.magazineRounds==3,"Full bolt cycle failed to chamber exactly once");
+    s.grab();s.drag(1);check(s.roundsEjected==1&&s.casesEjected==1,"Live round and spent case were not distinguished");
+    s.release(true,true);check(s.chambered&&s.roundsEjected==0&&s.magazineRounds==3,"Cancelled live-round ejection consumed ammunition");
+    s.reset();check(s.boltEjectProgress==.8f&&!s.spentCase&&!s.boltClosing,"Reset lost the source threshold or retained transient state");
+    s.dropMagazine();s.fire();s.tick(1,1);s.grab();s.drag(1);s.drag(0);s.release(false,true);
+    check(!s.canFire()&&!s.chambered&&!s.slideLocked&&s.casesEjected==1,"No-magazine bolt cycle fabricated a round or follower lock");
+    MagazineRail rail;rail.travel=10;rail.outward={0,0,-1};rail.captureRadius=1;
+    s.grab();s.drag(1);s.release(false,true);s.grabMagazine(rail);s.magazine.moveFree(rail,rail.outward*rail.travel);s.magazine.moveRail(rail,0);
+    check(!s.chambered&&s.slide==1,"Fresh magazine automatically closed/chambered the bolt");
+    s.grab();s.drag(0);s.release(false,true);check(s.chambered&&s.magazineRounds==4,"Open-bolt magazine insertion did not feed on locking");
+    s.fire();s.tick(1,1);s.reload(.4f,.8f);s.tick(2,1);
+    check(!s.spentCase&&s.chambered&&s.magazineRounds==4&&s.casesEjected==2,"Native full reload lost spent-case/feed events");
+    s.reset();s.boltEjectProgress=1;s.fire();s.tick(1,1);s.grab();s.drag(.999f);s.drag(0);s.release(false,true);
+    check(s.spentCase&&!s.chambered&&s.magazineRounds==4,"Rear tolerance fed through an unejected case");
+}
+void boltCycleFixture(const QString& path) {
+    QFile file(path);check(file.open(QIODevice::ReadOnly),"Missing Timberwolf native-cycle fixture");
+    const auto json=QJsonDocument::fromJson(file.readAll()).object();BoltCycle c;c.duration=float(json["duration"].toDouble());QString error;
+    for(const auto& values:json["tracks"].toArray()) {
+        c.tracks.append(c.tracks.size());QVector<Transformf> poses;
+        for(const auto& value:values.toArray()){Transformf pose;check(decodePoseTransform(value,pose,error),error);poses.append(pose);}c.poses.append(poses);
+    }
+    const float eject=float(json["ejectSeconds"].toDouble());check(analyzeBoltCycle(c,eject,error),error);
+    check(c.inputTravel>8&&c.inputTravel<9&&c.ejectProgress>.8f&&c.ejectProgress<1,"Timberwolf source stroke or ejection lost");
+    check(reloadPoseDistance(c.poses[2].front(),c.poses[2].back())>.3f,"Fixture lacks the fired-to-cocked pin change");
+    check(std::abs(c.poses[0][c.rear].rotation.w)<.72f,"Native bolt lift rotation was lost");
+    for(int t:c.tracks) {
+        for(int f=c.first;f<=c.rear;++f)check(reloadPoseDistance(boltCyclePose(c,t,c.opening[f-c.first],false),c.poses[t][f])<.005f,"Opening lost a native follower sample");
+        for(int f=c.rear;f<=c.last;++f)check(reloadPoseDistance(boltCyclePose(c,t,1-c.closing[f-c.rear],true),c.poses[t][f])<.005f,"Closing lost a native follower sample");
+    }
+    check(!analyzeBoltCycle(c,-1,error),"Missing ejection event accepted");
+    check(!analyzeBoltCycle(c,c.duration,error),"Ejection after locking accepted");
+    c.poses[1].removeLast();check(!analyzeBoltCycle(c,eject,error),"Mismatched follower samples accepted");
+}
 void ar15Fixture(const QString& path) {
     QFile file(path);check(file.open(QIODevice::ReadOnly),"Missing RU556 fixture");
     ReloadRecipe recipe;QString error;check(decodeReloadRecipe(file.readAll(),recipe,error),error);
@@ -213,7 +263,7 @@ void m1aFixture(const QString& path) {
 }
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
-    try {stateTransitions();ammunitionTransitions();nativeReloadEvents();ar15Transitions();check(app.arguments().size()>=2,"Pass the Glock project fixture");fixture(app.arguments()[1]);if(app.arguments().size()>2)ar15Fixture(app.arguments()[2]);if(app.arguments().size()>3)m1aFixture(app.arguments()[3]);
+    try {stateTransitions();ammunitionTransitions();nativeReloadEvents();ar15Transitions();boltActionTransitions();check(app.arguments().size()>=2,"Pass the Glock project fixture");fixture(app.arguments()[1]);if(app.arguments().size()>2)ar15Fixture(app.arguments()[2]);if(app.arguments().size()>3)m1aFixture(app.arguments()[3]);if(app.arguments().size()>4)boltCycleFixture(app.arguments()[4]);
         QTextStream(stdout)<<"PASS simulation state ownership, drop/fire persistence, regrab/cancel/return/reset, actual slide/barrel/cartridge curves and complete magazine ownership\n";return 0;
     }catch(const std::exception& e){QTextStream(stderr)<<"FAIL "<<e.what()<<'\n';return 1;}
 }

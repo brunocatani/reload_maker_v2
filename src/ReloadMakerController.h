@@ -16,6 +16,7 @@
 #include "WeaponSimulation.h"
 #include "WeaponAmmunition.h"
 #include "ActionCatalog.h"
+#include "BoltCycle.h"
 
 #include <QHash>
 #include <QCache>
@@ -170,6 +171,13 @@ namespace reloadmaker
         bool isGlockConfiguration() const;
         bool isAr15Configuration() const;
         bool isM1AConfiguration() const;
+        bool isBoltActionConfiguration() const;
+        bool prepareBoltActionMotion();
+        void applyBoltActionTargets(QHash<int,Transformf>& targets) const;
+        QJsonObject exportBoltActionMotion() const;
+        BoltCycle _boltCycle;
+        QVector<Transformf> _boltFiredPose;
+        QJsonObject _boltCycleSource;
         bool isRifleConfiguration() const;
         QString currentTestbed() const;
         QString testbedProject(const QString& name) const;

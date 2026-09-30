@@ -18,11 +18,11 @@ bool ReloadMakerController::isM1AConfiguration() const {
 }
 bool ReloadMakerController::isRifleConfiguration() const {return isAr15Configuration()||isM1AConfiguration();}
 QString ReloadMakerController::currentTestbed() const {
-    return isGlockConfiguration()?"glock":isAr15Configuration()?"ru556":isM1AConfiguration()?"m1a":QString();
+    return isGlockConfiguration()?"glock":isAr15Configuration()?"ru556":isM1AConfiguration()?"m1a":isBoltActionConfiguration()?"timberwolf":QString();
 }
 QString ReloadMakerController::testbedProject(const QString& name) const {
     return studioDataPath(name=="glock"?"workspace/Glock19x-magazine-grips.project.json":
-        name=="ru556"?"workspace/RU556-native-reload.project.json":"workspace/M1A-native-reload.project.json");
+        name=="ru556"?"workspace/RU556-native-reload.project.json":name=="m1a"?"workspace/M1A-native-reload.project.json":"workspace/Timberwolf-native-reload.project.json");
 }
 
 bool ReloadMakerController::prepareRifleMotion() {
@@ -84,7 +84,7 @@ float ReloadMakerController::simulationPoseSeconds() const {
 }
 
 void ReloadMakerController::setSimulationTrigger(bool pressed) {
-    if(!isRifleConfiguration())return;
+    if(!isRifleConfiguration()&&!isBoltActionConfiguration())return;
     if(!pressed){_simulation.triggerHeld=false;return;}
     if(_simulation.action==SimulationAction::Fire){_simulation.triggerHeld=_simulationAmmo.automatic;return;}
     runSimulationAction("fire");
@@ -93,7 +93,7 @@ void ReloadMakerController::setSimulationTrigger(bool pressed) {
 
 bool ReloadMakerController::selectTestbed(const QString& name) {
     if(_loadThread||_reloadCapturing||_rebuildTimer->isActive()){setStatus("Wait for the current weapon to finish loading.",true);return false;}
-    if(name!="glock"&&name!="ru556"&&name!="m1a"){setStatus("Unknown weapon testbed.",true);return false;}
+    if(name!="glock"&&name!="ru556"&&name!="m1a"&&name!="timberwolf"){setStatus("Unknown weapon testbed.",true);return false;}
     const auto current=currentTestbed();
     if(current==name){setWorkspace(OperateWorkspace);return true;}
     if(!current.isEmpty()) {

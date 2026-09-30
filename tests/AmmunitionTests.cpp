@@ -35,6 +35,10 @@ void resolution() {
     p.keywordNames[100]="AnimsGripPistol";p.objectMods={m};WeaponConfiguration c;
     const auto resolve=[&]{c.initialize(p,w);return resolveWeaponAmmunition(p,w,c);};
     auto a=resolve();check(a.valid()&&a.capacity==17&&a.ammoName=="New ammo"&&a.ammoRecord=="Local.esp:000def"&&a.pistol,"Selected overrides failed");
+    p.objectMods[0].ammoProperties[1].value2=605;
+    a=resolve();check(a.valid()&&a.ammoRecord=="Local.esp:000def"&&a.capacity==17,"FormID,Int companion changed ammo selection");
+    p.objectMods[0].ammoProperties[0].value2=18;check(!resolve().valid(),"Ranged capacity accepted");
+    p.objectMods[0].ammoProperties[0].value2=0;
     check(recordIdentity(p,0xabc)=="Base.esm:000abc","Master identity wrong");
     p.objectMods[0].ammoProperties[0].function=2;p.objectMods[0].ammoProperties[0].value1=2;
     check(resolve().capacity==10,"Additive capacity failed");

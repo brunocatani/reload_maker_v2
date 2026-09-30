@@ -168,6 +168,7 @@ void ReloadMakerController::restoreSessionSelection() {
         if (currentWeapon() && poseRecordKey(currentWeapon()->formId) == record["weapon"].toString()) { selected = i; break; }
     }
     if (selected < 0) { setStatus("The project weapon is absent from this source.",true); return; }
+    refreshWeaponPicker();
     { const QSignalBlocker block(_bodyCombo); _bodyCombo->setCurrentIndex(std::max(0,_bodyCombo->findData(record["body"].toString()))); }
     refreshAttachments(); refreshConfigurationChoices();
     if (auto* config = configuration()) {
