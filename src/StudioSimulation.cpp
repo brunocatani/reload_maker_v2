@@ -139,11 +139,14 @@ bool ReloadMakerController::selectSimulationClip(bool fire,bool reload) {
     int index=0;
     if(fire||reload) {
         index=-1;
-        const QString fireLabel=isGlockConfiguration()&&_simulationAmmo.automatic?"Fire — automatic":"Fire — single";
-        for(int i=0;i<_animationActions.size();++i)
-            if((reload&&_animationActions[i].baseReload)||(fire&&_animationActions[i].label==fireLabel)){index=i;break;}
+        // The configured receiver decides automatic vs single; the catalog lists
+        // the canonical single clip before its alternates.
+        for(int i=0;i<_animationActions.size();++i) {
+            const auto& a=_animationActions[i];
+            if((reload&&a.baseReload)||(fire&&a.family==ActionFamily::Fire&&a.automatic==_simulationAmmo.automatic)){index=i;break;}
+        }
     }
-    if(index<0||index>=_animationList->count()){_simulationError=fire?"No resolved single-fire animation.":"No resolved reload animation.";return false;}
+    if(index<0||index>=_animationList->count()){_simulationError=fire?(_simulationAmmo.automatic?"No resolved automatic-fire animation for this receiver.":"No resolved single-fire animation."):"No resolved reload animation.";return false;}
     const QSignalBlocker blocker(_animationList);_animationList->setCurrentRow(index);selectAnimation(_animationList->item(index));
     return _clip.valid();
 }

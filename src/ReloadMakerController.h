@@ -15,6 +15,7 @@
 #include "ReloadDriveViewport.h"
 #include "WeaponSimulation.h"
 #include "WeaponAmmunition.h"
+#include "ActionCatalog.h"
 
 #include <QHash>
 #include <QCache>
@@ -129,7 +130,9 @@ namespace reloadmaker
             QString baselineResourcePath;
             float blendInSeconds{ 0.0f };
             float blendOutSeconds{ 0.0f };
-            bool baseReload{false};
+            ActionFamily family{ ActionFamily::Idle };
+            bool automatic{ false };
+            bool baseReload{ false };
         };
 
         void createUi();

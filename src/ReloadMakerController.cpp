@@ -1017,28 +1017,6 @@ namespace reloadmaker
             }
             return nullptr;
         };
-        const auto appendAction = [this, &clipForAlias](
-                                       const QString& label,
-                                       const QStringList& aliases,
-                                       const QString& baselineResource) {
-            const HkxBehaviorClip* clip = clipForAlias(aliases);
-            if (!clip || baselineResource.isEmpty()) {
-                return;
-            }
-            QString resource = resolveAnimationPath(clip->animationPath);
-            if(aliases.contains("WPNReload",Qt::CaseInsensitive)&&_glockNoExtender) {
-                const auto alternative=glockNoExtenderPath();
-                if(!alternative.isEmpty())resource=alternative;else _glockNoExtender=false;
-            }
-            if (!resource.isEmpty()) {
-                _animationActions.append(AnimationAction{
-                    label, clip->nodeName, resource, baselineResource,
-                    clip->blendInSeconds, clip->blendOutSeconds,
-                    aliases.contains(QStringLiteral("WPNReload"),Qt::CaseInsensitive)
-                });
-            }
-        };
-
         const QString readyResource = resolveAnimationPath(combined.defaultReadyAnimationPath);
         if (readyResource.isEmpty()) {
             error = QStringLiteral("The graph-selected Ready pose cannot be resolved through the RACE search stack");
@@ -1048,55 +1026,36 @@ namespace reloadmaker
             QFileInfo(ResourceArchive::normalizeResourcePath(
                 combined.defaultReadyAnimationPath)).completeBaseName()
         });
-        const HkxBehaviorClip* sightedClip = clipForAlias(
-            { QStringLiteral("WPNIdleSighted") });
-        const QString sightedResource = sightedClip
-            ? resolveAnimationPath(sightedClip->animationPath)
-            : QString{};
         _animationActions.append(AnimationAction{
-            QStringLiteral("Authored Grip Pose — Idle / Ready"),
+            QStringLiteral("Idle / Ready"),
             readyClip ? readyClip->nodeName : QStringLiteral("Graph default Ready"),
-            readyResource,
-            readyResource,
-            0.0f,
-            0.0f,
+            readyResource, readyResource, 0.0f, 0.0f, ActionFamily::Idle, false, false,
         });
-        appendAction(QStringLiteral("Reload"), { QStringLiteral("WPNReload") },
-                     readyResource);
-        appendAction(QStringLiteral("Bolt / charge — ready"),
-                     { QStringLiteral("WPNBoltChargeReady") },
-                     readyResource);
-        appendAction(QStringLiteral("Bolt / charge — sighted"),
-                     { QStringLiteral("WPNBoltChargeSighted") },
-                     sightedResource);
-        appendAction(QStringLiteral("Fire — single"),
-                     { QStringLiteral("WPNFireSingleReady") },
-                     readyResource);
-        appendAction(QStringLiteral("Fire — automatic"),
-                     { QStringLiteral("WPNFireAutoReadyForward") },
-                     readyResource);
-        appendAction(QStringLiteral("Aim / sighted idle"),
-                     { QStringLiteral("WPNIdleSighted") },
-                     sightedResource);
-        appendAction(QStringLiteral("Walk forward"),
-                     { QStringLiteral("WPNWalkForwardReady") },
-                     readyResource);
-        appendAction(QStringLiteral("Run forward"),
-                     { QStringLiteral("WPNRunForwardReady") },
-                     readyResource);
-        appendAction(QStringLiteral("Sprint"), { QStringLiteral("WPNSprint") },
-                     readyResource);
-        appendAction(QStringLiteral("Equip"), { QStringLiteral("WPNEquip") },
-                     readyResource);
-        appendAction(QStringLiteral("Unequip"), { QStringLiteral("WPNUnEquip") },
-                     readyResource);
-        appendAction(QStringLiteral("Melee"), { QStringLiteral("WPNMelee") },
-                     readyResource);
-        appendAction(QStringLiteral("Throw grenade"),
-                     { QStringLiteral("WPNGrenadeThrow") },
-                     readyResource);
-        appendAction(QStringLiteral("Throw mine"), { QStringLiteral("WPNMineThrow") },
-                     readyResource);
+        // The graph, not a fixed alias list, decides which authored actions exist.
+        // Each clip is classified by base name and resolved through the RACE
+        // search stack; clips absent for this weapon are skipped.
+        struct Candidate { AnimationAction action; int order; };
+        QVector<Candidate> candidates;
+        QSet<QString> labels;
+        for (const HkxBehaviorClip& clip : combined.clips) {
+            QString path = clip.animationPath;
+            path.replace('\\', '/');
+            const auto kind = classifyWeaponClip(QFileInfo(path).completeBaseName());
+            if (!kind || labels.contains(kind->label)) continue;
+            QString resource = resolveAnimationPath(clip.animationPath);
+            if (kind->baseReload && _glockNoExtender) {
+                const auto alternative = glockNoExtenderPath();
+                if (!alternative.isEmpty()) resource = alternative; else _glockNoExtender = false;
+            }
+            if (resource.isEmpty()) continue;
+            labels.insert(kind->label);
+            candidates.append({AnimationAction{kind->label, clip.nodeName, resource, readyResource,
+                clip.blendInSeconds, clip.blendOutSeconds, kind->family, kind->automatic, kind->baseReload}, kind->order});
+        }
+        std::stable_sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
+            return a.action.family != b.action.family ? int(a.action.family) < int(b.action.family) : a.order < b.order;
+        });
+        for (const auto& candidate : candidates) _animationActions.append(candidate.action);
 
         QStringList keywordText;
         for (const std::uint32_t keyword : keywords) {
