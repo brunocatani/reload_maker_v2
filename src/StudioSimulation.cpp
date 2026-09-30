@@ -73,16 +73,23 @@ void ReloadMakerController::createSimulationUi() {
     magazine->addWidget(_magazineGrab,1,0);magazine->addWidget(_simulationDrop,1,1);
     layout->addLayout(magazine);
     _simulationMagazineGrip=new QComboBox(panel);layout->addWidget(_simulationMagazineGrip);
+    auto* configureMagazine=new QPushButton("CONFIGURE SELECTED MAGAZINE",panel);layout->addWidget(configureMagazine);
+    configureMagazine->setToolTip("Edit this magazine's hand fit with Move / Rotate. Save replaces its assignment and saves the project.");
+    connect(configureMagazine,&QPushButton::clicked,this,[this]{(void)editMagazineGrip();});
     _simulationMagazineGrip->setToolTip("Saved hand grip for this magazine, used by GRAB. Create one in Hands & grips by selecting a pose and clicking its contact point.");
     connect(_simulationMagazineGrip,qOverload<int>(&QComboBox::activated),this,[this](int index) {
         if(!_simulationRig||!_reloadRecipe)return;
         const auto& anchor=_reloadRecipe->tracks[_simulationRig->magazine].anchor;
         const auto key=magazineGrabKey(poseRecordKey(currentWeapon()->formId),anchor.ownerRecord);
         const auto previous=_magazineGrabGrips.value(key),id=_simulationMagazineGrip->itemData(index).toString();
+        if(index>0)return; // This entry displays the resolved fit, including inherited defaults.
+        if(_magazineGrabDefaults.contains(poseRecordKey(currentWeapon()->formId).toLower())) {
+            setStatus("This weapon has a default hand fit. Configure the selected magazine to change it.");resolveMagazineGrabGrip();return;
+        }
         if(id.isEmpty())_magazineGrabGrips.remove(key);else _magazineGrabGrips[key]=id;
         for(auto& window:_reloadRecipe->windows)for(auto& member:window.members)
             if(member.track==_simulationRig->magazine&&(member.gripId.isEmpty()||member.gripId==previous))member.gripId=id;
-        resolveMagazineGrabGrip();(void)applyPose(_simulation.seconds);updateSimulationControls();
+        _magazineGripDrafts.remove(key);resolveMagazineGrabGrip();(void)applyPose(_simulation.seconds);updateSimulationControls();(void)saveSession();
     });
     auto* optionsTitle=new QLabel("BEHAVIOUR",panel);optionsTitle->setObjectName("Section");layout->addWidget(optionsTitle);
     _simulationSpring=new QCheckBox("Slide returns when released",panel);_simulationSpring->setChecked(true);layout->addWidget(_simulationSpring);
@@ -181,6 +188,7 @@ void ReloadMakerController::prepareSimulation() {
     _simulationDrive->clearCurve();_simulationDrive->setActive(true,true);updateSimulationControls();++_revision;
 }
 void ReloadMakerController::stopSimulation() {
+    _magazineFitPreview=false;
     if(_simulationTimer)_simulationTimer->stop();
     _simulationActive=false;_simulation.reset();
     _magazineGrabGrip.reset();_magazineGrabBinding=-1;_magazineGrabError.clear();

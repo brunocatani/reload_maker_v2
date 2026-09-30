@@ -100,6 +100,9 @@ namespace reloadmaker {
         int automatic=-1;Vec3f world;QString surface,error;QVector<int> candidates;
         if(!pickWeaponPart(point,automatic,world,surface,candidates,error)){_gripStatus->setText(error);return;}
         QString assignmentError;
+        // Magazine configuration has one explicit authority. A skinned triangle
+        // may report its frame/parent; clicking it must not retarget the grip.
+        if(_editingMagazine)automatic=currentMagazineAnchor();
         if(automatic>=0 && !assignGripPart(automatic,assignmentError)) {setStatus(assignmentError,true);return;}
         const auto reference=_partGripFrame.weapon?_globalPose[_weaponBoneIndex]:composed(_boundGlobalPose.at(_partGripFrame.binding),_partGripFrame.bridge);
         Transformf inverse;
@@ -112,7 +115,7 @@ namespace reloadmaker {
         _gripViewport->setPicking(false);
         const QString referenceName=_partGripDraft->pose.placement.anchorName;
         showPartGripValues(); if(!applyPose(_playbackTime)) return; updateHandPoseControls();
-        setStatus(automatic>=0?QStringLiteral("Point attached to %1. Configure its shared mechanism to set stages and followers.").arg(referenceName):
+        setStatus(_editingMagazine?QStringLiteral("Hand placed on the selected magazine. Fine-tune with Move / Rotate, then Save for this magazine."):automatic>=0?QStringLiteral("Point attached to %1. Configure its shared mechanism to set stages and followers.").arg(referenceName):
             QStringLiteral("This surface has no single resolved moving-part frame. Point captured against %1; explicitly choose its Reference part before defining movement.").arg(referenceName));
     }
     bool ReloadMakerController::pickWeaponPart(QPointF point,int& automatic,Vec3f& world,QString& surface,QVector<int>& candidates,QString& error)

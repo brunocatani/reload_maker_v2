@@ -375,6 +375,7 @@ namespace reloadmaker {
 
     void ReloadMakerController::restoreHandPosePreview()
     {
+        rememberMagazineGrip();
         _workshopHandEditing=false;_workshopPicking=false;
         if(_gripViewport)_gripViewport->setPicking(false);
         if (!_handPosePreview && !_partGripDraft && !_mechanismPreview) { return; }

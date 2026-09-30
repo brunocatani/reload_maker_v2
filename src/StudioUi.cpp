@@ -4,6 +4,7 @@
 #include "SlotOverlay.h"
 #include "glview.h"
 #include "LoadoutView.h"
+#include "MagazineViewport.h"
 #include <QCompleter>
 #include <QDir>
 #include <QFileInfo>
@@ -306,8 +307,8 @@ void ReloadMakerController::createUi() {
 
 
     _handPoseDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
-    _handPoseDock->setMinimumWidth(340);
-    _handPoseDock->setMaximumWidth(450);
+    _handPoseDock->setMinimumWidth(400);
+    _handPoseDock->setMaximumWidth(480);
     _window->removeDockWidget(_handPoseDock);
     _window->addDockWidget(Qt::RightDockWidgetArea, _handPoseDock);
     _handPoseDock->setWindowTitle("HANDS && GRIPS");
@@ -507,10 +508,14 @@ bool ReloadMakerController::mechanismPageActive() const {
 
 void ReloadMakerController::setWorkspace(int workspace) {
     if (!validWorkspace(workspace) || _loadThread) return;
+    if(_magazineFitPreview&&workspace!=GripsWorkspace){rememberMagazineGrip();stopSimulation();}
     // Operate replaces clips and poses freely; an in-progress authoring grip is
     // parked while it is open and returned when leaving (as Reload phases does).
     if (_workspace == OperateWorkspace && workspace != OperateWorkspace) {
-        stopSimulation();
+        if(_magazineFitPreview&&workspace==GripsWorkspace) {
+            _simulationTimer->stop();_magazineViewport->setActive(false);
+            _simulationDrive->setActive(false,false);
+        } else stopSimulation();
         _partGripDraft = _operateSuspendedGrip; _operateSuspendedGrip.reset();
     } else if (_workspace != OperateWorkspace && workspace == OperateWorkspace) {
         _operateSuspendedGrip = _reloadWorkspaceActive ? _suspendedAuthoringGrip : _partGripDraft;
@@ -518,6 +523,7 @@ void ReloadMakerController::setWorkspace(int workspace) {
         _partGripDraft.reset();
     }
     _workspace = workspace;
+    if(workspace!=GripsWorkspace)_magazineFitPreview=false;
     _workspaceButtons->button(workspace)->setChecked(true);
     // Reload phases replaces the loadout rail with its phase list and the
     // native clip list; Operate and Hands & grips keep the loadout.
@@ -530,7 +536,7 @@ void ReloadMakerController::setWorkspace(int workspace) {
     _handPoseDock->setVisible(workspace == GripsWorkspace);
     // Hands & grips needs a frame to capture from; phases shows the transport
     // only while a non-reload clip is being previewed.
-    _timelineDock->setVisible(workspace == GripsWorkspace);
+    _timelineDock->setVisible(workspace == GripsWorkspace && !_magazineFitPreview);
     if (_slotOverlay) _slotOverlay->setActive(_pages->currentIndex() == kLoadoutPage && _showPartLabels);
     updateGripViewport();
     if(_clip.valid()&&!_reloadCapturing)(void)applyPose(_playbackTime);

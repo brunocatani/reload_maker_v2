@@ -1,5 +1,6 @@
 #include "ReloadMakerController.h"
 #include "StudioPaths.h"
+#include "ReloadBundle.h"
 #include "StudioWindow.h"
 #include "glview.h"
 #include <QCheckBox>
@@ -16,6 +17,7 @@
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QTimer>
+#include <QTabWidget>
 #include <algorithm>
 
 namespace reloadmaker {
@@ -55,10 +57,21 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     record["glockReloadNoExtender"] = _glockNoExtender;
     QJsonObject magazineGrabs;for(auto it=_magazineGrabGrips.cbegin();it!=_magazineGrabGrips.cend();++it)magazineGrabs[it.key()]=it.value();
     record["magazineGrabGrips"]=magazineGrabs;
+    QJsonObject magazineDefaults;
+    for(auto it=_magazineGrabDefaults.cbegin();it!=_magazineGrabDefaults.cend();++it)magazineDefaults[it.key()]=it.value();
+    record["magazineGrabDefaults"]=magazineDefaults;
     if(_simulationRig&&_reloadRecipe)record["simulationSetup"]=simulationRigJson(*_reloadRecipe,*_simulationRig,_simulationSpring->isChecked());
     if(_magazineRail)record["magazineInteraction"]=magazineRailJson(*_magazineRail);
     if(_simulationAmmo.valid())record["ammunitionConfiguration"]=_simulationAmmo.json();
     QString error;
+    rememberMagazineGrip();
+    QJsonObject magazineDrafts;
+    for(auto it=_magazineGripDrafts.cbegin();it!=_magazineGripDrafts.cend();++it) {
+        const auto bytes=encodePartGrip(it.value(),error);
+        if(bytes.isEmpty()){setStatus("Cannot save magazine draft: "+error,true);return false;}
+        magazineDrafts[it.key()]=QJsonDocument::fromJson(bytes).object();
+    }
+    record["magazineGripDrafts"]=magazineDrafts;
     QJsonArray fingers;
     for (const auto& draft : _fingerDrafts) {
         if (!draft) { fingers.append(QJsonValue()); continue; }
@@ -108,6 +121,15 @@ void ReloadMakerController::openSession(const QString& path) {
     if (!QFileInfo(record["gameData"].toString()).isDir() || (!record["library"].toBool() && !QFileInfo(record["package"].toString()).exists())) { setStatus("Project source is missing. Restore its original package/Data path before opening.",true); return; }
     // Validate all authored data before changing source or replacing a draft.
     QString error;
+    const auto magazineDefaults=record["magazineGrabDefaults"].toObject();
+    if((record.contains("magazineGrabDefaults")&&!record["magazineGrabDefaults"].isObject())||magazineDefaults.size()>512){setStatus("Invalid magazine defaults.",true);return;}
+    for(auto it=magazineDefaults.begin();it!=magazineDefaults.end();++it)if(it.key().isEmpty()||it.key().size()>512||!it.value().isString()||QUuid(it.value().toString()).isNull()){setStatus("Invalid magazine default identity.",true);return;}
+    const auto magazineDrafts=record["magazineGripDrafts"].toObject();
+    if((record.contains("magazineGripDrafts")&&!record["magazineGripDrafts"].isObject())||magazineDrafts.size()>512){setStatus("Invalid magazine drafts.",true);return;}
+    for(auto it=magazineDrafts.begin();it!=magazineDrafts.end();++it) {
+        PartGrip grip;
+        if(!decodePartGrip(QJsonDocument(it.value().toObject()).toJson(),grip,error)||it.key()!=magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord)){setStatus("Invalid magazine draft: "+error,true);return;}
+    }
     const auto fingerDrafts=record["fingerDrafts"].toArray();
     if(record.contains("magazineGrabGrips")&&!record["magazineGrabGrips"].isObject()){setStatus("Invalid magazine grip assignments.",true);return;}
     const auto magazineGrabs=record["magazineGrabGrips"].toObject();
@@ -165,6 +187,11 @@ void ReloadMakerController::restoreSessionSelection() {
     _glockNoExtender=record["glockReloadNoExtender"].toBool(false);
     _magazineGrabGrips.clear();const auto magazineGrabs=record["magazineGrabGrips"].toObject();
     for(auto it=magazineGrabs.begin();it!=magazineGrabs.end();++it)_magazineGrabGrips[it.key().toLower()]=it.value().toString();
+    _magazineGrabDefaults.clear();const auto magazineDefaults=record["magazineGrabDefaults"].toObject();
+    for(auto it=magazineDefaults.begin();it!=magazineDefaults.end();++it)_magazineGrabDefaults[it.key().toLower()]=it.value().toString();
+    _partGripDraft.reset();_operateSuspendedGrip.reset();_suspendedAuthoringGrip.reset();_editingMagazine=false;
+    _magazineGripDrafts.clear();const auto magazineDrafts=record["magazineGripDrafts"].toObject();
+    for(auto it=magazineDrafts.begin();it!=magazineDrafts.end();++it){PartGrip grip;QString e;if(decodePartGrip(QJsonDocument(it.value().toObject()).toJson(),grip,e))_magazineGripDrafts[it.key()]=grip;}
     rebuildWeapon();
     if (!_clip.valid()) return;
     for (int i = 0; i < _animationList->count(); ++i) if (_animationList->item(i)->data(Qt::UserRole).toString() == record["animation"].toString()) { _animationList->setCurrentRow(i); selectAnimation(_animationList->item(i)); break; }
@@ -189,7 +216,15 @@ void ReloadMakerController::restoreSessionSelection() {
         if (decodePartGrip(QJsonDocument(record["gripDraft"].toObject()).toJson(),grip,error)) {
             QVector<HandPosePlacement> anchors; for (const auto& a : _handPoseAnchors) anchors.append(a.description);
             const int anchor = resolveGripAnchor(grip,poseRecordKey(currentWeapon()->formId),anchors,error);
-            if (anchor >= 0 && preparePartGripFrame(anchor,error)) { _partGripDraft=grip;showPartGripValues(); }
+            if (anchor >= 0 && preparePartGripFrame(anchor,error)) {
+                _partGripDraft=grip;_gripName->setText(grip.pose.name);
+                const QSignalBlocker poseBlock(_gripPoseCombo),partBlock(_gripReferenceCombo);
+                _gripPoseCombo->setCurrentIndex(_gripPoseCombo->findData(grip.sourcePoseId));
+                _gripReferenceCombo->setCurrentIndex(anchor);
+                _editingMagazine=magazineGrabAnchor(grip.pose.placement)>=0;
+                if(record["workspace"].toInt()==GripsWorkspace)_handPosePages->setCurrentIndex(1);
+                showPartGripValues();
+            }
         }
     }
     (void)applyPose(_playbackTime); updateTimelineText(); refreshFingerEditor();

@@ -101,7 +101,26 @@ namespace {
         // magazine assignment tries to reuse it with a different owner.
         check(encodeReloadBundle(r,{bad,other},{part},otherBindings,error).isEmpty(),"Reused definition hid a mismatched grip anchor");
         auto drum=grip.pose.placement;drum.ownerModel="Weapons/Glock19x/Attachments/Glock19x_Mag_50RND.nif";
-        check(!magazineGrabSupported(drum),"Glock drum accepted a stick-magazine grip");
+        check(magazineGrabSupported(drum),"Drum authoring was excluded");
+        drum.ownerRecord="Glock19x.esp:002e6c";
+        check(!magazineGripFor(grip.weaponRecord,drum,{grip},bindings,{},error),"Unconfigured drum inherited an unrelated custom fit");
+        const QHash<QString,QString> defaults{{grip.weaponRecord.toLower(),grip.pose.id}};
+        const auto inherited=magazineGripFor(grip.weaponRecord,drum,{grip},bindings,defaults,error);
+        check(inherited.has_value()&&sameGripAnchor(inherited->pose.placement,drum),"Default did not bind the concrete magazine");
+        check(QJsonDocument::fromJson(encodeHandPose(inherited->pose,error))["fingerLocalTransforms"]==QJsonDocument::fromJson(encodeHandPose(grip.pose,error))["fingerLocalTransforms"],"Default changed finger transforms");
+        check(reloadPoseDistance(inherited->pose.placement.handInAnchor,grip.pose.placement.handInAnchor)<.0001f,"Default lost hand rotation/position");
+        auto custom=*inherited;custom.pose.id=QUuid::createUuid().toString(QUuid::WithoutBraces);custom.pose.placement.handInAnchor.translation.x+=3;
+        auto assigned=bindings;assigned[magazineGrabKey(grip.weaponRecord,drum.ownerRecord)]=custom.pose.id;
+        const auto resolved=magazineGripFor(grip.weaponRecord,drum,{grip,custom},assigned,defaults,error);
+        check(resolved&&resolved->pose.id==custom.pose.id,"Weapon default overwrote an individual fit");
+        auto wrong=drum;wrong.ownerModel="Different.nif";
+        check(!magazineGripFor(grip.weaponRecord,wrong,{grip,custom},assigned,defaults,error)&&!error.isEmpty(),"Mismatched custom fit silently fell back to default");
+        auto defaultRecipe=r;defaultRecipe.tracks[2].anchor=drum;
+        defaultRecipe.id=reloadRecipeIdentity(defaultRecipe);
+        for(auto& window:defaultRecipe.windows)for(auto& member:window.members)if(member.track==2)member.gripId=inherited->pose.id;
+        const auto inheritedBundle=encodeReloadBundle(defaultRecipe,{grip},{},bindings,error,defaults);
+        check(!inheritedBundle.isEmpty(),error);
+        check(QJsonDocument::fromJson(inheritedBundle)["magazineGrabBindings"].toArray().size()==2,"Export omitted concrete default binding");
     }
     void slowAndStatic(){
         auto r=capture();r.tracks.resize(1);r.tracks[0].parent=-1;

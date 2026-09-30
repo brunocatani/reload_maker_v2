@@ -113,9 +113,24 @@ def author_reload_grips(expected_revision: int) -> dict:
     return command('author_reload_grips',revision=expected_revision)
 
 @mcp.tool()
-def use_for_magazine_grab(expected_revision: int) -> dict:
-    """Save the current part-grip placement and assign it to this magazine's Grab Magazine and reload phases. Target WeaponMagazine or its matching WeaponExtra3 reload copy; auxiliary placement is converted through authored model frames. Glock drums are excluded. Save the project to persist assignments; reload_bundle exports all required grip records."""
-    return command('use_magazine_grip',revision=expected_revision)
+def use_for_magazine_grab(expected_revision: int, scope: str = 'magazine') -> dict:
+    """Replace this magazine's active fit and save the project. scope=weapon_default sets the current weapon's default, preserving other custom fits. Drums are supported. Old snapshots remain in explicit history; reload_bundle embeds concrete resolved fits."""
+    return command('use_magazine_grip',{'scope':scope},expected_revision)
+
+@mcp.tool()
+def configure_magazine(expected_revision: int, grip_id: str = '') -> dict:
+    """Open the selected magazine in the existing Move/Rotate hand editor. Load its draft/current fit or optionally a specific saved fit from its history. An unassigned magazine offers named Finger poses. Magazine geometry stays authoritative."""
+    return command('configure_magazine',{'gripId':grip_id},expected_revision)
+
+@mcp.tool()
+def apply_magazine_pose(pose_id: str, expected_revision: int) -> dict:
+    """Apply a named Finger pose's exact joints AND saved wrist rotation to the configured magazine. Preserve the current hand position for fine adjustment."""
+    return command('apply_magazine_pose',{'poseId':pose_id},expected_revision)
+
+@mcp.tool()
+def use_default_magazine_grip(expected_revision: int) -> dict:
+    """Remove this magazine's custom assignment, use the weapon default, and save the project."""
+    return command('use_default_magazine_grip',revision=expected_revision)
 
 @mcp.tool()
 def start_part_grip(pose_id: str, anchor: int, expected_revision: int, captured: bool = True) -> dict:

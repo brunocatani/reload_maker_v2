@@ -110,7 +110,7 @@ QJsonObject ReloadMakerController::studioState() const {
         {"body",_bodyCombo->currentData().toString()},{"animationSets",sets},{"animationSet",_animationSetCombo->currentIndex()},
         {"actions",actions},{"action",_activeAction},{"animation",_activeAnimationPath},{"seconds",_playbackTime},{"duration",playbackDuration()},
         {"playing",_playing||_reloadPlaying},{"motionMode",_motionMode->currentIndex()},{"anchors",anchors},
-        {"handPoses",poses},{"partGrips",grips},{"magazineGrabGrips",magazineGrabs},{"recipeWindows",_reloadRecipe?int(_reloadRecipe->windows.size()):0},
+        {"handPoses",poses},{"partGrips",grips},{"magazineGrabGrips",magazineGrabs},{"magazineEditor",magazineEditorState()},{"recipeWindows",_reloadRecipe?int(_reloadRecipe->windows.size()):0},
         {"recipeTracks",_reloadRecipe?int(_reloadRecipe->tracks.size()):0},{"status",_window->statusBar()->currentMessage()},
         {"lastError",_lastError},{"project",_sessionPath},{"camera",_window->getGLView()->studioCameraState()},{"nativeApplicationShell",false}};
 }
@@ -151,7 +151,18 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
         startLibraryLoad();
     } else if(method=="workspace") {const int index=p["index"].toInt(-1);require(validWorkspace(index),"Unknown workspace");setWorkspace(index);}
     else if(method=="author_reload_grips") {require(authorReloadGrips(),_lastError);}
-    else if(method=="use_magazine_grip") {require(useMagazineGrabGrip(),_lastError);}
+    else if(method=="use_magazine_grip") {
+        const auto scope=p["scope"].toString("magazine");require(scope=="magazine"||scope=="weapon_default","Scope must be magazine or weapon_default");
+        require(useMagazineGrabGrip(scope=="weapon_default"),_lastError);
+    }
+    else if(method=="configure_magazine") {require(editMagazineGrip(p["gripId"].toString()),_lastError);}
+    else if(method=="use_default_magazine_grip") {require(useDefaultMagazineGrip(),_lastError);}
+    else if(method=="apply_magazine_pose") {
+        const int index=_gripPoseCombo->findData(p["poseId"].toString());require(index>=0,"Unknown named finger pose");
+        require(_workspace==GripsWorkspace&&_handPosePages->currentIndex()==1,"Configure the magazine first");
+        _gripPoseCombo->setCurrentIndex(index);require(_gripCurrentStart->isEnabled(),"Wait for the magazine editor");_gripCurrentStart->click();
+        require(_partGripDraft.has_value(),_lastError);
+    }
     else if(method=="simulate") {
         require(_workspace==OperateWorkspace,"Open the Operate workspace first");
         // Same rule as the Operate buttons: an action leaves native clip preview.
@@ -326,7 +337,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
         QString error;QByteArray bytes;const QString kind=p["kind"].toString();QString id;
         if(kind=="slide"){const auto record=exportSlideProfile();require(!record.isEmpty(),"Prepare a Glock simulation with native rig bindings before exporting");bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
         else if(kind=="simulation"){const auto record=exportSimulation();require(!record.isEmpty(),"Prepare a simulation before exporting");bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
-        else if(kind=="reload_bundle"){require(_reloadRecipe.has_value(),"Learn the configured reload first");bytes=encodeReloadBundle(*_reloadRecipe,_partGrips,_mechanisms,_magazineGrabGrips,error);id=_reloadRecipe->id;}
+        else if(kind=="reload_bundle"){require(_reloadRecipe.has_value(),"Learn the configured reload first");bytes=encodeReloadBundle(*_reloadRecipe,_partGrips,_mechanisms,_magazineGrabGrips,error,_magazineGrabDefaults);id=_reloadRecipe->id;}
         else if(kind=="reload"){require(_reloadRecipe.has_value(),"No reload recipe");bytes=encodeReloadRecipe(*_reloadRecipe,error);id=_reloadRecipe->id;}
         else if(kind=="grip"){require(_partGripDraft.has_value(),"No grip draft");bytes=encodePartGrip(*_partGripDraft,error);id=_partGripDraft->pose.id;}
         else if(kind=="mechanism"){require(_mechanismDraft.has_value(),"No mechanism draft");bytes=encodeMechanism(*_mechanismDraft,error);id=_mechanismDraft->id;}

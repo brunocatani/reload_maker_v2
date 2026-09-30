@@ -36,6 +36,7 @@ bool ReloadMakerController::authorReloadGrips() {
 }
 
 void ReloadMakerController::applySavedPoseToPart() {
+    _editingMagazine=false;
     const auto* pose=selectedHandPose();
     if(!pose){setStatus("Select a saved hand pose first.",true);return;}
     const auto name=pose->name;
@@ -53,10 +54,10 @@ int ReloadMakerController::magazineGrabAnchor(const HandPosePlacement& placement
     return -1;
 }
 
-bool ReloadMakerController::useMagazineGrabGrip() {
+bool ReloadMakerController::useMagazineGrabGrip(bool allMagazines) {
     const int anchor=_partGripDraft?magazineGrabAnchor(_partGripDraft->pose.placement):-1;
     if(anchor<0) {
-        setStatus("Place the pose on the moving magazine before assigning it. Glock drums are excluded.",true);return false;
+        setStatus("Place the hand on the selected magazine before saving.",true);return false;
     }
     updatePartGripControls();if(!_gripSave->isEnabled()){setStatus("Place the hand within reach and name the grip before assigning it.",true);return false;}
     PartGrip grip=*_partGripDraft;
@@ -85,11 +86,26 @@ bool ReloadMakerController::useMagazineGrabGrip() {
     grip.pose.name=_gripName->text().trimmed();grip.pose.createdUtc=QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
     grip.pose.source=currentPoseSource();
     QString error;if(!_partGripLibrary.save(grip,error)){setStatus(error,true);return false;}
-    _magazineGrabGrips[magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord)]=grip.pose.id;
+    const auto previousAssignments=_magazineGrabGrips,previousDefaults=_magazineGrabDefaults;
+    const auto previousWindows=_reloadRecipe?_reloadRecipe->windows:QVector<ReloadWindow>{};
+    const auto key=magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord);
+    if(!allMagazines||_magazineGrabGrips.contains(key))_magazineGrabGrips[key]=grip.pose.id;
+    if(allMagazines)_magazineGrabDefaults[grip.weaponRecord.toLower()]=grip.pose.id;
+    if(sameGripAnchor(_partGripDraft->pose.placement,grip.pose.placement))_partGripDraft=grip;
+    else {_partGripDraft->pose.id=grip.pose.id;_partGripDraft->pose.name=grip.pose.name;}
+    rememberMagazineGrip();
     if(_reloadRecipe)for(auto& window:_reloadRecipe->windows)for(auto& member:window.members)
         if(sameMechanismPart(_reloadRecipe->tracks[member.track].anchor,grip.pose.placement))member.gripId=grip.pose.id;
     refreshPartGripLibrary();
-    setStatus("“"+grip.pose.name+"” is assigned to this magazine's grab and reload. Save the project to retain the assignment.");
+    resolveMagazineGrabGrip();
+    if(!saveSession()) {
+        _magazineGrabGrips=previousAssignments;_magazineGrabDefaults=previousDefaults;resolveMagazineGrabGrip();
+        if(_reloadRecipe)_reloadRecipe->windows=previousWindows;
+        setStatus("Fit snapshot saved, but the project assignment could not be saved. Retry Save for this magazine.",true);return false;
+    }
+    updatePartGripControls();
+    setStatus(allMagazines?"Weapon default saved. Other custom magazine fits are preserved. Project saved.":
+        "Magazine fit replaced and project saved. Grab Magazine now uses this fit.");
     return true;
 }
 
@@ -100,27 +116,22 @@ void ReloadMakerController::resolveMagazineGrabGrip() {
     if(!_simulationRig||!_reloadRecipe)return;
     const auto& anchor=_reloadRecipe->tracks[_simulationRig->magazine].anchor;
     if(!magazineGrabSupported(anchor))return;
-    const auto id=_magazineGrabGrips.value(magazineGrabKey(poseRecordKey(currentWeapon()->formId),anchor.ownerRecord));
-    for(const auto& grip:_partGrips)if(grip.weaponRecord.compare(poseRecordKey(currentWeapon()->formId),Qt::CaseInsensitive)==0&&sameMechanismPart(grip.pose.placement,anchor))
-        _simulationMagazineGrip->addItem(grip.pose.name+" · "+(grip.pose.hand==PoseHand::Left?"Left":"Right"),grip.pose.id);
-    const int selectedIndex=_simulationMagazineGrip->findData(id);if(selectedIndex>=0)_simulationMagazineGrip->setCurrentIndex(selectedIndex);
-    if(id.isEmpty())return;
-    const PartGrip* selected=nullptr;
-    for(const auto& grip:_partGrips)if(grip.pose.id==id) {
-        if(selected){_magazineGrabError="Duplicate magazine grip ID.";return;}selected=&grip;
-    }
-    if(!selected||selected->weaponRecord.compare(poseRecordKey(currentWeapon()->formId),Qt::CaseInsensitive)!=0||!sameMechanismPart(selected->pose.placement,anchor)) {
-        _magazineGrabError="The assigned magazine grip is missing or targets a different part.";return;
-    }
+    const auto weapon=poseRecordKey(currentWeapon()->formId);
+    const auto selected=magazineGripFor(weapon,anchor,_partGrips,_magazineGrabGrips,_magazineGrabDefaults,_magazineGrabError);
+    const auto id=selected?selected->pose.id:QString();
+    // The normal selector is the active assignment. Historical snapshots are
+    // available explicitly in Hands & grips, not mixed with the current fit.
+    if(selected){_simulationMagazineGrip->addItem(selected->pose.name+" · "+(selected->pose.hand==PoseHand::Left?"Left":"Right"),id);_simulationMagazineGrip->setCurrentIndex(1);}
+    if(!selected)return;
     for(int i=0;i<_nodeBindings.size();++i)if(_nodeBindings[i].nodeIndex==_reloadTrackNodes[_simulationRig->magazine]){_magazineGrabBinding=i;break;}
     if(_magazineGrabBinding<0){_magazineGrabError="The magazine grip has no live binding.";return;}
     _magazineGrabGrip=*selected;
     for(auto& window:_reloadRecipe->windows)for(auto& member:window.members)
-        if(member.track==_simulationRig->magazine&&member.gripId.isEmpty())member.gripId=id;
+        if(member.track==_simulationRig->magazine)member.gripId=id;
 }
 
 bool ReloadMakerController::applyMagazineGrabPose() {
-    if(!_simulationActive||!_magazineGrabGrip)return true;
+    if(!_simulationActive||!_magazineGrabGrip||_magazineFitPreview)return true;
     if(!_simulation.magazine.carried()){_magazineGrabError.clear();return true;}
     const auto target=composed(_boundGlobalPose[_magazineGrabBinding],_magazineGrabGrip->pose.placement.handInAnchor);
     if(!solvePartGrip(_skeleton,_localPose,_globalPose,_magazineGrabGrip->pose,target,_localPose,_globalPose,_magazineGrabError,GripReach::FollowTarget))return true;

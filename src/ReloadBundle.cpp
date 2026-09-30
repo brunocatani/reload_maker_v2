@@ -2,18 +2,53 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSet>
+#include <QUuid>
 
 namespace reloadmaker {
 QString magazineGrabKey(const QString& weapon,const QString& magazine){return weapon.toLower()+"|"+magazine.toLower();}
 bool magazineGrabSupported(const HandPosePlacement& anchor) {
-    QString model=anchor.ownerModel;model.replace('\\','/');
-    return anchor.anchorName.compare("WeaponMagazine",Qt::CaseInsensitive)==0&&
-        !model.endsWith("/Glock19x_Mag_50RND.nif",Qt::CaseInsensitive);
+    return anchor.anchorName.compare("WeaponMagazine",Qt::CaseInsensitive)==0;
 }
-QByteArray encodeReloadBundle(const ReloadRecipe& recipe,const QVector<PartGrip>& library,
-    const QVector<PartMechanism>& mechanisms,const QHash<QString,QString>& magazineGrabs,QString& error) {
+std::optional<PartGrip> magazineGripFor(const QString& weapon,const HandPosePlacement& anchor,
+    const QVector<PartGrip>& library,const QHash<QString,QString>& assignments,
+    const QHash<QString,QString>& defaults,QString& error) {
+    error.clear();if(!magazineGrabSupported(anchor))return {};
+    const auto key=magazineGrabKey(weapon,anchor.ownerRecord);
+    const bool custom=assignments.contains(key);
+    const auto id=custom?assignments.value(key):defaults.value(weapon.toLower());
+    if(id.isEmpty())return {};
+    const PartGrip* found=nullptr;
+    for(const auto& grip:library)if(grip.pose.id==id){if(found){error="Duplicate magazine grip ID";return {};}found=&grip;}
+    if(!found||found->weaponRecord.compare(weapon,Qt::CaseInsensitive)!=0||!magazineGrabSupported(found->pose.placement)) {
+        error="The magazine fit is missing or belongs to another weapon";return {};
+    }
+    if(custom) {
+        if(!sameGripAnchor(found->pose.placement,anchor)){error="The assigned fit targets a different magazine model or frame";return {};}
+        return *found;
+    }
+    PartGrip fit=*found;
+    fit.pose.id=QUuid::createUuidV5(QUuid(id),(key+"|"+anchor.ownerModel.toLower()+"|"+anchor.anchorPath).toUtf8()).toString(QUuid::WithoutBraces);
+    const auto placement=fit.pose.placement.handInAnchor;
+    fit.pose.placement=anchor;fit.pose.placement.handInAnchor=placement;
+    fit.mechanismId.clear();fit.surfaceContact.reset();
+    return fit;
+}
+QByteArray encodeReloadBundle(const ReloadRecipe& recipe,const QVector<PartGrip>& savedLibrary,
+    const QVector<PartMechanism>& mechanisms,const QHash<QString,QString>& savedGrabs,QString& error,
+    const QHash<QString,QString>& defaults) {
     error.clear();const auto raw=encodeReloadRecipe(recipe,error);if(raw.isEmpty())return {};
     const QString weapon=recipe.source["weaponRecord"].toString();
+    auto library=savedLibrary;auto magazineGrabs=savedGrabs;
+    QVector<HandPosePlacement> anchors;
+    for(const auto& grip:savedLibrary)if(grip.weaponRecord.compare(weapon,Qt::CaseInsensitive)==0&&magazineGrabSupported(grip.pose.placement))anchors.append(grip.pose.placement);
+    for(const auto& track:recipe.tracks)if(magazineGrabSupported(track.anchor))anchors.append(track.anchor);
+    for(const auto& anchor:anchors) {
+        const auto key=magazineGrabKey(weapon,anchor.ownerRecord);
+        if(magazineGrabs.contains(key))continue;
+        auto fit=magazineGripFor(weapon,anchor,savedLibrary,savedGrabs,defaults,error);
+        if(!error.isEmpty())return {};
+        if(fit){magazineGrabs[key]=fit->pose.id;library.append(*fit);}
+    }
     QJsonArray grips,parts,assignments;QSet<QString> included,definitions;
     const auto findGrip=[&](const QString& id)->const PartGrip* {
         const PartGrip* result=nullptr;
