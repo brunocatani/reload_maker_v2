@@ -221,6 +221,16 @@ def set_interaction_hand(hand: str, expected_revision: int) -> dict:
     return command('interaction_hand',{'hand':hand},expected_revision)
 
 @mcp.tool()
+def get_grab_locations() -> dict:
+    """Read source-local operating grab points, radii and allowed physical hands."""
+    return command('grab_locations_state')
+
+@mcp.tool()
+def configure_grab_location(operation: str, expected_revision: int, values: dict | None = None) -> dict:
+    """open/pick/edit/remove/select/use_palm/save exact operating grab locations. pick takes viewport x/y and optional replace; edit takes id, name, pointInSource[3], radiusGame and handMask (left=1/right=2/both=3). Exports use kind=grab_locations. These are game acquisition locations, independent of wrist/finger poses."""
+    return command('grab_locations',dict(values or {},operation=operation),expected_revision)
+
+@mcp.tool()
 def get_sound_state() -> dict:
     """Read imported physical cues, original descriptor identities, playback counters and audio errors."""
     return command('sound_state')

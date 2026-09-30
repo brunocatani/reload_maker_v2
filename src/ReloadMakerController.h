@@ -19,6 +19,7 @@
 #include "BoltCycle.h"
 #include "SoundProfile.h"
 #include "AudioPreview.h"
+#include "OperatingGrabLocations.h"
 
 #include <QHash>
 #include <QCache>
@@ -155,7 +156,7 @@ namespace reloadmaker
         void createUi();
         void setWorkspace(int workspace);
         void previewNativeClip(int row);
-        [[nodiscard]] bool reloadCaptureAllowed() const noexcept { return _reloadWorkspaceActive || simulationWorkspace(_workspace); }
+        [[nodiscard]] bool reloadCaptureAllowed() const noexcept;
         void createSoundsUi();
         void prepareSounds();
         void refreshSoundsUi();
@@ -400,6 +401,27 @@ namespace reloadmaker
         QPushButton* _saveOperatingGrip{nullptr};
         QLabel* _operatingGripStatus{nullptr};
         bool setInteractionHand(PoseHand hand);
+        void createGrabLocationsUi();
+        bool openGrabLocations();
+        void prepareGrabLocationFrame();
+        std::optional<std::pair<QString,float>> _grabLocationCapturePreview;
+        OperatingGrabLocations currentGrabLocations() const;
+        void refreshGrabLocationsUi();
+        bool beginGrabLocationPick(bool replace=false);
+        bool pickGrabLocation(QPointF);
+        void editGrabLocationWorld(const Transformf&);
+        bool saveGrabLocations();
+        QJsonObject grabLocationsState() const;
+        QJsonObject exportGrabLocations() const;
+        QJsonObject configureGrabLocation(const QJsonObject&);
+        QHash<QString,OperatingGrabLocations> _grabLocations;
+        QListWidget* _grabLocationList{};
+        QLineEdit* _grabLocationName{};
+        QDoubleSpinBox* _grabLocationPosition[3]{};
+        QDoubleSpinBox* _grabLocationRadius{};
+        QComboBox* _grabLocationHands{};
+        QLabel* _grabLocationStatus{};
+        bool _editingGrabLocationUi{},_pickingGrabLocation{},_replaceGrabLocation{};
         QString operatingGroup() const;
         int operatingAnchor() const;
         bool editOperatingGrip();

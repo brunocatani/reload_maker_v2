@@ -57,10 +57,12 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     record["glockReloadNoExtender"] = _glockNoExtender;
     QJsonObject magazineGrabs;for(auto it=_magazineGrabGrips.cbegin();it!=_magazineGrabGrips.cend();++it)magazineGrabs[it.key()]=it.value();
     record["magazineGrabGrips"]=magazineGrabs;
+    record["handsPage"]=_handPosePages->currentIndex();
     record["interactionHand"]=_interactionHand==PoseHand::Left?"left":"right";
     QJsonObject sounds;for(auto it=_savedSounds.cbegin();it!=_savedSounds.cend();++it)sounds[it.key()]=soundProfileJson(it.value());
     if(!_soundProfile.weapon.isEmpty())sounds[soundProfileKey()]=soundProfileJson(_soundProfile);
     record["soundProfiles"]=sounds;
+    QJsonObject locations;for(auto it=_grabLocations.cbegin();it!=_grabLocations.cend();++it)locations[it.key()]=grabLocationsJson(it.value());record["grabLocations"]=locations;
     QJsonObject operating;for(auto it=_operatingGrips.cbegin();it!=_operatingGrips.cend();++it)operating[it.key()]=it.value();record["operatingGrips"]=operating;
     QJsonObject magazineDefaults;
     for(auto it=_magazineGrabDefaults.cbegin();it!=_magazineGrabDefaults.cend();++it)magazineDefaults[it.key()]=it.value();
@@ -127,6 +129,11 @@ void ReloadMakerController::openSession(const QString& path) {
     if (!QFileInfo(record["gameData"].toString()).isDir() || (!record["library"].toBool() && !QFileInfo(record["package"].toString()).exists())) { setStatus("Project source is missing. Restore its original package/Data path before opening.",true); return; }
     // Validate all authored data before changing source or replacing a draft.
     QString error;
+    if(record.contains("grabLocations")) {
+        if(!record["grabLocations"].isObject()||record["grabLocations"].toObject().size()>128){setStatus("Invalid grab locations.",true);return;}
+        const auto locations=record["grabLocations"].toObject();for(auto it=locations.begin();it!=locations.end();++it){OperatingGrabLocations g;
+            if(!it.value().isObject()||!readGrabLocations(it.value().toObject(),g,error)||it.key()!=grabLocationsKey(g)){setStatus("Invalid grab locations: "+error,true);return;}}
+    }
     const auto magazineDefaults=record["magazineGrabDefaults"].toObject();
     if(record.contains("soundProfiles")){
         if(!record["soundProfiles"].isObject()||record["soundProfiles"].toObject().size()>128){setStatus("Invalid sound profiles.",true);return;}
@@ -202,6 +209,7 @@ void ReloadMakerController::restoreSessionSelection() {
     _glockNoExtender=record["glockReloadNoExtender"].toBool(false);
     _savedSounds.clear();const auto sounds=record["soundProfiles"].toObject();for(auto it=sounds.begin();it!=sounds.end();++it){SoundProfile profile;QString error;if(readSoundProfile(it.value().toObject(),profile,error))_savedSounds.insert(it.key(),profile);}
     _interactionHand=record["interactionHand"].toString(isM1AConfiguration()?"right":"left")=="right"&&!isGlockConfiguration()?PoseHand::Right:PoseHand::Left;
+    _grabLocations.clear();const auto locations=record["grabLocations"].toObject();for(auto it=locations.begin();it!=locations.end();++it){OperatingGrabLocations g;QString e;if(readGrabLocations(it.value().toObject(),g,e))_grabLocations[it.key()]=g;}
     _operatingGrips.clear();const auto operating=record["operatingGrips"].toObject();for(auto it=operating.begin();it!=operating.end();++it)_operatingGrips[it.key()]=it.value().toString();
     _magazineGrabGrips.clear();const auto magazineGrabs=record["magazineGrabGrips"].toObject();
     for(auto it=magazineGrabs.begin();it!=magazineGrabs.end();++it)_magazineGrabGrips[it.key().toLower()]=it.value().toString();
@@ -249,6 +257,7 @@ void ReloadMakerController::restoreSessionSelection() {
     _simulationSpring->setChecked(record["simulationSpringReturn"].toBool(true));
     const int workspace=record["workspace"].toInt(OperateWorkspace);
     setWorkspace(validWorkspace(workspace)?workspace:OperateWorkspace);
+    if(workspace==GripsWorkspace&&record.contains("handsPage"))_handPosePages->setCurrentIndex(std::clamp(record["handsPage"].toInt(),0,3));
     if(record.contains("camera")&&!_window->getGLView()->studioRestoreCamera(record["camera"].toObject()))appendDiagnostic("PROJECT: invalid saved camera ignored.");
     if (record.contains("reloadDraft")) {
         // Native recapture establishes live node bindings before restoring the
@@ -256,6 +265,7 @@ void ReloadMakerController::restoreSessionSelection() {
         _pendingReloadDraft = record["reloadDraft"].toObject();
     }
     ++_revision;
+    if(workspace==GripsWorkspace&&_handPosePages->currentIndex()==3)prepareGrabLocationFrame();
     setStatus(error.isEmpty() ? "Project restored · "+QFileInfo(_sessionPath).fileName() : "Project restored with a grip warning: "+error,!error.isEmpty());
 }
 }

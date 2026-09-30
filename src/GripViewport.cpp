@@ -137,7 +137,7 @@ namespace reloadmaker {
                 return true;
             }
             if(button==0) {if(_canPick && beginPick) beginPick();}
-            else if(button==1 || button==2) {setPicking(false);_rotate=button==2;_view->update();}
+            else if(button==1 || (button==2&&!_pointAuthoring)) {setPicking(false);_rotate=button==2;_view->update();}
             else if(button==3) {if(_canSave && save) save();}
             else if(button==4) {if(end) end();}
             else if(_picking) {if(surfacePicked) surfacePicked(position);}
@@ -156,11 +156,11 @@ namespace reloadmaker {
         QFont font=painter.font(); font.setPixelSize(12); painter.setFont(font);
         const QString labels[]{_teaching?"PICK PART":_simulating?"RESET":_workshop?(_workshopHand?"PLACE PALM":"PICK PART"):"PICK POINT",
             _simulating&&!_teaching?"DRAG PART":"MOVE",_simulating&&!_teaching?"STAGED":"ROTATE",
-            _simulating&&!_teaching?"RELEASE":_workshop?"SAVE":"SAVE GRIP",_teaching?"TEST":_simulating?"EDIT":"END"};
+            _simulating&&!_teaching?"RELEASE":_pointAuthoring?"SAVE POINTS":_workshop?"SAVE":"SAVE GRIP",_teaching?"TEST":_simulating?"EDIT":"END"};
         qreal x=16;
         for(int i=0;i<5;++i) {
             const bool selected=(i==0 && _picking) || (i==1 && !_picking && !_rotate) || (i==2 && !_picking && _rotate);
-            const bool enabled=_simulating&&!_teaching?true:i==0?_canPick:i==3?_canSave:true;
+            const bool enabled=_simulating&&!_teaching?true:i==0?_canPick:i==3?_canSave:!(i==2&&_pointAuthoring);
             const qreal width=painter.fontMetrics().horizontalAdvance(labels[i])+24;
             const QRectF rect(x,16,width,30); _buttons.append(rect); x+=width+6;
             painter.setPen(QColor(selected?"#f0c785":"#59646a")); painter.setBrush(QColor(selected?"#443522":"#1b2023")); painter.drawRoundedRect(rect,3,3);

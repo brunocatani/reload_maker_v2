@@ -189,6 +189,8 @@ namespace reloadmaker {
         if(!_reloadWorkspaceActive&&_reloadRecipe&&_reloadExpectedPath==expected)return;
         QListWidgetItem* item=nullptr;for(int i=0;i<_animationList->count();++i)if(_animationList->item(i)->data(Qt::UserRole).toString()==expected){item=_animationList->item(i);break;}
         if(!item)return;
+        if(_workspace==GripsWorkspace&&_handPosePages->currentIndex()==3)
+            _grabLocationCapturePreview=std::pair{_activeAnimationPath,_playbackTime};
         _animationList->setCurrentItem(item);selectAnimation(item);
         if(!_clip.valid()||_activeAnimationPath!=expected)return;
         if(_reloadRecipe&&_reloadExpectedPath==expected){refreshReloadWindows();selectReloadWindow(std::max(0,_reloadWindow));return;}
@@ -264,6 +266,18 @@ namespace reloadmaker {
         }
         refreshReloadWindows();if(!recipe.windows.isEmpty()){if(_reloadWorkspaceActive)selectReloadWindow(0);}else _reloadSummary->setText("This base reload contains no measurable weapon-part movement. No substitute animation was used.");
         if(simulationWorkspace(_workspace))prepareSimulation();
+        else if(_workspace==GripsWorkspace&&_handPosePages->currentIndex()==3){
+            // Learning establishes live part bindings without replacing the
+            // frame the user chose for surface picking.
+            if(_grabLocationCapturePreview){
+                const auto [path,seconds]=*_grabLocationCapturePreview;_grabLocationCapturePreview.reset();
+                for(int i=0;i<_animationList->count();++i)if(_animationList->item(i)->data(Qt::UserRole).toString()==path){
+                    _animationList->setCurrentRow(i);selectAnimation(_animationList->item(i));
+                    _playbackTime=std::clamp(seconds,0.f,playbackDuration());(void)applyPose(_playbackTime);updateTimelineText();break;
+                }
+            }
+            prepareGrabLocationFrame();
+        }
     }
     void ReloadMakerController::refreshReloadWindows()
     {

@@ -11,6 +11,8 @@
 #include <QJsonDocument>
 #include <QUuid>
 #include <QDateTime>
+#include <algorithm>
+#include <limits>
 
 namespace reloadmaker {
 QString ReloadMakerController::operatingGroup() const {return isAr15Configuration()?"charging_handle":isBoltActionConfiguration()?"bolt":isM1AConfiguration()?"operating_handle":"slide";}
@@ -96,7 +98,7 @@ void ReloadMakerController::updateInteractionGripUi() {
     for(auto* picker:{_interactionHandPicker,_magazineHandPicker})if(picker){const QSignalBlocker block(picker);picker->setCurrentIndex(int(_interactionHand));picker->setEnabled(!isGlockConfiguration()&&free&&!_loadThread&&!_reloadCapturing);}
     if(_editOperatingGrip){_editOperatingGrip->setVisible(!isGlockConfiguration());_editOperatingGrip->setEnabled(free&&_simulationActive);}
     if(_operatingGripStatus)_operatingGripStatus->setText(!_operatingGripError.isEmpty()?_operatingGripError:_operatingGrip?"Authored grip · "+_operatingGrip->pose.name:"Dynamic grab · this hand has no authored operating fit");
-    _operatingHover=false;if(_simulationDrive)_simulationDrive->setMarkers({});
+    _operatingHover=false;if(_simulationDrive)_simulationDrive->setMarkers({});refreshGrabLocationsUi();
 }
 std::optional<QVector3D> ReloadMakerController::hoverOperatingPart(QPointF point) {
     _operatingHover=false;
@@ -104,6 +106,17 @@ std::optional<QVector3D> ReloadMakerController::hoverOperatingPart(QPointF point
     if(!operatingGrabAvailable())return {};
     int automatic=-1;Vec3f hit;QString surface,error;QVector<int> candidates;
     if(!pickWeaponPart(point,automatic,hit,surface,candidates,error))return {};
+    const auto locations=currentGrabLocations();
+    if(_grabLocations.contains(grabLocationsKey(locations))) {
+        const int a=operatingAnchor();if(a<0||!candidates.contains(a))return {};
+        Transformf world;if(!sceneNodeWorld(_handPoseAnchors[a].node,world,error))return {};
+        std::optional<QVector3D> best;float distance=std::numeric_limits<float>::infinity();
+        for(const auto& p:locations.points)if(p.hands&(_interactionHand==PoseHand::Left?1:2)) {
+            const auto v=composed(world,Transformf{p.point}).translation;const QVector3D position(v.x,v.y,v.z);
+            const float d=(position-QVector3D(hit.x,hit.y,hit.z)).lengthSquared();if(d<=p.radius*p.radius&&d<distance){best=position;distance=d;}
+        }
+        _operatingHover=best.has_value();return best;
+    }
     const auto& input=_reloadRecipe->tracks[_simulationRig->slide].anchor;
     for(int i:candidates)if(sameGripAnchor(_handPoseAnchors[i].description,input)){
         _operatingHover=true;return QVector3D(hit.x,hit.y,hit.z);
@@ -111,7 +124,9 @@ std::optional<QVector3D> ReloadMakerController::hoverOperatingPart(QPointF point
     return {};
 }
 bool ReloadMakerController::operatingGrabAvailable() const {
-    return currentWeapon()&&_operatingGripError.isEmpty();
+    const auto g=currentGrabLocations();
+    return currentWeapon()&&_operatingGripError.isEmpty()&&(!_grabLocations.contains(grabLocationsKey(g))||
+        std::any_of(g.points.cbegin(),g.points.cend(),[&](const auto& p){return p.hands&(_interactionHand==PoseHand::Left?1:2);}));
 }
 
 QJsonObject ReloadMakerController::interactionGripState() const {
@@ -133,11 +148,12 @@ QJsonObject ReloadMakerController::exportInteractionGrips() const {
             const auto raw=encodePartGrip(fit,error);if(raw.isEmpty())return {};
             QJsonArray members;for(int t:_simulationRig->slideTracks)members.append(t);if(!_simulationRig->slideTracks.contains(_simulationRig->bolt))members.append(_simulationRig->bolt);
             operating.append(QJsonObject{{"group",operatingGroup()},{"hand",hand==PoseHand::Left?"left":"right"},{"inputTrack",_simulationRig->slide},{"drivenTracks",members},
-                {"indicator","contacted-part-surface"},{"grip",QJsonDocument::fromJson(raw).object()},
+                {"indicator",exportGrabLocations().isEmpty()?"contacted-part-surface":"authored-grab-locations"},{"grip",QJsonDocument::fromJson(raw).object()},
                 {"inputPath",isBoltActionConfiguration()?"linear":"source-motion"}});
         }
         if(!found)return {};
     }
-    return {{"version",1},{"firingHand","right"},{"otherHandPolicy","dynamic"},{"operatingGroups",operating}};
+    QJsonObject result{{"version",1},{"firingHand","right"},{"otherHandPolicy","dynamic"},{"operatingGroups",operating}};
+    const auto locations=exportGrabLocations();if(!locations.isEmpty()){result["version"]=2;result["grabLocations"]=locations;}return result;
 }
 }

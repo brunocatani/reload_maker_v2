@@ -17,15 +17,16 @@ namespace reloadmaker {
     void ReloadMakerController::createGripViewport()
     {
         _gripViewport=new GripViewport(_window->getGLView(),this);
-        _gripViewport->beginPick=[this](){if(_handPosePages->currentIndex()==2)beginWorkshopPick(_workshopHandEditing);else beginGripSurfacePick();};
-        _gripViewport->surfacePicked=[this](QPointF point){if(_handPosePages->currentIndex()==2)pickWorkshopPart(point);else pickGripSurface(point);};
-        _gripViewport->edited=[this](const Transformf& world){editGripWorld(world);};
-        _gripViewport->save=[this](){if(_handPosePages->currentIndex()==2)saveWorkshop();else (void)savePartGrip();};
-        _gripViewport->end=[this](){_gripViewport->setPicking(false);if(_handPosePages->currentIndex()==2)editWorkshopHand(false);else restoreHandPosePreview();};
+        _gripViewport->beginPick=[this](){if(_handPosePages->currentIndex()==3)beginGrabLocationPick();else if(_handPosePages->currentIndex()==2)beginWorkshopPick(_workshopHandEditing);else beginGripSurfacePick();};
+        _gripViewport->surfacePicked=[this](QPointF point){if(_handPosePages->currentIndex()==3)pickGrabLocation(point);else if(_handPosePages->currentIndex()==2)pickWorkshopPart(point);else pickGripSurface(point);};
+        _gripViewport->edited=[this](const Transformf& world){if(_handPosePages->currentIndex()==3)editGrabLocationWorld(world);else editGripWorld(world);};
+        _gripViewport->save=[this](){if(_handPosePages->currentIndex()==3)saveGrabLocations();else if(_handPosePages->currentIndex()==2)saveWorkshop();else (void)savePartGrip();};
+        _gripViewport->end=[this](){_gripViewport->setPicking(false);if(_handPosePages->currentIndex()==3){_pickingGrabLocation=false;setWorkspace(OperateWorkspace);}else if(_handPosePages->currentIndex()==2)editWorkshopHand(false);else restoreHandPosePreview();};
         _gripViewport->teachingGrab=[this](int axis,bool rotation){beginTeachingDrag(axis,rotation);};
         _gripViewport->teachingTool=[this](bool rotation){_teachingRotation=rotation;_gripViewport->setRotationTool(rotation);updateMechanismControls();updateGripViewport();};
         _gripViewport->test=[this](){beginMechanismPreview();};
         _gripViewport->pickingCancelled=[this](){
+            _pickingGrabLocation=false;
             _workshopPicking=false;
             if(_workshopPivotPicking&&_mechanismTeaching){_workshopPivotPicking=false;_mechanismState.path=float(_mechanismStages->currentRow()+1);(void)applyPose(_playbackTime);}
             updateMechanismControls();updateGripViewport();
@@ -38,6 +39,7 @@ namespace reloadmaker {
         _gripViewport->simulationReset=[this](){if(!_mechanismPreview)return;_mechanismTimer->stop();_mechanismState={};_mechanismHeld=false;_mechanismDirection=1;(void)applyPose(_playbackTime);updateMechanismControls();updateGripViewport();};
         _gripViewport->simulationStop=[this](){beginMechanismTeaching();};
         connect(_handPosePages,&QTabWidget::currentChanged,this,[this](int page){
+            if(page!=3){_pickingGrabLocation=false;_gripViewport->setPicking(false);}else prepareGrabLocationFrame();
             if(page!=2){_workshopPicking=false;_workshopHandEditing=false;_gripViewport->setPicking(false);if(_mechanismPreview){stopMechanismPreview();if(_clip.valid())(void)applyPose(_playbackTime);}}
             updatePartGripControls();
             // Finger, grip and mechanism previews depend on the visible tab.
@@ -51,9 +53,10 @@ namespace reloadmaker {
     {
         if(!_gripViewport) return;
         const bool workshop=_handPosePages->currentIndex()==2;
-        const bool active=!_reloadWorkspaceActive && (_handPosePages->currentIndex()==1 || workshop) && _handPoseDock->isVisible() && _handPoseDock->widget()->isEnabled() && !_loadThread &&
+        const bool points=_handPosePages->currentIndex()==3;_gripViewport->setPointAuthoring(points);
+        const bool active=!_reloadWorkspaceActive && (_handPosePages->currentIndex()==1 || workshop || points) && _handPoseDock->isVisible() && _handPoseDock->widget()->isEnabled() && !_loadThread &&
             !_rebuildTimer->isActive() && _clip.valid() && _renderedWeapon==_weaponCombo->currentIndex();
-        _gripViewport->configure(active,workshop?_workshopPick->isEnabled():_gripPick->isEnabled(),workshop?_mechanismSave->isEnabled():_gripSave->isEnabled());
+        _gripViewport->configure(active,points?operatingAnchor()>=0:workshop?_workshopPick->isEnabled():_gripPick->isEnabled(),points?operatingAnchor()>=0:workshop?_mechanismSave->isEnabled():_gripSave->isEnabled());
         _gripViewport->setWorkshop(workshop,_mechanismDraft?_mechanismDraft->name:QString(),_workshopHandEditing);
         if(_mechanismPreview&&_mechanismDraft&&!_workshopPicking){
             const int i=_mechanismTeaching?std::max(0,_mechanismStages->currentRow()):std::clamp(_mechanismState.activeStage,0,int(_mechanismDraft->stages.size())-1);
@@ -69,6 +72,12 @@ namespace reloadmaker {
             if(_mechanismTeaching)_gripViewport->setRotationTool(_teachingRotation);
         }else {_gripViewport->setSimulation(false);_gripViewport->setTeaching(false);}
         if(_slotOverlay) _slotOverlay->setActive(_pages->currentIndex()==kLoadoutPage && _showPartLabels && !active);
+        if(points){
+            const auto g=currentGrabLocations();const int i=_grabLocationList?_grabLocationList->currentRow():-1,a=operatingAnchor();
+            Transformf reference;QString error;
+            if(i<0||i>=g.points.size()||a<0||!sceneNodeWorld(_handPoseAnchors[a].node,reference,error)){_gripViewport->clearGrip();return;}
+            const auto target=composed(reference,Transformf{g.points[i].point});_gripViewport->setGrip(reference,target,{},target.translation);return;
+        }
         if(!_partGripDraft || (workshop&&!_mechanismPreview&&!_workshopHandEditing)) { _gripViewport->clearGrip(); return; }
         const auto reference=gripReferenceWorld();
         const auto hand=composed(reference,_partGripDraft->pose.placement.handInAnchor);

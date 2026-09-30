@@ -100,7 +100,7 @@ void ReloadMakerController::createUi() {
     exportRecords->setText("Export");
     exportRecords->setPopupMode(QToolButton::InstantPopup);
     auto* exportMenu = new QMenu(exportRecords);
-    for(const auto& pair : {std::pair{"Saved hand pose","hand"},std::pair{"Current part grip","grip"},std::pair{"Current mechanism","mechanism"},std::pair{"Current reload recipe","reload"},std::pair{"Reload + grips (self-contained)","reload_bundle"},std::pair{"Simulation setup","simulation"},std::pair{"Current slide for DIAMOND","slide"}}) {
+    for(const auto& pair : {std::pair{"Saved hand pose","hand"},std::pair{"Current part grip","grip"},std::pair{"Current mechanism","mechanism"},std::pair{"Current reload recipe","reload"},std::pair{"Reload + grips (self-contained)","reload_bundle"},std::pair{"Simulation setup","simulation"},std::pair{"Current slide for DIAMOND","slide"},std::pair{"Operating grab locations","grab_locations"}}) {
         connect(exportMenu->addAction(pair.first),&QAction::triggered,this,[this,kind=QString(pair.second)] {
             try {const auto result=executeCommand({{"method","export"},{"params",QJsonObject{{"kind",kind}}}});setStatus("Exported · "+result["path"].toString());}
             catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}
@@ -309,6 +309,7 @@ void ReloadMakerController::createUi() {
         createReloadUi();
         createSimulationUi();
         createSoundsUi();
+        createGrabLocationsUi();
 
 
     _handPoseDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
@@ -322,7 +323,7 @@ void ReloadMakerController::createUi() {
     _handPosePages->setTabText(2, "Mechanism");
     createFingerEditor();
     // Short controls and scrollable inspectors remain usable on smaller screens.
-    for (int page : {0, 1}) {
+    for (int page : {0, 1, 3}) {
         QWidget* content = _handPosePages->widget(page);
         const QString title = _handPosePages->tabText(page);
         _handPosePages->removeTab(page);

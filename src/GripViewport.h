@@ -17,6 +17,7 @@ namespace reloadmaker {
         void setTeaching(bool active,const Transformf& frame={});
         void setWorkshop(bool active,const QString& partName={},bool handEditing=false);
         void setRotationTool(bool rotation);
+        void setPointAuthoring(bool value) {if(value&&!_pointAuthoring)_rotate=false;_pointAuthoring=value;}
         [[nodiscard]] bool picking() const { return _picking; }
         std::function<void()> beginPick,save,end;
         std::function<void(QPointF)> surfacePicked;
@@ -53,7 +54,7 @@ namespace reloadmaker {
         float _dragPrecision{1};
         float _dragAngle{0},_dragLastAngle{0};
         bool _simulating{false},_simulationRotation{false};
-        bool _teaching{false},_workshop{false},_workshopHand{false};
+        bool _teaching{false},_workshop{false},_workshopHand{false},_pointAuthoring{false};
         Transformf _teachingFrame;
         QString _partName;
         QVector3D _simulationPivot,_simulationAxis;

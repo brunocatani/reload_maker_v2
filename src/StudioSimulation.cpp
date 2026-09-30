@@ -103,6 +103,8 @@ void ReloadMakerController::createSimulationUi() {
     _operatingGripStatus=hint({},panel);layout->addWidget(_operatingGripStatus);
     _editOperatingGrip=new QPushButton("CONFIGURE OPERATING GRIP",panel);layout->addWidget(_editOperatingGrip);
     connect(_editOperatingGrip,&QPushButton::clicked,this,[this]{(void)editOperatingGrip();});
+    auto* grabLocations=new QPushButton("CONFIGURE GRAB LOCATIONS",panel);layout->addWidget(grabLocations);
+    connect(grabLocations,&QPushButton::clicked,this,[this]{(void)openGrabLocations();});
     _simulationSpring=new QCheckBox("Slide returns when released",panel);_simulationSpring->setChecked(true);layout->addWidget(_simulationSpring);
     _simulationNoExtender=new QCheckBox("QuickHands: standard magazine grip",panel);layout->addWidget(_simulationNoExtender);
     _simulationNoExtender->setToolTip("Use the package's optional NoExtender reload with the unextended standard magazine and a QuickHands animation set.");
