@@ -132,7 +132,7 @@ try:
                 assert max(abs(a-b) for a,b in zip(actual[1],expected['rotate']))<.005,(phase,name,offset)
         op('release')
     bundled=edit('export',kind='reload_bundle');bundle=json.loads(Path(bundled['path']).read_text(encoding='utf-8'))
-    assert len(bundle['magazineGrabBindings'])==2 and {g['pose']['hand'] for g in bundle['grips']}=={'left'}
+    assert sum(b.get('hand', 'left')=='left' for b in bundle['magazineGrabBindings'])==2
     results.update(export=exported['path'],bundle=bundled['path'])
     (OUT/'validated.json').write_text(json.dumps(results,indent=2),encoding='utf-8')
     print('PASS native C14 lift/pull/push/lock, spent/live ejection, manual hold, short strokes, magazine insertion, all reload/ammo/receiver choices and exports')

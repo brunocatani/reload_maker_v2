@@ -74,6 +74,15 @@ namespace {
         require(decodeHandPose(encoded,decoded,error),error);
         for(int i=0;i<15;++i) expect(pose.fingers[i],decoded.fingers[i]);
         expect(pose.placement.handInAnchor,decoded.placement.handInAnchor);
+        HandPose mirrored,back;const auto mirrorAnchor=transform({0,4,-2},17);
+        require(mirrorHandPose(skeleton,pose,mirrorAnchor,mirrored,error),error);
+        require(mirrored.hand!=side,"Mirror kept original physical hand");
+        require(mirrorHandPose(skeleton,mirrored,mirrorAnchor,back,error),error);
+        expect(pose.placement.handInAnchor,back.placement.handInAnchor);
+        for(int i=0;i<15;++i)expect(pose.fingers[i],back.fingers[i]);
+        const auto beforeWrist=composed(mirrorAnchor,pose.placement.handInAnchor).translation;
+        const auto afterWrist=composed(mirrorAnchor,mirrored.placement.handInAnchor).translation;
+        require(std::abs(beforeWrist.x+afterWrist.x)<.0003f&&std::abs(beforeWrist.y-afterWrist.y)<.0003f&&std::abs(beforeWrist.z-afterWrist.z)<.0003f,"Opposite wrist did not mirror around the magazine plane");
         expect(pose.placement.handInWeapon,decoded.placement.handInWeapon);
         const int hand=skeleton.boneIndex(side==PoseHand::Left?"LArm_Hand":"RArm_Hand");
         expect(composed(anchor,decoded.placement.handInAnchor),globals[hand]);

@@ -57,6 +57,8 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     record["glockReloadNoExtender"] = _glockNoExtender;
     QJsonObject magazineGrabs;for(auto it=_magazineGrabGrips.cbegin();it!=_magazineGrabGrips.cend();++it)magazineGrabs[it.key()]=it.value();
     record["magazineGrabGrips"]=magazineGrabs;
+    record["interactionHand"]=_interactionHand==PoseHand::Left?"left":"right";
+    QJsonObject operating;for(auto it=_operatingGrips.cbegin();it!=_operatingGrips.cend();++it)operating[it.key()]=it.value();record["operatingGrips"]=operating;
     QJsonObject magazineDefaults;
     for(auto it=_magazineGrabDefaults.cbegin();it!=_magazineGrabDefaults.cend();++it)magazineDefaults[it.key()]=it.value();
     record["magazineGrabDefaults"]=magazineDefaults;
@@ -125,11 +127,14 @@ void ReloadMakerController::openSession(const QString& path) {
     const auto magazineDefaults=record["magazineGrabDefaults"].toObject();
     if((record.contains("magazineGrabDefaults")&&!record["magazineGrabDefaults"].isObject())||magazineDefaults.size()>512){setStatus("Invalid magazine defaults.",true);return;}
     for(auto it=magazineDefaults.begin();it!=magazineDefaults.end();++it)if(it.key().isEmpty()||it.key().size()>512||!it.value().isString()||QUuid(it.value().toString()).isNull()){setStatus("Invalid magazine default identity.",true);return;}
+    const auto operating=record["operatingGrips"].toObject();
+    if((record.contains("operatingGrips")&&!record["operatingGrips"].isObject())||operating.size()>64){setStatus("Invalid operating grips.",true);return;}
+    for(auto it=operating.begin();it!=operating.end();++it)if(it.key().size()>1024||!it.key().contains('|')||QUuid(it.value().toString()).isNull()){setStatus("Invalid operating grip identity.",true);return;}
     const auto magazineDrafts=record["magazineGripDrafts"].toObject();
     if((record.contains("magazineGripDrafts")&&!record["magazineGripDrafts"].isObject())||magazineDrafts.size()>512){setStatus("Invalid magazine drafts.",true);return;}
     for(auto it=magazineDrafts.begin();it!=magazineDrafts.end();++it) {
         PartGrip grip;
-        if(!decodePartGrip(QJsonDocument(it.value().toObject()).toJson(),grip,error)||it.key()!=magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord)){setStatus("Invalid magazine draft: "+error,true);return;}
+        if(!decodePartGrip(QJsonDocument(it.value().toObject()).toJson(),grip,error)||(it.key()!=magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord)&&it.key()!=handAssignmentKey(magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord),grip.pose.hand))){setStatus("Invalid magazine draft: "+error,true);return;}
     }
     const auto fingerDrafts=record["fingerDrafts"].toArray();
     if(record.contains("magazineGrabGrips")&&!record["magazineGrabGrips"].isObject()){setStatus("Invalid magazine grip assignments.",true);return;}
@@ -187,13 +192,15 @@ void ReloadMakerController::restoreSessionSelection() {
     if (animationSet < 0 && _animationSetCombo->count() > 0) { setStatus("The project's animation set no longer exists.",true); return; }
     { const QSignalBlocker block(_animationSetCombo); _animationSetCombo->setCurrentIndex(animationSet); }
     _glockNoExtender=record["glockReloadNoExtender"].toBool(false);
+    _interactionHand=record["interactionHand"].toString(isM1AConfiguration()?"right":"left")=="right"&&!isGlockConfiguration()?PoseHand::Right:PoseHand::Left;
+    _operatingGrips.clear();const auto operating=record["operatingGrips"].toObject();for(auto it=operating.begin();it!=operating.end();++it)_operatingGrips[it.key()]=it.value().toString();
     _magazineGrabGrips.clear();const auto magazineGrabs=record["magazineGrabGrips"].toObject();
     for(auto it=magazineGrabs.begin();it!=magazineGrabs.end();++it)_magazineGrabGrips[it.key().toLower()]=it.value().toString();
     _magazineGrabDefaults.clear();const auto magazineDefaults=record["magazineGrabDefaults"].toObject();
     for(auto it=magazineDefaults.begin();it!=magazineDefaults.end();++it)_magazineGrabDefaults[it.key().toLower()]=it.value().toString();
-    _partGripDraft.reset();_operateSuspendedGrip.reset();_suspendedAuthoringGrip.reset();_editingMagazine=false;
+    _partGripDraft.reset();_operateSuspendedGrip.reset();_suspendedAuthoringGrip.reset();_editingMagazine=false;_editingOperating=false;
     _magazineGripDrafts.clear();const auto magazineDrafts=record["magazineGripDrafts"].toObject();
-    for(auto it=magazineDrafts.begin();it!=magazineDrafts.end();++it){PartGrip grip;QString e;if(decodePartGrip(QJsonDocument(it.value().toObject()).toJson(),grip,e))_magazineGripDrafts[it.key()]=grip;}
+    for(auto it=magazineDrafts.begin();it!=magazineDrafts.end();++it){PartGrip grip;QString e;if(decodePartGrip(QJsonDocument(it.value().toObject()).toJson(),grip,e))_magazineGripDrafts[handAssignmentKey(magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord),grip.pose.hand)]=grip;}
     rebuildWeapon();
     if (!_clip.valid()) return;
     for (int i = 0; i < _animationList->count(); ++i) if (_animationList->item(i)->data(Qt::UserRole).toString() == record["animation"].toString()) { _animationList->setCurrentRow(i); selectAnimation(_animationList->item(i)); break; }

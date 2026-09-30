@@ -111,8 +111,7 @@ try:
     exported=edit('export',kind='simulation');payload=json.loads(Path(exported['path']).read_text(encoding='utf-8'))
     assert payload['format']=='reload-maker-m1a-simulation' and payload['reciprocatingHandle'] and payload['magazineInteraction']['version']==3
     bundled=edit('export',kind='reload_bundle');bundle=json.loads(Path(bundled['path']).read_text(encoding='utf-8'))
-    assert len(bundle['magazineGrabBindings'])==4
-    assert {g['pose']['hand'] for g in bundle['grips']}=={'right'}
+    assert sum(b.get('hand', 'right')=='right' for b in bundle['magazineGrabBindings'])==4
     results['export']=exported['path'];results['bundle']=bundled['path']
     edit('save_project',path=str(ROOT/'workspace/M1A-native-reload.project.json'))
     for name in ['glock','ru556']:

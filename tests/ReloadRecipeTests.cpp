@@ -68,6 +68,10 @@ namespace {
         check(!decodeReloadRecipe(QJsonDocument(json).toJson(),r,error),"Unknown recipe version accepted");
     }
     void curve(){
+        check(std::abs(reloadCurveTime({{0,0},{100,0}},{0,1},{98,0},.9f,.025f)-1)<1e-6f,"Bolt pointer stopped before its rear end stop");
+        check(reloadCurveTime({{0,0},{100,0}},{0,1},{2,0},.1f,.025f)==0,"Bolt pointer did not finish forward locking");
+        check(std::abs(reloadCurveTime({{0,0},{100,0}},{0,1},{50,0},0,.025f)-.5f)<1e-6f,"End-stop snap changed mid-stroke input");
+
         const QVector<QPointF> points{{0,0},{10,0},{10,10},{20,10}};const QVector<float> times{0,1,2,3};
         check(std::abs(reloadCurveTime(points,times,{10,5},1)-1.5f)<.001f,"Corner path collapsed to a straight axis");
         check(std::abs(reloadCurveTime(points,times,{15,10},2)-2.5f)<.001f,"Curved path time wrong");
@@ -88,6 +92,15 @@ namespace {
         PartGrip restored;check(decodePartGrip(QJsonDocument(bundle["grips"].toArray()[0].toObject()).toJson(),restored,error),error);
         check(encodePartGrip(restored,error)==encodePartGrip(grip,error),"Export changed fingers or part placement");
         check(bundle["magazineGrabBindings"].toArray().size()==1,"Magazine assignment missing from bundle");
+        auto opposite=grip;opposite.pose.id=QUuid::createUuid().toString(QUuid::WithoutBraces);opposite.pose.hand=grip.pose.hand==PoseHand::Left?PoseHand::Right:PoseHand::Left;
+        const auto baseKey=magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord);
+        auto twoHands=bindings;twoHands[handAssignmentKey(baseKey,opposite.pose.hand)]=opposite.pose.id;
+        const auto original=magazineGripFor(grip.weaponRecord,grip.pose.placement,{grip,opposite},twoHands,{},error,grip.pose.hand);
+        const auto alternate=magazineGripFor(grip.weaponRecord,grip.pose.placement,{grip,opposite},twoHands,{},error,opposite.pose.hand);
+        check(original&&original->pose.id==grip.pose.id&&alternate&&alternate->pose.id==opposite.pose.id,"Per-hand assignment overwrote legacy fit");
+        check(!magazineGripFor(grip.weaponRecord,grip.pose.placement,{grip},bindings,{},error,opposite.pose.hand),"Other hand inherited a wrong-side legacy fit");
+        const auto dual=QJsonDocument::fromJson(encodeReloadBundle(r,{grip,opposite},{},twoHands,error)).object();
+        check(dual["version"]==2&&dual["magazineGrabBindings"].toArray().size()==2,"Both magazine hands missing from versioned export");
         check(encodeReloadBundle(r,{}, {},bindings,error).isEmpty(),"Unresolved grip exported");
         auto bad=grip;bad.weaponRecord="Other.esp:123456";check(encodeReloadBundle(r,{bad},{},bindings,error).isEmpty(),"Cross-weapon grip exported");
         bad=grip;bad.pose.placement.anchorPath="Wrong/part";check(encodeReloadBundle(r,{bad},{},bindings,error).isEmpty(),"Wrong-part grip exported");

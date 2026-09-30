@@ -36,6 +36,10 @@ namespace reloadmaker {
         const Transformf& anchorWorld, HandPose& pose, QString& error);
     [[nodiscard]] bool applyHandPoseFingers(const HkxSkeleton& skeleton,
         const HandPose& pose, QVector<Transformf>& locals, QString& error);
+    // Reflect spatial contact across the weapon's X plane while converting
+    // every joint through the actual opposite-hand reference basis.
+    [[nodiscard]] bool mirrorHandPose(const HkxSkeleton& skeleton,const HandPose& source,
+        const Transformf& anchorInWeapon,HandPose& target,QString& error);
 
     [[nodiscard]] QByteArray encodeHandPose(const HandPose& pose, QString& error);
     [[nodiscard]] bool encodePoseTransform(const Transformf& value,QJsonObject& json,QString& error);

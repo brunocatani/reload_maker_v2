@@ -76,6 +76,10 @@ void ReloadMakerController::createSimulationUi() {
     magazine->addWidget(_magazineOut,0,0);magazine->addWidget(_magazineIn,0,1);
     magazine->addWidget(_magazineGrab,1,0);magazine->addWidget(_simulationDrop,1,1);
     layout->addLayout(magazine);
+    _interactionHandPicker=new QComboBox(panel);
+    _interactionHandPicker->addItem("Left hand · right firing grip");_interactionHandPicker->addItem("Right hand · left support grip");
+    layout->addWidget(_interactionHandPicker);
+    connect(_interactionHandPicker,qOverload<int>(&QComboBox::activated),this,[this](int i){(void)setInteractionHand(PoseHand(i));updateInteractionGripUi();});
     _simulationMagazineGrip=new QComboBox(panel);layout->addWidget(_simulationMagazineGrip);
     auto* configureMagazine=new QPushButton("CONFIGURE SELECTED MAGAZINE",panel);layout->addWidget(configureMagazine);
     configureMagazine->setToolTip("Edit this magazine's hand fit with Move / Rotate. Save replaces its assignment and saves the project.");
@@ -84,7 +88,7 @@ void ReloadMakerController::createSimulationUi() {
     connect(_simulationMagazineGrip,qOverload<int>(&QComboBox::activated),this,[this](int index) {
         if(!_simulationRig||!_reloadRecipe)return;
         const auto anchor=simulationMagazineAnchor();
-        const auto key=magazineGrabKey(poseRecordKey(currentWeapon()->formId),anchor.ownerRecord);
+        const auto key=handAssignmentKey(magazineGrabKey(poseRecordKey(currentWeapon()->formId),anchor.ownerRecord),_interactionHand);
         const auto previous=_magazineGrabGrips.value(key),id=_simulationMagazineGrip->itemData(index).toString();
         if(index>0)return; // This entry displays the resolved fit, including inherited defaults.
         if(_magazineGrabDefaults.contains(poseRecordKey(currentWeapon()->formId).toLower())) {
@@ -96,6 +100,9 @@ void ReloadMakerController::createSimulationUi() {
         _magazineGripDrafts.remove(key);resolveMagazineGrabGrip();(void)applyPose(_simulation.seconds);updateSimulationControls();(void)saveSession();
     });
     auto* optionsTitle=new QLabel("BEHAVIOUR",panel);optionsTitle->setObjectName("Section");layout->addWidget(optionsTitle);
+    _operatingGripStatus=hint({},panel);layout->addWidget(_operatingGripStatus);
+    _editOperatingGrip=new QPushButton("CONFIGURE OPERATING GRIP",panel);layout->addWidget(_editOperatingGrip);
+    connect(_editOperatingGrip,&QPushButton::clicked,this,[this]{(void)editOperatingGrip();});
     _simulationSpring=new QCheckBox("Slide returns when released",panel);_simulationSpring->setChecked(true);layout->addWidget(_simulationSpring);
     _simulationNoExtender=new QCheckBox("QuickHands: standard magazine grip",panel);layout->addWidget(_simulationNoExtender);
     _simulationNoExtender->setToolTip("Use the package's optional NoExtender reload with the unextended standard magazine and a QuickHands animation set.");
@@ -126,6 +133,8 @@ QString ReloadMakerController::glockNoExtenderPath()const {
 }
 void ReloadMakerController::createSimulationViewport() {
     _simulationDrive=new ReloadDriveViewport(_window->getGLView(),this);
+    _simulationDrive->hover=[this](QPointF p){return hoverOperatingPart(p);};
+    _simulationDrive->hoverLeave=[this]{_operatingHover=false;};
     _simulationDrive->setInstructions("SIMULATE · grab the slide to rack it · linked parts follow · background drag orbits");
     _simulationDrive->begin=[this](QPointF point,ReloadDriveCurve& curve){return beginSimulationGrab(point,curve);};
     _simulationDrive->drive=[this](float progress){dragSimulation(progress);};
@@ -208,13 +217,14 @@ void ReloadMakerController::prepareSimulation() {
     _reloadPreviewTimer->stop();_reloadPlaying=false;_reloadHeld=false;_reloadDrive->setActive(false,false);
     if(!selectSimulationClip(false,false)){stopSimulation();updateSimulationControls();return;}
     prepareMagazineInteraction();
-    resolveMagazineGrabGrip();
+    if(isGlockConfiguration())_interactionHand=PoseHand::Left;
+    resolveMagazineGrabGrip();resolveOperatingGrip();
     (void)applyPose(0);
     _magazineViewport->setActive(true);
     _simulationDrive->clearCurve();_simulationDrive->setActive(true,true);updateSimulationControls();++_revision;
 }
 void ReloadMakerController::stopSimulation() {
-    _magazineFitPreview=false;
+    _magazineFitPreview=false;_operatingGrip.reset();_operatingGripBinding=-1;
     if(_simulationTimer)_simulationTimer->stop();
     _simulationActive=false;_simulation.reset();
     _magazineGrabGrip.reset();_magazineGrabBinding=-1;_magazineGrabError.clear();
@@ -385,17 +395,17 @@ bool ReloadMakerController::beginSimulationGrab(QPointF point,ReloadDriveCurve& 
     int automatic=-1;Vec3f hit;QString surface,error;QVector<int> candidates;
     if(!pickWeaponPart(point,automatic,hit,surface,candidates,error))return false;
     const auto& rig=*_simulationRig;const auto& track=_reloadRecipe->tracks[rig.slide];
-    const bool slide=std::any_of(candidates.cbegin(),candidates.cend(),[&](int i){
-        if(sameMechanismPart(_handPoseAnchors[i].description,track.anchor))return true;
-        return isBoltActionConfiguration()&&std::any_of(_boltCycle.tracks.cbegin(),_boltCycle.tracks.cend(),[&](int t){return sameMechanismPart(_handPoseAnchors[i].description,_reloadRecipe->tracks[t].anchor);});
-    });
+    const bool slide=std::any_of(candidates.cbegin(),candidates.cend(),[&](int i){return sameGripAnchor(_handPoseAnchors[i].description,track.anchor);});
+    if(!operatingGrabAvailable())return true;
+    if(_operatingGrip&&!std::any_of(candidates.cbegin(),candidates.cend(),[&](int i){return sameGripAnchor(_handPoseAnchors[i].description,_operatingGrip->pose.placement);}))return false;
     if(!slide||!_simulation.grab())return true;
     _simulationTimer->stop();
     if(isBoltActionConfiguration()) {
         const auto axis=rotated(_globalPose[_weaponBoneIndex].rotation,_boltCycle.inputAxis);
         const QVector3D stroke(axis.x*_boltCycle.inputTravel,axis.y*_boltCycle.inputTravel,axis.z*_boltCycle.inputTravel);
         const QVector3D start=QVector3D(hit.x,hit.y,hit.z)-stroke*_simulation.slide;
-        curve.points={start,start+stroke};curve.times={0,1};curve.current=_simulation.slide;
+        curve.points={start,start+stroke};curve.times={0,1};curve.current=_simulation.slide;curve.endpointSnapFraction=.025f;
+        (void)applyPose(0);
         updateSimulationControls();setStatus("Bolt grabbed · pull back to open, push forward to lock · release holds position");++_revision;return true;
     }
     Transformf world,inverse;
@@ -411,6 +421,7 @@ bool ReloadMakerController::beginSimulationGrab(QPointF point,ReloadDriveCurve& 
     // Gesture travel beyond the catch lets a locked-open slide be pulled and
     // released. Geometry remains clamped to the verified source stroke.
     curve.points.append(curve.points.back()+(curve.points.back()-curve.points.front())*.08f);curve.times.append(1.08f);
+    (void)applyPose(0);
     updateSimulationControls();setStatus(isRifleConfiguration()?"Handle grabbed · pull fully to operate the bolt · Esc cancels":"Slide grabbed · drag along its travel · Esc cancels");++_revision;return true;
 }
 void ReloadMakerController::dragSimulation(float progress) {
@@ -433,6 +444,7 @@ void ReloadMakerController::updateSimulationControls() {
         _testbedPicker->setEnabled(!_loadThread&&!_reloadCapturing&&!_rebuildTimer->isActive());
     }
     if(!_simulationStatus)return;
+    updateInteractionGripUi();
     const bool native=_simulation.action==SimulationAction::Fire||_simulation.action==SimulationAction::Reload;
     const bool busy=native||_simulation.magazine.busy();
     _simulationMagazineGrip->setEnabled(_simulationActive&&!busy&&_simulation.action==SimulationAction::Idle&&_simulationRig&&_reloadRecipe&&magazineGrabSupported(_reloadRecipe->tracks[_simulationRig->magazine].anchor));
@@ -511,7 +523,7 @@ QJsonObject ReloadMakerController::simulationState() const {
             QJsonObject value;if(encodePoseTransform(world,value,error))parts.append(QJsonObject{{"track",i},{"name",_reloadRecipe->tracks[i].anchor.anchorName},{"world",value},{"magazineOwner",_simulationRig->magazineTracks.contains(i)}});
         }
     }
-    result["parts"]=parts;QJsonArray visibility;
+    result["interaction"]=interactionGripState();result["parts"]=parts;QJsonArray visibility;
     if(auto* model=activeModel())for(const auto& [index,original]:_simulationVisibility)if(index.isValid())
         visibility.append(QJsonObject{{"block",model->getBlockNumber(index)},{"flags",model->get<int>(index,"Flags")},{"originalFlags",original}});
     result["magazineRoots"]=visibility;
@@ -575,6 +587,7 @@ QJsonObject ReloadMakerController::exportSimulation() const {
         result["format"]="reload-maker-bolt-action-simulation";result["mechanismProfile"]="manual-bolt-action";
         result["springReturn"]=false;result["boltMotion"]=motion;
     }
+    const auto grips=exportInteractionGrips();if(grips.isEmpty())return {};result["authoredInteractions"]=grips;
     result["sourceRecipe"]=QJsonDocument::fromJson(bytes).object();return result;
 }
 }

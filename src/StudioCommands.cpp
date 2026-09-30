@@ -110,7 +110,7 @@ QJsonObject ReloadMakerController::studioState() const {
         {"body",_bodyCombo->currentData().toString()},{"animationSets",sets},{"animationSet",_animationSetCombo->currentIndex()},
         {"actions",actions},{"action",_activeAction},{"animation",_activeAnimationPath},{"seconds",_playbackTime},{"duration",playbackDuration()},
         {"playing",_playing||_reloadPlaying},{"motionMode",_motionMode->currentIndex()},{"anchors",anchors},
-        {"handPoses",poses},{"partGrips",grips},{"magazineGrabGrips",magazineGrabs},{"magazineEditor",magazineEditorState()},{"recipeWindows",_reloadRecipe?int(_reloadRecipe->windows.size()):0},
+        {"interaction",interactionGripState()},{"handPoses",poses},{"partGrips",grips},{"magazineGrabGrips",magazineGrabs},{"magazineEditor",magazineEditorState()},{"recipeWindows",_reloadRecipe?int(_reloadRecipe->windows.size()):0},
         {"recipeTracks",_reloadRecipe?int(_reloadRecipe->tracks.size()):0},{"status",_window->statusBar()->currentMessage()},
         {"lastError",_lastError},{"project",_sessionPath},{"camera",_window->getGLView()->studioCameraState()},{"nativeApplicationShell",false}};
 }
@@ -152,6 +152,10 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     } else if(method=="workspace") {const int index=p["index"].toInt(-1);require(validWorkspace(index),"Unknown workspace");setWorkspace(index);}
     else if(method=="author_reload_grips") {require(authorReloadGrips(),_lastError);}
     else if(method=="testbed") {require(selectTestbed(p["name"].toString()),_lastError);}
+    else if(method=="interaction_hand") {const auto hand=p["hand"].toString();require(hand=="left"||hand=="right","Specify left or right");require(setInteractionHand(hand=="left"?PoseHand::Left:PoseHand::Right),_lastError);}
+    else if(method=="configure_operating_grip") {require(editOperatingGrip(),_lastError);}
+    else if(method=="use_operating_grip") {require(useOperatingGrip(),_lastError);}
+    else if(method=="mirror_magazine_grip") {require(mirrorMagazineGrip(),_lastError);}
     else if(method=="use_magazine_grip") {
         const auto scope=p["scope"].toString("magazine");require(scope=="magazine"||scope=="weapon_default","Scope must be magazine or weapon_default");
         require(useMagazineGrabGrip(scope=="weapon_default"),_lastError);
@@ -176,6 +180,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
             const float delta=number(p["seconds"]);require(delta>=0&&delta<=30,"Simulation step must be between 0 and 30 seconds");
             _simulationTimer->stop();advanceSimulation(delta);
         } else if(operation=="pull") {
+            require(operatingGrabAvailable(),"The operating grip assignment is invalid for this assembly.");
             const float progress=number(p["progress"]);require(progress>=0&&progress<=1.08f,"Slide pull must be between 0 and 1.08; above 1 releases the catch");
             require(_simulation.action==SimulationAction::Held||_simulation.grab(),"Finish the native action before pulling");
             _simulationTimer->stop();dragSimulation(progress);
@@ -343,7 +348,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
         QString error;QByteArray bytes;const QString kind=p["kind"].toString();QString id;
         if(kind=="slide"){const auto record=exportSlideProfile();require(!record.isEmpty(),"Prepare a Glock simulation with native rig bindings before exporting");bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
         else if(kind=="simulation"){const auto record=exportSimulation();require(!record.isEmpty(),"Prepare a simulation before exporting");bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
-        else if(kind=="reload_bundle"){require(_reloadRecipe.has_value(),"Learn the configured reload first");bytes=encodeReloadBundle(*_reloadRecipe,_partGrips,_mechanisms,_magazineGrabGrips,error,_magazineGrabDefaults);id=_reloadRecipe->id;}
+        else if(kind=="reload_bundle"){require(_reloadRecipe.has_value(),"Learn the configured reload first");bytes=encodeReloadBundle(*_reloadRecipe,_partGrips,_mechanisms,_magazineGrabGrips,error,_magazineGrabDefaults);if(!bytes.isEmpty()){auto bundle=QJsonDocument::fromJson(bytes).object();const auto interactions=exportInteractionGrips();require(!interactions.isEmpty(),"Operating grip assignments could not be resolved for export");if(!interactions["operatingGroups"].toArray().isEmpty()){bundle["version"]=2;bundle["authoredInteractions"]=interactions;}bytes=QJsonDocument(bundle).toJson();}id=_reloadRecipe->id;}
         else if(kind=="reload"){require(_reloadRecipe.has_value(),"No reload recipe");bytes=encodeReloadRecipe(*_reloadRecipe,error);id=_reloadRecipe->id;}
         else if(kind=="grip"){require(_partGripDraft.has_value(),"No grip draft");bytes=encodePartGrip(*_partGripDraft,error);id=_partGripDraft->pose.id;}
         else if(kind=="mechanism"){require(_mechanismDraft.has_value(),"No mechanism draft");bytes=encodeMechanism(*_mechanismDraft,error);id=_mechanismDraft->id;}

@@ -43,7 +43,7 @@ int ReloadMakerController::currentMagazineAnchor() const {
 void ReloadMakerController::rememberMagazineGrip() {
     if(!_partGripDraft||magazineGrabAnchor(_partGripDraft->pose.placement)<0)return;
     auto copy=*_partGripDraft;copy.pose.name=_gripName->text().trimmed();
-    const auto key=magazineGrabKey(copy.weaponRecord,copy.pose.placement.ownerRecord);
+    const auto key=handAssignmentKey(magazineGrabKey(copy.weaponRecord,copy.pose.placement.ownerRecord),copy.pose.hand);
     if(magazineEditorState()["unsaved"].toBool())_magazineGripDrafts[key]=copy;
     else _magazineGripDrafts.remove(key);
 }
@@ -53,9 +53,9 @@ bool ReloadMakerController::editMagazineGrip(const QString& savedId) {
     if(anchor<0||_loadThread||_reloadCapturing||_rebuildTimer->isActive()) {
         setStatus("Wait for the selected magazine to finish loading.",true);return false;
     }
-    rememberMagazineGrip();
+    rememberMagazineGrip();_editingOperating=false;
     const auto part=_handPoseAnchors[anchor].description;
-    const auto weapon=poseRecordKey(currentWeapon()->formId),key=magazineGrabKey(weapon,part.ownerRecord);
+    const auto weapon=poseRecordKey(currentWeapon()->formId),key=handAssignmentKey(magazineGrabKey(weapon,part.ownerRecord),_interactionHand);
     QString error;std::optional<PartGrip> fit;
     if(!savedId.isEmpty()) {
         for(const auto& grip:_partGrips)if(grip.pose.id==savedId)fit=grip;
@@ -63,7 +63,7 @@ bool ReloadMakerController::editMagazineGrip(const QString& savedId) {
             setStatus("Choose a saved fit for this magazine. Use Saved pose to reuse fingers from another part.",true);return false;
         }
     } else if(_magazineGripDrafts.contains(key))fit=_magazineGripDrafts.value(key);
-    else fit=magazineGripFor(weapon,part,_partGrips,_magazineGrabGrips,_magazineGrabDefaults,error);
+    else fit=magazineGripFor(weapon,part,_partGrips,_magazineGrabGrips,_magazineGrabDefaults,error,_interactionHand);
     if(!error.isEmpty()){setStatus(error,true);return false;}
     // Reuse the existing detached-magazine presentation, frozen for hand editing.
     // The magazine's pose remains the reference; gizmos never drive its geometry.
@@ -95,15 +95,16 @@ bool ReloadMakerController::editMagazineGrip(const QString& savedId) {
 QJsonObject ReloadMakerController::magazineEditorState() const {
     const int anchor=currentMagazineAnchor();if(anchor<0||!currentWeapon())return {};
     const auto& part=_handPoseAnchors[anchor].description;
-    const auto weapon=poseRecordKey(currentWeapon()->formId),key=magazineGrabKey(weapon,part.ownerRecord);
-    QString error;const auto fit=magazineGripFor(weapon,part,_partGrips,_magazineGrabGrips,_magazineGrabDefaults,error);
+    const auto weapon=poseRecordKey(currentWeapon()->formId),key=handAssignmentKey(magazineGrabKey(weapon,part.ownerRecord),_interactionHand);
+    QString error;const auto fit=magazineGripFor(weapon,part,_partGrips,_magazineGrabGrips,_magazineGrabDefaults,error,_interactionHand);
     QString name=part.ownerRecord;
     if(const auto* config=configuration())for(const auto& slot:config->entries())if(const auto* mod=config->mod(config->selected(slot.key)))
         if(poseRecordKey(mod->formId).compare(part.ownerRecord,Qt::CaseInsensitive)==0)name=mod->name;
     const bool editing=_partGripDraft&&magazineGrabAnchor(_partGripDraft->pose.placement)==anchor;
     const bool dirty=editing&&(!fit||!sameFit(*_partGripDraft,*fit,_gripName->text().trimmed()));
+    const bool custom=_magazineGrabGrips.contains(key)||(fit&&_magazineGrabGrips.value(magazineGrabKey(weapon,part.ownerRecord))==fit->pose.id);
     return {{"magazine",name},{"ownerRecord",part.ownerRecord},{"anchor",anchor},
-        {"assignment",_magazineGrabGrips.contains(key)?"custom":fit?"default":"none"},
+        {"hand",_interactionHand==PoseHand::Left?"left":"right"},{"assignment",custom?"custom":fit?"default":"none"},
         {"gripId",fit?fit->pose.id:QString()},{"name",fit?fit->pose.name:QString()},
         {"editing",editing},{"unsaved",dirty},{"canSave",editing&&_gripPreviewValid&&!_gripName->text().trimmed().isEmpty()},
         {"preview",_magazineFitPreview},{"error",error.isEmpty()&&editing&&!_gripPreviewValid?_gripError:error}};
@@ -114,7 +115,7 @@ void ReloadMakerController::updateMagazineGripUi() {
     const auto state=magazineEditorState();
     _editMagazineGrip->setEnabled(!state.isEmpty()&&!_loadThread&&!_reloadCapturing);
     const auto weapon=currentWeapon()?poseRecordKey(currentWeapon()->formId).toLower():QString();
-    _useDefaultMagazineGrip->setEnabled(!state.isEmpty()&&_magazineGrabDefaults.contains(weapon));
+    _useDefaultMagazineGrip->setEnabled(!state.isEmpty()&&(_magazineGrabDefaults.contains(handAssignmentKey(weapon,_interactionHand))||_magazineGrabDefaults.contains(weapon)));
     if(state.isEmpty()){_magazineFitStatus->setText("Select a magazine in Loadout to configure its hand.");return;}
     const auto assignment=state["assignment"].toString();
     const auto source=assignment=="custom"?"Custom fit":assignment=="default"?"Weapon default":"No saved fit";
@@ -129,9 +130,11 @@ void ReloadMakerController::updateMagazineGripUi() {
 bool ReloadMakerController::useDefaultMagazineGrip() {
     const int anchor=currentMagazineAnchor();if(anchor<0||!currentWeapon())return false;
     const auto weapon=poseRecordKey(currentWeapon()->formId);
-    if(!_magazineGrabDefaults.contains(weapon.toLower()))return false;
-    const auto key=magazineGrabKey(weapon,_handPoseAnchors[anchor].description.ownerRecord);
+    QString error;if(!magazineGripFor(weapon,_handPoseAnchors[anchor].description,_partGrips,{},_magazineGrabDefaults,error,_interactionHand))return false;
+    const auto key=handAssignmentKey(magazineGrabKey(weapon,_handPoseAnchors[anchor].description.ownerRecord),_interactionHand);
     const auto assignments=_magazineGrabGrips;const auto drafts=_magazineGripDrafts;
+    const auto base=magazineGrabKey(weapon,_handPoseAnchors[anchor].description.ownerRecord);
+    for(const auto& grip:_partGrips)if(grip.pose.id==_magazineGrabGrips.value(base)&&grip.pose.hand==_interactionHand)_magazineGrabGrips.remove(base);
     _magazineGrabGrips.remove(key);_magazineGripDrafts.remove(key);
     _partGripDraft.reset();
     if(!editMagazineGrip()||!saveSession()) {_magazineGrabGrips=assignments;_magazineGripDrafts=drafts;return false;}

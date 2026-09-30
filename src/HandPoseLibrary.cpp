@@ -8,6 +8,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QQuaternion>
+#include <QMatrix4x4>
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QUuid>
@@ -148,6 +149,41 @@ namespace reloadmaker {
         } catch (const std::exception& e) { error = QString::fromUtf8(e.what()); return false; }
     }
 
+    bool mirrorHandPose(const HkxSkeleton& skeleton,const HandPose& source,const Transformf& anchorInWeapon,HandPose& target,QString& error) {
+        error.clear();
+        try {
+            const auto other=source.hand==PoseHand::Left?PoseHand::Right:PoseHand::Left;
+            const auto from=fingerIndices(skeleton,source.hand),to=fingerIndices(skeleton,other);
+            const int sourceHand=skeleton.boneIndex(wrist(source.hand)),targetHand=skeleton.boneIndex(wrist(other));
+            require(sourceHand>=0&&targetHand>=0,"Missing mirrored wrist");
+            // Only bone bases are needed. Reference-pose scale/translation on
+            // unrelated helper bones may not describe a renderable pose.
+            QVector<Transformf> local,reference;for(const auto& b:skeleton.bones){Transformf basis;basis.rotation=normalized(b.referenceLocal.rotation);local.append(basis);}
+            if(!buildPoseGlobals(skeleton,local,reference,error))return false;
+            const auto matrix=[](const Transformf& t){QMatrix4x4 m;m.translate(t.translation.x,t.translation.y,t.translation.z);m.rotate(QQuaternion(t.rotation.w,t.rotation.x,t.rotation.y,t.rotation.z));m.scale(t.scale.x);return m;};
+            QMatrix4x4 reflection;reflection.scale(-1,1,1);
+            const auto mirrored=[&](const Transformf& value,int a,int b) {
+                auto ra=reference[a],rb=reference[b];ra.translation={};rb.translation={};ra.scale=rb.scale={1,1,1};
+                const auto m=reflection*matrix(value)*matrix(ra).inverted()*reflection*matrix(rb);
+                const float scale=value.scale.x;QMatrix3x3 rotation;
+                for(int r=0;r<3;++r)for(int c=0;c<3;++c)rotation(r,c)=m(r,c)/scale;
+                const auto q=QQuaternion::fromRotationMatrix(rotation).normalized();
+                return Transformf{{m(0,3),m(1,3),m(2,3)},{q.x(),q.y(),q.z(),q.scalar()},{scale,scale,scale}};
+            };
+            const auto hand=composed(anchorInWeapon,source.placement.handInAnchor);
+            const auto mirroredHand=mirrored(hand,sourceHand,targetHand);
+            Transformf inverse;require(invertUniformTransform(anchorInWeapon,inverse),"Invalid magazine frame");
+            HandPose result=source;result.hand=other;result.placement.handInAnchor=composed(inverse,mirroredHand);result.placement.handInWeapon=mirroredHand;
+            std::array<Transformf,15> original,converted;
+            for(int i=0;i<15;++i) {
+                original[i]=composed(i%3?original[i-1]:hand,source.fingers[i]);
+                converted[i]=mirrored(original[i],from[i],to[i]);
+                require(invertUniformTransform(i%3?converted[i-1]:mirroredHand,inverse),"Invalid mirrored finger parent");
+                result.fingers[i]=composed(inverse,converted[i]);require(validTransform(result.fingers[i]),"Invalid mirrored finger transform");
+            }
+            require(validTransform(result.placement.handInAnchor),"Invalid mirrored wrist transform");target=std::move(result);return true;
+        }catch(const std::exception& e){error=QString::fromUtf8(e.what());return false;}
+    }
     bool applyHandPoseFingers(const HkxSkeleton& skeleton, const HandPose& pose,
         QVector<Transformf>& locals, QString& error) {
         error.clear();

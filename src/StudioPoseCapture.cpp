@@ -65,6 +65,8 @@ bool ReloadMakerController::useMagazineGrabGrip(bool allMagazines) {
     }
     updatePartGripControls();if(!_gripSave->isEnabled()){setStatus("Place the hand within reach and name the grip before assigning it.",true);return false;}
     PartGrip grip=*_partGripDraft;
+    if(isGlockConfiguration()&&grip.pose.hand!=PoseHand::Left){setStatus("Glock magazines use the left hand.",true);return false;}
+    _interactionHand=grip.pose.hand;
     Transformf weaponInverse;
     if(!invertUniformTransform(_globalPose[_weaponBoneIndex],weaponInverse)){setStatus("The weapon reference is not invertible.",true);return false;}
     const auto handInWeapon=composed(weaponInverse,composed(gripReferenceWorld(),grip.pose.placement.handInAnchor));
@@ -92,9 +94,9 @@ bool ReloadMakerController::useMagazineGrabGrip(bool allMagazines) {
     QString error;if(!_partGripLibrary.save(grip,error)){setStatus(error,true);return false;}
     const auto previousAssignments=_magazineGrabGrips,previousDefaults=_magazineGrabDefaults;
     const auto previousWindows=_reloadRecipe?_reloadRecipe->windows:QVector<ReloadWindow>{};
-    const auto key=magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord);
-    if(!allMagazines||_magazineGrabGrips.contains(key))_magazineGrabGrips[key]=grip.pose.id;
-    if(allMagazines)_magazineGrabDefaults[grip.weaponRecord.toLower()]=grip.pose.id;
+    const auto key=handAssignmentKey(magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord),grip.pose.hand);
+    _magazineGrabGrips[key]=grip.pose.id;
+    if(allMagazines)_magazineGrabDefaults[handAssignmentKey(grip.weaponRecord,grip.pose.hand)]=grip.pose.id;
     if(sameGripAnchor(_partGripDraft->pose.placement,grip.pose.placement))_partGripDraft=grip;
     else {_partGripDraft->pose.id=grip.pose.id;_partGripDraft->pose.name=grip.pose.name;}
     rememberMagazineGrip();
@@ -121,7 +123,7 @@ void ReloadMakerController::resolveMagazineGrabGrip() {
     const auto anchor=simulationMagazineAnchor();
     if(!magazineGrabSupported(anchor))return;
     const auto weapon=poseRecordKey(currentWeapon()->formId);
-    const auto selected=magazineGripFor(weapon,anchor,_partGrips,_magazineGrabGrips,_magazineGrabDefaults,_magazineGrabError);
+    const auto selected=magazineGripFor(weapon,anchor,_partGrips,_magazineGrabGrips,_magazineGrabDefaults,_magazineGrabError,_interactionHand);
     const auto id=selected?selected->pose.id:QString();
     // The normal selector is the active assignment. Historical snapshots are
     // available explicitly in Hands & grips, not mixed with the current fit.
