@@ -11,6 +11,12 @@
 
 namespace reloadmaker
 {
+    struct SoundRecord {
+        std::uint32_t formId{0};
+        QString editorId;
+        QStringList files;
+        float attenuationDb{0};
+    };
     struct AmmoProperty {
         std::uint16_t property{0};
         std::uint8_t valueType{0}, function{0};
@@ -44,6 +50,7 @@ namespace reloadmaker
         QVector<std::uint32_t> defaultObjectMods;
         QVector<std::uint32_t> attachParentSlots;
         std::uint32_t ammo{0};
+        std::uint32_t attackFailSound{0};
         int ammoCapacity{0};
         bool ammoDataKnown{false};
         bool automatic{false};
@@ -76,6 +83,7 @@ namespace reloadmaker
         QString fileName;
         QStringList masters;
         QVector<WeaponRecord> weapons;
+        QVector<SoundRecord> sounds;
         QVector<ObjectModRecord> objectMods;
         QVector<AnimationSubgraphRecord> animationSubgraphs;
         QHash<std::uint32_t, QString> keywordNames;

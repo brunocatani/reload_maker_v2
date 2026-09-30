@@ -194,7 +194,7 @@ def open_project(path: str, expected_revision: int) -> dict:
 
 @mcp.tool()
 def export_authored_record(kind: str, expected_revision: int) -> dict:
-    """Export hand/grip/mechanism/reload/simulation, slide or reload_bundle to the local exports folder. slide retains every closing-stroke sample and the native rig paths for DIAMOND. reload_bundle embeds the native recipe, assigned grips, their part definitions and magazine-grab bindings; unresolved references reject export. Never deploys."""
+    """Export hand/grip/mechanism/reload/simulation, slide, sounds or reload_bundle to the local exports folder. sounds exports the selected weapon/reload set's saved physical cues and original descriptor identities. slide retains every closing-stroke sample and the native rig paths for DIAMOND. reload_bundle embeds the native recipe, assigned grips, their part definitions and magazine-grab bindings; unresolved references reject export. Never deploys."""
     return command('export',{'kind':kind},expected_revision)
 
 @mcp.tool()
@@ -219,6 +219,21 @@ def simulate_weapon(operation: str, expected_revision: int, progress: float | No
 def set_interaction_hand(hand: str, expected_revision: int) -> dict:
     """Choose left (right firing grip) or right (left support grip). Glock remains left-only. Finish the current grab first."""
     return command('interaction_hand',{'hand':hand},expected_revision)
+
+@mcp.tool()
+def get_sound_state() -> dict:
+    """Read imported physical cues, original descriptor identities, playback counters and audio errors."""
+    return command('sound_state')
+
+@mcp.tool()
+def configure_sound(operation: str, expected_revision: int, id: str = '', record: str | None = None,
+                    trigger: str | None = None, progress: float | None = None, gain: float | None = None,
+                    enabled: bool | None = None) -> dict:
+    """Edit, play, stop, save or mute original reload sounds. Movement progress is 0..1; gain 0..2. Save persists this weapon/reload set."""
+    params={'operation':operation,'id':id}
+    for key,value in {'record':record,'trigger':trigger,'progress':progress,'gain':gain,'enabled':enabled}.items():
+        if value is not None:params[key]=value
+    return command('sound',params,expected_revision)
 
 @mcp.tool()
 def configure_operating_grip(expected_revision: int) -> dict:

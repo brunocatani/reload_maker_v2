@@ -54,7 +54,7 @@ void ReloadMakerController::createSimulationUi() {
     _simulationStatus->setTextFormat(Qt::RichText);layout->addWidget(_simulationStatus);
     const auto button=[&](const QString& text,const QString& action) {
         auto* b=new QPushButton(text,panel);b->setMinimumHeight(36);
-        connect(b,&QPushButton::clicked,this,[this,action]{if(action!="fire"||(!isRifleConfiguration()&&!isBoltActionConfiguration()))runSimulationAction(action);});return b;
+        connect(b,&QPushButton::clicked,this,[this,action]{if(action!="fire")runSimulationAction(action);});return b;
     };
     // Primary weapon actions first, then magazine handling: everything used
     // repeatedly stays above the fold.
@@ -62,7 +62,7 @@ void ReloadMakerController::createSimulationUi() {
     _simulationFire=button("FIRE","fire");_simulationFire->setObjectName("PrimaryButton");
     connect(_simulationFire,&QPushButton::pressed,this,[this]{setSimulationTrigger(true);});
     connect(_simulationFire,&QPushButton::released,this,[this]{setSimulationTrigger(false);});
-    connect(qGuiApp,&QGuiApplication::applicationStateChanged,this,[this](Qt::ApplicationState state){if(state!=Qt::ApplicationActive)_simulation.triggerHeld=false;});
+    connect(qGuiApp,&QGuiApplication::applicationStateChanged,this,[this](Qt::ApplicationState state){if(state!=Qt::ApplicationActive){setSimulationTrigger(false);_audio.stop();}});
     _simulationSlideRelease=button("SLIDE RELEASE","slide_release");
     _simulationReload=button("AUTOMATIC RELOAD","reload");
     _simulationReset=button("RESET","reset");
@@ -162,7 +162,7 @@ bool ReloadMakerController::selectSimulationClip(bool fire,bool reload) {
     return _clip.valid();
 }
 void ReloadMakerController::prepareSimulation() {
-    if(_workspace!=5||_loadThread||_reloadCapturing||!_reloadRecipe){updateSimulationControls();return;}
+    if(!simulationWorkspace(_workspace)||_loadThread||_reloadCapturing||!_reloadRecipe){updateSimulationControls();return;}
     if(_simulationActive)return;
     SimulationRig rig;_simulationError.clear();
     if(!buildSimulationRig(*_reloadRecipe,rig,_simulationError,isBoltActionConfiguration()?WeaponMechanism::BoltAction:isM1AConfiguration()?WeaponMechanism::M1A:isAr15Configuration()?WeaponMechanism::Ar15:WeaponMechanism::PistolSlide)){updateSimulationControls();return;}
@@ -219,11 +219,14 @@ void ReloadMakerController::prepareSimulation() {
     prepareMagazineInteraction();
     if(isGlockConfiguration())_interactionHand=PoseHand::Left;
     resolveMagazineGrabGrip();resolveOperatingGrip();
+    prepareSounds();
     (void)applyPose(0);
     _magazineViewport->setActive(true);
     _simulationDrive->clearCurve();_simulationDrive->setActive(true,true);updateSimulationControls();++_revision;
 }
 void ReloadMakerController::stopSimulation() {
+    _simulationTriggerDown=false;
+    _audio.stop();_soundTracking=false;
     _magazineFitPreview=false;_operatingGrip.reset();_operatingGripBinding=-1;
     if(_simulationTimer)_simulationTimer->stop();
     _simulationActive=false;_simulation.reset();
@@ -347,10 +350,10 @@ bool ReloadMakerController::applySimulationPose() {
     return true;
 }
 void ReloadMakerController::runSimulationAction(const QString& action) {
-    if(!_simulationActive&&_workspace==OperateWorkspace)prepareSimulation();
+    if(!_simulationActive&&simulationWorkspace(_workspace))prepareSimulation();
     if(!_simulationActive){setStatus(_simulationError.isEmpty()?"Wait for the simulation source to be ready.":_simulationError,true);return;}
     _simulationError.clear();bool accepted=false;
-    if(action=="reset") {_simulation.reset();_simulationTimer->stop();_simulationDrive->clearCurve();accepted=selectSimulationClip(false,false);}
+    if(action=="reset") {_simulation.reset();resetSoundTracking();_simulationTimer->stop();_simulationDrive->clearCurve();accepted=selectSimulationClip(false,false);}
     else if(action=="drop_magazine")accepted=_simulation.dropMagazine();
     else if(action=="slide_release"||action=="bolt_release") {
         accepted=_simulation.slideRelease();
@@ -366,27 +369,34 @@ void ReloadMakerController::runSimulationAction(const QString& action) {
         if(accepted&&_simulation.magazine.animated()){_simulationClock.restart();_simulationTimer->start();}
     }
     else if(action=="fire"||action=="reload") {
+        if(action=="fire"&&!_simulation.chambered&&_simulation.action==SimulationAction::Idle&&_simulation.inputProgress()<=.001f&&!_simulation.magazine.busy()) {
+            emitSoundEvent("dry_fire");refreshSoundsUi();setStatus("Dry fire · chamber empty");++_revision;return;
+        }
         const auto previous=_simulation;
         accepted=action=="fire"?_simulation.fire():_simulation.reload(_glockReloadRackAt,_glockReloadFeedAt);
         if(accepted&&!selectSimulationClip(action=="fire",action=="reload")){_simulation=previous;accepted=false;}
-        if(accepted){_simulation.triggerHeld=false;_simulationDrive->clearCurve();_simulationClock.restart();_simulationTimer->start();}
+        if(accepted){_simulation.triggerHeld=false;_simulationDrive->clearCurve();resetSoundTracking(false);playSourceSounds(_clip,-.0001f,0);_simulationClock.restart();_simulationTimer->start();}
     }
     if(!accepted){setStatus(!_simulationAmmo.valid()?_simulationAmmo.error:isBoltActionConfiguration()?"Cycle the bolt fully back and forward to load and lock the next round.":action=="fire"&&!_simulation.chambered?"Chamber empty. Insert a magazine and cycle or release the slide.":"Finish the current interaction; the slide must be closed and chamber loaded to fire.",true);return;}
     if(!applyPose(simulationPoseSeconds())){_simulationError=_lastError;stopSimulation();updateSimulationControls();return;}
+    updateSimulationSounds();
     applySimulationVisibility();updateSimulationControls();++_revision;
     setStatus(action=="drop_magazine"?"Magazine removed. Grab a fresh magazine and guide it into the well.":actionName(_simulation.action,isRifleConfiguration(),isBoltActionConfiguration()));
 }
 void ReloadMakerController::tickSimulation() {
-    if(!_simulationActive||_workspace!=5){_simulationTimer->stop();return;}
+    if(!_simulationActive||!simulationWorkspace(_workspace)){_simulationTimer->stop();return;}
     const float delta=float(_simulationClock.nsecsElapsed())/1e9f;_simulationClock.restart();
     advanceSimulation(delta);
 }
 void ReloadMakerController::advanceSimulation(float delta) {
+    const auto before=_simulation;
+    if(before.action==SimulationAction::Reload)playSourceSounds(_clip,before.seconds,std::min(before.seconds+delta,_clip.durationSeconds));
     const bool finished=_simulation.tick(delta,_clip.durationSeconds);
     if(_magazineRail)_simulation.magazine.tick(*_magazineRail,delta);
     if(finished&&!selectSimulationClip(false,false)){stopSimulation();updateSimulationControls();return;}
     if(!applyPose(simulationPoseSeconds())){stopSimulation();updateSimulationControls();return;}
     _playbackTime=simulationPoseSeconds();applySimulationVisibility();_simulationDrive->setTime(_simulation.inputProgress());
+    updateSimulationSounds();
     if(_simulation.action==SimulationAction::Idle&&!_simulation.magazine.animated())_simulationTimer->stop();
     updateSimulationControls();
 }
@@ -428,11 +438,13 @@ void ReloadMakerController::dragSimulation(float progress) {
     if(!_simulationActive)return;
     _simulation.drag(progress);
     if(!applyPose(0)){_simulationError=_lastError;stopSimulation();}
+    updateSimulationSounds();
     applySimulationVisibility();updateSimulationControls();
 }
 void ReloadMakerController::releaseSimulation(bool cancel) {
     if(!_simulationActive)return;
     _simulation.release(cancel,_simulationSpring->isChecked());
+    if(cancel)resetSoundTracking();
     if(_simulation.action==SimulationAction::Returning){_simulationClock.restart();_simulationTimer->start();}
     if(!applyPose(0)){_simulationError=_lastError;stopSimulation();}
     updateSimulationControls();++_revision;
@@ -465,7 +477,7 @@ void ReloadMakerController::updateSimulationControls() {
         _simulationSource->setText("Reload source · "+relative+" · "+(bolt?"manual bolt action":_simulationAmmo.automatic?"automatic receiver":"semi-automatic receiver"));
         _simulationSource->setToolTip(path);
     }
-    _simulationFire->setEnabled(_simulationActive&&(_simulation.canFire()||(ar&&_simulation.action==SimulationAction::Fire)));
+    _simulationFire->setEnabled(_simulationActive&&(_simulation.canFire()||(ar&&_simulation.action==SimulationAction::Fire)||(!_simulation.chambered&&_simulation.action==SimulationAction::Idle&&_simulation.inputProgress()<=.001f&&!busy)));
     _simulationSlideRelease->setEnabled(_simulationActive&&_simulation.ammoKnown()&&!busy&&_simulation.action==SimulationAction::Idle&&_simulation.slide>.001f);
     _simulationReload->setEnabled(_simulationActive&&_simulation.ammoKnown()&&!busy&&_simulation.action!=SimulationAction::Held);
     _simulationDrop->setEnabled(_simulationActive&&!busy&&_simulation.action!=SimulationAction::Held&&_simulation.magazine.visible());
@@ -475,7 +487,7 @@ void ReloadMakerController::updateSimulationControls() {
     _magazineGrab->setEnabled(magazineReady&&_simulation.ammoKnown()&&!_simulation.magazine.seated());
     _simulationReset->setEnabled(_simulationActive);
     if(!_simulationActive) {
-        const QString idle=_reloadCapturing?"Learning the native reload…":_clip.valid()&&_workspace==OperateWorkspace&&_reloadRecipe?"Press any action to operate the weapon.":"Preparing native part motion…";
+        const QString idle=_reloadCapturing?"Learning the native reload…":_clip.valid()&&simulationWorkspace(_workspace)&&_reloadRecipe?"Press any action to operate the weapon.":"Preparing native part motion…";
         _simulationStatus->setText(_simulationError.isEmpty()?idle:_simulationError);_simulationParts->clear();return;
     }
     // Compact state card: the numbers the user acts on, then the phase text.
@@ -588,6 +600,7 @@ QJsonObject ReloadMakerController::exportSimulation() const {
         result["springReturn"]=false;result["boltMotion"]=motion;
     }
     const auto grips=exportInteractionGrips();if(grips.isEmpty())return {};result["authoredInteractions"]=grips;
+    const auto sounds=exportSounds();if(sounds.isEmpty())return {};result["sounds"]=sounds;
     result["sourceRecipe"]=QJsonDocument::fromJson(bytes).object();return result;
 }
 }

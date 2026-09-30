@@ -268,9 +268,10 @@ namespace reloadmaker
         if (_pendingSession.isEmpty() && !saveSession()) { return; }
         struct Result {
             PreparedPackage package;
-            ResourceArchive resources, meshes, animations;
+            ResourceArchive resources, meshes, animations, sounds;
             QVector<PluginContent> plugins;
             QHash<QString,QString> referenceNames;
+            QHash<QString,SoundCue> referenceSounds;
             QString data, error;
             bool cancelled{false};
         };
@@ -291,6 +292,7 @@ namespace reloadmaker
                     if (cancelled()) { result->cancelled = true; return; }
                     progress(QStringLiteral("Indexing reference animations…"));
                     if (!result->animations.open(QDir(data).filePath("Fallout4 - Animations.ba2"), result->error)) { return; }
+                    QString audioError;(void)result->sounds.open(QDir(data).filePath("Fallout4 - Sounds.ba2"),audioError);
                 } else { result->data.clear(); }
                 if (!path.isEmpty() && !cancelled()) {
                     progress(QStringLiteral("Preparing package…"));
@@ -311,6 +313,7 @@ namespace reloadmaker
                         if(!QFileInfo::exists(file))continue;
                         progress("Reading ammunition and keyword catalog: "+master);
                         const auto catalog=EspReader::read(file,cancelled,true);
+                        for(const auto& sound:catalog.sounds){SoundCue cue;cue.record=recordIdentity(catalog,sound.formId);cue.editorId=sound.editorId;cue.files=sound.files;cue.attenuationDb=sound.attenuationDb;result->referenceSounds.insert(cue.record.toLower(),cue);}
                         for(auto it=catalog.ammoNames.cbegin();it!=catalog.ammoNames.cend();++it)result->referenceNames.insert(recordIdentity(catalog,it.key()).toLower(),it.value());
                         for(auto it=catalog.keywordNames.cbegin();it!=catalog.keywordNames.cend();++it)result->referenceNames.insert(recordIdentity(catalog,it.key()).toLower(),it.value());
                     }
@@ -333,9 +336,11 @@ namespace reloadmaker
             _packageResources = std::move(result->resources);
             _gameMeshes = std::move(result->meshes);
             _gameAnimations = std::move(result->animations);
+            _gameSounds = std::move(result->sounds);
             _gameData = result->data;
             _plugins = std::move(result->plugins);
             _referenceNames = std::move(result->referenceNames);
+            _referenceSounds = std::move(result->referenceSounds);
             _packageText = _package.sourcePath;
             _gameDataText = _gameData;
             QSettings settings;
@@ -1084,6 +1089,7 @@ namespace reloadmaker
 
     void ReloadMakerController::clearAssetCaches()
     {
+        _audio.clear();_soundTracking=false;_soundCatalog.clear();_referenceSounds.clear();_soundProfile={};_savedSounds.clear();_soundsDirty=false;
         invalidateReloadCapture();
         _referenceNames.clear();
         _weaponFitCorners.clear();
@@ -2201,6 +2207,7 @@ namespace reloadmaker
         _stateBaselineLocalPose = std::move(baselineLocal);
         _stateBaselineAnimationPath = baselinePath;
         _clip = std::move(clip);
+        if(!_simulationActive)_audio.stop();cacheSourceSounds(_clip);
         _activeAction = item->text();
         _activeAnimationPath = path;
         const auto duration = [](float value) {
@@ -2265,6 +2272,7 @@ namespace reloadmaker
         const qint64 elapsedNanoseconds = _playbackClock.nsecsElapsed();
         _playbackClock.restart();
         const float elapsedSeconds = static_cast<float>(elapsedNanoseconds) / 1'000'000'000.0f;
+        const float soundFrom=_playbackTime;
         _playbackTime += elapsedSeconds * _playbackRate;
         const float duration = playbackDuration();
         if (_playbackTime >= duration) {
@@ -2278,6 +2286,8 @@ namespace reloadmaker
             }
         }
         if (!applyPose(_playbackTime)) { return; }
+        if(_playbackTime>=soundFrom)playSourceSounds(_clip,soundFrom,_playbackTime);
+        else {playSourceSounds(_clip,soundFrom,duration);playSourceSounds(_clip,-.0001f,_playbackTime);}
         updateTimelineText();
         refreshFingerEditor();
     }

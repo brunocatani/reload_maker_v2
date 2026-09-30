@@ -72,7 +72,7 @@ void ReloadMakerController::createUi() {
     // Stable workspace ids are persisted in projects and used by MCP clients;
     // display order is independent of the id.
     const std::pair<QString, int> workspaces[]{{"Operate", OperateWorkspace},
-        {"Hands && grips", GripsWorkspace}, {"Reload phases", PhasesWorkspace}};
+        {"Hands && grips", GripsWorkspace}, {"Reload phases", PhasesWorkspace},{"Sounds",SoundsWorkspace}};
     for (const auto& [title, id] : workspaces) {
         auto* button = new QPushButton(title, header);
         button->setCheckable(true);
@@ -107,6 +107,10 @@ void ReloadMakerController::createUi() {
         });
     }
     exportRecords->setMenu(exportMenu);
+    connect(exportMenu->addAction("Physical reload sounds"),&QAction::triggered,this,[this]{
+        try{const auto result=executeCommand({{"method","export"},{"params",QJsonObject{{"kind","sounds"}}}});setStatus("Exported · "+result["path"].toString());}
+        catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}
+    });
     auto* diagnostics = new QPushButton("Diagnostics", header);
     diagnostics->setCheckable(true);
     for (QWidget* b : std::initializer_list<QWidget*>{openProject, saveProject, importRecords, diagnostics}) header->addWidget(b);
@@ -304,6 +308,7 @@ void ReloadMakerController::createUi() {
         createHandPoseUi();
         createReloadUi();
         createSimulationUi();
+        createSoundsUi();
 
 
     _handPoseDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
@@ -517,7 +522,7 @@ void ReloadMakerController::refreshWeaponPicker() {
 }
 
 bool ReloadMakerController::validWorkspace(int workspace) {
-    return workspace == GripsWorkspace || workspace == PhasesWorkspace || workspace == OperateWorkspace;
+    return workspace == GripsWorkspace || workspace == PhasesWorkspace || simulationWorkspace(workspace);
 }
 
 bool ReloadMakerController::mechanismPageActive() const {
@@ -529,13 +534,13 @@ void ReloadMakerController::setWorkspace(int workspace) {
     if(_magazineFitPreview&&workspace!=GripsWorkspace){rememberMagazineGrip();stopSimulation();}
     // Operate replaces clips and poses freely; an in-progress authoring grip is
     // parked while it is open and returned when leaving (as Reload phases does).
-    if (_workspace == OperateWorkspace && workspace != OperateWorkspace) {
+    if (simulationWorkspace(_workspace) && !simulationWorkspace(workspace)) {
         if(_magazineFitPreview&&workspace==GripsWorkspace) {
             _simulationTimer->stop();_magazineViewport->setActive(false);
             _simulationDrive->setActive(false,false);
         } else stopSimulation();
         _partGripDraft = _operateSuspendedGrip; _operateSuspendedGrip.reset();
-    } else if (_workspace != OperateWorkspace && workspace == OperateWorkspace) {
+    } else if (!simulationWorkspace(_workspace) && simulationWorkspace(workspace)) {
         _operateSuspendedGrip = _reloadWorkspaceActive ? _suspendedAuthoringGrip : _partGripDraft;
         if (_reloadWorkspaceActive) _suspendedAuthoringGrip.reset();
         _partGripDraft.reset();
@@ -549,6 +554,7 @@ void ReloadMakerController::setWorkspace(int workspace) {
     _pages->setCurrentIndex(phases ? kReloadPage : kLoadoutPage);
     _packageDock->setWindowTitle(phases ? "RELOAD PHASES" : "LOADOUT");
     _simulationDock->setVisible(workspace == OperateWorkspace);
+    _soundsDock->setVisible(workspace==SoundsWorkspace);
     _reloadGraphDock->setVisible(phases);
     _reloadInspectorDock->setVisible(phases);
     _handPoseDock->setVisible(workspace == GripsWorkspace);
@@ -561,7 +567,7 @@ void ReloadMakerController::setWorkspace(int workspace) {
     refreshFingerEditor();
     // Operate needs the learned reload for its rig; learning no longer depends
     // on the Reload phases page being visible.
-    if (workspace == OperateWorkspace) { startReloadCapture(); prepareSimulation(); }
+    if (simulationWorkspace(workspace)) { if(!_simulationActive){startReloadCapture();prepareSimulation();}refreshSoundsUi(); }
     ++_revision;
 }
 

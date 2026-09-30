@@ -119,7 +119,7 @@ namespace reloadmaker {
             _gameDataText = _gameData;
             _package = { _gameData, {}, {}, false };
             _packageResources = std::move(result->resources);
-            _gameMeshes.close(); _gameAnimations.close();
+            _gameMeshes.close(); _gameAnimations.close();_gameSounds.close();
             _plugins.clear(); _plugins.append(std::move(result->catalog));
             _libraryPlugins = result->plugins;
             configureResourcePaths();

@@ -88,6 +88,7 @@ void ReloadMakerController::prepareMagazineInteraction() {
 void ReloadMakerController::updateMagazinePose() {
     if(!_simulationActive)return;
     if(!applyPose(0)){_simulationError=_lastError;stopSimulation();}
+    updateSimulationSounds();
     applySimulationVisibility();updateSimulationControls();++_revision;
 }
 void ReloadMakerController::moveFreeMagazine(QVector3D offset) {
@@ -101,6 +102,6 @@ void ReloadMakerController::moveMagazineRail(float distance) {
     if(!before&&_simulation.magazine.seated())setStatus("Full magazine seated.");
 }
 void ReloadMakerController::cancelMagazine() {
-    _simulation.cancelMagazine();updateMagazinePose();setStatus("Magazine placement cancelled.");
+    _simulation.cancelMagazine();resetSoundTracking();updateMagazinePose();setStatus("Magazine placement cancelled.");
 }
 }

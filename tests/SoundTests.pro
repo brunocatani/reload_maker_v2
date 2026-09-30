@@ -1,0 +1,9 @@
+QT = core
+CONFIG += console c++20 release
+CONFIG -= app_bundle debug_and_release
+TEMPLATE = app
+TARGET = SoundTests
+LIBFO = $$NIFSKOPE_SOURCE_DIR/lib/libfo76utils/src
+INCLUDEPATH += ../src $$LIBFO
+SOURCES += SoundTests.cpp ../src/SoundProfile.cpp ../src/EspReader.cpp ../src/LoadOrderLibrary.cpp ../src/PackageSource.cpp ../src/StudioPaths.cpp
+SOURCES += $$LIBFO/ba2file.cpp $$LIBFO/filebuf.cpp $$LIBFO/common.cpp $$LIBFO/zlib.cpp ../src/LibraryResources.cpp

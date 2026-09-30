@@ -17,6 +17,8 @@
 #include "WeaponAmmunition.h"
 #include "ActionCatalog.h"
 #include "BoltCycle.h"
+#include "SoundProfile.h"
+#include "AudioPreview.h"
 
 #include <QHash>
 #include <QCache>
@@ -141,7 +143,8 @@ namespace reloadmaker
         // Stable ids: persisted in projects and used by MCP clients (DIAMOND's
         // importer uses OperateWorkspace = 5). Retired ids (0 Source, 1 Preview,
         // 3 Mechanisms) are rejected; projects saved on them reopen in Operate.
-        enum Workspace : int { GripsWorkspace = 2, PhasesWorkspace = 4, OperateWorkspace = 5 };
+        enum Workspace : int { GripsWorkspace = 2, PhasesWorkspace = 4, OperateWorkspace = 5, SoundsWorkspace = 6 };
+        static bool simulationWorkspace(int value) { return value==OperateWorkspace||value==SoundsWorkspace; }
         static constexpr int kLoadoutPage = 0, kReloadPage = 1;
         void createSourceBar(QToolBar* bar);
         void refreshSourceBar();
@@ -152,7 +155,43 @@ namespace reloadmaker
         void createUi();
         void setWorkspace(int workspace);
         void previewNativeClip(int row);
-        [[nodiscard]] bool reloadCaptureAllowed() const noexcept { return _reloadWorkspaceActive || _workspace == OperateWorkspace; }
+        [[nodiscard]] bool reloadCaptureAllowed() const noexcept { return _reloadWorkspaceActive || simulationWorkspace(_workspace); }
+        void createSoundsUi();
+        void prepareSounds();
+        void refreshSoundsUi();
+        void editSoundCue();
+        bool saveSounds();
+        bool playSoundCue(int index);
+        void emitSoundEvent(const QString& event);
+        void updateSimulationSounds();
+        void resetSoundTracking(bool stop=true);
+        void playSourceSounds(const HkxClip&,float from,float to);
+        void cacheSourceSounds(const HkxClip&);
+        bool cacheSound(const SoundCue&);
+        bool playSound(const SoundCue&);
+        QJsonObject soundState() const;
+        QJsonObject exportSounds() const;
+        QString soundProfileKey() const;
+        QHash<QString,SoundCue> _referenceSounds,_soundCatalog;
+        QHash<QString,SoundProfile> _savedSounds;
+        SoundProfile _soundProfile;
+        SoundCueGate _soundGate;
+        AudioPreview _audio;
+        QString _soundError,_lastSound;
+        quint64 _soundEventCount{0};
+        bool _soundTracking{false},_soundsMuted{false},_soundsDirty{false},_editingSoundUi{false};
+        bool _simulationTriggerDown{false};
+        WeaponSimulation _soundPrevious;
+        QDockWidget* _soundsDock{};
+        QListWidget* _soundCueList{};
+        QComboBox* _soundChoice{};
+        QComboBox* _soundTrigger{};
+        QDoubleSpinBox* _soundProgress{};
+        QDoubleSpinBox* _soundGain{};
+        QCheckBox* _soundEnabled{};
+        QCheckBox* _soundMute{};
+        QLabel* _soundInfo{};
+        QLabel* _soundStatus{};
         void createFingerEditor();
         void refreshFingerEditor();
         void editFinger(int joint, const Quaternionf& rotation);
@@ -667,6 +706,7 @@ namespace reloadmaker
         ResourceArchive _packageResources;
         ResourceArchive _gameMeshes;
         ResourceArchive _gameAnimations;
+        ResourceArchive _gameSounds;
         QVector<PluginContent> _plugins;
         QVector<WeaponSelection> _weaponSelections;
         mutable QHash<int, WeaponConfiguration> _configurations;

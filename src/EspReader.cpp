@@ -154,8 +154,8 @@ namespace reloadmaker
             }
             // A full Data library includes the base ESM. Skip irrelevant payloads
             // before decompression/copying, while still checking record bounds.
-            if ((state.referenceCatalogOnly && type!="TES4" && type!="AMMO" && type!="KYWD") ||
-                (type != "TES4" && type != "WEAP" && type != "OMOD" && type != "KYWD" && type != "RACE" && type!="AMMO")) {
+            if ((state.referenceCatalogOnly && type!="TES4" && type!="AMMO" && type!="KYWD" && type!="SNDR") ||
+                (type != "TES4" && type != "WEAP" && type != "OMOD" && type != "KYWD" && type != "RACE" && type!="AMMO" && type!="SNDR")) {
                 return dataStart + static_cast<qsizetype>(dataSize);
             }
             QByteArray recordData = file.mid(dataStart, static_cast<qsizetype>(dataSize));
@@ -452,6 +452,9 @@ namespace reloadmaker
                         pending.weapon.ammo=readLittle<std::uint32_t>(d->data,0);
                         pending.weapon.ammoCapacity=readLittle<std::uint16_t>(d->data,52);
                         pending.weapon.automatic=(readLittle<std::uint32_t>(d->data,48)&0x8000u)!=0;
+                        // FO4 DNAM is packed: animation type and damage leave
+                        // the attack-fail SNDR unaligned at byte 85 (xEdit).
+                        if(d->data.size()>=89)pending.weapon.attackFailSound=readLittle<std::uint32_t>(d->data,85);
                         pending.weapon.ammoDataKnown=true;
                     }
                     if (const Subrecord* keywords = firstSubrecord(
@@ -465,6 +468,12 @@ namespace reloadmaker
                         pending.weapon.attachParentSlots = formIdArray(parentSlots->data);
                     }
                     pendingWeapons.append(std::move(pending));
+                } else if(record.type=="SNDR") {
+                    SoundRecord sound; sound.formId=record.formId;sound.editorId=textSubrecord(record,"EDID",false);
+                    for(const auto& sub:record.subrecords)if(sub.type=="ANAM")sound.files.append(decodeText(sub.data));
+                    // Standard SNDR BNAM: frequency bytes, priority, attenuation (hundredths dB).
+                    if(const auto* b=firstSubrecord(record,"BNAM");b&&b->data.size()>=6)sound.attenuationDb=readLittle<std::uint16_t>(b->data,4)/100.f;
+                    content.sounds.append(std::move(sound));
                 } else if(record.type=="AMMO") {
                     QString label=textSubrecord(record,"FULL",localized);
                     if(label.isEmpty()||label.startsWith("String "))label=textSubrecord(record,"EDID",false);
@@ -519,6 +528,7 @@ namespace reloadmaker
             content.diagnostics.append(QStringLiteral("Plugin parse failed: %1")
                                            .arg(QString::fromUtf8(exception.what())));
             content.weapons.clear();
+            content.sounds.clear();
             content.objectMods.clear();
             content.animationSubgraphs.clear();
             content.keywordNames.clear();

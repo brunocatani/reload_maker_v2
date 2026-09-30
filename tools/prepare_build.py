@@ -136,5 +136,6 @@ pro += 'FORMS = src/ui/checkablemessagebox.ui\n'
 pro += 'SOURCES += ' + ' '.join(p.as_posix() for p in (project/'src').glob('*.cpp')) + '\n'
 pro += 'HEADERS += ' + ' '.join(p.as_posix() for p in (project/'src').glob('*.h')) + '\n'
 pro += f'INCLUDEPATH += {app}/src\nDEFINES += RELOAD_MAKER_V2\n'
+pro += 'win32:LIBS += -lxaudio2_8 -lole32\n'
 write('NifSkope.pro', pro)
 (project/'local/native-build-manifest.json').write_text(json.dumps({'nativeSources':native,'excludedApplicationSources':removed},indent=2))

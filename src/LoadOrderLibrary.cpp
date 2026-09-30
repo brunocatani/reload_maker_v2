@@ -159,6 +159,7 @@ namespace reloadmaker {
         QHash<QString, std::uint32_t> identities;
         QSet<QString> loaded;
         QHash<std::uint32_t, WeaponRecord> weapons;
+        QHash<std::uint32_t, SoundRecord> sounds;
         QHash<std::uint32_t, ObjectModRecord> mods;
         QHash<std::uint32_t, AnimationSubgraphRecord> graphs;
         try {
@@ -190,12 +191,13 @@ namespace reloadmaker {
                 const auto winner = [&](std::uint32_t id) { result.origins[id].winner = plugin.fileName; };
                 for (const auto raw : plugin.deletedRecords) {
                     const auto id = resolve(raw);
-                    weapons.remove(id); mods.remove(id); graphs.remove(id); result.keywordNames.remove(id);result.nodeRemaps.remove(id);result.ammoNames.remove(id); winner(id);
+                    weapons.remove(id); sounds.remove(id);mods.remove(id); graphs.remove(id); result.keywordNames.remove(id);result.nodeRemaps.remove(id);result.ammoNames.remove(id); winner(id);
                 }
                 for (auto weapon : plugin.weapons) {
                     weapon.formId = resolve(weapon.formId);
                     remap(weapon.keywords); remap(weapon.defaultObjectMods); remap(weapon.attachParentSlots);
                     weapon.ammo=resolve(weapon.ammo);
+                    weapon.attackFailSound=resolve(weapon.attackFailSound);
                     winner(weapon.formId); weapons.insert(weapon.formId, std::move(weapon));
                 }
                 for (auto mod : plugin.objectMods) {
@@ -215,6 +217,7 @@ namespace reloadmaker {
                     result.nodeRemaps.remove(id);
                     if(plugin.nodeRemaps.contains(it.key()))result.nodeRemaps.insert(id,plugin.nodeRemaps.value(it.key()));
                 }
+                for(auto sound:plugin.sounds){sound.formId=resolve(sound.formId);winner(sound.formId);sounds.insert(sound.formId,std::move(sound));}
                 for(auto it=plugin.ammoNames.cbegin();it!=plugin.ammoNames.cend();++it){const auto id=resolve(it.key());winner(id);result.ammoNames.insert(id,it.value());}
                 loaded.insert(plugin.fileName.toLower());
                 for (const auto& diagnostic : plugin.diagnostics) {
@@ -225,6 +228,7 @@ namespace reloadmaker {
                 }
             }
             result.weapons = weapons.values(); result.objectMods = mods.values(); result.animationSubgraphs = graphs.values();
+            result.sounds=sounds.values();
             const auto byId = [](const auto& a, const auto& b) { return a.formId < b.formId; };
             std::sort(result.weapons.begin(), result.weapons.end(), byId);
             std::sort(result.objectMods.begin(), result.objectMods.end(), byId);

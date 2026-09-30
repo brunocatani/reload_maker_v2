@@ -84,7 +84,8 @@ float ReloadMakerController::simulationPoseSeconds() const {
 }
 
 void ReloadMakerController::setSimulationTrigger(bool pressed) {
-    if(!isRifleConfiguration()&&!isBoltActionConfiguration())return;
+    if(pressed&&_simulationTriggerDown)return;
+    _simulationTriggerDown=pressed;
     if(!pressed){_simulation.triggerHeld=false;return;}
     if(_simulation.action==SimulationAction::Fire){_simulation.triggerHeld=_simulationAmmo.automatic;return;}
     runSimulationAction("fire");

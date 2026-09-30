@@ -263,7 +263,7 @@ namespace reloadmaker {
             _pendingReloadDraft = {};
         }
         refreshReloadWindows();if(!recipe.windows.isEmpty()){if(_reloadWorkspaceActive)selectReloadWindow(0);}else _reloadSummary->setText("This base reload contains no measurable weapon-part movement. No substitute animation was used.");
-        if(_workspace==5)prepareSimulation();
+        if(simulationWorkspace(_workspace))prepareSimulation();
     }
     void ReloadMakerController::refreshReloadWindows()
     {
@@ -371,7 +371,7 @@ namespace reloadmaker {
         if(!_reloadRecipe||!_reloadWorkspaceActive){_reloadPreviewTimer->stop();return;}
         const float delta=float(_reloadClock.nsecsElapsed())/1e9f;_reloadClock.restart();
         if(_reloadReturning&&_reloadWindow>=0){const float start=_reloadRecipe->duration*_reloadRecipe->windows[_reloadWindow].first/(_reloadRecipe->frames-1);seekReload(std::max(start,_playbackTime-delta));if(_playbackTime<=start)_reloadReturning=false;}
-        else if(_reloadPlaying){seekReload(_playbackTime+delta);if(_reloadRecipe&&_playbackTime>=_reloadRecipe->duration){_reloadPlaying=false;_reloadPlay->setText("PLAY RELOAD");}}
+        else if(_reloadPlaying){const auto previous=_playbackTime;seekReload(_playbackTime+delta);playSourceSounds(_reloadClip,previous,_playbackTime);if(_reloadRecipe&&_playbackTime>=_reloadRecipe->duration){_reloadPlaying=false;_reloadPlay->setText("PLAY RELOAD");}}
         if(!_reloadPlaying&&!_reloadReturning)_reloadPreviewTimer->stop();
     }
     void ReloadMakerController::saveReloadRecipe()
