@@ -65,12 +65,16 @@ void MagazineMotion::cancel(){if(carried())drop();}
 void MagazineMotion::reset(){*this={};}
 void MagazineMotion::moveFree(const MagazineRail& rail,const QVector3D& p) {
     if(phase!=MagazinePhase::Free||!finite(p))return;
-    const auto entrance=rail.outward*rail.travel;
     const auto step=p-offset;const float squared=step.lengthSquared();
-    const float fraction=squared>1e-10f?std::clamp(QVector3D::dotProduct(entrance-offset,step)/squared,0.f,1.f):0;
-    const auto nearest=offset+step*fraction;
+    // Swept capture against the whole finite guide, keeping the entry depth.
+    const float along=QVector3D::dotProduct(step,rail.outward),start=QVector3D::dotProduct(offset,rail.outward);
+    const float denominator=squared-along*along;
+    float fraction=denominator>std::max(1e-8f,squared*1e-6f)?std::clamp((along*start-QVector3D::dotProduct(step,offset))/denominator,0.f,1.f):0;
+    const float depth=std::clamp(start+fraction*along,0.f,rail.travel);
+    if(squared>1e-10f)fraction=std::clamp((along*depth-QVector3D::dotProduct(step,offset))/squared,0.f,1.f);
+    const auto nearest=offset+step*fraction,guide=rail.outward*depth;
     offset=p;
-    if((nearest-entrance).length()<=rail.captureRadius){phase=MagazinePhase::Rail;distance=rail.travel;offset=entrance;}
+    if((nearest-guide).length()<=rail.captureRadius){phase=MagazinePhase::Rail;distance=depth;offset=guide;}
 }
 void MagazineMotion::moveRail(const MagazineRail& rail,float d) {
     if(phase!=MagazinePhase::Rail||!std::isfinite(d))return;

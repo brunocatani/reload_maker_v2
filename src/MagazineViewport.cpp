@@ -56,7 +56,7 @@ void MagazineViewport::paint() {
     if(projectGripPoint(camera,size,r->handle,seated)&&projectGripPoint(camera,size,r->handle+r->outward*r->travel,entrance)) {
         painter.setPen(QPen(QColor("#84d9c2"),2,Qt::DashLine));painter.drawLine(seated,entrance);
         painter.setBrush(Qt::NoBrush);painter.drawEllipse(entrance,12,12);painter.drawEllipse(seated,5,5);
-        painter.drawText(entrance+QPointF(18,0),s.phase==MagazinePhase::Rail?"GUIDED · push toward the weapon":"Align the magazine here");
+        painter.drawText(entrance+QPointF(18,0),s.phase==MagazinePhase::Rail?"GUIDED · push toward the weapon":"Align anywhere along this line");
     }
     if(s.carried()) {
         painter.fillRect(QRectF(12,8,_view->width()-24,38),QColor("#263a36"));painter.setPen(QColor("#c3f3e3"));
