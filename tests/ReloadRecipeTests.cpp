@@ -121,6 +121,17 @@ namespace {
         const auto inheritedBundle=encodeReloadBundle(defaultRecipe,{grip},{},bindings,error,defaults);
         check(!inheritedBundle.isEmpty(),error);
         check(QJsonDocument::fromJson(inheritedBundle)["magazineGrabBindings"].toArray().size()==2,"Export omitted concrete default binding");
+        auto rifle=r;
+        for(auto& window:rifle.windows)for(auto& member:window.members)member.gripId.clear();
+        rifle.tracks[0].anchor.anchorName="WeaponBolt";
+        rifle.tracks[2].anchor.ownerModel=rifle.tracks[0].anchor.ownerModel;
+        rifle.tracks[2].anchor.ownerRecord=rifle.tracks[0].anchor.ownerRecord;
+        rifle.id=reloadRecipeIdentity(rifle);
+        auto attachment=grip;attachment.pose.placement.anchorKind="installed-part";
+        attachment.pose.placement.anchorName="Mag";attachment.pose.placement.anchorPath="Mag";
+        const auto rifleBundle=encodeReloadBundle(rifle,{attachment},{},bindings,error,defaults);
+        check(!rifleBundle.isEmpty(),error);
+        check(QJsonDocument::fromJson(rifleBundle)["magazineGrabBindings"].toArray().size()==1,"AR magazine default was also assigned to its receiver");
     }
     void slowAndStatic(){
         auto r=capture();r.tracks.resize(1);r.tracks[0].parent=-1;

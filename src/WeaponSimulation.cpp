@@ -17,23 +17,25 @@ bool descendant(const ReloadRecipe& r,int child,int parent) {
     return false;
 }
 }
-bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& error) {
-    error.clear();SimulationRig rig;rig.recipeId=r.id;
+bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& error,WeaponMechanism profile) {
+    error.clear();SimulationRig rig;rig.recipeId=r.id;rig.mechanism=profile;
     if(r.frames<3||r.tracks.isEmpty()){error="Capture a native reload before simulating.";return false;}
     for(int i=0;i<r.tracks.size();++i) {
         const auto& t=r.tracks[i];
         if(t.poses.size()!=r.frames||t.parent>=r.tracks.size()||t.parent< -1){error="Invalid simulation source tracks.";return false;}
-        if(t.surface&&t.anchor.anchorName.compare("WeaponBolt",Qt::CaseInsensitive)==0) {
+        if(t.surface&&t.anchor.anchorName.compare(profile==WeaponMechanism::Ar15?"WeaponExtra1":"WeaponBolt",Qt::CaseInsensitive)==0) {
             if(rig.slide>=0){error="This assembly has multiple slide owners.";return false;}rig.slide=i;
         }
+        if(t.surface&&t.anchor.anchorName.compare("WeaponBolt",Qt::CaseInsensitive)==0)rig.bolt=i;
         if(t.surface&&t.anchor.anchorName.compare("WeaponMagazine",Qt::CaseInsensitive)==0) {
             if(rig.magazine>=0){error="This assembly has multiple magazine owners.";return false;}rig.magazine=i;
         }
     }
     if(rig.slide<0||rig.magazine<0){error="Direct simulation currently requires a resolved slide and magazine.";return false;}
-    if(sameOwner(r.tracks[rig.slide],r.tracks[rig.magazine])) {
+    if(profile==WeaponMechanism::PistolSlide&&sameOwner(r.tracks[rig.slide],r.tracks[rig.magazine])) {
         error="This weapon shares one mesh owner for slide and magazine; separate magazine visibility is required.";return false;
     }
+    if(profile==WeaponMechanism::Ar15&&rig.bolt<0){error="The AR-15 bolt track is missing.";return false;}
     const auto& slide=r.tracks[rig.slide].poses;const auto& rest=slide.back();
     float travel=0;QVector<float> distance;distance.reserve(r.frames);
     for(const auto& p:slide) {
@@ -54,6 +56,11 @@ bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& err
     }
     for(int i=0;i<r.tracks.size();++i) {
         const auto& t=r.tracks[i];
+        if(profile==WeaponMechanism::Ar15) {
+            if(descendant(r,i,rig.magazine))rig.magazineTracks.append(i);
+            if(i==rig.slide)rig.slideTracks.append(i);
+            continue;
+        }
         if(sameOwner(t,r.tracks[rig.magazine]))rig.magazineTracks.append(i);
         // Receiver followers (barrel/catch) and independently animated magazine
         // descendants (feed cartridge) keep their own sampled trajectories.
@@ -81,13 +88,13 @@ QJsonObject simulationRigJson(const ReloadRecipe& r,const SimulationRig& rig,boo
 bool WeaponSimulation::fire() {
     if(!canFire())return false;
     chambered=false;++shotsFired;_cycleArmed=false;
-    action=SimulationAction::Fire;seconds=0;return true;
+    action=SimulationAction::Fire;seconds=0;shotSeconds=0;return true;
 }
 bool WeaponSimulation::reload(float rackAt,float feedAt) {
     if(!ammoKnown()||action==SimulationAction::Fire||action==SimulationAction::Reload||action==SimulationAction::Held||magazine.busy())return false;
     reloadStartedLoaded=chambered;reloadStartedOpen=slideLocked||slide>=.95f;
     reloadRackAt=rackAt;reloadFeedAt=feedAt;reloadCycled=false;reloadFed=false;
-    action=SimulationAction::Reload;seconds=0;slide=0;magazine.reset();return true;
+    action=SimulationAction::Reload;seconds=0;slide=0;handle=0;triggerHeld=false;magazine.reset();return true;
 }
 bool WeaponSimulation::dropMagazine() {
     if(action==SimulationAction::Fire||action==SimulationAction::Reload||action==SimulationAction::Held||!magazine.visible()||magazine.busy())return false;
@@ -95,12 +102,23 @@ bool WeaponSimulation::dropMagazine() {
 }
 bool WeaponSimulation::grab() {
     if((action!=SimulationAction::Idle&&action!=SimulationAction::Returning)||magazine.busy())return false;
-    grabStart=slide;_pullFromLock=slideLocked;_pulledRearward=false;
-    _pullSnapshot={chambered,slideLocked,_cycleArmed,magazineRounds,roundsEjected};
+    if(mechanism==WeaponMechanism::Ar15&&action==SimulationAction::Returning&&handle<=.001f)return false;
+    grabStart=inputProgress();_pullFromLock=slideLocked;_pulledRearward=false;
+    _pullSnapshot={chambered,slideLocked,_cycleArmed,magazineRounds,roundsEjected,slide,handle};
     action=SimulationAction::Held;return true;
 }
 void WeaponSimulation::drag(float value) {
     if(action!=SimulationAction::Held||!std::isfinite(value))return;
+    if(mechanism==WeaponMechanism::Ar15) {
+        handle=std::clamp(value,0.f,1.f);
+        if(handle>=.95f) {
+            slideLocked=false;
+            if(!_cycleArmed){if(chambered){chambered=false;++roundsEjected;}_cycleArmed=true;}
+        }
+        if(!slideLocked)slide=handle;
+        if(slide<=.001f&&!slideLocked)finishClosing();
+        return;
+    }
     if(value>grabStart+.025f)_pulledRearward=true;
     if(_pullFromLock&&_pulledRearward)slideLocked=false;
     slide=_pullFromLock&&!_pulledRearward?1.f:std::clamp(value,0.f,1.f);
@@ -113,8 +131,13 @@ void WeaponSimulation::drag(float value) {
 void WeaponSimulation::release(bool cancel,bool springReturn) {
     if(action!=SimulationAction::Held)return;
     if(cancel) {
-        slide=grabStart;chambered=_pullSnapshot.chambered;slideLocked=_pullSnapshot.locked;_cycleArmed=_pullSnapshot.cycle;
+        slide=_pullSnapshot.bolt;handle=_pullSnapshot.handle;chambered=_pullSnapshot.chambered;slideLocked=_pullSnapshot.locked;_cycleArmed=_pullSnapshot.cycle;
         magazineRounds=_pullSnapshot.rounds;roundsEjected=_pullSnapshot.ejected;action=SimulationAction::Idle;return;
+    }
+    if(mechanism==WeaponMechanism::Ar15) {
+        if(_cycleArmed&&magazine.seated()&&magazineRounds==0){slide=1;slideLocked=true;}
+        action=springReturn&&handle>0?SimulationAction::Returning:SimulationAction::Idle;
+        return;
     }
     if((_pullFromLock&&!_pulledRearward)||(_cycleArmed&&pistolLock&&magazine.seated()&&magazineRounds==0)) {
         slide=1;slideLocked=true;action=SimulationAction::Idle;return;
@@ -124,6 +147,26 @@ void WeaponSimulation::release(bool cancel,bool springReturn) {
 }
 bool WeaponSimulation::tick(float delta,float duration) {
     if(!std::isfinite(delta)||delta<0)return false;
+    if(mechanism==WeaponMechanism::Ar15&&action==SimulationAction::Returning) {
+        handle=std::max(0.f,handle-delta*4.f);
+        if(!slideLocked)slide=std::max(0.f,slide-delta*4.f);
+        if(handle==0&&(slide==0||slideLocked)){if(!slideLocked)finishClosing();action=SimulationAction::Idle;}
+        return false;
+    }
+    if(mechanism==WeaponMechanism::Ar15&&action==SimulationAction::Fire) {
+        if(!std::isfinite(fireCycleSeconds)||fireCycleSeconds<.01f||delta>60)return false;
+        seconds+=delta;shotSeconds+=delta;
+        // Capacity is bounded; each iteration consumes a real round. Large
+        // deterministic steps obey the same feed/catch order as live frames.
+        for(int remaining=capacity+1;shotSeconds>=fireCycleSeconds&&remaining>0;--remaining) {
+            shotSeconds-=fireCycleSeconds;
+            if(willLockAfterShot()){slide=1;slideLocked=true;triggerHeld=false;action=SimulationAction::Idle;seconds=0;return true;}
+            _cycleArmed=true;slide=0;finishClosing();
+            if(!triggerHeld||!chambered){triggerHeld=false;action=SimulationAction::Idle;seconds=0;return true;}
+            chambered=false;++shotsFired;
+        }
+        return false;
+    }
     if(action==SimulationAction::Returning){slide=std::max(0.f,slide-delta*4.f);if(slide==0){finishClosing();action=SimulationAction::Idle;}}
     else if(action==SimulationAction::Fire||action==SimulationAction::Reload) {
         seconds=std::min(seconds+delta,duration);
@@ -151,8 +194,8 @@ void WeaponSimulation::finishClosing() {
     if(_cycleArmed&&!chambered&&magazine.seated()&&magazineRounds>0){--magazineRounds;chambered=true;}
     _cycleArmed=false;slideLocked=false;
 }
-void WeaponSimulation::configureAmmunition(int count,bool lockPistol){capacity=std::clamp(count,0,65535);pistolLock=lockPistol;reset();}
-void WeaponSimulation::reset(){const int count=capacity;const bool lock=pistolLock;*this={};capacity=count;pistolLock=lock;chambered=count>0;magazineRounds=std::max(0,count-1);}
+void WeaponSimulation::configureAmmunition(int count,bool lockPistol,WeaponMechanism profile){capacity=std::clamp(count,0,65535);mechanism=profile;pistolLock=lockPistol||profile==WeaponMechanism::Ar15;reset();}
+void WeaponSimulation::reset(){const int count=capacity;const bool lock=pistolLock;const auto profile=mechanism;const float cycle=fireCycleSeconds;*this={};capacity=count;pistolLock=lock;mechanism=profile;fireCycleSeconds=cycle;chambered=count>0;magazineRounds=std::max(0,count-1);}
 bool WeaponSimulation::slideRelease() {
     if(!ammoKnown()||action!=SimulationAction::Idle||magazine.busy()||(!slideLocked&&slide<=.001f))return false;
     if(slideLocked||slide>=.95f)_cycleArmed=true;

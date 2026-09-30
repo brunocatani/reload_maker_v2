@@ -8,17 +8,24 @@
 #include <cmath>
 
 namespace reloadmaker {
+HandPosePlacement ReloadMakerController::simulationMagazineAnchor() const {
+    if(isAr15Configuration()) {
+        const int index=currentMagazineAnchor();
+        return index>=0?_handPoseAnchors[index].description:HandPosePlacement{};
+    }
+    return _simulationRig&&_reloadRecipe?_reloadRecipe->tracks[_simulationRig->magazine].anchor:HandPosePlacement{};
+}
 void ReloadMakerController::prepareMagazineInteraction() {
     _magazineRail.reset();_magazineVisuals.clear();_magazineError.clear();
     if(!_simulationRig||!_reloadRecipe)return;
     auto* model=activeModel();auto* scene=_window->getGLView()->getScene();
-    const auto& rig=*_simulationRig;const auto& full=_reloadRecipe->tracks[rig.magazine];
+    const auto& rig=*_simulationRig;
     const auto below=[&](QModelIndex child,const QModelIndex& parent) {
         for(int depth=0;child.isValid()&&depth<model->getBlockCount();++depth){if(child==parent)return true;child=model->getBlockIndex(model->getParent(child));}return false;
     };
-    SlotKey slot=0;const auto* config=configuration();
-    for(auto it=_partRoots.cbegin();it!=_partRoots.cend();++it)if(poseRecordKey(config->selected(it.key()))==full.anchor.ownerRecord){slot=it.key();break;}
-    auto source=sourceNif(_packageResources,full.anchor.ownerModel,_magazineError);if(!source)return;
+    const SlotKey slot=_simulationMagazineSlot;
+    const auto anchor=simulationMagazineAnchor();
+    auto source=sourceNif(_packageResources,anchor.ownerModel,_magazineError);if(!source)return;
     ConnectTarget target;QString connectionName;
     for(const auto& name:childConnectPoints(*source)){target=findConnectTarget(name,nullptr,slot);if(target.valid()){connectionName="P-"+name.mid(2);break;}}
     Transformf parent;
@@ -52,7 +59,8 @@ void ReloadMakerController::prepareMagazineInteraction() {
         const bool isEmpty=!rail.sharedBody()&&shape.track==rail.emptyTrack;
         if(isEmpty)empty=true;
         if(shape.track==rig.magazine)fullBody=true;
-        _magazineVisuals.append({shape.node,model->get<int>(shape.node,"Flags"),isEmpty,shape.track});
+        const bool cartridge=isAr15Configuration()?model->get<QString>(shape.node,"Name").startsWith("MagBullet:",Qt::CaseInsensitive):!isEmpty&&shape.track!=rig.magazine;
+        _magazineVisuals.append({shape.node,model->get<int>(shape.node,"Flags"),isEmpty,shape.track,cartridge});
     }
     if((!empty&&!rail.sharedBody())||!fullBody){_magazineVisuals.clear();_magazineError="Magazine body geometry could not be resolved.";return;}
     _magazineRail=rail;

@@ -106,6 +106,8 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     const auto bytes = QJsonDocument(record).toJson();
     if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) { setStatus("Project save failed: "+file.errorString(),true); return false; }
     _sessionPath = absolute;
+    if(isGlockConfiguration())QSettings().setValue("testbeds/glock",absolute);
+    else if(isAr15Configuration())QSettings().setValue("testbeds/ru556",absolute);
     QSettings().setValue("projects/lastProject",absolute);
     setStatus("Project saved · "+QFileInfo(path).fileName());
     return true;

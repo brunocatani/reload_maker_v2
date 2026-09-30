@@ -292,6 +292,7 @@ namespace reloadmaker {
         const HandPose* selected=nullptr;
         for(const auto& pose:_savedHandPoses) if(pose.id==_gripPoseCombo->currentData().toString()) selected=&pose;
         if(!selected) return;
+        const bool sameSource=_partGripDraft&&_partGripDraft->sourcePoseId==selected->id;
         const int anchor=_gripReferenceCombo->currentData().toInt();
         _editingMagazine=anchor>=0&&anchor<_handPoseAnchors.size()&&magazineGrabAnchor(_handPoseAnchors[anchor].description)>=0;
         restoreHandPosePreview();
@@ -309,7 +310,7 @@ namespace reloadmaker {
         }
         _partGripDraft=std::move(draft);
         if(!assignGripPart(anchor,error)) {setStatus(error,true);_partGripDraft.reset();return;}
-        if(_gripName->text().trimmed().isEmpty()) _gripName->setText(selected->name+" · "+_handPoseAnchors[anchor].description.anchorName);
+        if(!sameSource||_gripName->text().trimmed().isEmpty()) _gripName->setText(selected->name+" · "+_handPoseAnchors[anchor].description.anchorName);
         _showArmsCheck->setChecked(true);
         showPartGripValues(); (void)applyPose(_playbackTime); updateHandPoseControls();
     }

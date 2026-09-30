@@ -1093,6 +1093,7 @@ namespace reloadmaker
         _gripError.clear();
         _fingerDrafts = {};
         _suspendedAuthoringGrip.reset();
+        _operateSuspendedGrip.reset();
         _handPoseAnchors.clear();
         _handPoseAnchor->clear();
         _playing = false; _playbackTimer->stop();

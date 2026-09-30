@@ -45,6 +45,10 @@ void ReloadMakerController::applySavedPoseToPart() {
 }
 
 int ReloadMakerController::magazineGrabAnchor(const HandPosePlacement& placement)const {
+    if(isAr15Configuration()) {
+        const int index=currentMagazineAnchor();
+        return index>=0&&sameGripAnchor(placement,_handPoseAnchors[index].description)?index:-1;
+    }
     if(placement.anchorName!="WeaponMagazine"&&placement.anchorName!="WeaponExtra3")return -1;
     for(int i=0;i<_handPoseAnchors.size();++i) {
         const auto& candidate=_handPoseAnchors[i].description;
@@ -114,7 +118,7 @@ void ReloadMakerController::resolveMagazineGrabGrip() {
     const QSignalBlocker block(_simulationMagazineGrip);
     _simulationMagazineGrip->clear();_simulationMagazineGrip->addItem("Magazine grip · native hand",QString());
     if(!_simulationRig||!_reloadRecipe)return;
-    const auto& anchor=_reloadRecipe->tracks[_simulationRig->magazine].anchor;
+    const auto anchor=simulationMagazineAnchor();
     if(!magazineGrabSupported(anchor))return;
     const auto weapon=poseRecordKey(currentWeapon()->formId);
     const auto selected=magazineGripFor(weapon,anchor,_partGrips,_magazineGrabGrips,_magazineGrabDefaults,_magazineGrabError);
@@ -123,17 +127,24 @@ void ReloadMakerController::resolveMagazineGrabGrip() {
     // available explicitly in Hands & grips, not mixed with the current fit.
     if(selected){_simulationMagazineGrip->addItem(selected->pose.name+" · "+(selected->pose.hand==PoseHand::Left?"Left":"Right"),id);_simulationMagazineGrip->setCurrentIndex(1);}
     if(!selected)return;
+    _magazineGrabBridge={};
     for(int i=0;i<_nodeBindings.size();++i)if(_nodeBindings[i].nodeIndex==_reloadTrackNodes[_simulationRig->magazine]){_magazineGrabBinding=i;break;}
     if(_magazineGrabBinding<0){_magazineGrabError="The magazine grip has no live binding.";return;}
+    if(isAr15Configuration()) {
+        Transformf world,inverse;
+        if(!sceneNodeWorld(_partRoots.value(_simulationMagazineSlot),world,_magazineGrabError)||
+           !invertUniformTransform(_boundGlobalPose[_magazineGrabBinding],inverse)){_magazineGrabError="The magazine attachment frame is unavailable.";return;}
+        _magazineGrabBridge=composed(inverse,world);
+    }
     _magazineGrabGrip=*selected;
     for(auto& window:_reloadRecipe->windows)for(auto& member:window.members)
-        if(member.track==_simulationRig->magazine)member.gripId=id;
+        if(member.track==_simulationRig->magazine&&sameGripAnchor(anchor,_reloadRecipe->tracks[member.track].anchor))member.gripId=id;
 }
 
 bool ReloadMakerController::applyMagazineGrabPose() {
     if(!_simulationActive||!_magazineGrabGrip||_magazineFitPreview)return true;
     if(!_simulation.magazine.carried()){_magazineGrabError.clear();return true;}
-    const auto target=composed(_boundGlobalPose[_magazineGrabBinding],_magazineGrabGrip->pose.placement.handInAnchor);
+    const auto target=composed(composed(_boundGlobalPose[_magazineGrabBinding],_magazineGrabBridge),_magazineGrabGrip->pose.placement.handInAnchor);
     if(!solvePartGrip(_skeleton,_localPose,_globalPose,_magazineGrabGrip->pose,target,_localPose,_globalPose,_magazineGrabError,GripReach::FollowTarget))return true;
     // Arm composition preserves the weapon; restore its manually driven part
     // targets after evaluating the updated hand skeleton bindings.

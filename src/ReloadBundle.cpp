@@ -3,11 +3,13 @@
 #include <QJsonDocument>
 #include <QSet>
 #include <QUuid>
+#include <algorithm>
 
 namespace reloadmaker {
 QString magazineGrabKey(const QString& weapon,const QString& magazine){return weapon.toLower()+"|"+magazine.toLower();}
 bool magazineGrabSupported(const HandPosePlacement& anchor) {
-    return anchor.anchorName.compare("WeaponMagazine",Qt::CaseInsensitive)==0;
+    return anchor.anchorName.compare("WeaponMagazine",Qt::CaseInsensitive)==0||
+        (anchor.anchorKind=="installed-part"&&anchor.anchorName.compare("Mag",Qt::CaseInsensitive)==0);
 }
 std::optional<PartGrip> magazineGripFor(const QString& weapon,const HandPosePlacement& anchor,
     const QVector<PartGrip>& library,const QHash<QString,QString>& assignments,
@@ -41,7 +43,17 @@ QByteArray encodeReloadBundle(const ReloadRecipe& recipe,const QVector<PartGrip>
     auto library=savedLibrary;auto magazineGrabs=savedGrabs;
     QVector<HandPosePlacement> anchors;
     for(const auto& grip:savedLibrary)if(grip.weaponRecord.compare(weapon,Qt::CaseInsensitive)==0&&magazineGrabSupported(grip.pose.placement))anchors.append(grip.pose.placement);
-    for(const auto& track:recipe.tracks)if(magazineGrabSupported(track.anchor))anchors.append(track.anchor);
+    for(const auto& track:recipe.tracks)if(magazineGrabSupported(track.anchor)) {
+        // RU556's WeaponMagazine belongs to the receiver. Its installed Mag
+        // attachment owns the grip; never materialize a magazine default on
+        // that receiver just because the reload animates its parent frame.
+        const bool receiverFrame=std::any_of(recipe.tracks.cbegin(),recipe.tracks.cend(),[&](const auto& other){
+            return other.anchor.anchorName.compare("WeaponBolt",Qt::CaseInsensitive)==0&&
+                other.anchor.ownerRecord.compare(track.anchor.ownerRecord,Qt::CaseInsensitive)==0&&
+                other.anchor.ownerModel.compare(track.anchor.ownerModel,Qt::CaseInsensitive)==0;
+        });
+        if(!receiverFrame)anchors.append(track.anchor);
+    }
     for(const auto& anchor:anchors) {
         const auto key=magazineGrabKey(weapon,anchor.ownerRecord);
         if(magazineGrabs.contains(key))continue;

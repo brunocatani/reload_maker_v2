@@ -412,6 +412,17 @@ void ReloadMakerController::createSourceBar(QToolBar* bar) {
     });
     _sourceButton->setMenu(menu);
     bar->addWidget(_sourceButton);
+    bar->addWidget(new QLabel("  Testbed",bar));
+    _testbedPicker=new QComboBox(bar);
+    _testbedPicker->addItem("Current source",QString());
+    _testbedPicker->addItem("Glock · pistol",QString("glock"));
+    _testbedPicker->addItem("RU556 · AR-15",QString("ru556"));
+    _testbedPicker->setToolTip("Switch saved testbeds. Each keeps its own equipped parts and authored hand fits.");
+    bar->addWidget(_testbedPicker);
+    connect(_testbedPicker,qOverload<int>(&QComboBox::activated),this,[this](int i){
+        const auto name=_testbedPicker->itemData(i).toString();if(!name.isEmpty())(void)selectTestbed(name);
+        refreshSourceBar();
+    });
     _sourceLabel = new QLabel("No source", bar);
     _sourceLabel->setObjectName("SourceLabel");
     bar->addWidget(_sourceLabel);
@@ -451,6 +462,11 @@ void ReloadMakerController::createSourceBar(QToolBar* bar) {
 }
 
 void ReloadMakerController::refreshSourceBar() {
+    if(_testbedPicker) {
+        const QSignalBlocker block(_testbedPicker);
+        _testbedPicker->setCurrentIndex(isGlockConfiguration()?1:isAr15Configuration()?2:0);
+        _testbedPicker->setEnabled(!_loadThread&&!_reloadCapturing);
+    }
     if (!_sourceLabel) return;
     if (_libraryMode && _launchSnapshot.valid()) {
         _sourceLabel->setText(QStringLiteral("MO2 · %1").arg(_launchSnapshot.profileName));

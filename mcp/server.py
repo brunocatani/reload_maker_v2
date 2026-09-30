@@ -63,6 +63,11 @@ def select_weapon(index: int, expected_revision: int) -> dict:
     return command('select_weapon',{'index':index},expected_revision)
 
 @mcp.tool()
+def select_testbed(name: str, expected_revision: int) -> dict:
+    """Switch glock/ru556 saved testbeds, retaining the outgoing project. State becomes busy while the source loads."""
+    return command('testbed',{'name':name},expected_revision)
+
+@mcp.tool()
 def configure_weapon(changes: dict, expected_revision: int) -> dict:
     """Change body male/female, animationSet index, or slot and mod decimal-string IDs. Glock: after selecting the standard magazine and a QuickHands set, reloadNoExtender enables the package's optional unextended-magazine clip. Set it separately from slots/animationSet. Configuration changes rebuild the native interaction source."""
     return command('configure',changes,expected_revision)
@@ -200,12 +205,14 @@ def get_simulation_state() -> dict:
 @mcp.tool()
 def simulate_weapon(operation: str, expected_revision: int, progress: float | None = None,
                     cancel: bool = False, enabled: bool = True,
-                    position: list[float] | None = None, distance: float | None = None) -> dict:
-    """In Simulate: fire/reload/drop_magazine/reset/slide_release, pull (0..1; use 1.08 to retract a locked-open slide), release (cancel), spring (enabled), mag_out/mag_in/grab_magazine/cancel_magazine. move_magazine takes weapon-local offset position[3] while free, or outward distance on the rail. Read ammunition for configured capacity, magazine/chamber counts and lock state. Fresh insertion does not chamber; release or cycle the slide."""
+                    position: list[float] | None = None, distance: float | None = None,
+                    seconds: float | None = None) -> dict:
+    """Operate: fire/reload/drop_magazine/reset/slide_release or bolt_release, pull, release(cancel), spring(enabled), mag_out/mag_in/grab_magazine/cancel_magazine. AR-15 uses an independent charging handle (pull 0..1) and bolt catch; trigger_down/up controls held automatic fire. step(seconds 0..30) pauses the live clock and advances the same simulation deterministically. move_magazine takes weapon-local offset position[3] while free or outward distance on its rail. Fresh insertion does not chamber until the bolt/slide closes."""
     params={'operation':operation,'cancel':cancel,'enabled':enabled}
     if progress is not None: params['progress']=progress
     if position is not None: params['position']=position
     if distance is not None: params['distance']=distance
+    if seconds is not None: params['seconds']=seconds
     return command('simulate',params,expected_revision)
 
 @mcp.tool()

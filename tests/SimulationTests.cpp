@@ -135,10 +135,43 @@ void nativeReloadEvents() {
     s.tick(2,1);check(s.chambered&&s.magazineRounds==0&&s.roundsEjected==0,"Large frame step lost empty reload events");
     s.reset();check(!s.reloadCycled&&!s.reloadFed&&s.reloadRackAt<0,"Reset retained reload event state");
 }
+void ar15Transitions() {
+    WeaponSimulation s;s.configureAmmunition(3,false,WeaponMechanism::Ar15);s.fireCycleSeconds=.1f;
+    check(s.fire(),"AR fire rejected");s.triggerHeld=true;
+    check(s.tick(1,2)&&s.shotsFired==3&&s.slideLocked&&s.slide==1&&s.handle==0,"Automatic AR fire must consume each round and hold only the bolt open");
+    check(s.grab(),"AR charging-handle grab failed");s.drag(.5f);
+    check(s.slide==1&&s.handle==.5f&&s.slideLocked,"Partial handle pull released the bolt catch");
+    s.release(false,true);s.tick(1,1);check(s.handle==0&&s.slide==1&&s.slideLocked,"Empty charging handle did not return independently");
+    MagazineRail rail;rail.travel=10;rail.outward={0,0,-1};rail.captureRadius=1;rail.releaseMargin=2;
+    check(s.dropMagazine()&&s.grabMagazine(rail),"AR spare magazine rejected");
+    s.magazine.moveFree(rail,rail.outward*rail.travel);s.magazine.moveRail(rail,0);
+    check(s.slideLocked&&!s.chambered&&s.magazineRounds==3,"Insertion should not close the bolt");
+    s.grab();s.drag(1);s.release(true,true);
+    check(s.slideLocked&&s.slide==1&&s.handle==0&&!s.chambered,"Cancel did not restore AR bolt/handle/ammo");
+    s.grab();s.drag(1);s.release(false,true);s.tick(1,1);
+    check(s.chambered&&s.magazineRounds==2&&s.slide==0&&s.handle==0&&!s.slideLocked,"AR pull/release did not feed exactly once");
+    s.grab();s.drag(1);check(s.roundsEjected==1&&!s.chambered,"AR rack did not eject the chambered round");
+    s.release(false,true);s.tick(1,1);check(s.chambered&&s.magazineRounds==1,"AR rack double fed");
+    s.fire();s.triggerHeld=true;s.tick(1,1);check(s.slideLocked,"Second empty cycle failed");
+    s.dropMagazine();s.magazineIn(rail);s.magazine.tick(rail,1);check(s.slideRelease(),"AR bolt release rejected");s.tick(1,1);
+    check(s.chambered&&s.magazineRounds==2&&s.handle==0,"Bolt release moved the charging handle or lost a round");
+    s.fire();s.triggerHeld=true;s.tick(.11f,1);s.triggerHeld=false;const int shots=s.shotsFired;s.tick(1,1);
+    check(s.shotsFired==shots&&s.action==SimulationAction::Idle,"Trigger release did not stop repeat shots");
+    s.reset();s.dropMagazine();s.fire();s.tick(1,1);check(!s.slideLocked&&!s.chambered,"Absent magazine fabricated follower lock");
+    s.reset();s.grab();s.drag(.4f);s.release(false,false);check(!s.canFire(),"Open charging handle allowed fire");
+}
+void ar15Fixture(const QString& path) {
+    QFile file(path);check(file.open(QIODevice::ReadOnly),"Missing RU556 fixture");
+    ReloadRecipe recipe;QString error;check(decodeReloadRecipe(file.readAll(),recipe,error),error);
+    SimulationRig rig;check(buildSimulationRig(recipe,rig,error,WeaponMechanism::Ar15),error);
+    check(rig.slide==1&&rig.bolt==0&&rig.magazine==4,"RU556 part roles are wrong");
+    check(rig.slideTracks==QVector<int>({1})&&!rig.magazineTracks.contains(rig.bolt)&&!rig.magazineTracks.contains(2),"Magazine/handle ownership included the receiver bolt or release");
+    check(reloadPoseDistance(simulationTrackPose(recipe,rig,1,0),simulationTrackPose(recipe,rig,1,1))>3.8f,"RU556 handle lost its source travel");
+}
 }
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
-    try {stateTransitions();ammunitionTransitions();nativeReloadEvents();check(app.arguments().size()==2,"Pass the Glock project fixture");fixture(app.arguments()[1]);
+    try {stateTransitions();ammunitionTransitions();nativeReloadEvents();ar15Transitions();check(app.arguments().size()>=2,"Pass the Glock project fixture");fixture(app.arguments()[1]);if(app.arguments().size()>2)ar15Fixture(app.arguments()[2]);
         QTextStream(stdout)<<"PASS simulation state ownership, drop/fire persistence, regrab/cancel/return/reset, actual slide/barrel/cartridge curves and complete magazine ownership\n";return 0;
     }catch(const std::exception& e){QTextStream(stderr)<<"FAIL "<<e.what()<<'\n';return 1;}
 }
