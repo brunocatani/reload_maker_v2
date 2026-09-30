@@ -203,7 +203,7 @@ namespace reloadmaker
         _gameDataPath->setText(game);
         if (!mo2Instance.isEmpty()) { _mo2Path->setText(mo2Instance); }
         if (library || (insideMo2VirtualFilesystem() && packagePath.isEmpty())) {
-            _pages->setCurrentIndex(2);
+            _pages->setCurrentIndex(kLibraryPage);
             startLibraryLoad();
             return;
         }
@@ -355,7 +355,7 @@ namespace reloadmaker
             refreshWeapons(); refreshAnimations();
             _librarySummary->setText(QStringLiteral("Standalone package active. Load the MO2 library to browse the whole profile."));
             _libraryWeapons->clear();
-            if (_pages->currentIndex() == 2 && !_plugins.isEmpty()) { _pages->setCurrentIndex(0); }
+            if (_pages->currentIndex() == kLibraryPage && !_plugins.isEmpty()) { _pages->setCurrentIndex(kLoadoutPage); }
             setStatus(QStringLiteral("Source indexed. Select a weapon configuration and action."));
             restoreSessionSelection();
         });
@@ -2422,7 +2422,9 @@ namespace reloadmaker
             return false;
         }
 
-        const float actionWeight = _reloadWorkspaceActive ? 1.0f : actionBlendWeight(timeSeconds);
+        // Learned reloads and the interactive simulation use exact source poses; only
+        // free clip preview applies the approximate entry/exit blend.
+        const float actionWeight = (_reloadWorkspaceActive || _simulationActive) ? 1.0f : actionBlendWeight(timeSeconds);
         if (actionWeight < 1.0f) {
             for (qsizetype bone = 0; bone < localPose.size(); ++bone) {
                 localPose[bone] = interpolatedTransform(

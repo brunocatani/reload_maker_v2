@@ -72,7 +72,7 @@ bool ReloadMakerController::saveSession(const QString& requested) {
         if(!error.isEmpty()){setStatus(error,true);return false;}
         record["handPreview"]=QJsonDocument::fromJson(bytes).object();
     }
-    const auto& authoredGrip=_reloadWorkspaceActive?_suspendedAuthoringGrip:_partGripDraft;
+    const auto& authoredGrip=_reloadWorkspaceActive?_suspendedAuthoringGrip:_workspace==OperateWorkspace?_operateSuspendedGrip:_partGripDraft;
     if (authoredGrip) {
         const auto bytes = encodePartGrip(*authoredGrip,error);
         if (!error.isEmpty()) { setStatus("Finish the grip before saving: "+error,true); return false; }
@@ -194,7 +194,8 @@ void ReloadMakerController::restoreSessionSelection() {
     }
     (void)applyPose(_playbackTime); updateTimelineText(); refreshFingerEditor();
     _simulationSpring->setChecked(record["simulationSpringReturn"].toBool(true));
-    setWorkspace(std::clamp(record["workspace"].toInt(),0,5));
+    const int workspace=record["workspace"].toInt(OperateWorkspace);
+    setWorkspace(validWorkspace(workspace)?workspace:OperateWorkspace);
     if(record.contains("camera")&&!_window->getGLView()->studioRestoreCamera(record["camera"].toObject()))appendDiagnostic("PROJECT: invalid saved camera ignored.");
     if (record.contains("reloadDraft")) {
         // Native recapture establishes live node bindings before restoring the

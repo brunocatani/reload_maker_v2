@@ -64,12 +64,15 @@ void ReloadMakerController::createUi() {
     brand->setObjectName("Brand");
     header->addWidget(brand);
     _workspaceButtons = new QButtonGroup(this);
-    const QStringList workspaces{"Setup", "Preview", "Hands & grips", "Mechanisms", "Reload", "Simulate"};
-    for (int i = 0; i < workspaces.size(); ++i) {
-        auto* button = new QPushButton(workspaces[i], header);
+    // Stable workspace ids are persisted in projects and used by MCP clients;
+    // display order is independent of the id.
+    const std::pair<QString, int> workspaces[]{{"Source", SourceWorkspace}, {"Operate", OperateWorkspace},
+        {"Hands && grips", GripsWorkspace}, {"Mechanisms", MechanismWorkspace}, {"Reload phases", PhasesWorkspace}};
+    for (const auto& [title, id] : workspaces) {
+        auto* button = new QPushButton(title, header);
         button->setCheckable(true);
         button->setObjectName("WorkspaceButton");
-        _workspaceButtons->addButton(button, i);
+        _workspaceButtons->addButton(button, id);
         header->addWidget(button);
     }
     auto* spacer = new QWidget(header);
@@ -92,7 +95,7 @@ void ReloadMakerController::createUi() {
     exportRecords->setText("Export");
     exportRecords->setPopupMode(QToolButton::InstantPopup);
     auto* exportMenu = new QMenu(exportRecords);
-    for(const auto& pair : {std::pair{"Saved hand pose","hand"},std::pair{"Current part grip","grip"},std::pair{"Current mechanism","mechanism"},std::pair{"Current reload recipe","reload"},std::pair{"Reload + grips (self-contained)","reload_bundle"},std::pair{"Current slide for DIAMOND","slide"}}) {
+    for(const auto& pair : {std::pair{"Saved hand pose","hand"},std::pair{"Current part grip","grip"},std::pair{"Current mechanism","mechanism"},std::pair{"Current reload recipe","reload"},std::pair{"Reload + grips (self-contained)","reload_bundle"},std::pair{"Simulation setup","simulation"},std::pair{"Current slide for DIAMOND","slide"}}) {
         connect(exportMenu->addAction(pair.first),&QAction::triggered,this,[this,kind=QString(pair.second)] {
             try {const auto result=executeCommand({{"method","export"},{"params",QJsonObject{{"kind",kind}}}});setStatus("Exported · "+result["path"].toString());}
             catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}
@@ -153,6 +156,18 @@ void ReloadMakerController::createUi() {
     setupLayout->setContentsMargins(0, 0, 0, 0);
     _configurationSummary = hint("Open a mod to assemble its weapon and attachments.", setup);
     setupLayout->addWidget(_configurationSummary);
+    auto* animationForm = new QFormLayout;
+    _bodyCombo = new QComboBox(setup);
+    _bodyCombo->addItem("Male arms", "male");
+    _bodyCombo->addItem("Female arms", "female");
+    _animationSetCombo = new QComboBox(setup);
+    _animationSetCombo->setMinimumContentsLength(18);
+    _animationSetCombo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    _animationSetCombo->setMaxVisibleItems(24);
+    _animationSetCombo->setToolTip("Animation / reload set. Automatic follows the equipped parts' keywords.");
+    animationForm->addRow("Arms", _bodyCombo);
+    animationForm->addRow("Animation set", _animationSetCombo);
+    setupLayout->addLayout(animationForm);
     auto* slotSplitter = new QSplitter(Qt::Vertical, setup);
     _slotTree = new QTreeWidget(slotSplitter);
     _slotTree->setHeaderLabels({"Attachment slot", "Installed part"});
@@ -172,26 +187,11 @@ void ReloadMakerController::createUi() {
     slotSplitter->setStretchFactor(0, 3);
     slotSplitter->setStretchFactor(1, 2);
     setupLayout->addWidget(slotSplitter, 1);
-    _pages->addTab(setup, "Configuration");
-
-    auto* preview = new QWidget(_pages);
-    auto* previewLayout = new QVBoxLayout(preview);
-    previewLayout->setContentsMargins(0, 0, 0, 0);
-    auto* animationForm = new QFormLayout;
-    _bodyCombo = new QComboBox(preview);
-    _bodyCombo->addItem("Male arms", "male");
-    _bodyCombo->addItem("Female arms", "female");
-    _animationSetCombo = new QComboBox(preview);
-    _animationSetCombo->setMinimumContentsLength(18);
-    _animationSetCombo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-    _animationSetCombo->setMaxVisibleItems(24);
-    animationForm->addRow("Body", _bodyCombo);
-    animationForm->addRow("Animation set", _animationSetCombo);
-    previewLayout->addLayout(animationForm);
-    previewLayout->addWidget(hint("Choose an action. Pause at any frame to capture a hand or start authoring a part.", preview));
-    _animationList = new QListWidget(preview);
-    previewLayout->addWidget(_animationList, 1);
-    _pages->addTab(preview, "Actions");
+    _pages->addTab(setup, "Loadout");
+    // The native clip list is shown in the Operate panel. It is created here
+    // because loadout/graph resolution populates it before that panel exists.
+    _animationList = new QListWidget(_window);
+    _animationList->hide();
     createLibraryPage();
     _loadingLabel = hint({}, packagePanel);
     _loadingProgress = new QProgressBar(packagePanel);
@@ -237,17 +237,20 @@ void ReloadMakerController::createUi() {
     transport->addWidget(_timeline, 1); transport->addWidget(_timeLabel);
     timelineLayout->addLayout(transport);
     auto* viewOptions = new QHBoxLayout;
-    _motionMode = new QComboBox(timelinePanel);
-    _motionMode->addItems({"Weapon fixed", "Full native motion"});
     _transitionCheck = new QCheckBox("Approximate entry / exit blends", timelinePanel);
     _transitionCheck->setChecked(true);
     _transitionCheck->setToolTip("Graph-derived transition preview; not full Havok behavior emulation.");
-    _showArmsCheck = new QCheckBox("Show arms & hands", timelinePanel);
-    _showArmsCheck->setChecked(true);
-    viewOptions->addWidget(_motionMode); viewOptions->addWidget(_transitionCheck); viewOptions->addWidget(_showArmsCheck); viewOptions->addStretch();
+    viewOptions->addWidget(_transitionCheck); viewOptions->addStretch();
     viewOptions->addWidget(hint("Drag: orbit   ·   Middle drag: pan   ·   Wheel: zoom", timelinePanel));
     timelineLayout->addLayout(viewOptions);
     _timelineDock->setWidget(timelinePanel);
+    // One authority each for the motion frame and arm visibility; both live
+    // in the always-visible view toolbar.
+    _motionMode = new QComboBox(_window);
+    _motionMode->addItems({"Weapon fixed", "Full native motion"});
+    _motionMode->setToolTip("Weapon fixed holds the weapon frame still while hands and moving parts keep their native relative motion.");
+    _showArmsCheck = new QCheckBox("Arms && hands", _window);
+    _showArmsCheck->setChecked(true);
 
         connect(folderButton, &QPushButton::clicked, this, &ReloadMakerController::browsePackage);
         connect(zipButton, &QPushButton::clicked, this, [this]() {
@@ -300,16 +303,15 @@ void ReloadMakerController::createUi() {
         connect(_partList, &QListWidget::itemActivated, this, choosePart);
         connect(_pages, &QTabWidget::currentChanged, this, [this](int index) {
             if (_playing) { togglePlayback(); }
-            _timelineDock->setVisible(index == 1);
-            if (_slotOverlay) { _slotOverlay->setActive(index == 0 && _showPartLabels); }
+            if (_slotOverlay) { _slotOverlay->setActive(index == kLoadoutPage && _showPartLabels); }
             updateGripViewport();
             // Both pages share one live scene and one configuration.
             _window->getGLView()->update();
         });
         connect(_animationList, &QListWidget::itemActivated,
-                this, &ReloadMakerController::selectAnimation);
+                this, [this](QListWidgetItem* item) { previewNativeClip(_animationList->row(item)); });
         connect(_animationList, &QListWidget::itemClicked,
-                this, &ReloadMakerController::selectAnimation);
+                this, [this](QListWidgetItem* item) { previewNativeClip(_animationList->row(item)); });
         connect(reloadButton, &QPushButton::clicked, this, [this]() {
             if (_libraryMode) { startLibraryLoad(); }
             else { openPackageFromField(); }
@@ -387,11 +389,14 @@ void ReloadMakerController::createUi() {
     });
     auto* labels = new QCheckBox("Part labels", camera);
     camera->addWidget(labels);
+    camera->addSeparator();
+    camera->addWidget(_motionMode);
+    camera->addWidget(_showArmsCheck);
     connect(labels,&QCheckBox::toggled,this,[this](bool show) {
-        _showPartLabels=show;if(_slotOverlay)_slotOverlay->setActive(show&&_workspace==0);
+        _showPartLabels=show;if(_slotOverlay)_slotOverlay->setActive(show&&_pages->currentIndex()==kLoadoutPage);
     });
     connect(_workspaceButtons, &QButtonGroup::idClicked, this, &ReloadMakerController::setWorkspace);
-    connect(libraryButton, &QPushButton::clicked, this, [this] { setWorkspace(0); _pages->setCurrentIndex(2); });
+    connect(libraryButton, &QPushButton::clicked, this, [this] { setWorkspace(SourceWorkspace); _pages->setCurrentIndex(kLibraryPage); });
     connect(diagnostics, &QPushButton::toggled, _detailsDock, &QWidget::setVisible);
     connect(saveProject, &QToolButton::clicked, this, [this] { saveSession(); });
     connect(openProject, &QPushButton::clicked, this, [this] {
@@ -402,42 +407,69 @@ void ReloadMakerController::createUi() {
     connect(saveShortcut, &QShortcut::activated, this, [this] { saveSession(); });
     auto* fitShortcut = new QShortcut(QKeySequence("F"), _window);
     connect(fitShortcut, &QShortcut::activated, this, [this] { (void)fitWeapon(); });
-    for (int i = 0; i < workspaces.size(); ++i) {
+    for (int i = 0; i < int(std::size(workspaces)); ++i) {
         auto* shortcut = new QShortcut(QKeySequence(QString("Ctrl+%1").arg(i+1)), _window);
-        connect(shortcut, &QShortcut::activated, this, [this, i] { setWorkspace(i); });
+        connect(shortcut, &QShortcut::activated, this, [this, id = workspaces[i].second] { setWorkspace(id); });
     }
 }
 
+bool ReloadMakerController::validWorkspace(int workspace) {
+    return workspace == SourceWorkspace || workspace == GripsWorkspace || workspace == MechanismWorkspace ||
+           workspace == PhasesWorkspace || workspace == OperateWorkspace;
+}
+
 void ReloadMakerController::setWorkspace(int workspace) {
-    if (workspace < 0 || workspace > 5 || _loadThread) return;
-    if (_workspace == 5 && workspace != 5) stopSimulation();
+    if (!validWorkspace(workspace) || _loadThread) return;
+    // Operate replaces clips and poses freely; an in-progress authoring grip is
+    // parked while it is open and returned when leaving (as Reload phases does).
+    if (_workspace == OperateWorkspace && workspace != OperateWorkspace) {
+        stopSimulation();
+        _partGripDraft = _operateSuspendedGrip; _operateSuspendedGrip.reset();
+    } else if (_workspace != OperateWorkspace && workspace == OperateWorkspace) {
+        _operateSuspendedGrip = _reloadWorkspaceActive ? _suspendedAuthoringGrip : _partGripDraft;
+        if (_reloadWorkspaceActive) _suspendedAuthoringGrip.reset();
+        _partGripDraft.reset();
+    }
     _workspace = workspace;
     _workspaceButtons->button(workspace)->setChecked(true);
-    _pages->setCurrentIndex(workspace == 0 ? 0 : workspace >= 4 ? 3 : 1);
-    _packageDock->setVisible(workspace != 5);
-    _simulationDock->setVisible(workspace == 5);
-    _reloadGraphDock->setVisible(workspace == 4);
-    _reloadInspectorDock->setVisible(workspace == 4);
-    if (workspace == 4) startReloadCapture();
-    _packageGroup->setVisible(workspace == 0);
-    _referenceGroup->setVisible(workspace == 0);
-    _reloadSource->setVisible(workspace == 0);
-    _handPoseDock->setVisible(workspace == 2 || workspace == 3);
-    _handPosePages->setTabVisible(0, workspace == 2);
-    _handPosePages->setTabVisible(1, workspace == 2);
-    _handPosePages->setTabVisible(2, workspace == 3);
-    _handPosePages->tabBar()->setVisible(workspace == 2);
-    if (workspace == 3) _handPosePages->setCurrentIndex(2);
-    else if (workspace == 2 && _handPosePages->currentIndex() == 2) _handPosePages->setCurrentIndex(0);
-    _timelineDock->setVisible(workspace != 0 && workspace < 4);
-    _packageDock->setWindowTitle(workspace == 0 ? "SOURCE & CONFIGURATION" : workspace == 4 ? "RELOAD PHASES" : "ANIMATION SOURCE");
-    _handPoseDock->setWindowTitle(workspace == 3 ? "PART MECHANISM" : "HANDS & GRIPS");
-    if (_slotOverlay) _slotOverlay->setActive(workspace == 0 && _showPartLabels);
+    // Only Reload phases uses the reload page. Every other workspace keeps the
+    // loadout rail so parts can be swapped in place; Source may show the library.
+    const bool phases = workspace == PhasesWorkspace;
+    if (phases) _pages->setCurrentIndex(kReloadPage);
+    else if (workspace != SourceWorkspace || _pages->currentIndex() == kReloadPage) _pages->setCurrentIndex(kLoadoutPage);
+    _packageDock->setWindowTitle(phases ? "RELOAD PHASES" : workspace == SourceWorkspace ? "SOURCE & LOADOUT" : "LOADOUT");
+    _packageGroup->setVisible(workspace == SourceWorkspace);
+    _referenceGroup->setVisible(workspace == SourceWorkspace);
+    _reloadSource->setVisible(workspace == SourceWorkspace);
+    _simulationDock->setVisible(workspace == OperateWorkspace);
+    _reloadGraphDock->setVisible(phases);
+    _reloadInspectorDock->setVisible(phases);
+    _handPoseDock->setVisible(workspace == GripsWorkspace || workspace == MechanismWorkspace);
+    _handPosePages->setTabVisible(0, workspace == GripsWorkspace);
+    _handPosePages->setTabVisible(1, workspace == GripsWorkspace);
+    _handPosePages->setTabVisible(2, workspace == MechanismWorkspace);
+    _handPosePages->tabBar()->setVisible(workspace == GripsWorkspace);
+    if (workspace == MechanismWorkspace) _handPosePages->setCurrentIndex(2);
+    else if (workspace == GripsWorkspace && _handPosePages->currentIndex() == 2) _handPosePages->setCurrentIndex(0);
+    _timelineDock->setVisible(workspace == OperateWorkspace || workspace == GripsWorkspace || workspace == MechanismWorkspace);
+    _handPoseDock->setWindowTitle(workspace == MechanismWorkspace ? "PART MECHANISM" : "HANDS & GRIPS");
+    if (_slotOverlay) _slotOverlay->setActive(_pages->currentIndex() == kLoadoutPage && _showPartLabels);
     updateGripViewport();
     if(_clip.valid()&&!_reloadCapturing)(void)applyPose(_playbackTime);
     refreshFingerEditor();
-    if (workspace == 5) prepareSimulation();
+    // Operate needs the learned reload for its rig; learning no longer depends
+    // on the Reload phases page being visible.
+    if (workspace == OperateWorkspace) { startReloadCapture(); prepareSimulation(); }
     ++_revision;
+}
+
+void ReloadMakerController::previewNativeClip(int row) {
+    if (row < 0 || row >= _animationList->count()) return;
+    // Previewing a native clip leaves the interactive weapon state; the next
+    // Operate action starts a fresh simulation from Ready.
+    if (_simulationActive) { stopSimulation(); updateSimulationControls(); }
+    _animationList->setCurrentRow(row);
+    selectAnimation(_animationList->item(row));
 }
 
 void ReloadMakerController::applyStyle() {
@@ -447,6 +479,8 @@ void ReloadMakerController::applyStyle() {
         QToolBar { border:0; spacing:7px; padding:7px; }
         QLabel#Brand { font-size:20px; font-weight:700; padding:0 20px 0 5px; }
         QLabel#Hint { color:#91a4ae; }
+        QLabel#Section { color:#7fb3ac; font-weight:700; letter-spacing:1px; padding-top:6px; }
+        QLabel#StatusCard { padding:10px 12px; background:#1f3533; color:#d3f7ec; border-radius:5px; }
         QDockWidget::title { background:#202a32; color:#93b8b9; padding:9px 12px; font-weight:600; }
         QGroupBox { border:1px solid #344149; border-radius:5px; margin-top:12px; padding:10px 6px 5px; }
         QGroupBox::title { subcontrol-origin:margin; left:10px; color:#a6bdc5; padding:0 4px; }

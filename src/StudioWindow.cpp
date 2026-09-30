@@ -4,12 +4,16 @@
 #include <QCloseEvent>
 #include <QJsonArray>
 #include <QPainter>
+#include <QScreen>
+#include <algorithm>
 #include "gl/glshape.h"
 
 StudioWindow::StudioWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle("Reload Maker V2");
-    resize(1600, 980);
-    setMinimumSize(1120, 760);
+    // Fit the available desktop instead of a fixed size that can exceed it.
+    const QRect available = screen() ? screen()->availableGeometry() : QRect(0, 0, 1600, 980);
+    resize(std::min(1600, available.width() - 40), std::min(980, available.height() - 60));
+    setMinimumSize(std::min(1120, available.width() - 40), std::min(700, available.height() - 60));
     _model = new NifModel(this);
     _view = new GLView(nullptr);
     setCentralWidget(_view->createWindowContainer(this));

@@ -97,8 +97,8 @@ namespace reloadmaker {
         _packageGroup->setEnabled(!loading);
         _referenceGroup->setEnabled(!loading);
         _weaponCombo->setEnabled(!loading);
-        _pages->setTabEnabled(0, !loading); _pages->setTabEnabled(1, !loading);
-        if(_pages->count()>3)_pages->setTabEnabled(3,!loading);
+        _pages->setTabEnabled(kLoadoutPage, !loading);
+        if(_pages->count()>kReloadPage)_pages->setTabEnabled(kReloadPage,!loading);
         if(_reloadInspectorDock)_reloadInspectorDock->setEnabled(!loading);
         if(_reloadGraphDock)_reloadGraphDock->setEnabled(!loading);
         if(_simulationDock)_simulationDock->setEnabled(!loading);

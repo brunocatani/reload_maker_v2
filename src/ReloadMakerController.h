@@ -135,8 +135,15 @@ namespace reloadmaker
             bool baseReload{ false };
         };
 
+        // Stable ids: persisted in projects and used by MCP clients (DIAMOND's
+        // importer uses OperateWorkspace = 5). Id 1 (the old Preview) is retired.
+        enum Workspace : int { SourceWorkspace = 0, GripsWorkspace = 2, MechanismWorkspace = 3, PhasesWorkspace = 4, OperateWorkspace = 5 };
+        static constexpr int kLoadoutPage = 0, kLibraryPage = 1, kReloadPage = 2;
+        [[nodiscard]] static bool validWorkspace(int workspace);
         void createUi();
         void setWorkspace(int workspace);
+        void previewNativeClip(int row);
+        [[nodiscard]] bool reloadCaptureAllowed() const noexcept { return _reloadWorkspaceActive || _workspace == OperateWorkspace; }
         void createFingerEditor();
         void refreshFingerEditor();
         void editFinger(int joint, const Quaternionf& rotation);
@@ -188,7 +195,6 @@ namespace reloadmaker
         QPushButton* _simulationReset{nullptr};
         QLabel* _simulationStatus{nullptr};
         QLabel* _simulationParts{nullptr};
-        QComboBox* _simulationReloadSet{nullptr};
         QCheckBox* _simulationNoExtender{nullptr};
         QLabel* _simulationSource{nullptr};
         bool _glockNoExtender{false};
@@ -438,6 +444,7 @@ namespace reloadmaker
         QVector<PartGrip> _partGrips;
         std::optional<PartGrip> _partGripDraft;
         std::optional<PartGrip> _suspendedAuthoringGrip;
+        std::optional<PartGrip> _operateSuspendedGrip;
         struct PartGripFrame {
             bool weapon{false};
             int binding{-1};
@@ -449,8 +456,6 @@ namespace reloadmaker
         bool _reloadWorkspaceActive{false},_reloadCapturing{false},_reloadUpdating{false};
         bool _reloadHeld{false},_reloadPlaying{false},_reloadReturning{false};
         bool _reloadIgnoreSavedOnce{false};
-        bool _reloadOldHandsDock{false},_reloadOldDetailsDock{false};
-        bool _reloadOldPackageGroup{false},_reloadOldReferenceGroup{false};
         int _reloadOldMotionMode{0},_reloadWindow{-1},_reloadTrack{-1},_reloadCaptureFrame{0};
         float _reloadGrabStart{0};
         QDockWidget* _reloadGraphDock{nullptr};

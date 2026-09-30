@@ -66,6 +66,18 @@ void fixture(const QString& path) {
     magazine.moveRail(rail,rail.travel+rail.releaseMargin+1);check(magazine.phase==MagazinePhase::Free,"Withdrawal could not disengage");
     magazine.moveFree(rail,entrance);magazine.moveRail(rail,rail.travel*.4f);check((magazine.offset-rail.outward*magazine.distance).length()<1e-5f,"Guided movement left its axis");
     magazine.moveRail(rail,0);check(magazine.seated()&&magazine.offset.isNull(),"Cursor insertion did not latch");
+    const auto lateral=QVector3D::crossProduct(rail.outward,{0,1,0}).normalized()*rail.captureRadius*3;
+    for(const float fraction:{.15f,.5f,.85f,-1.f,2.f}) {
+        magazine.drop();magazine.grab(rail);
+        const auto middle=rail.outward*(rail.travel*fraction);
+        magazine.offset=middle+lateral;
+        magazine.moveFree(rail,middle-lateral);
+        if(fraction<0||fraction>1)check(magazine.phase==MagazinePhase::Free,"Captured beyond finite guide");
+        else {
+            check(magazine.phase==MagazinePhase::Rail&&std::abs(magazine.distance-rail.travel*fraction)<1e-4f,"Side entry lost capture depth");
+            magazine.moveRail(rail,0);check(magazine.seated(),"Side entry failed to seat");
+        }
+    }
     magazine.drop();magazine.grab(rail);magazine.cancel();check(!magazine.visible()&&!magazine.carried(),"Cancel left cursor ownership or geometry behind");
 }
 void ammunitionTransitions() {

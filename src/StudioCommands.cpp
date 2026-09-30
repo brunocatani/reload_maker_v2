@@ -149,11 +149,14 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     } else if(method=="open_library") {
         if(p.contains("instance")) { _mo2Path->setText(p["instance"].toString()); }
         startLibraryLoad();
-    } else if(method=="workspace") {const int index=p["index"].toInt(-1);require(index>=0&&index<=5,"Unknown workspace");setWorkspace(index);}
+    } else if(method=="workspace") {const int index=p["index"].toInt(-1);require(validWorkspace(index),"Unknown workspace");setWorkspace(index);}
     else if(method=="author_reload_grips") {require(authorReloadGrips(),_lastError);}
     else if(method=="use_magazine_grip") {require(useMagazineGrabGrip(),_lastError);}
     else if(method=="simulate") {
-        require(_workspace==5&&_simulationActive,"Open the Simulate workspace and wait until ready");
+        require(_workspace==OperateWorkspace,"Open the Operate workspace first");
+        // Same rule as the Operate buttons: an action leaves native clip preview.
+        if(!_simulationActive)prepareSimulation();
+        require(_simulationActive,_simulationError.isEmpty()?"Wait until the Operate workspace is ready":_simulationError);
         const auto operation=p["operation"].toString();
         if(operation=="pull") {
             const float progress=number(p["progress"]);require(progress>=0&&progress<=1.08f,"Slide pull must be between 0 and 1.08; above 1 releases the catch");
@@ -189,7 +192,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
         if(p.contains("animationSet")){int index=p["animationSet"].toInt(-1);require(index>=0&&index<_animationSetCombo->count(),"Invalid animation set");_animationSetCombo->setCurrentIndex(index);}
         rebuildWeapon();
     } else if(method=="action") {
-        int index=p["index"].toInt(-1);require(index>=0&&index<_animationList->count(),"Invalid action index");_animationList->setCurrentRow(index);selectAnimation(_animationList->item(index));
+        int index=p["index"].toInt(-1);require(index>=0&&index<_animationList->count(),"Invalid action index");previewNativeClip(index);
     } else if(method=="playback") {
         require(_clip.valid(),"Load a configured animation first");
         if(p.contains("mode")){const int mode=p["mode"].toInt(-1);require(mode==0||mode==1,"Mode must be 0 fixed or 1 native");_motionMode->setCurrentIndex(mode);}

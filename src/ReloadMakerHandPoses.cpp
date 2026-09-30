@@ -279,7 +279,9 @@ namespace reloadmaker {
         refreshPartGripChoices();
         refreshPartGripList();
         refreshMechanismChoices();
-        if(_reloadWorkspaceActive)QTimer::singleShot(0,this,&ReloadMakerController::startReloadCapture);
+        // A rebuilt assembly is re-learned wherever the reload is consumed
+        // (Reload phases or Operate), so part swaps take effect in place.
+        if(reloadCaptureAllowed())QTimer::singleShot(0,this,&ReloadMakerController::startReloadCapture);
         updateHandPoseControls();
     }
 

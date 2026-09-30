@@ -62,7 +62,6 @@ namespace reloadmaker {
         _reloadPartName=new QLineEdit(inspector);_reloadPartName->setMaxLength(512);_reloadPartName->setPlaceholderText("Selected part label · does not rename the mesh");details->addWidget(_reloadPartName);
         details->addWidget(new QLabel("HAND FOR THE SELECTED PART",inspector));
         _reloadGripChoice=new QComboBox(inspector);_reloadGripChoice->setMinimumContentsLength(18);_reloadGripChoice->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);details->addWidget(_reloadGripChoice);
-        auto* hands=new QCheckBox("Show authored reload arms / hands",inspector);hands->setChecked(_showArmsCheck->isChecked());details->addWidget(hands);
         _reloadReturn=new QCheckBox("On release: return to this window's start",inspector);details->addWidget(_reloadReturn);
         auto* releaseHelp=new QLabel("Otherwise the part stays where released. A reload clip does not establish whether the real mechanism is spring-returning.",inspector);releaseHelp->setWordWrap(true);details->addWidget(releaseHelp);
         auto* files=new QPushButton("RELOAD SETUP FILES",inspector);details->addWidget(files);
@@ -71,7 +70,7 @@ namespace reloadmaker {
         _reloadPreviewTimer=new QTimer(this);_reloadPreviewTimer->setInterval(16);_reloadPreviewTimer->setTimerType(Qt::PreciseTimer);
         connect(_reloadCaptureTimer,&QTimer::timeout,this,&ReloadMakerController::advanceReloadCapture);
         connect(_reloadPreviewTimer,&QTimer::timeout,this,&ReloadMakerController::tickReloadPreview);
-        connect(_pages,&QTabWidget::currentChanged,this,[this](int i){setReloadWorkspace(i==3);});
+        connect(_pages,&QTabWidget::currentChanged,this,[this](int i){setReloadWorkspace(i==kReloadPage);});
         connect(_reloadAnalyze,&QPushButton::clicked,this,[this](){invalidateReloadCapture();_reloadIgnoreSavedOnce=true;startReloadCapture();});
         connect(_reloadPlay,&QPushButton::clicked,this,[this](){
             if(!_reloadRecipe||_reloadCapturing)return;
@@ -106,8 +105,6 @@ namespace reloadmaker {
             for(auto& member:_reloadRecipe->windows[_reloadWindow].members)if(member.track==_reloadTrack)member.gripId=_reloadGripChoice->currentData().toString();
             applyReloadGrip();
         });
-        connect(hands,&QCheckBox::toggled,_showArmsCheck,&QCheckBox::setChecked);
-        connect(_showArmsCheck,&QCheckBox::toggled,hands,&QCheckBox::setChecked);
         connect(_reloadWindowProgress,&QSlider::sliderPressed,this,[this](){_reloadPlaying=false;_reloadReturning=false;_reloadPreviewTimer->stop();_reloadPlay->setText("PLAY RELOAD");});
         connect(_reloadWindowProgress,&QSlider::valueChanged,this,[this](int value){
             if(_reloadUpdating||!_reloadRecipe||_reloadWindow<0){return;}
@@ -143,11 +140,10 @@ namespace reloadmaker {
         if(active){
             _suspendedAuthoringGrip=_partGripDraft;
             restoreHandPosePreview();_playing=false;_playbackTimer->stop();_playButton->setText("PLAY");
-            _reloadOldHandsDock=_handPoseDock->isVisible();_reloadOldDetailsDock=_detailsDock->isVisible();
-            _reloadOldPackageGroup=_packageGroup->isVisible();_reloadOldReferenceGroup=_referenceGroup->isVisible();
+            // Dock visibility is owned by setWorkspace; phase editing only
+            // forces the weapon-fixed frame and restores the user's choice after.
             _reloadOldMotionMode=_motionMode->currentIndex();{const QSignalBlocker block(_motionMode);_motionMode->setCurrentIndex(0);}
-            _handPoseDock->hide();_detailsDock->hide();_timelineDock->hide();_packageGroup->hide();_referenceGroup->hide();
-            _reloadGraphDock->show();_reloadInspectorDock->show();_window->resizeDocks({_reloadGraphDock},{230},Qt::Vertical);
+            _window->resizeDocks({_reloadGraphDock},{230},Qt::Vertical);
             if(_reloadDrive)_reloadDrive->setActive(true,false);
             startReloadCapture();
         }else{
@@ -156,8 +152,6 @@ namespace reloadmaker {
             _partGripDraft=_suspendedAuthoringGrip;_suspendedAuthoringGrip.reset();
             if(_reloadDrive){_reloadDrive->setActive(false,false);_reloadDrive->clearCurve();}
             {const QSignalBlocker block(_motionMode);_motionMode->setCurrentIndex(_reloadOldMotionMode);}
-            _reloadGraphDock->hide();_reloadInspectorDock->hide();_handPoseDock->setVisible(_reloadOldHandsDock);_detailsDock->setVisible(_reloadOldDetailsDock);
-            _packageGroup->setVisible(_reloadOldPackageGroup);_referenceGroup->setVisible(_reloadOldReferenceGroup);
             if(_clip.valid())(void)applyPose(_playbackTime);
         }
         updateGripViewport();
@@ -178,12 +172,16 @@ namespace reloadmaker {
     }
     void ReloadMakerController::startReloadCapture()
     {
-        if(!_reloadWorkspaceActive||_loadThread||_rebuildTimer->isActive()||_reloadCapturing)return;
+        if(!reloadCaptureAllowed()||_loadThread||_rebuildTimer->isActive()||_reloadCapturing)return;
         const auto action=std::find_if(_animationActions.cbegin(),_animationActions.cend(),[](const auto& a){return a.baseReload;});
         if(action==_animationActions.cend()||_nodeBindings.isEmpty()||_renderedWeapon!=_weaponCombo->currentIndex()){
             _reloadSummary->setText("This configuration has no resolved base WPNReload. No fire, charge, unload or alternative clip will be substituted.");return;
         }
         const auto expected=action->resourcePath;
+        // Phase selection drives the reload page's grip preview; Operate only
+        // consumes the recipe and must not inherit a phase member's grip or
+        // have its active clip replaced when the recipe is already current.
+        if(!_reloadWorkspaceActive&&_reloadRecipe&&_reloadExpectedPath==expected)return;
         QListWidgetItem* item=nullptr;for(int i=0;i<_animationList->count();++i)if(_animationList->item(i)->data(Qt::UserRole).toString()==expected){item=_animationList->item(i);break;}
         if(!item)return;
         _animationList->setCurrentItem(item);selectAnimation(item);
@@ -233,7 +231,7 @@ namespace reloadmaker {
     }
     void ReloadMakerController::advanceReloadCapture()
     {
-        if(!_reloadCapturing||!_reloadRecipe||!_reloadWorkspaceActive||_loadThread||_rebuildTimer->isActive()){invalidateReloadCapture();return;}
+        if(!_reloadCapturing||!_reloadRecipe||!reloadCaptureAllowed()||_loadThread||_rebuildTimer->isActive()){invalidateReloadCapture();return;}
         QString error;QVector<Transformf> tracks,local,global,boundLocal,boundGlobal,nativeLocal,world;
         auto& recipe=*_reloadRecipe;
         for(int batch=0;batch<16&&_reloadCaptureFrame<recipe.frames;++batch,++_reloadCaptureFrame){
@@ -259,7 +257,7 @@ namespace reloadmaker {
             else appendDiagnostic("PROJECT: saved reload draft does not match the recaptured native source; review required.");
             _pendingReloadDraft = {};
         }
-        refreshReloadWindows();if(!recipe.windows.isEmpty())selectReloadWindow(0);else _reloadSummary->setText("This base reload contains no measurable weapon-part movement. No substitute animation was used.");
+        refreshReloadWindows();if(!recipe.windows.isEmpty()){if(_reloadWorkspaceActive)selectReloadWindow(0);}else _reloadSummary->setText("This base reload contains no measurable weapon-part movement. No substitute animation was used.");
         if(_workspace==5)prepareSimulation();
     }
     void ReloadMakerController::refreshReloadWindows()

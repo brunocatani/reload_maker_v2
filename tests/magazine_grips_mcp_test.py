@@ -51,7 +51,10 @@ cases=[]
 try:
     edit('workspace',{'index':5});ready()
     for mod in [0x1000fa4,0x1000fa5,0x100176f,0x1001770,0x1001779,0x100177a]:
-        edit('configure',{'slot':slot,'mod':str(mod)});ready();op('reset')
+        # Selecting the already-installed part is rejected as a no-op edit.
+        if next(x['selected'] for x in command('state')['slots'] if x['key']==slot)!=str(mod):
+            edit('configure',{'slot':slot,'mod':str(mod)});ready()
+        op('reset')
         sim=command('simulation_state');gid=sim['magazineGrip']['id'];assert gid
         grip=json.loads((ROOT/'workspace/part-grips'/f'{gid}.json').read_text(encoding='utf-8'))
         original=json.loads((ROOT/'workspace/hand-poses'/f"{grip['sourcePoseId']}.json").read_text(encoding='utf-8'))

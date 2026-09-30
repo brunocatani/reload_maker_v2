@@ -39,7 +39,7 @@ try:
     edit('view',{'view':'side','fit':True});other_body=command('state')['camera']
     assert abs(other_body['distance']-baseline['distance'])<.01,'Arm/body geometry changed weapon Fit'
     assert abs(command('diagnostics')['viewport']['navigationScale']-navigation)<.01,'Reassembly changed navigation scale'
-    edit('workspace',{'index':1});ready()
+    edit('workspace',{'index':5});ready()
     reload_action=next(x['index'] for x in command('state')['actions'] if x['name']=='Reload')
     edit('action',{'index':reload_action})
     edit('playback',{'mode':1,'seconds':command('state')['duration']*.5})

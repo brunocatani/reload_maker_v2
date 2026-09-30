@@ -44,7 +44,10 @@ async def run():
                 return path
             state=await idle()
             assert any(w['editorId']=='WPNGlock19x' for w in state['weapons']), 'Launch the editor with the Glock fixture'
-            await call('set_workspace',index=1,expected_revision='current')
+            await call('set_workspace',index=5,expected_revision='current')
+            await idle()  # Operate learns the configured reload before accepting edits.
+            # Selecting a native clip leaves the interactive simulation, giving the unmodified native pose.
+            await call('select_action',index=0,expected_revision='current')
             state=await call('get_state')
             assert len(state['actions'])>=2 and state['duration']>0
             diag=await call('get_diagnostics')
@@ -108,11 +111,14 @@ async def run():
             conflict=await session.call_tool('import_authored_records',{'paths':[str(input_file)],'expected_revision':(await call('get_state'))['revision']})
             assert conflict.isError
             assert json.loads(saved_import.read_text(encoding='utf-8'))['pose']['name']=='V2 import compatibility check'
-            await call('set_workspace',index=1,expected_revision='current')
+            await call('set_workspace',index=5,expected_revision='current')
+            await idle()
+            await call('select_action',index=0,expected_revision='current')
             native_again={b['name']:b for b in (await call('inspect_pose'))['bones']}
             for a,b in zip(native_again['RArm_Finger13']['local']['rotation'],bones['RArm_Finger13']['local']['rotation']): assert abs(a-b)<1.e-5
+            await call('set_workspace',index=2,expected_revision='current')
             retained=await call('export_authored_record',kind='grip',expected_revision='current')
-            assert retained['path']==grip_export['path'], 'Preview workspace lost the authoring grip'
+            assert retained['path']==grip_export['path'], 'Operate workspace lost the authoring grip'
             state=await call('get_state')
             anchor=next(a['index'] for a in state['anchors'] if a['kind']=='animated-part' and 'WeaponBolt' in a['name'])
             await call('select_mechanism_part',anchor=anchor,expected_revision='current')

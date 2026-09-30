@@ -88,7 +88,7 @@ async def run():
             assert not (await call('get_simulation_state'))['active']
             recipe_after=await call('get_reload_recipe')
             assert recipe_after['windows']==recipe_before['windows'] and recipe_after['id']==recipe_before['id']
-            await call('set_workspace',index=1,expected_revision='current');await ready()
+            await call('set_workspace',index=0,expected_revision='current');await ready()
             await call('set_workspace',index=5,expected_revision='current');await ready()
             s=await call('get_simulation_state');assert s['active'] and s['magazinePresent'] and not hidden(s)
             await operation('spring',enabled=False)

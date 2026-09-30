@@ -65,7 +65,7 @@ namespace reloadmaker {
             _gripViewport->setTeaching(_mechanismTeaching,start);
             if(_mechanismTeaching)_gripViewport->setRotationTool(_teachingRotation);
         }else {_gripViewport->setSimulation(false);_gripViewport->setTeaching(false);}
-        if(_slotOverlay) _slotOverlay->setActive(_pages->currentIndex()==0 && !active);
+        if(_slotOverlay) _slotOverlay->setActive(_pages->currentIndex()==kLoadoutPage && _showPartLabels && !active);
         if(!_partGripDraft || (workshop&&!_mechanismPreview&&!_workshopHandEditing)) { _gripViewport->clearGrip(); return; }
         const auto reference=gripReferenceWorld();
         const auto hand=composed(reference,_partGripDraft->pose.placement.handInAnchor);

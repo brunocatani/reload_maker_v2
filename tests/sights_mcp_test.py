@@ -80,7 +80,7 @@ for slot,mod in original.items():
         edit('configure',{'slot':slot,'mod':mod});ready()
 op('reset');op('fire');finished();op('reload');finished()
 # Check the existing native preview, not only the simulation override.
-edit('workspace',{'index':1});s=ready()
+edit('workspace',{'index':5});s=ready()
 fire=next(a for a in s['actions'] if 'Fire' in a['name'] and 'single' in a['name'])
 edit('action',{'index':fire['index']});duration=command('state')['duration']
 for fraction in (0,.15,.45,.8,1):
