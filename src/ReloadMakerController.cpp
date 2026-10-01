@@ -2578,7 +2578,6 @@ namespace reloadmaker
         }
         if (_mechanismPreview && !applyMechanismPreview()) { return fail(); }
         if (!applySimulationPose()) { return fail(); }
-        if (!applyOperatingGripPose()) { return fail(); }
         if (!applyMagazineGrabPose()) { return fail(); }
         const bool gripWorkspace = (_workspace == 2 && _handPosePages->currentIndex() == 1) || mechanismPageActive() || (_reloadWorkspaceActive && _reloadHeld);
         const bool showGrip=gripWorkspace && _partGripDraft && (!_mechanismPreview || ((_mechanismTeaching||(_mechanismHeld&&_mechanismPoseOnGrab->isChecked())) && _mechanismDraft && sameMechanismPart(_partGripDraft->pose.placement,_mechanismDraft->anchor)));

@@ -247,7 +247,6 @@ namespace reloadmaker
         bool isSrepConfiguration() const;
         bool isSrepEmbeddedMagazine() const;
         bool isMk18OverhaulConfiguration() const;
-        QString operatingGripKey(PoseHand hand) const;
         bool isM1AConfiguration() const;
         bool isThanatosConfiguration() const;
         bool isL118Configuration() const;
@@ -435,13 +434,9 @@ namespace reloadmaker
         PoseHand _interactionHand{PoseHand::Left};
         QComboBox* _interactionHandPicker{nullptr};
         QComboBox* _magazineHandPicker{nullptr};
-        QHash<QString,QString> _operatingGrips;
-        std::optional<PartGrip> _operatingGrip;
-        int _operatingGripBinding{-1};
-        QString _operatingGripError;
-        bool _editingOperating{false};
-        QPushButton* _editOperatingGrip{nullptr};
-        QPushButton* _saveOperatingGrip{nullptr};
+        // Preserve old project assignments for the reusable pose library only.
+        // Operating acquisition/presentation never consumes these templates.
+        QHash<QString,QString> _savedOperatingGrips;
         QLabel* _operatingGripStatus{nullptr};
         bool setInteractionHand(PoseHand hand);
         void createGrabLocationsUi();
@@ -467,11 +462,7 @@ namespace reloadmaker
         bool _editingGrabLocationUi{},_pickingGrabLocation{},_replaceGrabLocation{};
         QString operatingGroup() const;
         int operatingAnchor() const;
-        bool editOperatingGrip();
-        bool useOperatingGrip();
         bool mirrorMagazineGrip();
-        void resolveOperatingGrip();
-        bool applyOperatingGripPose();
         void updateInteractionGripUi();
         QJsonObject interactionGripState() const;
         QJsonObject exportInteractionGrips() const;

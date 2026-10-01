@@ -101,8 +101,7 @@ void ReloadMakerController::createSimulationUi() {
     });
     auto* optionsTitle=new QLabel("BEHAVIOUR",panel);optionsTitle->setObjectName("Section");layout->addWidget(optionsTitle);
     _operatingGripStatus=hint({},panel);layout->addWidget(_operatingGripStatus);
-    _editOperatingGrip=new QPushButton("CONFIGURE OPERATING GRIP",panel);layout->addWidget(_editOperatingGrip);
-    connect(_editOperatingGrip,&QPushButton::clicked,this,[this]{(void)editOperatingGrip();});
+    _operatingGripStatus->setToolTip("In game, ROCK fits the hand to the contacted surface and approach. Mouse preview retains native hands; it does not run the VR contact solver.");
     auto* grabLocations=new QPushButton("CONFIGURE GRAB LOCATIONS",panel);layout->addWidget(grabLocations);
     connect(grabLocations,&QPushButton::clicked,this,[this]{(void)openGrabLocations();});
     _simulationSpring=new QCheckBox("Slide returns when released",panel);_simulationSpring->setChecked(true);layout->addWidget(_simulationSpring);
@@ -224,7 +223,7 @@ void ReloadMakerController::prepareSimulation() {
     if(!selectSimulationClip(false,false)){stopSimulation();updateSimulationControls();return;}
     prepareMagazineInteraction();
     if(isGlockConfiguration())_interactionHand=PoseHand::Left;
-    resolveMagazineGrabGrip();resolveOperatingGrip();
+    resolveMagazineGrabGrip();
     prepareSounds();
     (void)applyPose(0);
     _magazineViewport->setActive(true);
@@ -233,7 +232,7 @@ void ReloadMakerController::prepareSimulation() {
 void ReloadMakerController::stopSimulation() {
     _simulationTriggerDown=false;
     _audio.stop();_soundTracking=false;
-    _magazineFitPreview=false;_operatingGrip.reset();_operatingGripBinding=-1;
+    _magazineFitPreview=false;
     if(_simulationTimer)_simulationTimer->stop();
     _simulationActive=false;_simulation.reset();
     _magazineGrabGrip.reset();_magazineGrabBinding=-1;_magazineGrabError.clear();
@@ -421,7 +420,6 @@ bool ReloadMakerController::beginSimulationGrab(QPointF point,ReloadDriveCurve& 
     const auto& rig=*_simulationRig;const auto& track=_reloadRecipe->tracks[rig.slide];
     const bool slide=std::any_of(candidates.cbegin(),candidates.cend(),[&](int i){return sameGripAnchor(_handPoseAnchors[i].description,track.anchor);});
     if(!operatingGrabAvailable())return true;
-    if(_operatingGrip&&!std::any_of(candidates.cbegin(),candidates.cend(),[&](int i){return sameGripAnchor(_handPoseAnchors[i].description,_operatingGrip->pose.placement);}))return false;
     if(!slide||!_simulation.grab())return true;
     _simulationTimer->stop();
     if(isBoltActionConfiguration()) {

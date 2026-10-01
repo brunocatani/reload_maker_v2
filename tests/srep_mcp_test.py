@@ -99,7 +99,7 @@ def main():
                 if receiver not in embedded:select(mag['record'])
                 initial=op('reset');assert initial['active'] and not initial['error'] and not initial['magazine']['error'],initial
                 edit('interaction_hand',hand='left')
-                for progress in (0,.5,1):assert op('pull',progress=progress)['interaction']['applied']
+                for progress in (0,.5,1):assert not op('pull',progress=progress)['interaction']['applied']
                 op('release',cancel=True);op('reset')
                 stem=family+'-'+receiver['record'].split(':')[1]+'-'+mag['record'].split(':')[1]
                 sim=export('simulation',stem);assert len(sim['authoredInteractions']['grabLocations']['points'])==2

@@ -266,18 +266,8 @@ def configure_sound(operation: str, expected_revision: int, id: str = '', record
     return command('sound',params,expected_revision)
 
 @mcp.tool()
-def configure_operating_grip(expected_revision: int) -> dict:
-    """Open the current operating group's authored hand fit in the existing Move/Rotate editor."""
-    return command('configure_operating_grip',{},expected_revision)
-
-@mcp.tool()
-def save_operating_grip(expected_revision: int) -> dict:
-    """Assign the edited grip to this weapon's input group and physical hand. Replaces that assignment and saves the project."""
-    return command('use_operating_grip',{},expected_revision)
-
-@mcp.tool()
 def mirror_magazine_grip(expected_revision: int) -> dict:
-    """Create an editable opposite-hand magazine fit using the actual skeleton bases. Operating grips remain authored for their native hand."""
+    """Create an editable opposite-hand magazine fit using the actual skeleton bases. Operating grabs use dynamic contact for either hand."""
     return command('mirror_magazine_grip',{},expected_revision)
 
 @mcp.tool()

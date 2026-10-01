@@ -161,8 +161,6 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     else if(method=="author_reload_grips") {require(authorReloadGrips(),_lastError);}
     else if(method=="testbed") {require(selectTestbed(p["name"].toString()),_lastError);}
     else if(method=="interaction_hand") {const auto hand=p["hand"].toString();require(hand=="left"||hand=="right","Specify left or right");require(setInteractionHand(hand=="left"?PoseHand::Left:PoseHand::Right),_lastError);}
-    else if(method=="configure_operating_grip") {require(editOperatingGrip(),_lastError);}
-    else if(method=="use_operating_grip") {require(useOperatingGrip(),_lastError);}
     else if(method=="mirror_magazine_grip") {require(mirrorMagazineGrip(),_lastError);}
     else if(method=="sound") {
         const auto operation=p["operation"].toString();

@@ -53,7 +53,7 @@ bool ReloadMakerController::editMagazineGrip(const QString& savedId) {
     if(anchor<0||_loadThread||_reloadCapturing||_rebuildTimer->isActive()) {
         setStatus("Wait for the selected magazine to finish loading.",true);return false;
     }
-    rememberMagazineGrip();_editingOperating=false;
+    rememberMagazineGrip();
     const auto part=_handPoseAnchors[anchor].description;
     const auto weapon=poseRecordKey(currentWeapon()->formId),key=handAssignmentKey(magazineGrabKey(weapon,part.ownerRecord),_interactionHand);
     QString error;std::optional<PartGrip> fit;

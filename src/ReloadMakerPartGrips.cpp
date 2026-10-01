@@ -100,8 +100,6 @@ namespace reloadmaker {
         _gripSave=new QPushButton(QStringLiteral("SAVE PART GRIP"),page); _gripSave->setObjectName("PrimaryButton");
         _gripEnd=new QPushButton(QStringLiteral("END PREVIEW"),page);
         actions->addWidget(_gripSave); actions->addWidget(_gripEnd); layout->addLayout(actions);
-        _saveOperatingGrip=new QPushButton("SAVE FOR OPERATING GROUP",page);layout->addWidget(_saveOperatingGrip);
-        connect(_saveOperatingGrip,&QPushButton::clicked,this,[this]{(void)useOperatingGrip();});
         _useMagazineGrip=new QPushButton(QStringLiteral("SAVE FOR THIS MAGAZINE"),page);
         _useMagazineGrip->setObjectName("PrimaryButton");
         _useMagazineGrip->setToolTip(QStringLiteral("Replace the selected magazine’s active fit and save the project. Older snapshots remain in history, not as additional assignments."));
@@ -247,10 +245,6 @@ namespace reloadmaker {
         _gripSave->setVisible(!magazine&&!_editingMagazine);
         _gripEnd->setVisible(!_editingMagazine);
         updateMagazineGripUi();updateInteractionGripUi();
-        const int operating=operatingAnchor();
-        const bool operatingFit=editing&&operating>=0&&sameGripAnchor(_partGripDraft->pose.placement,_handPoseAnchors[operating].description);
-        if(_saveOperatingGrip){_saveOperatingGrip->setVisible(!magazine&&!isGlockConfiguration());_saveOperatingGrip->setEnabled(_gripSave->isEnabled()&&operatingFit);}
-        if(_editingOperating)_gripSave->setVisible(false);
         _gripEnd->setEnabled(editing);
         _gripLoad->setEnabled(frame && selectedPartGrip());
         if(editing) {
@@ -329,14 +323,13 @@ namespace reloadmaker {
     {
         const auto reference=gripReferenceWorld();
         const auto target=composed(reference,_partGripDraft->pose.placement.handInAnchor);
-        _gripPreviewValid=solvePartGrip(_skeleton,_localPose,_globalPose,_partGripDraft->pose,target,_localPose,_globalPose,_gripError,_editingOperating||magazineGrabAnchor(_partGripDraft->pose.placement)>=0?GripReach::FollowTarget:GripReach::FixedShoulder);
+        _gripPreviewValid=solvePartGrip(_skeleton,_localPose,_globalPose,_partGripDraft->pose,target,_localPose,_globalPose,_gripError,magazineGrabAnchor(_partGripDraft->pose.placement)>=0?GripReach::FollowTarget:GripReach::FixedShoulder);
         if(!_gripPreviewValid) { updatePartGripControls(); return true; }
         return evaluateSceneBindings(_skeleton,_nodeBindings,_sourceLocalPose,_stateBaselineLocalPose,
                                      _globalPose,_boundLocalPose,_boundGlobalPose,_poseError)&&applySimulationPose();
     }
     bool ReloadMakerController::savePartGrip()
     {
-        if(_editingOperating)return useOperatingGrip();
         if(_partGripDraft&&magazineGrabAnchor(_partGripDraft->pose.placement)>=0)return useMagazineGrabGrip();
         updatePartGripControls(); if(!_gripSave->isEnabled()) return false;
         PartGrip grip=*_partGripDraft;

@@ -66,7 +66,7 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     QJsonObject locations;for(auto it=_grabLocations.cbegin();it!=_grabLocations.cend();++it)locations[it.key()]=grabLocationsJson(it.value());record["grabLocations"]=locations;
     QJsonObject optics;for(auto it=_scopeProfiles.cbegin();it!=_scopeProfiles.cend();++it)optics[it.key()]=scopeProfileJson(it.value());record["scopeProfiles"]=optics;
     record["scopeSelection"]=currentScopeKey();
-    QJsonObject operating;for(auto it=_operatingGrips.cbegin();it!=_operatingGrips.cend();++it)operating[it.key()]=it.value();record["operatingGrips"]=operating;
+    QJsonObject operating;for(auto it=_savedOperatingGrips.cbegin();it!=_savedOperatingGrips.cend();++it)operating[it.key()]=it.value();record["operatingGrips"]=operating;
     QJsonObject magazineDefaults;
     for(auto it=_magazineGrabDefaults.cbegin();it!=_magazineGrabDefaults.cend();++it)magazineDefaults[it.key()]=it.value();
     record["magazineGrabDefaults"]=magazineDefaults;
@@ -229,12 +229,12 @@ void ReloadMakerController::restoreSessionSelection() {
     _scopeProfiles.clear();const auto optics=record["scopeProfiles"].toObject();for(auto it=optics.begin();it!=optics.end();++it){ScopeProfile p;QString error;if(readScopeProfile(it.value().toObject(),p,error))_scopeProfiles.insert(it.key(),p);}
     _interactionHand=record["interactionHand"].toString(isM1AConfiguration()?"right":"left")=="right"&&!isGlockConfiguration()?PoseHand::Right:PoseHand::Left;
     _grabLocations.clear();const auto locations=record["grabLocations"].toObject();for(auto it=locations.begin();it!=locations.end();++it){OperatingGrabLocations g;QString e;if(readGrabLocations(it.value().toObject(),g,e))_grabLocations[it.key()]=g;}
-    _operatingGrips.clear();const auto operating=record["operatingGrips"].toObject();for(auto it=operating.begin();it!=operating.end();++it)_operatingGrips[it.key()]=it.value().toString();
+    _savedOperatingGrips.clear();const auto operating=record["operatingGrips"].toObject();for(auto it=operating.begin();it!=operating.end();++it)_savedOperatingGrips[it.key()]=it.value().toString();
     _magazineGrabGrips.clear();const auto magazineGrabs=record["magazineGrabGrips"].toObject();
     for(auto it=magazineGrabs.begin();it!=magazineGrabs.end();++it)_magazineGrabGrips[it.key().toLower()]=it.value().toString();
     _magazineGrabDefaults.clear();const auto magazineDefaults=record["magazineGrabDefaults"].toObject();
     for(auto it=magazineDefaults.begin();it!=magazineDefaults.end();++it)_magazineGrabDefaults[it.key().toLower()]=it.value().toString();
-    _partGripDraft.reset();_operateSuspendedGrip.reset();_suspendedAuthoringGrip.reset();_editingMagazine=false;_editingOperating=false;
+    _partGripDraft.reset();_operateSuspendedGrip.reset();_suspendedAuthoringGrip.reset();_editingMagazine=false;
     _magazineGripDrafts.clear();const auto magazineDrafts=record["magazineGripDrafts"].toObject();
     for(auto it=magazineDrafts.begin();it!=magazineDrafts.end();++it){PartGrip grip;QString e;if(decodePartGrip(QJsonDocument(it.value().toObject()).toJson(),grip,e))_magazineGripDrafts[handAssignmentKey(magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord),grip.pose.hand)]=grip;}
     rebuildWeapon();

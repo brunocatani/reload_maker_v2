@@ -41,12 +41,12 @@ for family,title,expected in [('base','MK18',27),('empire','MK18-Empire',47)]:
  for c in slot['choices']:
   op('reset');select('Magazine',c['record']);initial=op('reset');assert initial['active'] and not initial['error'] and not initial['magazine']['error'],initial
   stem=family+'-'+c['record'].replace(':','-');sim=export('simulation',stem);bundle=export('reload_bundle',stem)
-  group=sim['authoredInteractions']['operatingGroups'];assert len(group)==1 and group[0]['hand']=='left'
+  assert sim['authoredInteractions']['operatingPosePolicy']=='dynamic' and not sim['authoredInteractions']['operatingGroups']
   points=sim['authoredInteractions']['grabLocations'];assert len(points['points'])==2 and points['sourceName']=='WeaponExtra1'
   assert sim['magazineInteraction'].get('inputPath','straight')=='straight'
   bindings={b['hand']:b for b in bundle['magazineGrabBindings'] if b['ownerRecord']==c['record']};assert set(bindings)=={'left','right'}
   for hand in ['left','right']:
-   edit('interaction_hand',hand=hand);op('reset');held=op('pull',progress=1);assert held['interaction']['applied']==(hand=='left');op('release');op('step',seconds=1);op('reset')
+   edit('interaction_hand',hand=hand);op('reset');held=op('pull',progress=1);assert not held['interaction']['applied'] and held['interaction']['posePolicy']=='dynamic';op('release');op('step',seconds=1);op('reset')
    op('mag_out');op('step',seconds=2);held=op('grab_magazine');assert held['magazineGrip']['applied'];rail=held['magazineRail']
    entered=op('move_magazine',position=[v*rail['travel']*.6 for v in rail['outwardInWeapon']]);assert entered['magazine']['phase']=='Full magazine on rail'
    op('move_magazine',distance=0);assert command('simulation_state')['magazinePresent']
@@ -64,7 +64,7 @@ for family,title,expected in [('base','MK18',27),('empire','MK18-Empire',47)]:
  select('Magazine','MK18.esp:000fb9');handles=next(s for s in ready()['slots'] if s['name']=='Charging Handle')
  for c in handles['choices']:
   op('reset');select('Charging Handle',c['record']);edit('interaction_hand',hand='left');op('reset')
-  for u in [0,.25,.5,.75,1]:assert op('pull',progress=u)['interaction']['applied']
+  for u in [0,.25,.5,.75,1]:assert not op('pull',progress=u)['interaction']['applied']
   op('release');op('step',seconds=1);op('reset');export('simulation',family+'-handle-'+c['record'].replace(':','-'))
   print('PASS handle',family,c['record'],flush=True)
  select('Charging Handle','MK18.esp:004d9a');receivers=next(s for s in ready()['slots'] if s['name']=='Receiver')
