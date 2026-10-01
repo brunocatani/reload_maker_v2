@@ -42,6 +42,8 @@ void fixture(const QString& path) {
     check(!buildSimulationRig(bad,rig,error),"Static slide must reject simulation");
     bad=r;bad.tracks[4].anchor.ownerRecord=bad.tracks[0].anchor.ownerRecord;bad.tracks[4].anchor.ownerModel=bad.tracks[0].anchor.ownerModel;
     check(!buildSimulationRig(bad,rig,error),"Shared receiver owner must not be hidden as magazine");
+    check(buildSimulationRig(bad,rig,error,WeaponMechanism::ReciprocatingBolt),error);
+    check(rig.slideTracks==QVector<int>({0})&&rig.magazineTracks==QVector<int>({4,5,6,7,8,9}),"Reciprocating rifle must separate the bolt from magazine descendants despite their shared receiver");
     QVector<QVector3D> body,frame;
     for(float x:{-1.f,1.f})for(float y:{-2.f,2.f})for(float z:{-5.f,3.f})body.append({x,y,z});
     for(float x:{-2.f,2.f})for(float y:{-3.f,14.f})for(float z:{-6.f,5.f})frame.append({x,y,z});
@@ -249,6 +251,14 @@ void m1aFixture(const QString& path) {
         check(reloadPoseDistance(magazineAnimationDelta(rail,input),rail.motion[i])<.0005f,"Linear input lost a native motion sample");
     }
     check((magazineAnimationOffset(rail,rail.travel*.4f)-magazineInputOffset(rail,rail.travel*.4f)).length()>.1f,"Animation was flattened into the input line");
+    // A Barrett-style insertion rotates right up to its seated frame, so
+    // there may be no rotation-aligned sample within the near-well interval.
+    auto rocking=r;
+    const Quaternionf tilt{.09983342f,0,0,.99500417f};
+    for(int f=0;f<rocking.frames-1;++f)rocking.tracks[4].poses[f].rotation=multiplied(rocking.tracks[4].poses.back().rotation,tilt);
+    MagazineRail rockingRail;check(buildMagazineRail(rocking,4,"P-Mag",{},body,frame,rockingRail,error,true),error);
+    check(buildMagazineAnimation(rocking,1.9f,body,rockingRail,error),error);
+    check(rockingRail.motion.size()>20&&std::abs(rockingRail.outward.length()-1)<.0001f,"Rotating approach lost its finite straight input");
     mag.moveRail(rail,rail.travel+rail.releaseMargin+1);check(mag.phase==MagazinePhase::Free,"Straight guide could not disengage");
     check((mag.offset-magazineAnimationOffset(rail,mag.distance)).length()<1e-4f,"Disengaging snapped the visual magazine to the input line");
     mag.moveFree(rail,magazineInputOffset(rail,rail.travel));mag.moveRail(rail,0);check(mag.seated(),"Straight guide did not seat");

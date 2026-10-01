@@ -77,18 +77,18 @@ void ReloadMakerController::prepareSounds(){
         for(auto& path:c.files)path=audioPath(path);_soundProfile.cues.append(c);
     };
     const bool glock=isGlockConfiguration(),ru=isAr15Configuration(),m1a=isM1AConfiguration(),bolt=isBoltActionConfiguration();
-    const QString prefix=glock?"WPNGlock19x":ru?"WPNRU556":m1a?"WPNM1A":bolt?"C14_":"";
+    const QString prefix=glock?"WPNGlock19x":ru?"WPNRU556":m1a?"WPNM1A":isThanatosConfiguration()?"WPNM107":isL118Configuration()?"L115A3_":bolt?"C14_":"";
     add("unlock","Bolt unlock","opening",.01f,bolt?prefix+"BoltUnlatch":"",bolt);
     add("pull","Slide / handle pull","opening",.035f,prefix+(glock?"SlideBack":ru?"Boltopen":"BoltBack"),bolt);
     add("rear","Rear stop","opening",1,"",bolt);
-    add("forward","Forward return","closing",.975f,prefix+(glock?"SlideForward":ru?"Boltclose":"BoltForward"),bolt);
+    add("forward","Forward return","closing",.975f,prefix+(glock?"SlideForward":ru?"Boltclose":isThanatosConfiguration()?"Boltrelease":"BoltForward"),bolt);
     add("lock","Bolt lock","closing",0,bolt?prefix+"BoltLatch":"",bolt);
-    add("mag-release","Magazine release","magazine_release",0,bolt?prefix+"MagRelease":"");
+    add("mag-release","Magazine release","magazine_release",0,bolt||isThanatosConfiguration()?prefix+"MagRelease":"");
     add("mag-out","Magazine withdrawal","extraction",.035f,prefix+"MagOut");
     add("mag-grab","Magazine grabbed","magazine_grab",0,m1a?prefix+"Grab":"");
-    add("mag-entry","Magazine entering","insertion",.02f,glock?prefix+"MagIns1":bolt?prefix+"MagInserting":"");
+    add("mag-entry","Magazine entering","insertion",.02f,glock?prefix+"MagIns1":isL118Configuration()?prefix+"ReloadMagIn":bolt?prefix+"MagInserting":isThanatosConfiguration()?prefix+"Magin":"");
     add("mag-insert","Magazine insertion","insertion",.65f,glock?prefix+"MagIns2":"");
-    add("mag-seat","Magazine seated","magazine_seated",1,prefix+"MagIn");
+    add("mag-seat","Magazine seated","magazine_seated",1,prefix+(isThanatosConfiguration()?"Magslam":"MagIn"));
     const auto dryKey=recordIdentity(*currentPlugin(),currentWeapon()->attackFailSound).toLower();const auto dry=_soundCatalog.value(dryKey);
     add("dry","Dry fire","dry_fire",0,dry.editorId);
     if(_savedSounds.contains(key)){_soundProfile=_savedSounds.value(key);_soundProfile.magazine=magazine;}

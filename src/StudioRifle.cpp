@@ -16,33 +16,52 @@ bool ReloadMakerController::isAr15Configuration() const {
 bool ReloadMakerController::isM1AConfiguration() const {
     return currentWeapon()&&currentWeapon()->editorId.compare("WPNM1A",Qt::CaseInsensitive)==0;
 }
-bool ReloadMakerController::isRifleConfiguration() const {return isAr15Configuration()||isM1AConfiguration();}
+bool ReloadMakerController::isThanatosConfiguration() const {
+    return currentWeapon()&&currentWeapon()->editorId.compare("DiaM107",Qt::CaseInsensitive)==0;
+}
+bool ReloadMakerController::isL118Configuration() const {
+    return currentWeapon()&&currentWeapon()->editorId.compare("L118A2",Qt::CaseInsensitive)==0;
+}
+WeaponMechanism ReloadMakerController::simulationMechanism() const {
+    return isBoltActionConfiguration()?WeaponMechanism::BoltAction:isM1AConfiguration()?WeaponMechanism::M1A:
+        isAr15Configuration()?WeaponMechanism::Ar15:isThanatosConfiguration()?WeaponMechanism::ReciprocatingBolt:WeaponMechanism::PistolSlide;
+}
+bool ReloadMakerController::isRifleConfiguration() const {return isAr15Configuration()||isM1AConfiguration()||isThanatosConfiguration();}
 QString ReloadMakerController::currentTestbed() const {
-    return isGlockConfiguration()?"glock":isAr15Configuration()?"ru556":isM1AConfiguration()?"m1a":isBoltActionConfiguration()?"timberwolf":QString();
+    return isGlockConfiguration()?"glock":isAr15Configuration()?"ru556":isM1AConfiguration()?"m1a":isThanatosConfiguration()?"thanatos":isL118Configuration()?"l118a2":isBoltActionConfiguration()?"timberwolf":QString();
 }
 QString ReloadMakerController::testbedProject(const QString& name) const {
     return studioDataPath(name=="glock"?"workspace/Glock19x-magazine-grips.project.json":
-        name=="ru556"?"workspace/RU556-native-reload.project.json":name=="m1a"?"workspace/M1A-native-reload.project.json":"workspace/Timberwolf-native-reload.project.json");
+        name=="ru556"?"workspace/RU556-native-reload.project.json":name=="m1a"?"workspace/M1A-native-reload.project.json":
+        name=="l118a2"?"workspace/L118A2-native-reload.project.json":name=="thanatos"?"workspace/Thanatos-native-reload.project.json":"workspace/Timberwolf-native-reload.project.json");
 }
 
 bool ReloadMakerController::prepareRifleMotion() {
     _rifleBoltCycle.clear();_rifleBoltOpen=0;_rifleFireInterval=0;_rifleBoltSource.clear();
     const auto single=std::find_if(_animationActions.cbegin(),_animationActions.cend(),[](const auto& a){return a.family==ActionFamily::Fire&&!a.automatic;});
     const auto automatic=std::find_if(_animationActions.cbegin(),_animationActions.cend(),[](const auto& a){return a.family==ActionFamily::Fire&&a.automatic;});
-    if(single==_animationActions.cend()||automatic==_animationActions.cend()){_simulationError="Rifle needs both its single-shot motion and automatic-fire cadence.";return false;}
+    if(single==_animationActions.cend()||(!isThanatosConfiguration()&&automatic==_animationActions.cend())){_simulationError="Rifle needs its native firing motion and applicable cadence.";return false;}
     QString error;
     const auto bytes=readAnimationResource(single->resourcePath,error);
     const auto clip=HkxReader::readClip(bytes,error);
     const auto base=HkxReader::readClip(readAnimationResource(single->baselineResourcePath,error),error);
-    const auto automaticClip=HkxReader::readClip(readAnimationResource(automatic->resourcePath,error),error);
-    if(!clip.valid()||!base.valid()||!automaticClip.valid()){_simulationError="Cannot read rifle fire source: "+error;return false;}
-    QVector<float> events;
-    for(const auto& event:automaticClip.annotations)if(event.text.compare("weaponfire",Qt::CaseInsensitive)==0)events.append(event.timeSeconds);
-    std::sort(events.begin(),events.end());
-    if(events.size()<2){_simulationError="Automatic-fire source has no repeated weaponfire cadence.";return false;}
-    _rifleFireInterval=events[1]-events[0];
-    if(_rifleFireInterval<.01f||_rifleFireInterval>2){_simulationError="Invalid automatic-fire cadence.";return false;}
-    for(int i=2;i<events.size();++i)if(std::abs(events[i]-events[i-1]-_rifleFireInterval)>.002f){_simulationError="Variable fire cadence needs an explicit event schedule.";return false;}
+    if(!clip.valid()||!base.valid()){_simulationError="Cannot read rifle fire source: "+error;return false;}
+    if(isThanatosConfiguration()) {
+        // The installed Thanatos receivers are semi-automatic. Its inherited
+        // automatic graph clip has a variable cadence and is not their source.
+        if(_simulationAmmo.automatic){_simulationError="This Thanatos profile requires a semi-automatic receiver.";return false;}
+        _rifleFireInterval=clip.durationSeconds;
+    } else {
+        const auto automaticClip=HkxReader::readClip(readAnimationResource(automatic->resourcePath,error),error);
+        if(!automaticClip.valid()){_simulationError="Cannot read rifle fire source: "+error;return false;}
+        QVector<float> events;
+        for(const auto& event:automaticClip.annotations)if(event.text.compare("weaponfire",Qt::CaseInsensitive)==0)events.append(event.timeSeconds);
+        std::sort(events.begin(),events.end());
+        if(events.size()<2){_simulationError="Automatic-fire source has no repeated weaponfire cadence.";return false;}
+        _rifleFireInterval=events[1]-events[0];
+        if(_rifleFireInterval<.01f||_rifleFireInterval>2){_simulationError="Invalid automatic-fire cadence.";return false;}
+        for(int i=2;i<events.size();++i)if(std::abs(events[i]-events[i-1]-_rifleFireInterval)>.002f){_simulationError="Variable fire cadence needs an explicit event schedule.";return false;}
+    }
     const int frames=int(std::ceil(clip.durationSeconds*120))+1;
     if(frames<3||frames>maximumReloadFrames){_simulationError="Rifle firing motion exceeds the sampling limit.";return false;}
     QVector<Transformf> sampled,baseline,local,global,boundLocal,boundGlobal,sceneLocal,sceneWorld;
@@ -94,7 +113,7 @@ void ReloadMakerController::setSimulationTrigger(bool pressed) {
 
 bool ReloadMakerController::selectTestbed(const QString& name) {
     if(_loadThread||_reloadCapturing||_rebuildTimer->isActive()){setStatus("Wait for the current weapon to finish loading.",true);return false;}
-    if(name!="glock"&&name!="ru556"&&name!="m1a"&&name!="timberwolf"){setStatus("Unknown weapon testbed.",true);return false;}
+    if(name!="glock"&&name!="ru556"&&name!="m1a"&&name!="timberwolf"&&name!="l118a2"&&name!="thanatos"){setStatus("Unknown weapon testbed.",true);return false;}
     const auto current=currentTestbed();
     if(current==name){setWorkspace(OperateWorkspace);return true;}
     if(!current.isEmpty()) {

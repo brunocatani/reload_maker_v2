@@ -3,7 +3,7 @@
 #include "MagazineInteraction.h"
 
 namespace reloadmaker {
-    enum class WeaponMechanism { PistolSlide, Ar15, M1A, BoltAction };
+    enum class WeaponMechanism { PistolSlide, Ar15, M1A, BoltAction, ReciprocatingBolt };
     // Indices belong to this exact captured recipe, never to scene blocks.
     struct SimulationRig {
         QString recipeId;

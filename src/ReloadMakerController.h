@@ -244,6 +244,9 @@ namespace reloadmaker
         bool isGlockConfiguration() const;
         bool isAr15Configuration() const;
         bool isM1AConfiguration() const;
+        bool isThanatosConfiguration() const;
+        bool isL118Configuration() const;
+        WeaponMechanism simulationMechanism() const;
         bool isBoltActionConfiguration() const;
         bool prepareBoltActionMotion();
         void applyBoltActionTargets(QHash<int,Transformf>& targets) const;

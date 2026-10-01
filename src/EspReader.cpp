@@ -491,7 +491,7 @@ namespace reloadmaker
                     // P-* sources remap connection metadata (e.g. the Glock's
                     // laser mount), not a node inside the incoming model.
                     QString label = textSubrecord(record, QByteArrayLiteral("FULL"), localized);
-                    if (label.isEmpty()) { label = textSubrecord(record, QByteArrayLiteral("EDID"), false); }
+                    if (label.isEmpty() || label.startsWith("String ")) { label = editorId; }
                     content.keywordNames.insert(record.formId, label);
                 } else if (record.type == QByteArrayLiteral("RACE")) {
                     AnimationSubgraphRecord subgraph = animationSubgraphRecord(record);

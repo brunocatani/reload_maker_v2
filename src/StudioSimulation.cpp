@@ -167,7 +167,7 @@ void ReloadMakerController::prepareSimulation() {
     if(!simulationWorkspace(_workspace)||_loadThread||_reloadCapturing||!_reloadRecipe){updateSimulationControls();return;}
     if(_simulationActive)return;
     SimulationRig rig;_simulationError.clear();
-    if(!buildSimulationRig(*_reloadRecipe,rig,_simulationError,isBoltActionConfiguration()?WeaponMechanism::BoltAction:isM1AConfiguration()?WeaponMechanism::M1A:isAr15Configuration()?WeaponMechanism::Ar15:WeaponMechanism::PistolSlide)){updateSimulationControls();return;}
+    if(!buildSimulationRig(*_reloadRecipe,rig,_simulationError,simulationMechanism())){updateSimulationControls();return;}
     _simulationRig=rig;_simulationVisibility.clear();
     const auto& owner=_reloadRecipe->tracks[rig.magazine].anchor;
     const auto* config=configuration();auto* model=activeModel();
@@ -276,7 +276,7 @@ bool ReloadMakerController::applySimulationPose() {
     QVector<Transformf> local,world;
     if(!nativeMechanismScene(_reloadScenePlan,_nodeBindings,_boundLocalPose,local,world,_poseError))return false;
     QHash<int,Transformf> targets;
-    if(!isRifleConfiguration()&&(_simulation.action!=SimulationAction::Fire||_simulation.willLockAfterShot()))for(int track:_simulationRig->slideTracks) {
+    if((!isRifleConfiguration()||isThanatosConfiguration())&&(_simulation.action!=SimulationAction::Fire||_simulation.willLockAfterShot()))for(int track:_simulationRig->slideTracks) {
         if(holdOpen&&_simulationRig->magazineTracks.contains(track))continue;
         targets.insert(_reloadTrackNodes[track],simulationTrackPose(*_reloadRecipe,*_simulationRig,track,holdOpen||_simulation.willLockAfterShot()?1.f:_simulation.slide));
     }
@@ -463,19 +463,19 @@ void ReloadMakerController::updateSimulationControls() {
     const bool busy=native||_simulation.magazine.busy();
     _simulationMagazineGrip->setEnabled(_simulationActive&&!busy&&_simulation.action==SimulationAction::Idle&&_simulationRig&&_reloadRecipe&&magazineGrabSupported(_reloadRecipe->tracks[_simulationRig->magazine].anchor));
     const bool bolt=isBoltActionConfiguration(),ar=isRifleConfiguration()||bolt;
-    _simulationInstructions->setText(bolt?"After firing, pull the bolt back to eject, then push it forward to feed and lock. Release holds its position. Magazine: enter the angled line and push straight in.":isM1AConfiguration()?"Drag the operating handle to rack. FIRE shoots once per press. GRAB: enter the angled line, then move straight along it or use the wheel. The magazine follows its reload motion. Esc cancels.":ar?"Drag the charging handle to rack. Hold FIRE for automatic fire. GRAB: move the mouse, wheel for depth, enter the guide and push in. Esc cancels.":"Drag the slide to rack. GRAB: move the mouse, wheel for depth, enter the guide and push in. Esc cancels.");
+    _simulationInstructions->setText(bolt?"After firing, pull the bolt back to eject, then push it forward to feed and lock. Release holds its position. Magazine: enter the angled line and push straight in.":isM1AConfiguration()||isThanatosConfiguration()?"Drag the operating handle to rack. FIRE shoots once per press. GRAB: enter the angled line, then move straight along it or use the wheel. The magazine follows its reload motion. Esc cancels.":ar?"Drag the charging handle to rack. Hold FIRE for automatic fire. GRAB: move the mouse, wheel for depth, enter the guide and push in. Esc cancels.":"Drag the slide to rack. GRAB: move the mouse, wheel for depth, enter the guide and push in. Esc cancels.");
     _simulationSlideRelease->setVisible(!bolt);_simulationSpring->setVisible(!bolt);
     _simulationSlideRelease->setText(ar?"BOLT RELEASE":"SLIDE RELEASE");
-    _simulationSpring->setText(ar?"Charging handle returns when released":"Slide returns when released");
+    _simulationSpring->setText(isAr15Configuration()?"Charging handle returns when released":ar?"Bolt returns when released":"Slide returns when released");
     _simulationFire->setToolTip(ar&&_simulationAmmo.automatic?"Press for one shot; hold for automatic fire.":"Fire one shot.");
-    _simulationDrive->setInstructions(bolt?"OPERATE · grab the bolt · pull back to lift/open · push forward to close/lock · release holds position":isM1AConfiguration()?"OPERATE · pull the operating handle to rack · bolt release closes the action · background drag orbits":ar?"OPERATE · grab the charging handle to rack · bolt release closes the bolt · hold FIRE for automatic fire":"SIMULATE · grab the slide to rack it · linked parts follow · background drag orbits");
+    _simulationDrive->setInstructions(bolt?"OPERATE · grab the bolt · pull back to lift/open · push forward to close/lock · release holds position":isM1AConfiguration()||isThanatosConfiguration()?"OPERATE · pull the operating handle to rack · bolt release closes the action · background drag orbits":ar?"OPERATE · grab the charging handle to rack · bolt release closes the bolt · hold FIRE for automatic fire":"SIMULATE · grab the slide to rack it · linked parts follow · background drag orbits");
     const bool glock=isGlockConfiguration();
     _simulationNoExtender->setVisible(glock);_simulationNoExtender->setEnabled(!busy&&!_loadThread&&!_reloadCapturing&&!glockNoExtenderPath().isEmpty());
     {const QSignalBlocker block(_simulationNoExtender);_simulationNoExtender->setChecked(_glockNoExtender);}
     _simulationSource->setVisible(glock||ar);
     if((glock||ar)&&_reloadRecipe) {
         const auto path=_reloadRecipe->source["animation"].toString();
-        const auto relative=path.section(bolt?"c14timb/":isM1AConfiguration()?"m1aanims/":ar?"ru556anims/":"glock19xanims/",1);
+        const auto relative=path.section(isL118Configuration()?"l118/":bolt?"c14timb/":isThanatosConfiguration()?"diam107/":isM1AConfiguration()?"m1aanims/":ar?"ru556anims/":"glock19xanims/",1);
         _simulationSource->setText("Reload source · "+relative+" · "+(bolt?"manual bolt action":_simulationAmmo.automatic?"automatic receiver":"semi-automatic receiver"));
         _simulationSource->setToolTip(path);
     }
@@ -502,8 +502,8 @@ void ReloadMakerController::updateSimulationControls() {
         .arg(_simulation.spentCase?"spent case":_simulation.chambered?"loaded":"empty").arg(slide).arg(_simulation.shotsFired)
         .arg(_simulation.magazine.seated()?QString("Magazine seated"):_simulation.magazineDescription().toHtmlEscaped()).arg(ar?"Bolt":"Slide"));
     QStringList names;for(int i:_simulationRig->slideTracks)names.append(_reloadRecipe->tracks[i].anchor.anchorName);
-    _simulationParts->setText(bolt?QString("C14 Timberwolf · manual bolt cycle\nLift / pull / push / lock follow the native animation\nCases ejected: %1").arg(_simulation.casesEjected):isM1AConfiguration()?QString("M1A · reciprocating operating handle and rotating bolt\nSemi-automatic · one shot per press"):
-        ar?QString("AR-15 · independent bolt and charging handle\nHandle %1% · automatic cadence %2 rounds/min").arg(qRound(_simulation.handle*100)).arg(qRound(60/_rifleFireInterval)):"Moving with the slide: "+names.join(" · "));
+    _simulationParts->setText(bolt?QString("%1 · manual bolt cycle\nLift / pull / push / lock follow the native animation\nCases ejected: %2").arg(isL118Configuration()?"L118A2":"C14 Timberwolf").arg(_simulation.casesEjected):isM1AConfiguration()?QString("M1A · reciprocating operating handle and rotating bolt\nSemi-automatic · one shot per press"):
+        isThanatosConfiguration()?QString("Thanatos · reciprocating bolt\nSemi-automatic · one shot per press"):ar?QString("AR-15 · independent bolt and charging handle\nHandle %1% · automatic cadence %2 rounds/min").arg(qRound(_simulation.handle*100)).arg(qRound(60/_rifleFireInterval)):"Moving with the slide: "+names.join(" · "));
     if(!_magazineError.isEmpty())_simulationParts->setText(_simulationParts->text()+"\n\nMagazine interaction: "+_magazineError);
     if(!_simulationAmmo.valid())_simulationParts->setText(_simulationParts->text()+"\n\nAmmunition: "+_simulationAmmo.error);
     if(_magazineGrabGrip)_simulationParts->setText(_simulationParts->text()+"\n\nMAGAZINE GRAB · "+_magazineGrabGrip->pose.name);
@@ -581,10 +581,10 @@ QJsonObject ReloadMakerController::exportSimulation() const {
     if(_magazineRail)result["magazineInteraction"]=magazineRailJson(*_magazineRail);
     result["ammunitionConfiguration"]=_simulationAmmo.json();
     if(isRifleConfiguration()) {
-        result["format"]=isM1AConfiguration()?"reload-maker-m1a-simulation":"reload-maker-ar15-simulation";
+        result["format"]=isThanatosConfiguration()?"reload-maker-reciprocating-bolt-simulation":isM1AConfiguration()?"reload-maker-m1a-simulation":"reload-maker-ar15-simulation";
         QJsonArray poses;
         for(const auto& pose:_rifleBoltCycle){QJsonObject value;if(!encodePoseTransform(pose,value,error))return {};poses.append(value);}
-        result["mechanismProfile"]=isM1AConfiguration()?"m1a":"ar15";
+        result["mechanismProfile"]=isThanatosConfiguration()?"reciprocating-bolt":isM1AConfiguration()?"m1a":"ar15";
         result["chargingHandleTrack"]=_simulationRig->slide;result["boltTrack"]=_simulationRig->bolt;
         result["magazineRecord"]=simulationMagazineAnchor().ownerRecord;result["magazineModel"]=simulationMagazineAnchor().ownerModel;
         result["boltMotion"]=QJsonObject{{"animation",_rifleBoltSource},{"duration",_rifleBoltDuration},{"openSample",_rifleBoltOpen},{"poses",poses}};

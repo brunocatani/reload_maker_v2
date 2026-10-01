@@ -56,7 +56,7 @@ bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& err
     }
     for(int i=0;i<r.tracks.size();++i) {
         const auto& t=r.tracks[i];
-        if(profile==WeaponMechanism::Ar15||profile==WeaponMechanism::M1A) {
+        if(profile==WeaponMechanism::Ar15||profile==WeaponMechanism::M1A||profile==WeaponMechanism::ReciprocatingBolt) {
             if(descendant(r,i,rig.magazine))rig.magazineTracks.append(i);
             if(i==rig.slide||(profile==WeaponMechanism::M1A&&i==rig.bolt))rig.slideTracks.append(i);
             continue;

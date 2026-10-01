@@ -53,12 +53,12 @@ void ReloadMakerController::prepareMagazineInteraction() {
         for(const auto& vertex:shape->verts){const auto point=composed(world,Transformf{{vertex[0],vertex[1],vertex[2]}}).translation;output.append({point.x,point.y,point.z});}
     }
     MagazineRail rail;
-    if(!buildMagazineRail(*_reloadRecipe,rig.magazine,connectionName,connection,body,frame,rail,_magazineError,isM1AConfiguration()||isBoltActionConfiguration()))return;
-    if(isM1AConfiguration()||isBoltActionConfiguration()) {
+    if(!buildMagazineRail(*_reloadRecipe,rig.magazine,connectionName,connection,body,frame,rail,_magazineError,isM1AConfiguration()||isBoltActionConfiguration()||isThanatosConfiguration()))return;
+    if(isM1AConfiguration()||isBoltActionConfiguration()||isThanatosConfiguration()) {
         float entry=-1,empty=-1;
         for(const auto& event:_reloadClip.annotations) {
-            if(event.text.endsWith(isBoltActionConfiguration()?"C14_MagInserting":"WPNM1AMagIn",Qt::CaseInsensitive))entry=event.timeSeconds;
-            if(event.text.endsWith(isBoltActionConfiguration()?"C14_MagOut":"WPNM1AMagOut",Qt::CaseInsensitive))empty=event.timeSeconds;
+            if(event.text.endsWith(isL118Configuration()?"L115A3_ReloadMagIn":isBoltActionConfiguration()?"C14_MagInserting":isThanatosConfiguration()?"WPNM107Magin":"WPNM1AMagIn",Qt::CaseInsensitive))entry=event.timeSeconds;
+            if(event.text.endsWith(isL118Configuration()?"L115A3_MagOut":isBoltActionConfiguration()?"C14_MagOut":isThanatosConfiguration()?"WPNM107Magout":"WPNM1AMagOut",Qt::CaseInsensitive))empty=event.timeSeconds;
         }
         if(empty<0){_magazineError="Native empty-magazine frame is unavailable.";return;}
         _m1aEmptyMagazineFrame=std::clamp(qRound(empty/_reloadRecipe->duration*(_reloadRecipe->frames-1)),0,_reloadRecipe->frames-1);

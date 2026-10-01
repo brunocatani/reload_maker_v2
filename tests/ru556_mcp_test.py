@@ -66,6 +66,7 @@ try:
         assert math.dist(handle,in_weapon('WeaponExtra1'))<.004,'Charging handle reciprocated during automatic fire'
         emptied=op('step',seconds=capacity*.14+.25)
         assert emptied['ammunition']['shotsFired']==capacity and emptied['ar15']['boltLocked']
+        op('trigger_up') # A later trigger_down must be a fresh physical press, including an unchanged receiver.
         assert emptied['ar15']['handle']==0 and not emptied['ammunition']['chambered']
         for shape in emptied['magazineShapes']:
             if shape['cartridge']:assert shape['flags']&1,'Empty magazine still shows a separate cartridge'

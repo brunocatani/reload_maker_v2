@@ -22,7 +22,7 @@ def count():return command('sound_state')['eventsTriggered']
 original=ready()['project'];edit('save_project',path=original);original_bytes=Path(original).read_bytes();backup=OUT/'original.project.json';backup.write_bytes(original_bytes)
 muted=command('sound_state')['muted'];results={}
 try:
-    for weapon in ['glock','ru556','m1a','timberwolf']:
+    for weapon in ['glock','ru556','m1a','timberwolf','l118a2','thanatos']:
         edit('testbed',name=weapon);canonical=ready()['project'];edit('workspace',index=6);ready();op('reset')
         scratch=OUT/(weapon+'.project.json');edit('save_project',path=str(scratch));saved=scratch.read_bytes()
         try:
@@ -35,7 +35,7 @@ try:
             op('pull',progress=.6);assert count()==after,'Holding repeated a sound'
             op('release',cancel=True);assert count()==after,'Cancel replayed sound'
             op('drop_magazine');op('pull',progress=1)
-            if weapon=='timberwolf':op('pull',progress=0)
+            if weapon in ('timberwolf','l118a2'):op('pull',progress=0)
             op('release');op('step',seconds=2)
             state=command('simulation_state');assert not state['ammunition']['chambered'] and state['slide']==0,state
             before=count();op('trigger_down');assert count()==before+1;op('trigger_down');op('step',seconds=2);assert count()==before+1,'Held empty trigger spammed'

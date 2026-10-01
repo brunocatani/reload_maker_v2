@@ -6,7 +6,7 @@
 
 namespace reloadmaker {
 bool ReloadMakerController::isBoltActionConfiguration() const {
-    return currentWeapon()&&currentWeapon()->editorId.compare("C14Timberwolf",Qt::CaseInsensitive)==0;
+    return currentWeapon()&&(currentWeapon()->editorId.compare("C14Timberwolf",Qt::CaseInsensitive)==0||isL118Configuration());
 }
 bool ReloadMakerController::prepareBoltActionMotion() {
     _boltCycle={};_boltFiredPose.clear();_boltCycleSource={};

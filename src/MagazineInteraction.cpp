@@ -31,6 +31,7 @@ bool buildMagazineRail(const ReloadRecipe& r,int full,const QString& name,const 
     if(size<.01f){error="Magazine geometry has no extent.";return false;}
     const auto& empty=r.tracks[rail.emptyTrack];
     const auto& rest=finalApproach?empty.poses.back():empty.poses.front();
+    QVector3D approach;
     for(int sample=0;sample<empty.poses.size();++sample) {
         // A shared drum body begins rotating as soon as it is removed. Its
         // final approach to the seated frame gives the aligned insertion
@@ -43,8 +44,15 @@ bool buildMagazineRail(const ReloadRecipe& r,int full,const QString& name,const 
         // Use motion while the empty magazine remains aligned with the well,
         // before the hand's free rotation/throw. A connection has no universal
         // axis convention; source motion establishes its outward direction.
-        if(length>=size*(rail.sharedBody()?.035f:.12f)&&length<=size*.4f&&dot>.9998f&&reloadPoseVisible(pose)){rail.outward=delta.normalized();break;}
+        if(length>=size*(rail.sharedBody()?.035f:.12f)&&length<=size*.4f&&reloadPoseVisible(pose)) {
+            if(approach.isNull())approach=delta.normalized();
+            if(dot>.9998f){rail.outward=delta.normalized();break;}
+        }
     }
+    // A native visual approach can rock/rotate all the way into the well.
+    // Its final translation still defines a straight hand-input direction;
+    // buildMagazineAnimation retains the complete independent visual curve.
+    if(finalApproach&&rail.outward.isNull())rail.outward=approach;
     if(rail.outward.lengthSquared()<.9f){error="No aligned magazine extraction segment was found.";return false;}
     float magazineMin=std::numeric_limits<float>::max(),weaponMax=-magazineMin;
     float radius=0;

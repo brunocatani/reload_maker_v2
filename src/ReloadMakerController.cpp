@@ -341,6 +341,12 @@ namespace reloadmaker
             _plugins = std::move(result->plugins);
             _referenceNames = std::move(result->referenceNames);
             _referenceSounds = std::move(result->referenceSounds);
+            // An OMOD need not override the master KYWD that names its slot.
+            for(auto& plugin:_plugins)for(const auto& mod:plugin.objectMods)
+                if(!plugin.keywordNames.contains(mod.attachPoint)) {
+                    const auto name=_referenceNames.value(recordIdentity(plugin,mod.attachPoint).toLower());
+                    if(!name.isEmpty())plugin.keywordNames.insert(mod.attachPoint,name);
+                }
             _packageText = _package.sourcePath;
             _gameDataText = _gameData;
             QSettings settings;

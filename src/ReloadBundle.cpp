@@ -10,7 +10,8 @@ QString magazineGrabKey(const QString& weapon,const QString& magazine){return we
 QString handAssignmentKey(const QString& key,PoseHand hand){return key.toLower()+(hand==PoseHand::Left?"|left":"|right");}
 bool magazineGrabSupported(const HandPosePlacement& anchor) {
     return anchor.anchorName.compare("WeaponMagazine",Qt::CaseInsensitive)==0||
-        (anchor.anchorKind=="installed-part"&&anchor.anchorName.compare("Mag",Qt::CaseInsensitive)==0);
+        (anchor.anchorKind=="installed-part"&&(anchor.anchorName.compare("Mag",Qt::CaseInsensitive)==0||
+            anchor.anchorName.compare("M82Mag10Rd",Qt::CaseInsensitive)==0));
 }
 std::optional<PartGrip> magazineGripFor(const QString& weapon,const HandPosePlacement& anchor,
     const QVector<PartGrip>& library,const QHash<QString,QString>& assignments,
