@@ -37,17 +37,21 @@ QJsonObject ReloadMakerController::packCommand(const QJsonObject& request) {
         return _packJob;
     }
     if(_packProcess)throw std::runtime_error("A pack job is already running");
-    const bool authoring=operation=="export"||operation=="inspect-project";
-    if(operation!="build"&&operation!="validate"&&!authoring)throw std::runtime_error("Unknown pack operation");
+    const bool authoring=operation=="export"||operation=="inspect-project",cooking=operation=="cook";
+    if(operation!="build"&&operation!="validate"&&!authoring&&!cooking)throw std::runtime_error("Unknown pack operation");
     const auto packs=request["packs"].toArray();
-    if(!authoring&&(packs.isEmpty()||packs.size()>256))throw std::runtime_error("Select between one and 256 finished pack folders");
+    if(!authoring&&!cooking&&(packs.isEmpty()||packs.size()>256))throw std::runtime_error("Select between one and 256 finished pack folders");
     const QDir application(QCoreApplication::applicationDirPath());
     const auto python=application.filePath("runtime/python/python.exe");
     const auto entry=application.filePath("tools/product_cli.py");
     if(!QFileInfo::exists(python)||!QFileInfo::exists(entry))throw std::runtime_error("The bundled object builder is missing. Install the complete Reload Maker tool package.");
     const auto id=QUuid::createUuid().toString(QUuid::WithoutBraces);
     _packCancelFile=studioDataPath("local/tmp/pack-"+id+".cancel");
-    QStringList arguments{"-B","-I",entry,"--workspace",studioRoot(),"--cancel-file",_packCancelFile,"packs",operation};
+    QStringList arguments{"-B","-I",entry,"--workspace",studioRoot(),"--cancel-file",_packCancelFile};
+    if(cooking) {
+        if(!QFileInfo(request["job"].toString()).isFile()||request["output"].toString().isEmpty())throw std::runtime_error("Select a frozen asset job and new finished NIF path");
+        arguments<<"cook-object"<<"--job"<<request["job"].toString()<<"--output"<<request["output"].toString();
+    } else arguments<<"packs"<<operation;
     if(authoring) {
         const auto project=request["project"].toString();
         if(!QFileInfo(project).isFile())throw std::runtime_error("Select an authored pack project");
@@ -57,7 +61,7 @@ QJsonObject ReloadMakerController::packCommand(const QJsonObject& request) {
             if(output.isEmpty())throw std::runtime_error("Choose a new local export folder");
             arguments<<"--output"<<output;
         }
-    } else for(const auto& pack:packs){if(!pack.isString()||!QFileInfo(pack.toString()).isDir())throw std::runtime_error("A selected pack folder is missing");arguments<<"--pack"<<pack.toString();}
+    } else if(!cooking)for(const auto& pack:packs){if(!pack.isString()||!QFileInfo(pack.toString()).isDir())throw std::runtime_error("A selected pack folder is missing");arguments<<"--pack"<<pack.toString();}
     if(operation=="build") {
         const auto installation=request["installation"].toString();
         if(installation.isEmpty())throw std::runtime_error("Select the installation ledger folder");

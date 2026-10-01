@@ -11,6 +11,7 @@ public:
     ~CollisionPanel() override;
     std::function<CollisionProfile(int,bool)> snapshot;
     std::function<void()> changed;
+    std::function<void()> cook;
     void setTargets(const QStringList& names);
     void invalidate();
     void cancel();

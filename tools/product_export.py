@@ -124,6 +124,11 @@ def export_pack(path, destination, backends):
                 require(validation.get('ok') and info.get('ok') and data.get('bsVersion') == 130 and
                         types.get('bhkNPCollisionObject') == 1 and types.get('bhkPhysicsSystem') == 1,
                         f'Object needs a validated, cooked Fallout 4 collision model: {source}')
+                blocks = native.nif_blocks(str(source))
+                require(blocks.get('ok'), 'Cannot inspect finished model material dependencies')
+                for block in blocks['data']:
+                    if block['type'] in ('BSLightingShaderProperty', 'BSEffectShaderProperty') and block.get('name'):
+                        materials.add(relative(block['name']))
                 verified.add(fingerprint)
             model = f'Meshes/DIAMOND/Packs/{pack}/{fingerprint}.nif'
             target = within(stage, model);target.parent.mkdir(parents=True, exist_ok=True)

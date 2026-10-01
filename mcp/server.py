@@ -70,7 +70,7 @@ def get_collision_state() -> dict:
 
 @mcp.tool()
 def configure_collisions(changes: dict, expected_revision: int) -> dict:
-    """Workspace 7: select target index; defaults/generate (gapGame, supportErrorGame, targetPoints); import pre-Elric JSON path against installed model; open saved profile; hull index/enabled; view overlay/compare/isolated; save replaces this weapon/loadout/target profile; export to a local path; cancel worker. Points are source-local game units, not cooked Havok shapes."""
+    """Workspace 7: select target index; defaults/generate (gapGame, supportErrorGame, targetPoints); import pre-Elric JSON path against installed model; open saved profile; hull index/enabled; view overlay/compare/isolated; save replaces this weapon/loadout/target profile; export to a local path; export-hulls converts enabled points into the selected magazine root for cooking; cancel worker. Saved profiles use source-local game units, not cooked Havok shapes."""
     return command('collisions', changes, expected_revision)
 
 @mcp.tool()
@@ -309,6 +309,15 @@ def use_operating_fingers(id: str, expected_revision: int) -> dict:
     """Assign saved finger shape to the current operating hand/group; wrist stays live. The unassigned other hand uses a skeleton-aware mirror."""
     return command('use_operating_fingers', {'id': id}, expected_revision)
 
+
+@mcp.tool()
+def cook_world_object(job: str, output: str, expected_revision: int) -> dict:
+    """Cook a frozen prepared-magazine job through bundled NIF tools and configured
+    Creation Kit. Input is a rigid render NIF plus bounded hull JSON in its root
+    frame. Finished output is new/immutable; source models stay untouched. Poll
+    pack_job(state) for completion and its validated output/receipt.
+    """
+    return command('pack_job', dict(operation='cook',job=job,output=output), expected_revision)
 
 @mcp.tool()
 def authoring_roadmap(operation: str = 'state', index: int | None = None,

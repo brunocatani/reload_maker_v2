@@ -45,8 +45,9 @@ CollisionPanel::CollisionPanel(QWidget* parent):QWidget(parent){
     _hulls=new QListWidget;_hulls->setMinimumHeight(160);layout->addWidget(_hulls);
     label("Yellow: selected · teal: ROCK · orange: imported. Uncheck a hull to exclude it from export. Save before changing the source, target or animation.")->setObjectName("Hint");
     button("SAVE / REPLACE THIS PROFILE","save");button("OPEN SAVED PROFILE…","browse_profile");button("EXPORT COLLISION JSON…","browse_export");button("CANCEL GENERATION","cancel");
+    button("COOK PREPARED MAGAZINE…","cook");
     _status=label("No collision snapshot yet.");_status->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    label("Preview shows convex point envelopes. Native radius, Havok cooking and physics are not simulated here. JSON export needs a runtime consumer; existing game assets are unchanged.")->setObjectName("Hint");layout->addStretch();
+    label("Preview shows convex point envelopes. Cook prepared magazine uses your configured Creation Kit to produce a finished collision model. Live Havok contacts still require an in-game test.")->setObjectName("Hint");layout->addStretch();
     connect(_target,qOverload<int>(&QComboBox::activated),this,[this]{invalidate();});
     connect(_hulls,&QListWidget::currentRowChanged,this,[this]{if(changed)changed();});
     connect(_hulls,&QListWidget::itemChanged,this,[this](QListWidgetItem* item){if(_refreshing)return;const int index=_hulls->row(item);if(index>=0&&index<_profile.hulls.size()){_profile.hulls[index].enabled=item->checkState()==Qt::Checked;_dirty=true;refresh();}});
@@ -80,6 +81,7 @@ QJsonObject CollisionPanel::command(const QJsonObject& args){
     if(args.contains("target")){const auto index=args["target"].toInt(-1);require(index>=0&&index<_target->count(),"Unknown collision target");if(index!=_target->currentIndex()){invalidate();_target->setCurrentIndex(index);}}
     _lastError.clear();
     if(op=="select"){}
+    else if(op=="cook"){require(_profile.valid()&&bool(cook),"Generate a magazine collision profile first");cook();return state();}
     else if(op=="defaults"||op=="generate"){
         if(op=="defaults"){_gap->setValue(1);_error->setValue(.5);_points->setValue(96);_radius->setValue(.01);}
         for(auto pair:{std::pair{"gapGame",_gap},std::pair{"supportErrorGame",_error},std::pair{"targetPoints",_points}})if(args.contains(pair.first)){const auto v=args[pair.first];require(v.isDouble()&&std::isfinite(v.toDouble())&&v.toDouble()>=pair.second->minimum()&&v.toDouble()<=pair.second->maximum(),"Invalid generation setting");pair.second->setValue(v.toDouble());}
@@ -90,14 +92,15 @@ QJsonObject CollisionPanel::command(const QJsonObject& args){
         if(path.isEmpty())return state();
         QFile file(path);require(file.size()<=32*1024*1024&&file.open(QIODevice::ReadOnly),"Cannot read collision JSON (maximum 32 MB)");const auto bytes=file.readAll();QJsonParseError parse;const auto doc=QJsonDocument::fromJson(bytes,&parse);require(parse.error==QJsonParseError::NoError&&doc.isObject(),"Invalid collision JSON");CollisionProfile next;QString error;
         if(legacy){auto result=importCollisionHullInput(doc.object(),context(true));require(result.error.isEmpty(),result.error);next=std::move(result.profile);next.sourceHash=QString::fromLatin1(QCryptographicHash::hash(bytes,QCryptographicHash::Sha256).toHex());}
-        else{require(readCollisionJson(doc.object(),next,error),error);const auto current=context(next.origin=="diamond-pre-elric-input");require(next.weapon==current.weapon&&next.configuration==current.configuration&&next.target==current.target,"Profile belongs to a different weapon, loadout or target");for(auto& source:next.sources){auto it=std::find_if(current.sources.begin(),current.sources.end(),[&](const auto& s){return s.key==source.key&&s.geometryHash==source.geometryHash;});require(it!=current.sources.end(),"Source geometry/pose changed; regenerate or import against its explicit reference");source.frame=it->frame;}}
+        else{require(readCollisionJson(doc.object(),next,error),error);const auto current=context(next.origin=="diamond-pre-elric-input");require(next.weapon==current.weapon&&next.configuration==current.configuration&&next.target==current.target,"Profile belongs to a different weapon, loadout or target");for(auto& source:next.sources){auto it=std::find_if(current.sources.begin(),current.sources.end(),[&](const auto& s){return s.key==source.key&&s.geometryHash==source.geometryHash;});require(it!=current.sources.end(),"Source geometry/pose changed; regenerate or import against its explicit reference");source.frame=it->frame;}next.referencePose["rootToWorld"]=current.referencePose["rootToWorld"];}
         _baseline=_profile;_profile=std::move(next);_dirty=legacy;_lastPath=path;
-    }else if(op=="save"||op=="export"||op=="browse_export"){
+    }else if(op=="save"||op=="export"||op=="browse_export"||op=="export-hulls"){
         require(_profile.valid(),"Generate or load a profile first");require(std::any_of(_profile.hulls.begin(),_profile.hulls.end(),[](const auto& h){return h.enabled;}),"Enable at least one hull");QString path=op=="save"?savePath():args["path"].toString();
         if(op=="browse_export")path=QFileDialog::getSaveFileName(this,"Export collision points",studioDataPath("exports/collision.json"),"Collision JSON (*.json)");
         if(path.isEmpty())return state();
         const auto full=QFileInfo(path).absoluteFilePath();require(full.startsWith(QDir(studioRoot()).absolutePath()+"/",Qt::CaseInsensitive),"Save collision profiles inside the Reload Maker V2 workspace");
-        QDir().mkpath(QFileInfo(full).absolutePath());QSaveFile file(full);const auto bytes=QJsonDocument(collisionJson(_profile)).toJson();require(file.open(QIODevice::WriteOnly)&&file.write(bytes)==bytes.size()&&file.commit(),"Could not save collision profile");_lastPath=full;_dirty=false;
+        QString error;const auto document=op=="export-hulls"?collisionCookInput(_profile,error):collisionJson(_profile);require(error.isEmpty(),error);
+        QDir().mkpath(QFileInfo(full).absolutePath());QSaveFile file(full);const auto bytes=QJsonDocument(document).toJson();require(file.open(QIODevice::WriteOnly)&&file.write(bytes)==bytes.size()&&file.commit(),"Could not save collision profile");_lastPath=full;if(op!="export-hulls")_dirty=false;
     }else if(op=="hull"){
         const int i=args["index"].toInt(-1);require(i>=0&&i<_profile.hulls.size(),"Unknown hull");_hulls->setCurrentRow(i);if(args.contains("enabled")){require(args["enabled"].isBool(),"Expected enabled boolean");_profile.hulls[i].enabled=args["enabled"].toBool();_dirty=true;}
     }else if(op=="view"){

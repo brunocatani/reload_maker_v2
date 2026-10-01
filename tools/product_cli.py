@@ -21,6 +21,9 @@ def main():
     commands.add_parser('self-check')
     automation = commands.add_parser('mcp')
     automation.add_argument('--adapter', choices=['studio', 'nif', 'archive', 'plugin'], default='studio')
+    cook = commands.add_parser('cook-object')
+    cook.add_argument('--job', required=True)
+    cook.add_argument('--output', required=True)
     packs = commands.add_parser('packs').add_subparsers(dest='action', required=True)
     validate = packs.add_parser('validate')
     validate.add_argument('--pack', action='append', required=True)
@@ -39,6 +42,9 @@ def main():
         os.environ['RELOAD_MAKER_CANCEL_FILE'] = str(Path(settings.cancel_file).resolve())
     if args.command == 'self-check':
         result = dict(ok=True, capabilities=backends.capabilities())
+    elif args.command == 'cook-object':
+        from product_assets import cook_world_object
+        result = cook_world_object(args.job, args.output, backends)
     elif args.command == 'mcp':
         if args.adapter == 'studio':
             sys.argv = [str(backends.application/'mcp/server.py')]

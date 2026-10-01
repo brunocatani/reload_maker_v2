@@ -243,6 +243,7 @@ namespace reloadmaker
         void showSetup();
         void showPackBuilder();
         void showPackExporter();
+        void showCollisionCooker();
         void showAuthoringRoadmap();
         QString roadmapKey() const;
         QJsonObject roadmapState() const;

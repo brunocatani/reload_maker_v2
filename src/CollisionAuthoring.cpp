@@ -86,6 +86,22 @@ CollisionResult bakeCollision(CollisionProfile input,const std::shared_ptr<std::
         out.profile=std::move(input);
     }catch(const std::exception& e){out.error=QString::fromUtf8(e.what());}return out;
 }
+QJsonObject collisionCookInput(const CollisionProfile& p,QString& error){
+    error.clear();
+    const auto frame=p.referencePose["rootToWorld"].toArray();
+    if(!p.valid()||frame.size()!=16){error="Regenerate this profile with a selected magazine reference before cooking";return {};}
+    QMatrix4x4 root;for(int i=0;i<16;++i){if(!frame[i].isDouble()||!finite(frame[i].toDouble())){error="Invalid magazine root frame";return {};}root(i/4,i%4)=float(frame[i].toDouble());}
+    bool invertible=false;const auto inverse=root.inverted(&invertible);if(!invertible){error="Singular magazine root frame";return {};}
+    QJsonArray hulls;QHash<QString,QMatrix4x4> frames;for(const auto& source:p.sources)frames.insert(source.key,inverse*source.frame);
+    for(const auto& hull:p.hulls)if(hull.enabled){
+        if(hull.points.size()<4||hull.points.size()>252||!frames.contains(hull.source)){error="Each moving-object hull needs 4–252 points and a valid source";return {};}
+        QJsonArray points;for(const auto& point:hull.points)points.append(vector(frames[hull.source].map(point)));
+        hulls.append(QJsonObject{{"points",points}});
+    }
+    if(hulls.isEmpty()){error="Enable at least one magazine hull";return {};}
+    return {{"hulls",hulls},{"havokScale",p.settings.scale},{"precision",.0001},{"radius",p.settings.radius},
+        {"layer",int(p.settings.layer)},{"material",double(p.settings.material)},{"mass",p.settings.mass}};
+}
 QJsonObject collisionJson(const CollisionProfile& p){
     QJsonArray sources,hulls,warnings;for(const auto& s:p.sources){QJsonArray frame;for(int r=0;r<4;++r)for(int c=0;c<4;++c)frame.append(s.frame(r,c));sources.append(QJsonObject{{"key",s.key},{"name",s.name},{"model",s.model},{"record",s.record},{"path",s.path},{"geometrySha256",s.geometryHash},{"sourceToWorld",frame}});}
     for(const auto& h:p.hulls){QJsonArray points;for(auto point:h.points)points.append(vector(point));hulls.append(QJsonObject{{"source",h.source},{"name",h.name},{"enabled",h.enabled},{"points",points}});}

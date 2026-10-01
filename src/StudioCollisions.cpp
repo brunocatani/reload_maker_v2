@@ -39,10 +39,11 @@ void ReloadMakerController::createCollisionsUi(){
     _collisionsDock=new QDockWidget("COLLISIONS",_window);_collisionsDock->setObjectName("CollisionsDock");_collisionsDock->setFeatures(QDockWidget::NoDockWidgetFeatures);_collisionsDock->setMinimumWidth(340);_collisionsDock->setMaximumWidth(470);
     _collisions=new CollisionPanel;auto* scroll=new QScrollArea;scroll->setWidgetResizable(true);scroll->setWidget(_collisions);_collisionsDock->setWidget(scroll);_window->addDockWidget(Qt::RightDockWidgetArea,_collisionsDock);_collisionsDock->hide();
     _collisions->snapshot=[this](int index,bool reference){return collisionSnapshot(index,reference);};
+    _collisions->cook=[this]{showCollisionCooker();};
     _collisions->changed=[this]{++_revision;_window->getGLView()->update();};
     connect(_window->getGLView(),&GLView::paintUpdate,this,[this]{paintCollisions();});
 }
-void ReloadMakerController::refreshCollisions(){if(!_collisions)return;QStringList names;_collisionTargets.clear();for(int i=0;i<_handPoseAnchor->count();++i)if(i==0||_handPoseAnchors[i].description.anchorKind=="installed-part"){names<<_handPoseAnchor->itemText(i);_collisionTargets.append(i);}_collisions->setTargets(names);}
+void ReloadMakerController::refreshCollisions(){if(!_collisions)return;QStringList names;_collisionTargets.clear();for(int i=0;i<_handPoseAnchor->count();++i)if(i==0||_handPoseAnchors[i].description.anchorKind=="installed-part"||_handPoseAnchors[i].description.anchorName=="WeaponMagazine"){names<<_handPoseAnchor->itemText(i);_collisionTargets.append(i);}_collisions->setTargets(names);}
 void ReloadMakerController::invalidateCollisions(){if(_collisions)_collisions->invalidate();}
 CollisionProfile ReloadMakerController::collisionSnapshot(int target,bool referenceOnly){
     require(_workspace==CollisionsWorkspace,"Open the Collisions tab first");require(!_loadThread&&!_reloadCapturing&&!_rebuildTimer->isActive(),"Wait for assembly and reload capture");
@@ -54,6 +55,7 @@ CollisionProfile ReloadMakerController::collisionSnapshot(int target,bool refere
     QJsonObject choices;for(const auto& slot:configuration()->entries())choices[QString::number(slot.key)]=poseRecordKey(configuration()->selected(slot.key));
     p.configuration=QString::fromLatin1(QCryptographicHash::hash(QJsonDocument(choices).toJson(QJsonDocument::Compact),QCryptographicHash::Sha256).toHex());
     p.referencePose={{"animation",_activeAnimationPath},{"seconds",_playbackTime},{"choices",choices}};
+    if(target>0){Transformf world;QString error;require(sceneNodeWorld(anchor.node,world,error),error);const auto transform=matrix(world);QJsonArray frame;for(int r=0;r<4;++r)for(int c=0;c<4;++c)frame.append(transform(r,c));p.referencePose["rootToWorld"]=frame;}
     QSet<QString> keys;qsizetype totalTriangles=0;
     for(auto* shape:view->getScene()->shapes){if(!shape||shape->isHidden())continue;const auto node=model->getBlockIndex(shape->id());
         const auto geometryName=model->get<QString>(node,"Name").toUtf8();bool billboard=false;

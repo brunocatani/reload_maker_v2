@@ -96,6 +96,13 @@ try:
         assert len(a['points']) == len(b['points'])
         for p, q in zip(a['points'], b['points']):
             assert max(abs(x-y) for x, y in zip(p, q)) < .00002, 'Source units/coordinates changed'
+    cook_path=OUT/'glock-root-hulls.json'
+    collision('export-hulls',path=str(cook_path))
+    native_hulls=json.loads(cook_path.read_text())
+    assert native_hulls['mass']==legacy['mass'] and len(native_hulls['hulls'])==len(legacy['hulls'])
+    for a,b in zip(native_hulls['hulls'],legacy['hulls']):
+        for p,q in zip(a['points'],b['points']):
+            assert max(abs(x-y) for x,y in zip(p,q))<.0001,'Cook input is not in the selected magazine frame'
     collision('open', path=str(imported_path))
     before = command('collision_state')
     bad = dict(legacy, mass=-1)

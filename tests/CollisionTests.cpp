@@ -17,6 +17,12 @@ int main(int argc,char** argv){QCoreApplication app(argc,argv);try{
     for(const auto& h:result.profile.hulls){check(h.points.size()<=252,"Native point budget exceeded");float min=1e6,max=-1e6;for(auto p:h.points){min=std::min(min,p.x());max=std::max(max,p.x());}check(!(min<0&&max>0),"Preserved gap was filled");}
     auto decoded=CollisionProfile{};QString error;check(readCollisionJson(collisionJson(result.profile),decoded,error),error);check(decoded.hulls.size()==result.profile.hulls.size(),"Roundtrip hull count");check(decoded.sources[0].frame==mesh.frame,"Source frame changed");
     result.profile.hulls[0].enabled=false;check(readCollisionJson(collisionJson(result.profile),decoded,error)&&!decoded.hulls[0].enabled,"Disabled hull lost");
+    auto cookProfile=result.profile;QMatrix4x4 root;root.translate(12,-8,4);root.rotate(43,QVector3D(0,0,1));QMatrix4x4 local;local.translate(2,3,4);cookProfile.sources[0].frame=root*local;
+    QJsonArray rootFrame;for(int r=0;r<4;++r)for(int c=0;c<4;++c)rootFrame.append(root(r,c));cookProfile.referencePose["rootToWorld"]=rootFrame;
+    const auto cooked=collisionCookInput(cookProfile,error);check(error.isEmpty(),error);check(cooked["hulls"].toArray().size()==cookProfile.hulls.size()-1,"Disabled hull reached native cooking");
+    const auto actual=cooked["hulls"].toArray()[0].toObject()["points"].toArray()[0].toArray();const auto expected=local.map(cookProfile.hulls[1].points[0]);
+    check((QVector3D(actual[0].toDouble(),actual[1].toDouble(),actual[2].toDouble())-expected).length()<.00001f,"Cooked points are not in magazine-root space");
+    cookProfile.referencePose={};check(collisionCookInput(cookProfile,error).isEmpty()&&!error.isEmpty(),"Missing root frame silently cooked");
     auto before=collisionJson(decoded);auto invalid=before;auto hulls=invalid["hulls"].toArray();auto h=hulls[0].toObject();h["source"]="missing";hulls[0]=h;invalid["hulls"]=hulls;check(!readCollisionJson(invalid,decoded,error)&&collisionJson(decoded)==before,"Invalid import mutated output");
     invalid=before;auto sources=invalid["sources"].toArray();auto s=sources[0].toObject();QJsonArray zero;for(int i=0;i<16;++i)zero.append(0);s["sourceToWorld"]=zero;sources[0]=s;invalid["sources"]=sources;check(!readCollisionJson(invalid,decoded,error),"Singular frame accepted");
     auto stop=std::make_shared<std::atomic<bool>>(true);check(!bakeCollision(input,stop).error.isEmpty(),"Cancelled worker continued");
