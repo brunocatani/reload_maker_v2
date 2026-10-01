@@ -243,6 +243,14 @@ namespace reloadmaker
         void showSetup();
         void showPackBuilder();
         void showPackExporter();
+        void showAuthoringRoadmap();
+        QString roadmapKey() const;
+        QJsonObject roadmapState() const;
+        QJsonObject roadmapCommand(const QJsonObject&);
+        QJsonObject sourceEvidence() const;
+        QJsonObject auditSources(const QJsonObject&) const;
+        QJsonObject _authoringRoadmaps;
+        mutable QHash<QString,QString> _animationReadHashes;
         QJsonObject packCommand(const QJsonObject&);
         QProcess* _packProcess{};
         QJsonObject _packJob;

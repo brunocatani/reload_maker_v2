@@ -86,6 +86,8 @@ void ReloadMakerController::createUi() {
     auto* openProject = new QPushButton("Open project", header);
     auto* setupTools = new QPushButton("Setup && tools", header);header->addWidget(setupTools);
     connect(setupTools,&QPushButton::clicked,this,&ReloadMakerController::showSetup);
+    auto* roadmap=new QPushButton("Author reload",header);header->addWidget(roadmap);
+    connect(roadmap,&QPushButton::clicked,this,&ReloadMakerController::showAuthoringRoadmap);
     auto* saveProject = new QToolButton(header);
     saveProject->setText("Save project");
     saveProject->setPopupMode(QToolButton::MenuButtonPopup);

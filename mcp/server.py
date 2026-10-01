@@ -311,6 +311,18 @@ def use_operating_fingers(id: str, expected_revision: int) -> dict:
 
 
 @mcp.tool()
+def authoring_roadmap(operation: str = 'state', index: int | None = None,
+                      expected_revision: int | None = None) -> dict:
+    """Inspect or navigate the twelve manual authoring steps. record-sources freezes
+    relevant selected-assembly animation/model bytes; check-sources compares the
+    actual current resource bytes, including same-path animation-only overrides.
+    Checks retain all authored work. Source mode/profile are explicit in results.
+    """
+    if operation not in ('state', 'check-sources') and expected_revision is None:
+        raise ValueError('Read the current revision before editing roadmap state')
+    return command('roadmap', dict(operation=operation, index=index), expected_revision)
+
+@mcp.tool()
 def get_installation() -> dict:
     """Inspect game/Creation Kit roots, MO2 profiles, capabilities and active VFS status."""
     return command('installation')

@@ -1,5 +1,6 @@
 #include "ReloadMakerController.h"
 #include "StudioPaths.h"
+#include "SourceEvidence.h"
 #include "ReloadBundle.h"
 #include "StudioWindow.h"
 #include "glview.h"
@@ -50,6 +51,7 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     QJsonObject choices;
     if (const auto* config = configuration()) for (const auto& slot : config->entries()) choices[QString::number(slot.key)] = QString::number(config->selected(slot.key));
     record["choices"] = choices;
+    record["authoringRoadmaps"]=_authoringRoadmaps;
     if(const auto* config=configuration())record["recordChoices"]=config->savedChoices(*currentPlugin());
     record["simulationSpringReturn"] = _simulationSpring->isChecked();
     record["camera"] = _window->getGLView()->studioCameraState();
@@ -132,6 +134,12 @@ void ReloadMakerController::openSession(const QString& path) {
     if (!QFileInfo(record["gameData"].toString()).isDir() || (!record["library"].toBool() && !QFileInfo(record["package"].toString()).exists())) { setStatus("Project source is missing. Restore its original package/Data path before opening.",true); return; }
     // Validate all authored data before changing source or replacing a draft.
     QString error;
+    if(record.contains("authoringRoadmaps")) {
+        const auto plans=record["authoringRoadmaps"].toObject();
+        if(!record["authoringRoadmaps"].isObject()||plans.size()>512){setStatus("Invalid authoring roadmap collection.",true);return;}
+        for(const auto& value:plans){const auto plan=value.toObject();const int step=plan["step"].toInt(-1);
+            if(!value.isObject()||step<0||step>11||(plan.contains("sources")&&!validSourceEvidence(plan["sources"].toObject(),error))){setStatus("Invalid saved authoring roadmap: "+error,true);return;}}
+    }
     if(record.contains("recordChoices")) {
         const auto choices=record["recordChoices"].toObject();
         if(!record["recordChoices"].isObject()||choices.size()>1024){setStatus("Invalid saved attachment choices.",true);return;}
@@ -226,6 +234,7 @@ void ReloadMakerController::restoreSessionSelection() {
     if (animationSet < 0 && _animationSetCombo->count() > 0) { setStatus("The project's animation set no longer exists.",true); return; }
     { const QSignalBlocker block(_animationSetCombo); _animationSetCombo->setCurrentIndex(animationSet); }
     _glockNoExtender=record["glockReloadNoExtender"].toBool(false);
+    _authoringRoadmaps=record["authoringRoadmaps"].toObject();
     _savedSounds.clear();const auto sounds=record["soundProfiles"].toObject();for(auto it=sounds.begin();it!=sounds.end();++it){SoundProfile profile;QString error;if(readSoundProfile(it.value().toObject(),profile,error))_savedSounds.insert(it.key(),profile);}
     _scopeProfiles.clear();const auto optics=record["scopeProfiles"].toObject();for(auto it=optics.begin();it!=optics.end();++it){ScopeProfile p;QString error;if(readScopeProfile(it.value().toObject(),p,error))_scopeProfiles.insert(it.key(),p);}
     _interactionHand=record["interactionHand"].toString(isM1AConfiguration()?"right":"left")=="right"&&!isGlockConfiguration()?PoseHand::Right:PoseHand::Left;

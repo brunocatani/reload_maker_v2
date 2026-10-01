@@ -10,4 +10,4 @@ SOURCES += ResourcesTests.cpp ../src/PackageSource.cpp \
     $$LIBFO/ba2file.cpp $$LIBFO/common.cpp $$LIBFO/filebuf.cpp $$LIBFO/zlib.cpp
 HEADERS += ../src/PackageSource.h
 
-SOURCES += ../src/StudioPaths.cpp
+SOURCES += ../src/StudioPaths.cpp ../src/SourceEvidence.cpp

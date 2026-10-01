@@ -16,6 +16,7 @@
 #include <QBuffer>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
 #include <QDockWidget>
@@ -846,12 +847,18 @@ namespace reloadmaker
         const QString& resourcePath, QString& error) const
     {
         error.clear();
-        if (_libraryMode) { return _packageResources.read(resourcePath, error); }
+        const auto read=[&](const ResourceArchive& archive){
+            auto bytes=archive.read(resourcePath,error);const auto key=ResourceArchive::normalizeResourcePath(resourcePath);
+            if(error.isEmpty()&&!bytes.isEmpty()&&!_animationReadHashes.contains(key))
+                _animationReadHashes.insert(key,QString::fromLatin1(QCryptographicHash::hash(bytes,QCryptographicHash::Sha256).toHex()));
+            return bytes;
+        };
+        if (_libraryMode) { return read(_packageResources); }
         if (_packageResources.contains(resourcePath)) {
-            return _packageResources.read(resourcePath, error);
+            return read(_packageResources);
         }
         if (_gameAnimations.contains(resourcePath)) {
-            return _gameAnimations.read(resourcePath, error);
+            return read(_gameAnimations);
         }
         error = QStringLiteral("Animation resource is missing: %1").arg(resourcePath);
         return {};
@@ -1152,6 +1159,7 @@ namespace reloadmaker
         _nifCache.clear();
         _nifBytesCache.clear();
         _clipCache.clear();
+        _animationReadHashes.clear();
         _graphCache.clear();
         _skeleton = {};
         _geometrySignature.clear();
