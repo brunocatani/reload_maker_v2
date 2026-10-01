@@ -98,7 +98,7 @@ void ReloadMakerController::showPackBuilder() {
         else if(phase=="failed")text="Build did not complete.\n"+state["error"].toString();
         else {
             const auto result=state["result"].toObject();
-            if(result.contains("output"))text=QString("Build complete.\n%1 active objects; %2 total records including retained objects.\n\nInstall this output folder as the generated companion mod:\n%3\n\nKeep its ESP and object bindings together. This build has not changed MO2 enablement.").arg(result["activeObjects"].toInt()).arg(result["retainedObjects"].toInt()).arg(QDir::toNativeSeparators(result["output"].toString()));
+            if(result.contains("output"))text=QString("Build complete.\n%1 objects from the selected packs.\n\nInstall this output folder as the generated companion mod:\n%2\n\nKeep its ESP and object bindings together. This build has not changed MO2 enablement.").arg(result["activeObjects"].toInt()).arg(QDir::toNativeSeparators(result["output"].toString()));
             else text=QString("Validated %1 pack(s). The content hashes and object definitions match their export.").arg(result["packs"].toArray().size());
         }
         report->setPlainText(text);};

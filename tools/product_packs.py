@@ -82,7 +82,12 @@ def identity(value):
 
 def load_pack(root):
     root = root.resolve()
-    manifest = read(root/'manifest.json', 1024*1024)
+    manifest_path=root/'manifest.json'
+    if not manifest_path.is_file():
+        manifests=list(root.glob('F4SE/Plugins/DIAMOND/Packs/*/manifest.json'))
+        require(len(manifests)==1, 'Select a folder containing one complete reload pack')
+        manifest_path=manifests[0]
+    manifest = read(manifest_path, 1024*1024)
     require(manifest.get('format') == 'diamond-content-pack' and manifest.get('version') == 1, 'Unsupported content pack')
     pack = identity(manifest.get('id'))
     require('/' not in pack, 'Pack ID must be a single namespace')
@@ -116,7 +121,7 @@ def load_pack(root):
         require(isinstance(obj.get('name'), str) and 0 < len(obj['name']) <= 256, 'Invalid object name')
         require(type(obj.get('weight')) in (int, float) and math.isfinite(obj['weight']) and 0 <= obj['weight'] < 10000, 'Invalid inventory weight')
         require(type(obj.get('value')) is int and 0 <= obj['value'] <= 0x7fffffff, 'Invalid inventory value')
-    return dict(root=root, manifest=manifest, objects=objects, manifestSha256=digest(root/'manifest.json'))
+    return dict(root=root, manifestPath=manifest_path, manifest=manifest, objects=objects, manifestSha256=digest(manifest_path))
 
 
 def allocate(previous, packs):
@@ -130,7 +135,7 @@ def allocate(previous, packs):
         value = entry.get('localId')
         require(type(value) is int and 0x800 <= value <= 0xffffff and value not in used, 'Corrupt or duplicate object allocation')
         used.add(value)
-        entry['active'] = False
+        entries[key] = dict(localId=value, active=False)
     next_id = ledger.get('nextId')
     require(type(next_id) is int and next_id > max(used, default=0x7ff) and next_id <= 0x1000000, 'Invalid ledger high-water mark')
     active = set()
@@ -160,6 +165,8 @@ def write_plugin_source(folder, ledger):
     records = folder/'MiscItems'
     records.mkdir()
     for key, entry in ledger['objects'].items():
+        if not entry['active']:
+            continue
         obj = entry['definition']
         editor = 'DiamondObject_'+hashlib.sha256(key.encode()).hexdigest()[:24]
         entry['editorId'] = editor
@@ -172,15 +179,16 @@ def write_plugin_source(folder, ledger):
 
 
 async def verify_plugin(backend, plugin, ledger):
+    active = {key: value for key, value in ledger['objects'].items() if value['active']}
     header = json.loads(await backend.fo4_plugin_info(backend.PluginPathInput(plugin_path=str(plugin))))
     masters = [value if value.lower().endswith('.esm') else bytes.fromhex(value).rstrip(b'\0').decode('utf-8') for value in header.get('masters', [])]
     require(masters == ['Fallout4.esm'], 'Generated plugin has unexpected hard masters')
     result = json.loads(await backend.fo4_read_records(backend.ReadRecordsInput(plugin_path=str(plugin), record_type='MISC', limit=10000)))
-    require('error' not in result and result['returned'] == len(ledger['objects']), f'Generated record count/readback failed: {result.get("error")}')
+    require('error' not in result and result['returned'] == len(active), f'Generated record count/readback failed: {result.get("error")}')
     require(all(int(r['form_id'], 16) >> 24 == len(masters) for r in result['records']), 'Generated record belongs to a master instead of this plugin')
     actual = {int(r['form_id'], 16) & 0xffffff: {s['type']: s['value'] for s in r['subrecords']} for r in result['records']}
-    require(len(actual) == len(ledger['objects']), 'Duplicate generated record IDs')
-    for entry in ledger['objects'].values():
+    require(len(actual) == len(active), 'Duplicate generated record IDs')
+    for entry in active.values():
         row = actual.get(entry['localId'], {})
         require(row.get('EDID') == entry['editorId'], 'Generated object identity mismatch')
         # The approved plugin reader returns MODL as a raw field; decode that
@@ -226,9 +234,6 @@ async def build(packs, installation, backends, initialize=False):
         stage = installation/generation
         output = stage/'output'
         output.mkdir(parents=True)
-        if old and (old/'output/Meshes').exists():
-            shutil.copytree(old/'output/Meshes', output/'Meshes')
-        # Retired records and their generated models survive profile changes.
         seen = {}
         native = backends.adapter('nif')
         for pack in loaded:
@@ -252,8 +257,10 @@ async def build(packs, installation, backends, initialize=False):
                     shutil.copy2(source, target)
                     seen[key] = expected
         for entry in ledger['objects'].values():
-            require(within(output, entry['definition']['model']).is_file(), 'Retired object asset is missing; restore the last good output')
-            require(digest(within(output, entry['definition']['model'])) == entry['assetSha256'], 'Retained object asset changed; use a distinct model path for the replacement')
+            if not entry['active']:
+                continue
+            require(within(output, entry['definition']['model']).is_file(), 'Selected object asset is missing')
+            require(digest(within(output, entry['definition']['model'])) == entry['assetSha256'], 'Selected object asset changed during the build')
         write_plugin_source(stage/'plugin-source', ledger)
         backends.prepare_serializer()
         backend = backends.adapter('plugin')
@@ -269,19 +276,20 @@ async def build(packs, installation, backends, initialize=False):
                         generation=generation.split('/')[-1], plugin=PLUGIN, pluginSha256=plugin_hash,
                         packs={p['manifest']['id']: p['manifestSha256'] for p in loaded},
                         objects={key: dict(form=f'{PLUGIN}:{entry["localId"]:06x}', editorId=entry['editorId'],
-                                           model=entry['definition']['model'][7:], active=entry['active'])
-                                 for key, entry in ledger['objects'].items()})
+                                           model=entry['definition']['model'][7:], name=entry['definition']['name'],
+                                           modelSha256=entry['assetSha256'], active=entry['active'])
+                                 for key, entry in ledger['objects'].items() if entry['active']})
         write(output/'F4SE/Plugins/DIAMOND/Generated/objects.json', bindings)
         write(stage/'ledger.json', ledger)
         receipt = dict(version=1, generation=generation, ledgerSha256=digest(stage/'ledger.json'), pluginSha256=plugin_hash,
                        bindingsSha256=digest(output/'F4SE/Plugins/DIAMOND/Generated/objects.json'))
         write(stage/'receipt.json', receipt)
         for pack in loaded:
-            require(digest(pack['root']/'manifest.json') == pack['manifestSha256'], 'Pack changed during build')
+            require(digest(pack['manifestPath']) == pack['manifestSha256'], 'Pack changed during build')
             for name, expected in pack['manifest']['files'].items():
                 require(digest(within(pack['root'], name)) == expected, 'Pack content changed during build')
         cancellation()
         write(current, receipt)
-        return dict(ok=True, output=str(output), generation=receipt, activeObjects=sum(e['active'] for e in ledger['objects'].values()), retainedObjects=len(ledger['objects']))
+        return dict(ok=True, output=str(output), generation=receipt, activeObjects=sum(e['active'] for e in ledger['objects'].values()))
     finally:
         lock.unlink()

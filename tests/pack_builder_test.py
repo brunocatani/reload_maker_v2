@@ -1,4 +1,4 @@
-"""Stable IDs, retired objects and failed-generation preservation using native backends."""
+"""Stable IDs, selected-pack output and failed-build preservation using native backends."""
 import argparse
 import asyncio
 import copy
@@ -35,10 +35,17 @@ async def run(args):
         assert ids == {k: v['localId'] for k, v in reordered['objects'].items()}
         assert first['generation']['pluginSha256'] == second['generation']['pluginSha256']
         removed = await build(packs[:1], install, backends)
-        assert removed['retainedObjects'] == len(ids) and removed['activeObjects'] < len(ids)
+        assert removed['activeObjects'] < len(ids)
         retained = read(install/read(install/'current.json')['generation']/'ledger.json')
         assert any(not entry['active'] for entry in retained['objects'].values())
         assert ids == {k: v['localId'] for k, v in retained['objects'].items()}
+        output=Path(removed['output'])
+        bindings=read(output/'F4SE/Plugins/DIAMOND/Generated/objects.json')['objects']
+        omitted={key for key, value in retained['objects'].items() if not value['active']}
+        assert omitted.isdisjoint(bindings)
+        for key in omitted:
+            assert not (output/ledger['objects'][key]['definition']['model']).exists()
+            assert 'definition' not in retained['objects'][key]
         original_pointer = (install/'current.json').read_bytes()
         objects = packs[0]/read(packs[0]/'manifest.json')['objects']
         original = objects.read_bytes()
@@ -70,7 +77,7 @@ async def run(args):
         restored = await build(packs, install, backends)
         assert restored['activeObjects'] == len(ids)
         report = dict(ok=True, objects=len(ids), checks=['native cooked NIF validation', 'ESP independent readback',
-            'stable reordered IDs and plugin bytes', 'retired records/assets retained', 'tamper failure preserves output',
+            'stable reordered IDs and plugin bytes', 'removed packs emit no records or models', 'tamper failure preserves output',
             'corrupt ledger rejected', 'reinstall recovers existing IDs'])
         (workspace/'pack-builder-result.json').write_text(json.dumps(report, indent=2))
         print(json.dumps(report))
