@@ -172,9 +172,12 @@ void ReloadMakerController::prepareSimulation() {
     const auto& owner=_reloadRecipe->tracks[rig.magazine].anchor;
     const auto* config=configuration();auto* model=activeModel();
     _simulationMagazineSlot=0;
-    const bool installedMagazine=isRifleConfiguration()&&!isMk18Configuration();
+    const bool installedMagazine=isRifleConfiguration()&&!isMk18Configuration()&&!isSrepEmbeddedMagazine();
     const int magazineAnchor=installedMagazine?currentMagazineAnchor():-1;
-    if(config&&model)for(auto it=_partRoots.cbegin();it!=_partRoots.cend();++it) {
+    if(isSrepEmbeddedMagazine()&&model) {
+        const auto node=_sceneNodes[_reloadTrackNodes[rig.magazine]];
+        _simulationVisibility.append({node,model->get<int>(node,"Flags")});
+    } else if(config&&model)for(auto it=_partRoots.cbegin();it!=_partRoots.cend();++it) {
         const bool match=installedMagazine?magazineAnchor>=0&&it.value()==_handPoseAnchors[magazineAnchor].node:
             poseRecordKey(config->selected(it.key())).compare(owner.ownerRecord,Qt::CaseInsensitive)==0;
         if(match&&it.value().isValid()) {
@@ -278,7 +281,7 @@ bool ReloadMakerController::applySimulationPose() {
     QVector<Transformf> local,world;
     if(!nativeMechanismScene(_reloadScenePlan,_nodeBindings,_boundLocalPose,local,world,_poseError))return false;
     QHash<int,Transformf> targets;
-    if((!isRifleConfiguration()||isThanatosConfiguration())&&(_simulation.action!=SimulationAction::Fire||_simulation.willLockAfterShot()))for(int track:_simulationRig->slideTracks) {
+    if((!isRifleConfiguration()||simulationMechanism()==WeaponMechanism::ReciprocatingBolt)&&(_simulation.action!=SimulationAction::Fire||_simulation.willLockAfterShot()))for(int track:_simulationRig->slideTracks) {
         if(holdOpen&&_simulationRig->magazineTracks.contains(track))continue;
         targets.insert(_reloadTrackNodes[track],simulationTrackPose(*_reloadRecipe,*_simulationRig,track,holdOpen||_simulation.willLockAfterShot()?1.f:_simulation.slide));
     }
@@ -286,16 +289,18 @@ bool ReloadMakerController::applySimulationPose() {
         const auto& rig=*_simulationRig;
         Transformf bolt;
         if(_simulation.action==SimulationAction::Fire)bolt=rifleFireBoltPose();
-        else if(_simulation.action==SimulationAction::Reload&&isMk18Configuration())bolt=holdOpen?rifleBoltPose(1):reloadTrackPose(*_reloadRecipe,rig.bolt,_simulation.seconds);
+        else if(_simulation.action==SimulationAction::Reload&&(isMk18Configuration()||isSrepConfiguration()))bolt=holdOpen?(isSrepConfiguration()?simulationTrackPose(*_reloadRecipe,rig,rig.bolt,1):rifleBoltPose(1)):reloadTrackPose(*_reloadRecipe,rig.bolt,_simulation.seconds);
         else if(_simulation.action==SimulationAction::Reload) {
             const auto handle=reloadTrackPose(*_reloadRecipe,rig.slide,_simulation.seconds);
             const float travel=reloadPoseDistance(_reloadRecipe->tracks[rig.slide].poses[rig.closedFrame],_reloadRecipe->tracks[rig.slide].poses[rig.openFrame]);
             const float progress=holdOpen?1.f:std::clamp(reloadPoseDistance(_reloadRecipe->tracks[rig.slide].poses[rig.closedFrame],handle)/travel,0.f,1.f);
             bolt=rifleBoltPose(progress);
-        } else bolt=rifleBoltPose(_simulation.slide);
+        } else bolt=isSrepConfiguration()?simulationTrackPose(*_reloadRecipe,rig,rig.bolt,_simulation.slide):rifleBoltPose(_simulation.slide);
         targets.insert(_reloadTrackNodes[rig.bolt],bolt);
         if(_simulation.action!=SimulationAction::Reload)
             targets.insert(_reloadTrackNodes[rig.slide],simulationTrackPose(*_reloadRecipe,rig,rig.slide,_simulation.action==SimulationAction::Fire?0.f:_simulation.handle));
+        if(isSrepConfiguration()&&_simulation.action!=SimulationAction::Reload)for(const int track:rig.slideTracks)
+            if(track!=rig.slide)targets.insert(_reloadTrackNodes[track],simulationTrackPose(*_reloadRecipe,rig,track,_simulation.slideLocked?1.f:_simulation.slide));
     }
     if(isM1AConfiguration()) {
         const auto& rig=*_simulationRig;
@@ -311,6 +316,8 @@ bool ReloadMakerController::applySimulationPose() {
         targets.insert(_reloadTrackNodes[rig.slide],simulationTrackPose(*_reloadRecipe,rig,rig.slide,progress));
     }
     if(isBoltActionConfiguration())applyBoltActionTargets(targets);
+    if(isSrepConfiguration()&&simulationMechanism()==WeaponMechanism::ReciprocatingBolt&&_simulation.action==SimulationAction::Fire)
+        targets.insert(_reloadTrackNodes[_simulationRig->bolt],rifleFireBoltPose());
     // A newly seated magazine has a top round, not a magically loaded chamber.
     // The source feed curve takes over only during a completed rack/return cycle.
     if(!isM1AConfiguration()&&_simulation.action!=SimulationAction::Fire&&_simulation.action!=SimulationAction::Reload&&!_simulation.chambered&&!_simulation.feedCycleActive())
@@ -480,7 +487,7 @@ void ReloadMakerController::updateSimulationControls() {
     _simulationSource->setVisible(glock||ar);
     if((glock||ar)&&_reloadRecipe) {
         const auto path=_reloadRecipe->source["animation"].toString();
-        const auto relative=path.section(isL118Configuration()?"l118/":bolt?"c14timb/":isThanatosConfiguration()?"diam107/":isM1AConfiguration()?"m1aanims/":isMk18Configuration()?"mk18anims/":ar?"ru556anims/":"glock19xanims/",1);
+        const auto relative=path.section(isL118Configuration()?"l118/":bolt?"c14timb/":isThanatosConfiguration()?"diam107/":isM1AConfiguration()?"m1aanims/":isMk18Configuration()?"mk18anims/":isSrepConfiguration()?"srep/":ar?"ru556anims/":"glock19xanims/",1);
         _simulationSource->setText("Reload source · "+relative+" · "+(bolt?"manual bolt action":_simulationAmmo.automatic?"automatic receiver":"semi-automatic receiver"));
         _simulationSource->setToolTip(path);
     }
@@ -586,14 +593,16 @@ QJsonObject ReloadMakerController::exportSimulation() const {
     if(_magazineRail)result["magazineInteraction"]=magazineRailJson(*_magazineRail);
     result["ammunitionConfiguration"]=_simulationAmmo.json();
     if(isRifleConfiguration()) {
-        result["format"]=isThanatosConfiguration()?"reload-maker-reciprocating-bolt-simulation":isM1AConfiguration()?"reload-maker-m1a-simulation":"reload-maker-ar15-simulation";
+        const bool reciprocating=simulationMechanism()==WeaponMechanism::ReciprocatingBolt;
+        result["format"]=reciprocating?"reload-maker-reciprocating-bolt-simulation":isM1AConfiguration()?"reload-maker-m1a-simulation":"reload-maker-ar15-simulation";
         QJsonArray poses;
         for(const auto& pose:_rifleBoltCycle){QJsonObject value;if(!encodePoseTransform(pose,value,error))return {};poses.append(value);}
-        result["mechanismProfile"]=isThanatosConfiguration()?"reciprocating-bolt":isM1AConfiguration()?"m1a":"ar15";
+        result["mechanismProfile"]=reciprocating?"reciprocating-bolt":isM1AConfiguration()?"m1a":"ar15";
         result["chargingHandleTrack"]=_simulationRig->slide;result["boltTrack"]=_simulationRig->bolt;
         result["magazineRecord"]=simulationMagazineAnchor().ownerRecord;result["magazineModel"]=simulationMagazineAnchor().ownerModel;
         result["boltMotion"]=QJsonObject{{"animation",_rifleBoltSource},{"duration",_rifleBoltDuration},{"openSample",_rifleBoltOpen},{"poses",poses}};
         result["automaticFireInterval"]=_rifleFireInterval;
+        if(isSrepConfiguration()&&isAr15Configuration())result["manualBoltFromReload"]=true;
         if(isM1AConfiguration()) {
             result["reciprocatingHandle"]=true;
             result["handleFireMotion"]="native-reload-stroke-by-firing-bolt-distance";

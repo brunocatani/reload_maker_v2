@@ -165,6 +165,11 @@ void ar15Transitions() {
     s.reset();s.grab();s.drag(.4f);s.release(false,false);check(!s.canFire(),"Open charging handle allowed fire");
 }
 void boltActionTransitions() {
+    WeaponSimulation automatic;automatic.configureAmmunition(20,false,WeaponMechanism::ReciprocatingBolt);automatic.fireCycleSeconds=.1f;
+    check(automatic.fire(),"Reciprocating rifle fire failed");automatic.triggerHeld=true;automatic.tick(3,5);
+    check(automatic.shotsFired==20&&automatic.slideLocked&&!automatic.chambered,"Reciprocating automatic rifle lost its measured cadence or last-shot lock");
+    automatic.reset();automatic.fire();automatic.tick(.11f,5);
+    check(automatic.shotsFired==1&&automatic.chambered&&automatic.action==SimulationAction::Idle,"Semiautomatic reciprocating rifle repeated a shot");
     WeaponSimulation s;s.configureAmmunition(5,false,WeaponMechanism::BoltAction);s.boltEjectProgress=.8f;
     check(s.fire()&&s.tick(1,1),"Bolt-action shot failed");
     check(s.spentCase&&!s.chambered&&s.magazineRounds==4&&s.slide==0&&!s.slideLocked&&!s.canFire(),"Firing automatically cycled the bolt action");

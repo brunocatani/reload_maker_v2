@@ -81,23 +81,23 @@ void ReloadMakerController::prepareSounds(){
         for(auto& path:c.files)path=audioPath(path);_soundProfile.cues.append(c);
     };
     const bool glock=isGlockConfiguration(),ru=isAr15Configuration(),m1a=isM1AConfiguration(),bolt=isBoltActionConfiguration();
-    const QString prefix=glock?"WPNGlock19x":isMk18Configuration()?"WPNMK18":ru?"WPNRU556":m1a?"WPNM1A":isThanatosConfiguration()?"WPNM107":isL118Configuration()?"L115A3_":bolt?"C14_":"";
+    const QString prefix=glock?"WPNGlock19x":isMk18Configuration()?"WPNMK18":ru||isSrepConfiguration()?"WPNRU556":m1a?"WPNM1A":isThanatosConfiguration()?"WPNM107":isL118Configuration()?"L115A3_":bolt?"C14_":"";
     add("unlock","Bolt unlock","opening",.01f,bolt?prefix+"BoltUnlatch":"",bolt);
-    add("pull","Slide / handle pull","opening",.035f,isMk18Configuration()?"WPNRifleIstvanReloadBoltOpen":prefix+(glock?"SlideBack":ru?"Boltopen":"BoltBack"),bolt);
+    add("pull","Slide / handle pull","opening",.035f,isMk18Configuration()?"WPNRifleIstvanReloadBoltOpen":prefix+(glock?"SlideBack":ru||isSrepConfiguration()?"Boltopen":"BoltBack"),bolt);
     add("rear","Rear stop","opening",1,"",bolt);
-    add("forward","Forward return","closing",.975f,isMk18Configuration()?"WPNRifleIstvanReloadBoltClose":prefix+(glock?"SlideForward":ru?"Boltclose":isThanatosConfiguration()?"Boltrelease":"BoltForward"),bolt);
+    add("forward","Forward return","closing",.975f,isMk18Configuration()?"WPNRifleIstvanReloadBoltClose":prefix+(glock?"SlideForward":ru||isSrepConfiguration()?"Boltclose":isThanatosConfiguration()?"Boltrelease":"BoltForward"),bolt);
     add("lock","Bolt lock","closing",0,bolt?prefix+"BoltLatch":"",bolt);
     add("mag-release","Magazine release","magazine_release",0,bolt||isThanatosConfiguration()?prefix+"MagRelease":"");
     add("mag-out","Magazine withdrawal","extraction",.035f,mkCue(prefix+"MagOut","WPNMK18MagOut141"));
-    add("mag-grab","Magazine grabbed","magazine_grab",0,isMk18Configuration()?"WPNMK18ClothGrabMag":m1a?prefix+"Grab":"");
-    add("mag-entry","Magazine entering","insertion",.02f,glock?prefix+"MagIns1":isL118Configuration()?prefix+"ReloadMagIn":bolt||isMk18Configuration()?prefix+"MagInserting":isThanatosConfiguration()?prefix+"Magin":"");
+    add("mag-grab","Magazine grabbed","magazine_grab",0,isSrepConfiguration()?"WPNRU556ClothMagIn":isMk18Configuration()?"WPNMK18ClothGrabMag":m1a?prefix+"Grab":"");
+    add("mag-entry","Magazine entering","insertion",.02f,isSrepConfiguration()?"WPNRU556Magin":glock?prefix+"MagIns1":isL118Configuration()?prefix+"ReloadMagIn":bolt||isMk18Configuration()?prefix+"MagInserting":isThanatosConfiguration()?prefix+"Magin":"");
     add("mag-insert","Magazine insertion","insertion",.65f,glock?prefix+"MagIns2":"");
-    add("mag-seat","Magazine seated","magazine_seated",1,mkCue(prefix+(isThanatosConfiguration()?"Magslam":"MagIn"),"WPNMK18MagIn141"));
+    add("mag-seat","Magazine seated","magazine_seated",1,isSrepConfiguration()?"WPNRU556MagSlap":mkCue(prefix+(isThanatosConfiguration()?"Magslam":"MagIn"),"WPNMK18MagIn141"));
     const auto dryKey=recordIdentity(*currentPlugin(),currentWeapon()->attackFailSound).toLower();const auto dry=_soundCatalog.value(dryKey);
     add("dry","Dry fire","dry_fire",0,dry.editorId);
     if(_savedSounds.contains(key)){_soundProfile=_savedSounds.value(key);_soundProfile.magazine=magazine;}
-    if(ru&&std::none_of(_soundProfile.cues.cbegin(),_soundProfile.cues.cend(),[](const auto& c){return c.id=="bolt-release";}))
-        add("bolt-release","Bolt catch release","bolt_release",0,isMk18Configuration()?mkCue("WPNMK18BoltCatchPress","WPNMK18BoltCatchSlap"):"WPNRU556BoltRelease");
+    if((ru||isSrepConfiguration())&&std::none_of(_soundProfile.cues.cbegin(),_soundProfile.cues.cend(),[](const auto& c){return c.id=="bolt-release";}))
+        add("bolt-release","Bolt catch release","bolt_release",0,isSrepConfiguration()?"WPNRU556MagCatch":isMk18Configuration()?mkCue("WPNMK18BoltCatchPress","WPNMK18BoltCatchSlap"):"WPNRU556BoltRelease");
     // Resolve current winning descriptors on each assembly; saved identities do
     // not pin obsolete file paths from a previous override or package version.
     for(auto& c:_soundProfile.cues)if(!c.record.isEmpty()){

@@ -244,6 +244,8 @@ namespace reloadmaker
         bool isGlockConfiguration() const;
         bool isAr15Configuration() const;
         bool isMk18Configuration() const;
+        bool isSrepConfiguration() const;
+        bool isSrepEmbeddedMagazine() const;
         bool isMk18OverhaulConfiguration() const;
         QString operatingGripKey(PoseHand hand) const;
         bool isM1AConfiguration() const;

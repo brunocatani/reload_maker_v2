@@ -434,6 +434,10 @@ void ReloadMakerController::createSourceBar(QToolBar* bar) {
     _testbedPicker->addItem("Thanatos · Barrett",QString("thanatos"));
     _testbedPicker->addItem("MK18 CQBR",QString("mk18"));
     _testbedPicker->addItem("MK18 · 1000 Year Empire",QString("mk18-empire"));
+    _testbedPicker->addItem("SREP · Service Rifle",QString("srep-service"));
+    _testbedPicker->addItem("SREP · Honey Badger",QString("srep-honeybadger"));
+    _testbedPicker->addItem("SREP · AR10",QString("srep-ar10"));
+    _testbedPicker->addItem("SREP · XM16E1",QString("srep-xm16e1"));
     _testbedPicker->setToolTip("Switch saved testbeds. Each keeps its own equipped parts and authored hand fits.");
     bar->addWidget(_testbedPicker);
     connect(_testbedPicker,qOverload<int>(&QComboBox::activated),this,[this](int i){

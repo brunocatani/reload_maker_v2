@@ -18,10 +18,10 @@ namespace reloadmaker {
 QString ReloadMakerController::operatingGripKey(PoseHand hand) const {
     QString key=poseRecordKey(currentWeapon()->formId)+"|"+operatingGroup();
     const int anchor=operatingAnchor();
-    if(isMk18Configuration()&&anchor>=0)key+="|"+normalizeNifPath(_handPoseAnchors[anchor].description.ownerModel);
+    if((isMk18Configuration()||isSrepConfiguration())&&anchor>=0)key+="|"+normalizeNifPath(_handPoseAnchors[anchor].description.ownerModel);
     return handAssignmentKey(key,hand);
 }
-QString ReloadMakerController::operatingGroup() const {return isAr15Configuration()?"charging_handle":isBoltActionConfiguration()||isThanatosConfiguration()?"bolt":isM1AConfiguration()?"operating_handle":"slide";}
+QString ReloadMakerController::operatingGroup() const {return isAr15Configuration()?"charging_handle":isBoltActionConfiguration()||isThanatosConfiguration()||isSrepConfiguration()?"bolt":isM1AConfiguration()?"operating_handle":"slide";}
 int ReloadMakerController::operatingAnchor() const {
     if(!_simulationRig||!_reloadRecipe)return -1;
     const auto& target=_reloadRecipe->tracks[_simulationRig->slide].anchor;

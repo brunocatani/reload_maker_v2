@@ -25,17 +25,31 @@ void ReloadMakerController::prepareMagazineInteraction() {
     };
     const SlotKey slot=_simulationMagazineSlot;
     const auto anchor=simulationMagazineAnchor();
-    auto source=sourceNif(_packageResources,anchor.ownerModel,_magazineError);if(!source)return;
     ConnectTarget target;QString connectionName;
-    for(const auto& name:childConnectPoints(*source)){target=findConnectTarget(name,nullptr,slot);if(target.valid()){connectionName="P-"+name.mid(2);break;}}
-    Transformf parent;
-    if(!target.valid()||!sceneNodeWorld(target.parent,parent,_magazineError)){_magazineError="Could not resolve the magazine's seated connection.";return;}
-    const Transformf connection=composed(parent,Transformf{target.translation,target.rotation,{target.scale,target.scale,target.scale}});
+    Transformf connection;
+    if(isSrepEmbeddedMagazine()) {
+        connectionName="P-Mag";
+        if(!sceneNodeWorld(_sceneNodes[_reloadTrackNodes[rig.magazine]],connection,_magazineError))return;
+    } else {
+        auto source=sourceNif(_packageResources,anchor.ownerModel,_magazineError);if(!source)return;
+        for(const auto& name:childConnectPoints(*source)){target=findConnectTarget(name,nullptr,slot);if(target.valid()){connectionName="P-"+name.mid(2);break;}}
+        Transformf parent;
+        if(!target.valid()||!sceneNodeWorld(target.parent,parent,_magazineError)){_magazineError="Could not resolve the magazine's seated connection.";return;}
+        connection=composed(parent,Transformf{target.translation,target.rotation,{target.scale,target.scale,target.scale}});
+    }
     QVector<QVector3D> body,frame;
     struct ShapeOwner {QPersistentModelIndex node;int track;};QVector<ShapeOwner> shapes;
     for(auto* shape:scene->shapes) {
         if(!shape)continue;
         const auto index=model->getBlockIndex(shape->id());
+        if(isSrepEmbeddedMagazine()) {
+            bool spare=false;auto node=index;
+            for(int depth=0;node.isValid()&&depth<model->getBlockCount();++depth) {
+                if(model->get<QString>(node,"Name")=="MagHelper"){spare=true;break;}
+                node=model->getBlockIndex(model->getParent(node));
+            }
+            if(spare){_magazineVisuals.append({index,model->get<int>(index,"Flags"),false,-1,false,true});continue;}
+        }
         bool magazine=false;for(const auto& [root,flags]:_simulationVisibility)if(below(index,root)){magazine=true;break;}
         int owner=-1;
         if(magazine)for(int track:rig.magazineTracks) {
@@ -79,6 +93,7 @@ void ReloadMakerController::prepareMagazineInteraction() {
             auto material=model->get<QString>(shader,"Name");material.replace('\\','/');
             cartridge|=material.contains("/MK18/Ammo/",Qt::CaseInsensitive);
         }
+        if(isSrepConfiguration())cartridge|=name.startsWith("Casing",Qt::CaseInsensitive)||name.startsWith("Bullet",Qt::CaseInsensitive);
         if(isBoltActionConfiguration()) {
             // The source culls this static round stack and Child1's top round
             // on an empty reload. Magazine body/follower helpers are separate.

@@ -180,7 +180,7 @@ bool WeaponSimulation::tick(float delta,float duration) {
         if(handle==0&&(slide==0||slideLocked)){if(!slideLocked)finishClosing();action=SimulationAction::Idle;}
         return false;
     }
-    if(mechanism==WeaponMechanism::Ar15&&action==SimulationAction::Fire) {
+    if((mechanism==WeaponMechanism::Ar15||mechanism==WeaponMechanism::ReciprocatingBolt)&&action==SimulationAction::Fire) {
         if(!std::isfinite(fireCycleSeconds)||fireCycleSeconds<.01f||delta>60)return false;
         seconds+=delta;shotSeconds+=delta;
         // Capacity is bounded; each iteration consumes a real round. Large

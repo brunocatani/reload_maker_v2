@@ -12,7 +12,21 @@
 
 namespace reloadmaker {
 bool ReloadMakerController::isAr15Configuration() const {
-    return isMk18Configuration()||(currentWeapon()&&currentWeapon()->editorId.compare("WPNRU556",Qt::CaseInsensitive)==0);
+    return (isSrepConfiguration()&&currentWeapon()->editorId.compare("SREP_AR10",Qt::CaseInsensitive)!=0)||isMk18Configuration()||(currentWeapon()&&currentWeapon()->editorId.compare("WPNRU556",Qt::CaseInsensitive)==0);
+}
+bool ReloadMakerController::isSrepConfiguration() const {
+    if(!currentWeapon())return false;
+    const auto& name=currentWeapon()->editorId;
+    return name.compare("SREP_ServiceRifle",Qt::CaseInsensitive)==0||name.compare("SREP_ServiceRifle_Unique_HoneyBadger",Qt::CaseInsensitive)==0||
+        name.compare("SREP_AR10",Qt::CaseInsensitive)==0||name.compare("SREP_XM16E1",Qt::CaseInsensitive)==0;
+}
+bool ReloadMakerController::isSrepEmbeddedMagazine() const {
+    if(!isSrepConfiguration()||!configuration())return false;
+    for(const auto id:configuration()->activeMods()) {
+        const auto* mod=configuration()->mod(id);
+        if(mod&&mod->editorId.contains("receiver_",Qt::CaseInsensitive)&&mod->editorId.contains("SMG",Qt::CaseInsensitive))return true;
+    }
+    return false;
 }
 bool ReloadMakerController::isMk18Configuration() const {
     return currentWeapon()&&(currentWeapon()->editorId.compare("WPNMK18",Qt::CaseInsensitive)==0||currentWeapon()->editorId.compare("WPNMK18UNIQUE",Qt::CaseInsensitive)==0);
@@ -31,13 +45,18 @@ bool ReloadMakerController::isL118Configuration() const {
 }
 WeaponMechanism ReloadMakerController::simulationMechanism() const {
     return isBoltActionConfiguration()?WeaponMechanism::BoltAction:isM1AConfiguration()?WeaponMechanism::M1A:
-        isAr15Configuration()?WeaponMechanism::Ar15:isThanatosConfiguration()?WeaponMechanism::ReciprocatingBolt:WeaponMechanism::PistolSlide;
+        isAr15Configuration()?WeaponMechanism::Ar15:isThanatosConfiguration()||isSrepConfiguration()?WeaponMechanism::ReciprocatingBolt:WeaponMechanism::PistolSlide;
 }
-bool ReloadMakerController::isRifleConfiguration() const {return isAr15Configuration()||isM1AConfiguration()||isThanatosConfiguration();}
+bool ReloadMakerController::isRifleConfiguration() const {return isAr15Configuration()||isM1AConfiguration()||isThanatosConfiguration()||isSrepConfiguration();}
 QString ReloadMakerController::currentTestbed() const {
+    if(isSrepConfiguration()) {
+        const auto name=currentWeapon()->editorId.toLower();
+        return name=="srep_ar10"?"srep-ar10":name=="srep_xm16e1"?"srep-xm16e1":name.endsWith("honeybadger")?"srep-honeybadger":"srep-service";
+    }
     return isGlockConfiguration()?"glock":isMk18Configuration()?(isMk18OverhaulConfiguration()?"mk18-empire":"mk18"):isAr15Configuration()?"ru556":isM1AConfiguration()?"m1a":isThanatosConfiguration()?"thanatos":isL118Configuration()?"l118a2":isBoltActionConfiguration()?"timberwolf":QString();
 }
 QString ReloadMakerController::testbedProject(const QString& name) const {
+    if(name.startsWith("srep-"))return studioDataPath("workspace/"+name+"-native-reload.project.json");
     if(name=="mk18"||name=="mk18-empire")return studioDataPath(name=="mk18"?"workspace/MK18-native-reload.project.json":"workspace/MK18-Empire-native-reload.project.json");
     return studioDataPath(name=="glock"?"workspace/Glock19x-magazine-grips.project.json":
         name=="ru556"?"workspace/RU556-native-reload.project.json":name=="m1a"?"workspace/M1A-native-reload.project.json":
@@ -45,6 +64,19 @@ QString ReloadMakerController::testbedProject(const QString& name) const {
 }
 
 bool ReloadMakerController::buildCurrentSimulationRig(SimulationRig& rig,QString& error) {
+    // SREP's native bolt cycles while its separate charging handle is static.
+    // Derive only the manual handle translation from that measured bolt stroke.
+    if(isSrepConfiguration()) {
+        for(const auto id:configuration()->activeMods()) {
+            const auto* mod=configuration()->mod(id);
+            if(mod&&(mod->editorId=="mod_SREP_M203Dummy"||mod->editorId=="mod_SREP_M26MASSDummy")) {
+                error="The active underbarrel weapon uses its own reload. Select rifle mode for physical rifle reloads.";return false;
+            }
+        }
+        if(!buildSimulationRig(*_reloadRecipe,rig,error,simulationMechanism(),isAr15Configuration()))return false;
+        for(int i=0;i<_reloadRecipe->tracks.size();++i)if(_reloadRecipe->tracks[i].surface&&_reloadRecipe->tracks[i].anchor.anchorName=="WeaponExtra2")rig.slideTracks.append(i);
+        return true;
+    }
     if(!isMk18Configuration())return buildSimulationRig(*_reloadRecipe,rig,error,simulationMechanism());
     const auto& r=*_reloadRecipe;int bolt=-1;float stroke=0;
     for(int i=0;i<r.tracks.size();++i)if(r.tracks[i].anchor.anchorName=="WeaponBolt")bolt=i;
@@ -160,7 +192,8 @@ void ReloadMakerController::setSimulationTrigger(bool pressed) {
 
 bool ReloadMakerController::selectTestbed(const QString& name) {
     if(_loadThread||_reloadCapturing||_rebuildTimer->isActive()){setStatus("Wait for the current weapon to finish loading.",true);return false;}
-    if(name!="glock"&&name!="ru556"&&name!="m1a"&&name!="timberwolf"&&name!="l118a2"&&name!="thanatos"&&name!="mk18"&&name!="mk18-empire"){setStatus("Unknown weapon testbed.",true);return false;}
+    if(name!="glock"&&name!="ru556"&&name!="m1a"&&name!="timberwolf"&&name!="l118a2"&&name!="thanatos"&&name!="mk18"&&name!="mk18-empire"&&
+       name!="srep-service"&&name!="srep-honeybadger"&&name!="srep-ar10"&&name!="srep-xm16e1"){setStatus("Unknown weapon testbed.",true);return false;}
     const auto current=currentTestbed();
     if(current==name){setWorkspace(OperateWorkspace);return true;}
     if(!current.isEmpty()) {

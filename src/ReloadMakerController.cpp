@@ -1416,6 +1416,22 @@ namespace reloadmaker
                     {{t[0], t[1], t[2]}, {q[1], q[2], q[3], q[0]}, {scale, scale, scale}}});
             }
         }
+        if(isSrepConfiguration())for(auto& point:scope.points) {
+            // Honey Badger names a rigid shape as its CPA frame. Shapes cannot
+            // own pasted branches, so carry the exact shape-local transform
+            // into the connection and attach beneath its real parent node.
+            if(point.parentName!="Upper")continue;
+            QModelIndex shape;int matches=0;
+            for(int block=firstBlock;block<lastBlock;++block) {
+                const auto index=model->getBlockIndex(block);
+                if(model->blockInherits(index,"BSTriShape")&&model->get<QString>(index,"Name")==point.parentName){shape=index;++matches;}
+            }
+            if(matches!=1)continue;
+            const auto parent=model->getBlockIndex(model->getParent(shape));Transformf local;
+            if(parent.isValid()&&model->blockInherits(parent,"NiNode")&&readNodeTransform(shape,local)) {
+                point.local=composed(local,point.local);point.parentName=model->get<QString>(parent,"Name");
+            }
+        }
         if (!scope.points.isEmpty()) { _attachmentConnections.add(std::move(scope)); }
     }
 
@@ -1472,7 +1488,10 @@ namespace reloadmaker
             }
             result.suppliedBone = bone;
         } else {
-            const auto canonical = bone >= 0 ? _canonicalNodes.value(normalizedKey(parentName)) : QPersistentModelIndex{};
+            auto canonical = bone >= 0 ? _canonicalNodes.value(normalizedKey(parentName)) : QPersistentModelIndex{};
+            // These SREP CPAs retain donor model-root labels while emitting
+            // WEAPON / Scene Root. Their supplied offsets are owner-local.
+            if(isSrepConfiguration()&&(parentName=="HandmadeARReceiver"||parentName=="AR10 Handguard"))canonical=model->getBlockIndex(result.ownerRoot);
             const int anchor = _attachmentConnections.anchor(match,
                 canonical.isValid() ? model->getBlockNumber(canonical) : -1, result.error);
             if (anchor >= 0) { result.parent = model->getBlockIndex(anchor); }

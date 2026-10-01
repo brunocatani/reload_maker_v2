@@ -33,7 +33,7 @@ int ReloadMakerController::currentMagazineAnchor() const {
     int result=-1;
     for(int i=0;i<_handPoseAnchors.size();++i)if(magazineGrabSupported(_handPoseAnchors[i].description)) {
         const auto& anchor=_handPoseAnchors[i].description;
-        if(isRifleConfiguration()&&!isMk18Configuration()?(anchor.anchorKind!="installed-part"):(anchor.anchorName.compare("WeaponMagazine",Qt::CaseInsensitive)!=0))continue;
+        if(isRifleConfiguration()&&!isMk18Configuration()&&!isSrepEmbeddedMagazine()?(anchor.anchorKind!="installed-part"):(anchor.anchorName.compare("WeaponMagazine",Qt::CaseInsensitive)!=0))continue;
         if(result>=0)return -1;
         result=i;
     }
