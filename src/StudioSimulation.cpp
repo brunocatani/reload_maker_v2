@@ -318,7 +318,9 @@ bool ReloadMakerController::applySimulationPose() {
             targets.insert(_reloadTrackNodes[visual.track],_reloadRecipe->tracks[visual.track].poses.front());
     if(isM1AConfiguration()&&_simulation.action!=SimulationAction::Reload&&_simulation.action!=SimulationAction::Fire) {
         const auto& rig=*_simulationRig;const auto& root=_reloadRecipe->tracks[rig.magazine];
-        const int frame=_simulation.magazineRounds>0?_reloadRecipe->frames-1:_m1aEmptyMagazineFrame;
+        // The last reload frame has already fed a round into the chamber.
+        // A detached magazine needs its pre-feed round stack at magazine-in.
+        const int frame=_simulation.magazineRounds>0?(_simulation.magazine.seated()?_reloadRecipe->frames-1:_m1aLoadedMagazineFrame):_m1aEmptyMagazineFrame;
         const bool feeding=_simulation.feedCycleActive()&&_simulation.magazine.seated()&&_simulation.magazineRounds>0;
         const auto parent=feeding?simulationTrackPose(*_reloadRecipe,rig,rig.magazine,_simulation.slide):root.poses[frame];
         Transformf inverse;if(!invertUniformTransform(parent,inverse)){_poseError="Invalid magazine payload frame.";return false;}
@@ -596,6 +598,7 @@ QJsonObject ReloadMakerController::exportSimulation() const {
             result["reciprocatingHandle"]=true;
             result["handleFireMotion"]="native-reload-stroke-by-firing-bolt-distance";
             result["emptyMagazineFrame"]=_m1aEmptyMagazineFrame;
+            result["loadedMagazineFrame"]=_m1aLoadedMagazineFrame;
         }
     }
     if(isGlockConfiguration())result["glockReloadProfile"]=simulationState()["reloadProfile"];

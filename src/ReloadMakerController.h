@@ -275,6 +275,7 @@ namespace reloadmaker
         QString _rifleBoltSource;
         SlotKey _simulationMagazineSlot{0};
         int _m1aEmptyMagazineFrame{0};
+        int _m1aLoadedMagazineFrame{0};
         HandPosePlacement simulationMagazineAnchor() const;
         Transformf _magazineGrabBridge{};
         QString glockNoExtenderPath() const;

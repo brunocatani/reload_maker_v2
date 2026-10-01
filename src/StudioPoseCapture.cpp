@@ -133,8 +133,9 @@ void ReloadMakerController::resolveMagazineGrabGrip() {
     for(int i=0;i<_nodeBindings.size();++i)if(_nodeBindings[i].nodeIndex==_reloadTrackNodes[_simulationRig->magazine]){_magazineGrabBinding=i;break;}
     if(_magazineGrabBinding<0){_magazineGrabError="The magazine grip has no live binding.";return;}
     if(isRifleConfiguration()) {
+        const int reference=currentMagazineAnchor();
         Transformf world,inverse;
-        if(!sceneNodeWorld(_partRoots.value(_simulationMagazineSlot),world,_magazineGrabError)||
+        if(reference<0||!sceneNodeWorld(_handPoseAnchors[reference].node,world,_magazineGrabError)||
            !invertUniformTransform(_boundGlobalPose[_magazineGrabBinding],inverse)){_magazineGrabError="The magazine attachment frame is unavailable.";return;}
         _magazineGrabBridge=composed(inverse,world);
     }
