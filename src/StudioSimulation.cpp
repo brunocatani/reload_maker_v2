@@ -101,7 +101,10 @@ void ReloadMakerController::createSimulationUi() {
     });
     auto* optionsTitle=new QLabel("BEHAVIOUR",panel);optionsTitle->setObjectName("Section");layout->addWidget(optionsTitle);
     _operatingGripStatus=hint({},panel);layout->addWidget(_operatingGripStatus);
-    _operatingGripStatus->setToolTip("In game, ROCK fits the hand to the contacted surface and approach. Mouse preview retains native hands; it does not run the VR contact solver.");
+    _operatingGripStatus->setToolTip("Saved finger shape only. In game your wrist follows your approach. Mouse preview applies the fingers to the native wrist; it does not run the VR contact solver.");
+    _operatingFingerPicker=new QComboBox(panel);layout->addWidget(_operatingFingerPicker);
+    _operatingFingerPicker->setToolTip("Replace this hand's operating finger pose. If the other hand is unassigned it uses a skeleton-aware mirror. Saved wrist placement is never applied.");
+    connect(_operatingFingerPicker,qOverload<int>(&QComboBox::activated),this,[this](int index){if(index>0)(void)useOperatingFingers(_operatingFingerPicker->itemData(index).toString());});
     auto* grabLocations=new QPushButton("CONFIGURE GRAB LOCATIONS",panel);layout->addWidget(grabLocations);
     connect(grabLocations,&QPushButton::clicked,this,[this]{(void)openGrabLocations();});
     _simulationSpring=new QCheckBox("Slide returns when released",panel);_simulationSpring->setChecked(true);layout->addWidget(_simulationSpring);
@@ -223,7 +226,7 @@ void ReloadMakerController::prepareSimulation() {
     if(!selectSimulationClip(false,false)){stopSimulation();updateSimulationControls();return;}
     prepareMagazineInteraction();
     if(isGlockConfiguration())_interactionHand=PoseHand::Left;
-    resolveMagazineGrabGrip();
+    resolveMagazineGrabGrip();resolveOperatingFingers();
     prepareSounds();
     (void)applyPose(0);
     _magazineViewport->setActive(true);
@@ -577,12 +580,15 @@ QJsonObject ReloadMakerController::exportSlideProfile() const {
         for(int f=rig.openFrame;f<=rig.closedFrame;++f)stroke.append(poses[f]);
         tracks.append(QJsonObject{{"anchor",source["anchor"]},{"runtimePath",path.join('/')},{"poses",stroke}});
     }
-    return {{"format","reload-maker-slide-profile"},{"version",1},{"recipeId",recipe.id},{"source",recipe.source},
+    QJsonObject result{{"format","reload-maker-slide-profile"},{"version",1},{"recipeId",recipe.id},{"source",recipe.source},
         {"framePath",_skeleton.bones[_weaponBoneIndex].name},{"space","weapon-local"},
         {"sourceFirstFrame",rig.openFrame},{"sourceLastFrame",rig.closedFrame},{"sourceFrames",recipe.frames},
         {"frames",rig.closedFrame-rig.openFrame+1},{"duration",recipe.duration*(rig.closedFrame-rig.openFrame)/(recipe.frames-1)},
         {"slideTrack",rig.slideTracks.indexOf(rig.slide)},{"openFrame",0},{"closedFrame",rig.closedFrame-rig.openFrame},
         {"springReturn",_simulationSpring->isChecked()},{"tracks",tracks}};
+    const auto fingers=exportInteractionGrips()["operatingFingers"].toArray();
+    if(!fingers.isEmpty())result["operatingFingers"]=fingers;
+    return result;
 }
 QJsonObject ReloadMakerController::exportSimulation() const {
     if(!_simulationRig||!_reloadRecipe)return {};

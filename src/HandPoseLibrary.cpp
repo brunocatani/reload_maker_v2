@@ -184,6 +184,12 @@ namespace reloadmaker {
             require(validTransform(result.placement.handInAnchor),"Invalid mirrored wrist transform");target=std::move(result);return true;
         }catch(const std::exception& e){error=QString::fromUtf8(e.what());return false;}
     }
+    bool handPoseFingersFor(const HkxSkeleton& skeleton,const HandPose& source,PoseHand hand,HandPose& target,QString& error) {
+        auto fingers=source;fingers.placement={};
+        if(source.hand==hand){target=std::move(fingers);error.clear();return true;}
+        if(!mirrorHandPose(skeleton,fingers,{},target,error))return false;
+        target.placement={};return true;
+    }
     bool applyHandPoseFingers(const HkxSkeleton& skeleton, const HandPose& pose,
         QVector<Transformf>& locals, QString& error) {
         error.clear();

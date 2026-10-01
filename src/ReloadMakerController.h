@@ -434,9 +434,14 @@ namespace reloadmaker
         PoseHand _interactionHand{PoseHand::Left};
         QComboBox* _interactionHandPicker{nullptr};
         QComboBox* _magazineHandPicker{nullptr};
-        // Preserve old project assignments for the reusable pose library only.
-        // Operating acquisition/presentation never consumes these templates.
+        // Assignments supply finger locals only; operating wrists stay live.
         QHash<QString,QString> _savedOperatingGrips;
+        std::array<std::optional<HandPose>,2> _operatingFingers;
+        QString _operatingFingerError;
+        QComboBox* _operatingFingerPicker{};
+        QString operatingGripKey(PoseHand hand) const;
+        void resolveOperatingFingers();
+        bool useOperatingFingers(const QString& id);
         QLabel* _operatingGripStatus{nullptr};
         bool setInteractionHand(PoseHand hand);
         void createGrabLocationsUi();

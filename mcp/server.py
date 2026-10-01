@@ -286,6 +286,14 @@ def import_authored_records(paths: list[str], expected_revision: int) -> dict:
     """Validate and import old or V2 pose/grip/mechanism/recipe JSON. Preserves originals and rejects conflicting IDs."""
     return command('import_records',{'paths':paths},expected_revision)
 
+
+
+@mcp.tool()
+def use_operating_fingers(id: str, expected_revision: int) -> dict:
+    """Assign saved finger shape to the current operating hand/group; wrist stays live. The unassigned other hand uses a skeleton-aware mirror."""
+    return command('use_operating_fingers', {'id': id}, expected_revision)
+
+
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--command',help='One JSON request to the local application')

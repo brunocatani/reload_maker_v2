@@ -6,6 +6,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <QSet>
 #include <QTabWidget>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -15,6 +16,53 @@
 #include <limits>
 
 namespace reloadmaker {
+QString ReloadMakerController::operatingGripKey(PoseHand hand) const {
+    QString key=poseRecordKey(currentWeapon()->formId)+"|"+operatingGroup();
+    const int anchor=operatingAnchor();
+    if((isMk18Configuration()||isSrepConfiguration())&&anchor>=0)key+="|"+normalizeNifPath(_handPoseAnchors[anchor].description.ownerModel);
+    return handAssignmentKey(key,hand);
+}
+void ReloadMakerController::resolveOperatingFingers() {
+    _operatingFingers={};_operatingFingerError.clear();
+    if(_operatingFingerPicker) {
+        const QSignalBlocker block(_operatingFingerPicker);_operatingFingerPicker->clear();
+        _operatingFingerPicker->addItem("Choose operating finger pose…");
+        QSet<QString> ids;
+        const auto add=[&](const HandPose& p){if(ids.contains(p.id))return;ids.insert(p.id);_operatingFingerPicker->addItem(p.name+(p.hand==PoseHand::Left?" · left":" · right"),p.id);};
+        for(const auto& p:_savedHandPoses)add(p);
+        for(const auto& g:_partGrips)if(_savedOperatingGrips.values().contains(g.pose.id))add(g.pose);
+    }
+    if(!currentWeapon()||operatingAnchor()<0)return;
+    for(const auto hand:{PoseHand::Left,PoseHand::Right}) {
+        auto id=_savedOperatingGrips.value(operatingGripKey(hand));
+        if(id.isEmpty())id=_savedOperatingGrips.value(operatingGripKey(hand==PoseHand::Left?PoseHand::Right:PoseHand::Left));
+        if(id.isEmpty())continue;
+        const HandPose* source=nullptr;
+        for(const auto& g:_partGrips)if(g.pose.id==id)source=&g.pose;
+        for(const auto& p:_savedHandPoses)if(p.id==id)source=&p;
+        if(!source){_operatingFingerError="Assigned operating finger pose is missing from the library.";return;}
+        HandPose pose;
+        if(!handPoseFingersFor(_skeleton,*source,hand,pose,_operatingFingerError))return;
+        pose.source["operatingMirrored"]=source->hand!=hand;
+        _operatingFingers[int(hand)]=std::move(pose);
+    }
+}
+bool ReloadMakerController::useOperatingFingers(const QString& id) {
+    if(!_simulationActive||operatingAnchor()<0||_simulation.action!=SimulationAction::Idle||_simulation.magazine.carried()) {
+        setStatus("Release the operating part and magazine before selecting a finger pose.",true);return false;
+    }
+    const bool found=std::any_of(_savedHandPoses.cbegin(),_savedHandPoses.cend(),[&](const auto& p){return p.id==id;})||
+        std::any_of(_partGrips.cbegin(),_partGrips.cend(),[&](const auto& g){return g.pose.id==id;});
+    if(!found){setStatus("Select a saved finger pose from the library.",true);return false;}
+    const auto key=operatingGripKey(_interactionHand),previous=_savedOperatingGrips.value(key);
+    _savedOperatingGrips[key]=id;resolveOperatingFingers();
+    if(!_operatingFingerError.isEmpty()||!saveSession()) {
+        const auto error=_operatingFingerError.isEmpty()?_lastError:_operatingFingerError;
+        if(previous.isEmpty())_savedOperatingGrips.remove(key);else _savedOperatingGrips[key]=previous;
+        resolveOperatingFingers();setStatus(error,true);return false;
+    }
+    updateInteractionGripUi();++_revision;setStatus("Operating fingers saved. Wrist angle stays live; an unassigned opposite hand uses the mirrored finger shape.");return true;
+}
 QString ReloadMakerController::operatingGroup() const {return isAr15Configuration()?"charging_handle":isBoltActionConfiguration()||isThanatosConfiguration()||isSrepConfiguration()?"bolt":isM1AConfiguration()?"operating_handle":"slide";}
 int ReloadMakerController::operatingAnchor() const {
     if(!_simulationRig||!_reloadRecipe)return -1;
@@ -26,7 +74,7 @@ bool ReloadMakerController::setInteractionHand(PoseHand hand) {
     if(isGlockConfiguration()&&hand!=PoseHand::Left){setStatus("The Glock uses a right firing hand and left reload hand.",true);return false;}
     if(_simulation.action!=SimulationAction::Idle||_simulation.magazine.carried()){setStatus("Release the part or finish magazine placement before switching hands.",true);return false;}
     rememberMagazineGrip();_interactionHand=hand;
-    resolveMagazineGrabGrip();
+    resolveMagazineGrabGrip();resolveOperatingFingers();
     if(_workspace==GripsWorkspace&&_editingMagazine){_partGripDraft.reset();return editMagazineGrip();}
     if(_clip.valid())(void)applyPose(_playbackTime);
     updateInteractionGripUi();++_revision;return true;
@@ -48,7 +96,14 @@ bool ReloadMakerController::mirrorMagazineGrip() {
 void ReloadMakerController::updateInteractionGripUi() {
     const bool free=_simulation.action==SimulationAction::Idle&&!_simulation.magazine.carried();
     for(auto* picker:{_interactionHandPicker,_magazineHandPicker})if(picker){const QSignalBlocker block(picker);picker->setCurrentIndex(int(_interactionHand));picker->setEnabled(!isGlockConfiguration()&&free&&!_loadThread&&!_reloadCapturing);}
-    if(_operatingGripStatus)_operatingGripStatus->setText("Dynamic operating grab · either permitted hand. Magazine poses stay authored.");
+    const auto& fingers=_operatingFingers[int(_interactionHand)];
+    if(_operatingGripStatus)_operatingGripStatus->setText(!_operatingFingerError.isEmpty()?_operatingFingerError:fingers?
+        "Fingers only · "+fingers->name+(fingers->source["operatingMirrored"].toBool()?" · mirrored for this hand":"")+"\nWrist position and angle stay live.":"No operating finger pose assigned. Select a saved pose below.");
+    if(_operatingFingerPicker) {
+        const QSignalBlocker block(_operatingFingerPicker);
+        _operatingFingerPicker->setCurrentIndex(fingers?_operatingFingerPicker->findData(fingers->id):0);
+        _operatingFingerPicker->setEnabled(free&&_simulationActive);
+    }
     _operatingHover=false;if(_simulationDrive)_simulationDrive->setMarkers({});refreshGrabLocationsUi();
 }
 std::optional<QVector3D> ReloadMakerController::hoverOperatingPart(QPointF point) {
@@ -76,20 +131,28 @@ std::optional<QVector3D> ReloadMakerController::hoverOperatingPart(QPointF point
 }
 bool ReloadMakerController::operatingGrabAvailable() const {
     const auto g=currentGrabLocations();
-    return currentWeapon()&&(!_grabLocations.contains(grabLocationsKey(g))||
+    return currentWeapon()&&_operatingFingerError.isEmpty()&&(!_grabLocations.contains(grabLocationsKey(g))||
         std::any_of(g.points.cbegin(),g.points.cend(),[&](const auto& p){return p.hands&(_interactionHand==PoseHand::Left?1:2);}));
 }
 
 QJsonObject ReloadMakerController::interactionGripState() const {
+    const auto& fingers=_operatingFingers[int(_interactionHand)];
     return {{"hand",_interactionHand==PoseHand::Left?"left":"right"},{"support",_interactionHand==PoseHand::Left?"right-firing-grip":"left-support-grip"},
-        {"group",operatingGroup()},{"canGrab",operatingGrabAvailable()},{"posePolicy","dynamic"},{"authored",false},{"gripId",QString()},
-        {"applied",false},{"error",QString()},
+        {"group",operatingGroup()},{"canGrab",operatingGrabAvailable()},{"posePolicy","authored-fingers-live-wrist"},{"authored",bool(fingers)},{"gripId",fingers?fingers->id:QString()},
+        {"applied",bool(fingers)&&_simulation.action==SimulationAction::Held},{"error",_operatingFingerError},
         {"markerVisible",_operatingHover}};
 }
 QJsonObject ReloadMakerController::exportInteractionGrips() const {
-    if(!_reloadRecipe||!currentWeapon())return {};
-    QJsonObject result{{"version",1},{"firingHand","right"},{"operatingPosePolicy","dynamic"},
-        {"otherHandPolicy","dynamic"},{"operatingGroups",QJsonArray{}}};
-    const auto locations=exportGrabLocations();if(!locations.isEmpty()){result["version"]=2;result["grabLocations"]=locations;}return result;
+    if(!_reloadRecipe||!currentWeapon()||!_operatingFingerError.isEmpty())return {};
+    QJsonArray hands;
+    for(const auto& p:_operatingFingers)if(p) {
+        QString error;QJsonArray joints;
+        for(const auto& f:p->fingers){QJsonObject joint;if(!encodePoseTransform(f,joint,error))return {};joints.append(joint);}
+        hands.append(QJsonObject{{"hand",p->hand==PoseHand::Left?"left":"right"},{"sourcePoseId",p->id},{"name",p->name},
+            {"fingerLocalTransformMask",0x7fff},{"fingerLocalTransforms",joints}});
+    }
+    QJsonObject result{{"version",3},{"firingHand","right"},{"operatingPosePolicy","authored-fingers-live-wrist"},
+        {"otherHandPolicy","mirror-fingers"},{"operatingFingers",hands}};
+    const auto locations=exportGrabLocations();if(!locations.isEmpty())result["grabLocations"]=locations;return result;
 }
 }

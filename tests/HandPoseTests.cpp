@@ -80,6 +80,16 @@ namespace {
         require(mirrorHandPose(skeleton,mirrored,mirrorAnchor,back,error),error);
         expect(pose.placement.handInAnchor,back.placement.handInAnchor);
         for(int i=0;i<15;++i)expect(pose.fingers[i],back.fingers[i]);
+        // Finger-only conversion cannot inherit the captured wrist or anchor.
+        HandPose only,shifted,changed=pose;
+        require(handPoseFingersFor(skeleton,pose,mirrored.hand,only,error),error);
+        changed.placement.handInAnchor=transform({900,-70,81},137);
+        changed.placement.handInWeapon=transform({-90,800,9},-65);
+        require(handPoseFingersFor(skeleton,changed,mirrored.hand,shifted,error),error);
+        for(int i=0;i<15;++i)expect(only.fingers[i],shifted.fingers[i]);
+        require(handPoseFingersFor(skeleton,only,side,back,error),error);
+        for(int i=0;i<15;++i)expect(pose.fingers[i],back.fingers[i]);
+        expect(only.placement.handInAnchor,Transformf{});
         const auto beforeWrist=composed(mirrorAnchor,pose.placement.handInAnchor).translation;
         const auto afterWrist=composed(mirrorAnchor,mirrored.placement.handInAnchor).translation;
         require(std::abs(beforeWrist.x+afterWrist.x)<.0003f&&std::abs(beforeWrist.y-afterWrist.y)<.0003f&&std::abs(beforeWrist.z-afterWrist.z)<.0003f,"Opposite wrist did not mirror around the magazine plane");

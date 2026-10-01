@@ -1,4 +1,4 @@
-"""Dynamic operating grabs with unchanged authored magazine wrists and fingers."""
+"""Authored operating fingers, live wrists, and unchanged full magazine poses."""
 import json,math,sys,time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -54,7 +54,10 @@ def run():
             edit('open_project',path=str(canonical));ready();edit('workspace',index=5);ready();op('reset')
             old=json.loads(canonical.read_text(encoding='utf-8'));payload=export('simulation')
             policy=payload['authoredInteractions']
-            assert policy['operatingPosePolicy']=='dynamic' and policy['operatingGroups']==[]
+            assert policy['operatingPosePolicy']=='authored-fingers-live-wrist'
+            authored=not name.startswith('Glock')
+            assert len(policy['operatingFingers'])==(2 if authored else 0)
+            for h in policy['operatingFingers']:assert 'placement' not in h and 'worldTransform' not in h
             points=command('grab_locations_state')['profile']
             hands=['left'] if name.startswith('Glock') else ['left','right']
             for hand in hands:
@@ -63,30 +66,51 @@ def run():
                 fingers={b['name']:b['local'] for b in scene['bones'] if 'Arm_Finger' in b['name']}
                 for progress in [.15,.5,1,.7,.2]:
                     state=op('pull',progress=progress)['interaction']
-                    assert state['canGrab'] and state['posePolicy']=='dynamic' and not state['authored'] and not state['applied'] and not state['error']
+                    assert state['canGrab'] and state['posePolicy']=='authored-fingers-live-wrist' and state['authored']==authored and state['applied']==authored and not state['error']
                     for b in command('pose')['bones']:
                         if b['name'] in baseline:near(frame(b['world']),frame(baseline[b['name']]))
-                        if b['name'] in fingers:near(frame(b['local']),frame(fingers[b['name']]))
+                        if b['name'] in fingers:
+                            prefix='L' if hand=='left' else 'R'
+                            if authored and b['name'].startswith(prefix):
+                                expected=next(h for h in policy['operatingFingers'] if h['hand']==hand)
+                                index=(int(b['name'][-2])-1)*3+int(b['name'][-1])-1
+                                near(frame(b['local']),expected['fingerLocalTransforms'][index])
+                            else:near(frame(b['local']),frame(fingers[b['name']]))
                 op('release',cancel=True);op('reset')
+                for b in command('pose')['bones']:
+                    if b['name'] in fingers:near(frame(b['local']),frame(fingers[b['name']]))
                 # Saved magazine poses still control the held/inserting mesh.
                 op('drop_magazine');held=op('grab_magazine');assert held['magazineGrip']['applied']
                 grip=json.loads((ROOT/'workspace/part-grips'/(held['magazineGrip']['id']+'.json')).read_text(encoding='utf-8'))
                 check_fit(grip);rail=held['magazineRail'];op('move_magazine',position=[v*rail['travel']*.7 for v in rail['outwardInWeapon']]);op('move_magazine',distance=rail['travel']*.4);check_fit(grip)
                 op('move_magazine',distance=0);op('reset')
             assert command('grab_locations_state')['profile']==points
-            # Existing operating assignments survive as library references but
-            # cannot regain runtime authority after saving and reopening.
-            scratch=OUT/(name+'-dynamic.project.json');edit('save_project',path=str(scratch))
+            # Existing operating assignments retain their finger-only authority
+            # after saving and reopening; all wrist placements remain absent.
+            scratch=OUT/(name+'-fingers.project.json');edit('save_project',path=str(scratch))
             saved=json.loads(scratch.read_text(encoding='utf-8'))
             for key in ['operatingGrips','magazineGrabGrips','magazineGrabDefaults','grabLocations']:assert saved.get(key,{})==old.get(key,{})
             edit('open_project',path=str(scratch));ready();edit('workspace',index=5);ready();op('reset')
-            assert export('simulation')['authoredInteractions']['operatingPosePolicy']=='dynamic'
+            assert export('simulation')['authoredInteractions']['operatingPosePolicy']=='authored-fingers-live-wrist'
+            if name=='RU556-native-reload':
+                # A named library choice replaces only the selected hand/group
+                # in the scratch project; it never changes magazine fits.
+                before=export('simulation')['authoredInteractions']['operatingFingers']
+                selected=next(p for p in ready()['handPoses'] if p['id']!=before[1]['sourcePoseId'])
+                edit('interaction_hand',hand='right');edit('use_operating_fingers',id=selected['id'])
+                after=export('simulation')['authoredInteractions']['operatingFingers']
+                assert after[0]==before[0] and after[1]['sourcePoseId']==selected['id']
+                edit('open_project',path=str(scratch));ready();edit('workspace',index=5);ready()
+                assert export('simulation')['authoredInteractions']['operatingFingers']==after
+                assigned=json.loads(scratch.read_text(encoding='utf-8'))
+                for key in ['magazineGrabGrips','magazineGrabDefaults','grabLocations']:assert assigned.get(key,{})==saved.get(key,{})
+
             # Restore only the canonical pointer, preserving the original file.
             edit('open_project',path=str(canonical));ready();edit('save_project',path=str(canonical))
-            results.append(name);print('PASS',name,'dynamic operating hands; authored magazine transforms; points and persistence',flush=True)
-        (OUT/'dynamic-validated.json').write_text(json.dumps(results,indent=2),encoding='utf-8')
+            results.append(name);print('PASS',name,'authored fingers / live wrists; authored magazine transforms; points and persistence',flush=True)
+        (OUT/'fingers-validated.json').write_text(json.dumps(results,indent=2),encoding='utf-8')
     finally:
         edit('open_project',path=original);ready()
-    print('PASS',len(results),'testbeds; dynamic operation and authored magazines',flush=True)
+    print('PASS',len(results),'testbeds; finger-only operation and authored magazines',flush=True)
 
 if __name__=='__main__':run()

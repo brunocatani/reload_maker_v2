@@ -2560,6 +2560,10 @@ namespace reloadmaker
         if (editingFingers && _handPosePreview && !_mechanismPreview && !applyHandPoseFingers(_skeleton, *_handPosePreview, _localPose, _poseError)) {
             return fail();
         }
+        if(_simulationActive&&_simulation.action==SimulationAction::Held) {
+            const auto& fingers=_operatingFingers[int(_interactionHand)];
+            if(fingers&&!applyHandPoseFingers(_skeleton,*fingers,_localPose,_poseError))return fail();
+        }
         if (!buildPoseGlobals(_skeleton, _localPose, _globalPose, _poseError)) { return fail(); }
         // Fixed mode removes this frame's complete Weapon world transform from
         // every branch. Source mode removes only the Ready world frame: Weapon

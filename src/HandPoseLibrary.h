@@ -40,6 +40,10 @@ namespace reloadmaker {
     // every joint through the actual opposite-hand reference basis.
     [[nodiscard]] bool mirrorHandPose(const HkxSkeleton& skeleton,const HandPose& source,
         const Transformf& anchorInWeapon,HandPose& target,QString& error);
+    // Convert only the finger chain through the target hand's skeleton bases.
+    // Saved wrist placement is deliberately excluded from this operation.
+    [[nodiscard]] bool handPoseFingersFor(const HkxSkeleton& skeleton,const HandPose& source,
+        PoseHand hand,HandPose& target,QString& error);
 
     [[nodiscard]] QByteArray encodeHandPose(const HandPose& pose, QString& error);
     [[nodiscard]] bool encodePoseTransform(const Transformf& value,QJsonObject& json,QString& error);

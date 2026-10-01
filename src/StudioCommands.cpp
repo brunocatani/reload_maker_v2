@@ -162,6 +162,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     else if(method=="testbed") {require(selectTestbed(p["name"].toString()),_lastError);}
     else if(method=="interaction_hand") {const auto hand=p["hand"].toString();require(hand=="left"||hand=="right","Specify left or right");require(setInteractionHand(hand=="left"?PoseHand::Left:PoseHand::Right),_lastError);}
     else if(method=="mirror_magazine_grip") {require(mirrorMagazineGrip(),_lastError);}
+    else if(method=="use_operating_fingers") {require(useOperatingFingers(p["id"].toString()),_lastError);}
     else if(method=="sound") {
         const auto operation=p["operation"].toString();
         const auto id=p["id"].toString();int index=-1;for(int i=0;i<_soundProfile.cues.size();++i)if(_soundProfile.cues[i].id==id)index=i;

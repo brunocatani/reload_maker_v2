@@ -55,7 +55,7 @@ try:
                 assert not initial['ammunition']['automatic']
                 stem=title+'-'+choice['record'].split(':')[1]
                 simulation=export('simulation',stem);bundle=export('reload_bundle',stem);export('sounds',stem)
-                assert simulation['authoredInteractions']['operatingPosePolicy']=='dynamic' and not simulation['authoredInteractions']['operatingGroups']
+                assert simulation['authoredInteractions']['operatingPosePolicy']=='authored-fingers-live-wrist' and len(simulation['authoredInteractions']['operatingFingers'])==2
                 points=simulation['authoredInteractions']['grabLocations'];assert points['sourceName']=='WeaponBolt' and len(points['points'])==1 and points['points'][0]['handMask']==3
                 assert simulation['magazineInteraction']['inputPath']=='straight'
                 # Shared receiver ownership must never classify the receiver,
@@ -64,7 +64,7 @@ try:
                 for hand in ['right','left']:
                     edit('interaction_hand',hand=hand);op('reset')
                     for progress in [.1,.5,1]:
-                        held=op('pull',progress=progress);assert not held['interaction']['applied'] and held['interaction']['posePolicy']=='dynamic'
+                        held=op('pull',progress=progress);assert held['interaction']['applied'] and held['interaction']['posePolicy']=='authored-fingers-live-wrist'
                     op('release',cancel=True);op('reset')
                 bindings={b['hand']:b for b in bundle['magazineGrabBindings'] if b['ownerRecord']==choice['record']};assert set(bindings)=={'left','right'}
                 grips={g['pose']['id']:g['pose'] for g in bundle['grips']}
