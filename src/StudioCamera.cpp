@@ -11,7 +11,11 @@
 
 QVector<QVector3D> GLView::studioGeometryBounds(const QVector<int>& blocks) {
     if(!scene||!isValid()||blocks.isEmpty())return {};
-    makeCurrent();paintGL();doneCurrent();
+    makeCurrent();paintGL();
+    // A model replacement can defer compilation for two paints. Never walk
+    // the previous scene's raw shape list while its nodes are being retired.
+    for(int pass=0;pass<2&&doCompile;++pass)paintGL();
+    const bool ready=!doCompile&&!isDisabled;doneCurrent();if(!ready)return {};
     const QSet<int> allowed(blocks.cbegin(),blocks.cend());
     QVector3D low(std::numeric_limits<float>::max(),std::numeric_limits<float>::max(),std::numeric_limits<float>::max()),high=-low;
     bool any=false;
@@ -73,13 +77,16 @@ bool GLView::studioRestoreCamera(const QJsonObject& value) {
 
 namespace reloadmaker {
 void ReloadMakerController::cacheWeaponFitBounds() {
-    _weaponFitCorners.clear();auto* model=activeModel();auto* scene=_window->getGLView()->getScene();if(!model||!scene)return;
+    _weaponFitCorners.clear();auto* model=activeModel();if(!model)return;
     QSet<int> blocks;
-    for(const auto& surfaces:_partSurfaces)for(const auto& surface:surfaces)if(surface.isValid())blocks.insert(model->getBlockNumber(surface));
-    for(const auto* shape:scene->shapes)if(shape) {
-        auto node=model->getBlockIndex(shape->id());
+    for(const auto& surfaces:_partSurfaces)for(const auto& surface:surfaces)if(surface.isValid()&&surface.model()==model)blocks.insert(model->getBlockNumber(surface));
+    // The model is the live ownership authority during assembly. The renderer
+    // may still contain pointers to shapes from the previously loaded weapon.
+    for(int block=0;block<model->getBlockCount();++block) {
+        auto node=model->getBlockIndex(block);
+        if(!model->blockInherits(node,"BSTriShape")&&!model->blockInherits(node,"NiTriBasedGeom"))continue;
         for(int depth=0;node.isValid()&&depth<model->getBlockCount();++depth) {
-            if(node==_weaponRoot){blocks.insert(shape->id());break;}
+            if(node==_weaponRoot){blocks.insert(block);break;}
             node=model->getBlockIndex(model->getParent(node));
         }
     }

@@ -78,7 +78,7 @@ CollisionProfile ReloadMakerController::collisionSnapshot(int target,bool refere
     const auto* weapon=currentWeapon();auto* model=activeModel();auto* view=_window->getGLView();require(weapon&&model&&view->getScene(),"Load a weapon first");require(target>=0&&target<_collisionTargets.size(),"Select a collision target");target=_collisionTargets[target];
     require(!_playing&&!_reloadPlaying,"Pause playback before creating a collision snapshot");
     const auto anchor=_handPoseAnchors[target];require(!referenceOnly||(target>0&&anchor.description.anchorKind=="installed-part"),"For DIAMOND input, select the installed magazine model, not an animated bone or whole weapon");
-    (void)view->studioCaptureFrame();
+    require(!view->studioCaptureFrame().isNull(),"Wait for the native scene to finish rebuilding before capturing geometry");
     CollisionProfile p;p.weapon=poseRecordKey(weapon->formId);p.target=target?anchor.description.ownerRecord+"|"+anchor.description.ownerModel+"|"+anchor.description.anchorPath:"whole-weapon";
     QJsonObject choices;for(const auto& slot:configuration()->entries())choices[QString::number(slot.key)]=poseRecordKey(configuration()->selected(slot.key));
     p.configuration=QString::fromLatin1(QCryptographicHash::hash(QJsonDocument(choices).toJson(QJsonDocument::Compact),QCryptographicHash::Sha256).toHex());

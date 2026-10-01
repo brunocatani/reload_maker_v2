@@ -31,18 +31,21 @@ void StudioWindow::closeEvent(QCloseEvent* event) {
     QMainWindow::closeEvent(event);
 }
 QImage GLView::studioCaptureFrame() {
+    if(!isValid()||isDisabled)return {};
     makeCurrent();
     paintGL();
+    for(int pass=0;pass<2&&doCompile;++pass)paintGL();
+    if(doCompile||isDisabled){doneCurrent();return {};}
     QImage result = grabFramebuffer();
     doneCurrent();
     return result;
 }
 QJsonObject GLView::studioDiagnostics() const {
     QJsonArray meshes;
-    if (scene) for (const auto* shape : scene->shapes) {
+    if (scene&&!doCompile&&!isDisabled) for (const auto* shape : scene->shapes) {
         if (shape) meshes.append(QJsonObject{{"block",shape->id()},{"hidden",shape->isHidden()},{"triangles",shape->triangles.size()}});
     }
-    return {{"renderer",bool(scene&&scene->haveRenderer())},{"validContext",isValid()},
+    return {{"renderer",bool(scene&&scene->haveRenderer())},{"validContext",isValid()},{"sceneReady",bool(scene&&!doCompile&&!isDisabled)},
         {"disabled",isDisabled},{"compilePending",int(doCompile)},{"modelBlocks",model?model->getBlockCount():0},
         {"meshes",meshes},{"fieldOfView",cfg.fov},{"navigationScale",axis},{"distance",Dist},{"zoom",Zoom},{"position",QJsonArray{Pos[0],Pos[1],Pos[2]}},
         {"rotation",QJsonArray{Rot[0],Rot[1],Rot[2]}},{"width",width()},{"height",height()}};
