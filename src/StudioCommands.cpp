@@ -117,11 +117,13 @@ QJsonObject ReloadMakerController::studioState() const {
 }
 QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     const QString method=request["method"].toString();const auto p=request["params"].toObject();
-    const bool reading=method=="state"||method=="pose"||method=="render"||method=="reload"||method=="diagnostics"||method=="simulation_state"||method=="sound_state"||method=="grab_locations_state"||method=="collision_state";
+    const bool reading=method=="state"||method=="pose"||method=="render"||method=="reload"||method=="diagnostics"||method=="simulation_state"||method=="sound_state"||method=="grab_locations_state"||method=="collision_state"||method=="scope_state";
     if(!reading&&request.contains("expectedRevision"))require(request["expectedRevision"].toDouble()==double(_revision),"Stale document revision; read state again");
     if(method=="state")return studioState();
     if(method=="simulation_state")return simulationState();
     if(method=="sound_state")return soundState();
+    if(method=="scope_state")return scopeState();
+    if(method=="scope_profile")return configureScope(p);
     if(method=="collision_state"){refreshCollisions();return _collisions->state();}
     if(method=="grab_locations_state")return grabLocationsState();
     if(method=="grab_locations"){_lastError.clear();return configureGrabLocation(p);}
@@ -370,6 +372,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     else if(method=="save_project") {require(saveSession(p["path"].toString()),_lastError);}
     else if(method=="open_project") {openSession(p["path"].toString());}
     else if(method=="export") {
+        if(p["kind"]=="scope")return exportScopeProfile();
         QString error;QByteArray bytes;const QString kind=p["kind"].toString();QString id;
         if(kind=="slide"){const auto record=exportSlideProfile();require(!record.isEmpty(),"Prepare a Glock simulation with native rig bindings before exporting");bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
         else if(kind=="grab_locations"){const auto record=exportGrabLocations();require(!record.isEmpty(),"Configure grab locations first");bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}

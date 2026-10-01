@@ -72,7 +72,7 @@ void ReloadMakerController::createUi() {
     // Stable workspace ids are persisted in projects and used by MCP clients;
     // display order is independent of the id.
     const std::pair<QString, int> workspaces[]{{"Operate", OperateWorkspace},
-        {"Hands && grips", GripsWorkspace}, {"Reload phases", PhasesWorkspace},{"Sounds",SoundsWorkspace},{"Collisions",CollisionsWorkspace}};
+        {"Hands && grips", GripsWorkspace}, {"Reload phases", PhasesWorkspace},{"Sounds",SoundsWorkspace},{"Collisions",CollisionsWorkspace},{"Scopes",ScopesWorkspace}};
     for (const auto& [title, id] : workspaces) {
         auto* button = new QPushButton(title, header);
         button->setCheckable(true);
@@ -107,6 +107,9 @@ void ReloadMakerController::createUi() {
         });
     }
     exportRecords->setMenu(exportMenu);
+    connect(exportMenu->addAction("True Scopes profile"),&QAction::triggered,this,[this]{
+        try{(void)exportScopeProfile();}catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}
+    });
     connect(exportMenu->addAction("Physical reload sounds"),&QAction::triggered,this,[this]{
         try{const auto result=executeCommand({{"method","export"},{"params",QJsonObject{{"kind","sounds"}}}});setStatus("Exported · "+result["path"].toString());}
         catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}
@@ -310,6 +313,7 @@ void ReloadMakerController::createUi() {
         createSimulationUi();
         createSoundsUi();
     createCollisionsUi();
+    createScopesUi();
         createGrabLocationsUi();
 
 
@@ -524,7 +528,7 @@ void ReloadMakerController::refreshWeaponPicker() {
 }
 
 bool ReloadMakerController::validWorkspace(int workspace) {
-    return workspace == GripsWorkspace || workspace == PhasesWorkspace || workspace == CollisionsWorkspace || simulationWorkspace(workspace);
+    return workspace == GripsWorkspace || workspace == PhasesWorkspace || workspace == CollisionsWorkspace || workspace == ScopesWorkspace || simulationWorkspace(workspace);
 }
 
 bool ReloadMakerController::mechanismPageActive() const {
@@ -558,6 +562,8 @@ void ReloadMakerController::setWorkspace(int workspace) {
     _simulationDock->setVisible(workspace == OperateWorkspace);
     _soundsDock->setVisible(workspace==SoundsWorkspace);
     _collisionsDock->setVisible(workspace==CollisionsWorkspace);
+    _scopesDock->setVisible(workspace==ScopesWorkspace);
+    if(workspace==ScopesWorkspace){if(_playing)togglePlayback();_reloadPlaying=false;_reloadPreviewTimer->stop();refreshScopeTargets();}
     if(workspace==CollisionsWorkspace){if(_playing)togglePlayback();_reloadPlaying=false;_reloadPreviewTimer->stop();refreshCollisions();}
     _reloadGraphDock->setVisible(phases);
     _reloadInspectorDock->setVisible(phases);

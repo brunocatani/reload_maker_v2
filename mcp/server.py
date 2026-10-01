@@ -38,6 +38,16 @@ def get_state() -> dict:
     return command('state')
 
 @mcp.tool()
+def get_scope_state() -> dict:
+    """Read installed optic targets, rigid shape names and current authored lens profile."""
+    return command('scope_state')
+
+@mcp.tool()
+def configure_scope(operation: str, expected_revision: int, values: dict | None = None) -> dict:
+    """Scope operations: open, select(index), pick(x,y viewport pixels), edit(profile), save, import(path), remove, export. Exports remain local."""
+    return command('scope_profile', dict(values or {}, operation=operation), expected_revision)
+
+@mcp.tool()
 def get_collision_state() -> dict:
     """Read target indices, generated hulls, warnings and asynchronous generation status."""
     return command('collision_state')
@@ -94,7 +104,7 @@ def control_playback(changes: dict, expected_revision: int) -> dict:
 
 @mcp.tool()
 def set_workspace(index: int, expected_revision: int) -> dict:
-    """Choose 2 Hands/grips, 4 Reload phases, 5 Operate, 6 Sounds or 7 Collisions."""
+    """Choose 2 Hands/grips, 4 Reload phases, 5 Operate, 6 Sounds, 7 Collisions or 8 Scopes."""
     return command('workspace',{'index':index},expected_revision)
 
 @mcp.tool()

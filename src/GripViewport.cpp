@@ -154,9 +154,9 @@ namespace reloadmaker {
         QOpenGLPaintDevice device(QSize(qRound(size.width()*dpr),qRound(size.height()*dpr))); device.setDevicePixelRatio(dpr);
         QPainter painter(&device); painter.setRenderHint(QPainter::Antialiasing);
         QFont font=painter.font(); font.setPixelSize(12); painter.setFont(font);
-        const QString labels[]{_teaching?"PICK PART":_simulating?"RESET":_workshop?(_workshopHand?"PLACE PALM":"PICK PART"):"PICK POINT",
+        const QString labels[]{_lensAuthoring?"PICK LENS":_teaching?"PICK PART":_simulating?"RESET":_workshop?(_workshopHand?"PLACE PALM":"PICK PART"):"PICK POINT",
             _simulating&&!_teaching?"DRAG PART":"MOVE",_simulating&&!_teaching?"STAGED":"ROTATE",
-            _simulating&&!_teaching?"RELEASE":_pointAuthoring?"SAVE POINTS":_workshop?"SAVE":"SAVE GRIP",_teaching?"TEST":_simulating?"EDIT":"END"};
+            _lensAuthoring?"SAVE SCOPE":_simulating&&!_teaching?"RELEASE":_pointAuthoring?"SAVE POINTS":_workshop?"SAVE":"SAVE GRIP",_teaching?"TEST":_simulating?"EDIT":"END"};
         qreal x=16;
         for(int i=0;i<5;++i) {
             const bool selected=(i==0 && _picking) || (i==1 && !_picking && !_rotate) || (i==2 && !_picking && _rotate);
@@ -174,6 +174,15 @@ namespace reloadmaker {
         if(!_hasGrip&&!_simulating) return;
         const auto pivot=_simulating?_simulationPivot:palmWorld(_hand,_palm); QPointF center; float depth=0;
         if(!projectGripPoint(camera,size,pivot,center,&depth)) return;
+        if(_lensAuthoring) {
+            QPolygonF ring;
+            for(int i=0;i<=96;++i){const float angle=float(i)*6.28318530718f/96;
+                const auto world=composed(_hand,Transformf{{_lensRadius*std::cos(angle),0,_lensRadius*std::clamp(std::sin(angle),-_lensAspect,_lensAspect)}}).translation;
+                QPointF point;if(projectGripPoint(camera,size,v(world),point))ring.append(point);}
+            painter.setPen(QPen(QColor("#65e5d0"),2));painter.setBrush(QColor(70,220,196,28));painter.drawPolygon(ring);
+            const auto world=composed(_hand,Transformf{{0,_lensForward,0}}).translation;QPointF tip;
+            if(projectGripPoint(camera,size,v(world),tip)){painter.drawLine(center,tip);painter.drawEllipse(tip,4,4);painter.drawText(tip+QPointF(8,0),"VIEW CAMERA / FORWARD");}
+        }
         QVector3D edge; GripRay centerRay;
         if(!unprojectGripPoint(camera,size,center+QPointF(76,0),depth,edge) || !gripRay(camera,size,center,centerRay)) return;
         const float radius=(edge-pivot).length(); if(!(radius>0)) return;

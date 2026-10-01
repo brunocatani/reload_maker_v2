@@ -277,6 +277,7 @@ namespace reloadmaker {
         const int restore = _handPoseAnchor->findText(previous);
         if (restore >= 0) { _handPoseAnchor->setCurrentIndex(restore); }
         refreshPartGripChoices();
+        refreshScopeTargets();
         refreshPartGripList();
         refreshMechanismChoices();
         // A rebuilt assembly is re-learned wherever the reload is consumed

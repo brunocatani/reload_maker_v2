@@ -21,6 +21,7 @@
 #include "AudioPreview.h"
 #include "OperatingGrabLocations.h"
 #include "CollisionAuthoring.h"
+#include "ScopeProfile.h"
 
 #include <QHash>
 #include <QCache>
@@ -146,7 +147,7 @@ namespace reloadmaker
         // Stable ids: persisted in projects and used by MCP clients (DIAMOND's
         // importer uses OperateWorkspace = 5). Retired ids (0 Source, 1 Preview,
         // 3 Mechanisms) are rejected; projects saved on them reopen in Operate.
-        enum Workspace : int { GripsWorkspace = 2, PhasesWorkspace = 4, OperateWorkspace = 5, SoundsWorkspace = 6, CollisionsWorkspace = 7 };
+        enum Workspace : int { GripsWorkspace = 2, PhasesWorkspace = 4, OperateWorkspace = 5, SoundsWorkspace = 6, CollisionsWorkspace = 7, ScopesWorkspace = 8 };
         static bool simulationWorkspace(int value) { return value==OperateWorkspace||value==SoundsWorkspace; }
         static constexpr int kLoadoutPage = 0, kReloadPage = 1;
         void createSourceBar(QToolBar* bar);
@@ -160,6 +161,28 @@ namespace reloadmaker
         void previewNativeClip(int row);
         [[nodiscard]] bool reloadCaptureAllowed() const noexcept;
         void createCollisionsUi();
+        void createScopesUi();
+        void refreshScopeTargets();
+        void refreshScopeControls();
+        void updateScopeViewport();
+        QVector<int> scopeShapeBlocks() const;
+        QString currentScopeKey() const;
+        bool scopeFrame(Transformf& world) const;
+        bool pickScopeLens(QPointF pixel);
+        void editScopeWorld(const Transformf& world);
+        QJsonObject scopeState() const;
+        QJsonObject configureScope(const QJsonObject& params);
+        QJsonObject exportScopeProfile();
+        QHash<QString,ScopeProfile> _scopeProfiles;
+        QDockWidget* _scopesDock{};
+        QComboBox* _scopePart{};
+        QLineEdit* _scopeName{};
+        QDoubleSpinBox* _scopePosition[3]{};
+        QDoubleSpinBox* _scopeRotation[3]{};
+        QDoubleSpinBox* _scopeRadius{},*_scopeAspect{},*_scopeRelief{},*_scopeCamera{};
+        QLabel* _scopeStatus{};
+        GripViewport* _scopeViewport{};
+        bool _editingScopeUi{false};
         void refreshCollisions();
         void invalidateCollisions();
         CollisionProfile collisionSnapshot(int target,bool referenceOnly);

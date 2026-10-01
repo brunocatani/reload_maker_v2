@@ -1089,6 +1089,7 @@ namespace reloadmaker
 
     void ReloadMakerController::clearAssetCaches()
     {
+        _scopeProfiles.clear();
         _grabLocations.clear();_pickingGrabLocation=false;_grabLocationCapturePreview.reset();
         _audio.clear();_soundTracking=false;_soundCatalog.clear();_referenceSounds.clear();_soundProfile={};_savedSounds.clear();_soundsDirty=false;
         invalidateReloadCapture();

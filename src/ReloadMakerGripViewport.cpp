@@ -51,6 +51,7 @@ namespace reloadmaker {
     }
     void ReloadMakerController::updateGripViewport()
     {
+        updateScopeViewport();
         if(!_gripViewport) return;
         const bool workshop=_handPosePages->currentIndex()==2;
         const bool points=_handPosePages->currentIndex()==3;_gripViewport->setPointAuthoring(points);

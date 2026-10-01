@@ -63,6 +63,8 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     if(!_soundProfile.weapon.isEmpty())sounds[soundProfileKey()]=soundProfileJson(_soundProfile);
     record["soundProfiles"]=sounds;
     QJsonObject locations;for(auto it=_grabLocations.cbegin();it!=_grabLocations.cend();++it)locations[it.key()]=grabLocationsJson(it.value());record["grabLocations"]=locations;
+    QJsonObject optics;for(auto it=_scopeProfiles.cbegin();it!=_scopeProfiles.cend();++it)optics[it.key()]=scopeProfileJson(it.value());record["scopeProfiles"]=optics;
+    record["scopeSelection"]=currentScopeKey();
     QJsonObject operating;for(auto it=_operatingGrips.cbegin();it!=_operatingGrips.cend();++it)operating[it.key()]=it.value();record["operatingGrips"]=operating;
     QJsonObject magazineDefaults;
     for(auto it=_magazineGrabDefaults.cbegin();it!=_magazineGrabDefaults.cend();++it)magazineDefaults[it.key()]=it.value();
@@ -129,6 +131,11 @@ void ReloadMakerController::openSession(const QString& path) {
     if (!QFileInfo(record["gameData"].toString()).isDir() || (!record["library"].toBool() && !QFileInfo(record["package"].toString()).exists())) { setStatus("Project source is missing. Restore its original package/Data path before opening.",true); return; }
     // Validate all authored data before changing source or replacing a draft.
     QString error;
+    if(record.contains("scopeProfiles")) {
+        if(!record["scopeProfiles"].isObject()||record["scopeProfiles"].toObject().size()>128){setStatus("Invalid scope profiles.",true);return;}
+        const auto optics=record["scopeProfiles"].toObject();for(auto it=optics.begin();it!=optics.end();++it){ScopeProfile p;
+            if(!it.value().isObject()||!readScopeProfile(it.value().toObject(),p,error)||p.model!=it.key()){setStatus("Invalid saved scope profile: "+error,true);return;}}
+    }
     if(record.contains("grabLocations")) {
         if(!record["grabLocations"].isObject()||record["grabLocations"].toObject().size()>128){setStatus("Invalid grab locations.",true);return;}
         const auto locations=record["grabLocations"].toObject();for(auto it=locations.begin();it!=locations.end();++it){OperatingGrabLocations g;
@@ -208,6 +215,7 @@ void ReloadMakerController::restoreSessionSelection() {
     { const QSignalBlocker block(_animationSetCombo); _animationSetCombo->setCurrentIndex(animationSet); }
     _glockNoExtender=record["glockReloadNoExtender"].toBool(false);
     _savedSounds.clear();const auto sounds=record["soundProfiles"].toObject();for(auto it=sounds.begin();it!=sounds.end();++it){SoundProfile profile;QString error;if(readSoundProfile(it.value().toObject(),profile,error))_savedSounds.insert(it.key(),profile);}
+    _scopeProfiles.clear();const auto optics=record["scopeProfiles"].toObject();for(auto it=optics.begin();it!=optics.end();++it){ScopeProfile p;QString error;if(readScopeProfile(it.value().toObject(),p,error))_scopeProfiles.insert(it.key(),p);}
     _interactionHand=record["interactionHand"].toString(isM1AConfiguration()?"right":"left")=="right"&&!isGlockConfiguration()?PoseHand::Right:PoseHand::Left;
     _grabLocations.clear();const auto locations=record["grabLocations"].toObject();for(auto it=locations.begin();it!=locations.end();++it){OperatingGrabLocations g;QString e;if(readGrabLocations(it.value().toObject(),g,e))_grabLocations[it.key()]=g;}
     _operatingGrips.clear();const auto operating=record["operatingGrips"].toObject();for(auto it=operating.begin();it!=operating.end();++it)_operatingGrips[it.key()]=it.value().toString();
@@ -257,6 +265,8 @@ void ReloadMakerController::restoreSessionSelection() {
     _simulationSpring->setChecked(record["simulationSpringReturn"].toBool(true));
     const int workspace=record["workspace"].toInt(OperateWorkspace);
     setWorkspace(validWorkspace(workspace)?workspace:OperateWorkspace);
+    if(record.contains("scopeSelection")){const auto model=record["scopeSelection"].toString();for(int i=0;i<_scopePart->count();++i){
+        const auto anchor=_scopePart->itemData(i).toInt();if(anchor>0&&anchor<_handPoseAnchors.size()&&scopeModelKey(_handPoseAnchors[anchor].description.ownerModel)==model){_scopePart->setCurrentIndex(i);break;}}}
     if(workspace==GripsWorkspace&&record.contains("handsPage"))_handPosePages->setCurrentIndex(std::clamp(record["handsPage"].toInt(),0,3));
     if(record.contains("camera")&&!_window->getGLView()->studioRestoreCamera(record["camera"].toObject()))appendDiagnostic("PROJECT: invalid saved camera ignored.");
     if (record.contains("reloadDraft")) {

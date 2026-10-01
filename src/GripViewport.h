@@ -18,6 +18,7 @@ namespace reloadmaker {
         void setWorkshop(bool active,const QString& partName={},bool handEditing=false);
         void setRotationTool(bool rotation);
         void setPointAuthoring(bool value) {if(value&&!_pointAuthoring)_rotate=false;_pointAuthoring=value;}
+        void setLensAuthoring(float radius,float aspect,float cameraForward) {_lensAuthoring=true;_lensRadius=radius;_lensAspect=aspect;_lensForward=cameraForward;}
         [[nodiscard]] bool picking() const { return _picking; }
         std::function<void()> beginPick,save,end;
         std::function<void(QPointF)> surfacePicked;
@@ -57,6 +58,8 @@ namespace reloadmaker {
         bool _teaching{false},_workshop{false},_workshopHand{false},_pointAuthoring{false};
         Transformf _teachingFrame;
         QString _partName;
+        bool _lensAuthoring{false};
+        float _lensRadius{1},_lensAspect{1},_lensForward{10};
         QVector3D _simulationPivot,_simulationAxis;
         int _simulationAxisIndex{0};
     };
