@@ -74,7 +74,7 @@ namespace reloadmaker {
         return hash.result();
     }
 
-    LoadOrderSnapshot readLoadOrderSnapshot(const QString& instancePath, const QString& dataPath) {
+    LoadOrderSnapshot readLoadOrderSnapshot(const QString& instancePath, const QString& dataPath,const QString& requestedProfile) {
         LoadOrderSnapshot result;
         result.instancePath = QDir(instancePath).absolutePath();
         try {
@@ -83,6 +83,7 @@ namespace reloadmaker {
             QSettings settings(configPath, QSettings::IniFormat);
             result.profileName = iniText(settings.value("General/selected_profile", settings.value("selected_profile")));
             if (!leafName(result.profileName)) { throw std::runtime_error("MO2 selected_profile is missing or invalid"); }
+            if(!requestedProfile.isEmpty()&&requestedProfile!=result.profileName)throw std::runtime_error(QString("Requested profile '%1', but MO2 is on '%2'. Reconnect through the requested profile.").arg(requestedProfile,result.profileName).toStdString());
             QString profiles = iniText(settings.value("Settings/profiles_directory"));
             if (profiles.isEmpty()) { profiles = QDir(instancePath).filePath("profiles"); }
             profiles.replace("%BASE_DIR%", result.instancePath, Qt::CaseInsensitive);

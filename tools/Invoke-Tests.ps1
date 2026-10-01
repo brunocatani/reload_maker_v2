@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('HkxReader', 'Resources', 'Pose', 'SceneBinding', 'Configuration', 'Library', 'HandPose', 'PartGrip', 'GripViewport', 'Mechanism', 'ReloadRecipe', 'Simulation', 'Ammunition', 'ActionCatalog', 'Sound', 'GrabLocations', 'ScopeProfile')]
+    [ValidateSet('HkxReader', 'Resources', 'Pose', 'SceneBinding', 'Configuration', 'Library', 'Installation', 'HandPose', 'PartGrip', 'GripViewport', 'Mechanism', 'ReloadRecipe', 'Simulation', 'Ammunition', 'ActionCatalog', 'Sound', 'GrabLocations', 'ScopeProfile')]
     [string]$Suite = 'HkxReader',
     [string]$QtBin = 'C:\msys64\ucrt64\bin',
     [string]$NifSkopeSource = 'F:\fo4dev\devtools\nifskope-upgraded\nifskope-cli',

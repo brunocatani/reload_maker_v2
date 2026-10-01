@@ -1,4 +1,5 @@
 #include "ReloadMakerController.h"
+#include "InstallationSetup.h"
 #include "PoseEvaluator.h"
 #include "SlotOverlay.h"
 #include "LibraryResources.h"
@@ -137,20 +138,15 @@ namespace reloadmaker
             return value.trimmed().toLower();
         }
 
-        [[nodiscard]] QString defaultGameDataPath()
-        {
-            const QString known = QStringLiteral(
-                "D:/SteamLibrary/steamapps/common/Fallout 4 VR/Data");
-            if (QFileInfo(known).isDir()) {
-                return QFileInfo(known).canonicalFilePath();
-            }
-            return {};
-        }
     }
 
     ReloadMakerController::ReloadMakerController(StudioWindow* window)
         : QObject(window), _window(window), _playbackTimer(new QTimer(this))
     {
+        _requestedMo2Profile=QCoreApplication::instance()->property("requestedMo2Profile").toString();
+        if(insideMo2VirtualFilesystem())_launchSnapshot=readLoadOrderSnapshot(
+            QCoreApplication::instance()->property("launchMo2Instance").toString(),
+            QCoreApplication::instance()->property("launchGameData").toString(),_requestedMo2Profile);
         _rebuildTimer = new QTimer(this);
         _rebuildTimer->setSingleShot(true);
         _rebuildTimer->setInterval(60);
@@ -195,14 +191,20 @@ namespace reloadmaker
         const QString& gameDataPath, const QString& mo2Instance, bool library)
     {
         QSettings settings;
+        const auto installation=loadInstallationSetup();
         QString game = gameDataPath;
         if (game.isEmpty()) {
-            game = settings.value(QStringLiteral("paths/gameData")).toString();
+            const auto checked=checkInstallation(installation);
+            game=checked.gameReady?checked.dataPath:settings.value(QStringLiteral("paths/gameData")).toString();
         }
         if (game.isEmpty() || !QFileInfo(game).isDir()) {
-            game = defaultGameDataPath();
+            const auto checked=checkInstallation(installation);
+            game=checked.gameReady?checked.dataPath:QString();
         }
         _gameDataText = game;
+        if(mo2Instance.isEmpty()&&!installation.mo2Instance.isEmpty())_mo2Instance=installation.mo2Instance;
+        _requestedMo2Profile=QCoreApplication::instance()->property("requestedMo2Profile").toString();
+        if(_requestedMo2Profile.isEmpty())_requestedMo2Profile=installation.profile;
         if (!mo2Instance.isEmpty()) { _mo2Instance = mo2Instance; }
         if (library || (insideMo2VirtualFilesystem() && packagePath.isEmpty())) {
             startLibraryLoad();
@@ -218,7 +220,7 @@ namespace reloadmaker
             startPackageLoad(package, game);
         } else if (!game.isEmpty()) {
             startPackageLoad({}, game);
-        }
+        }else showSetup();
     }
 
     void ReloadMakerController::browsePackage()

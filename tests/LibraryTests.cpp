@@ -122,6 +122,8 @@ namespace {
         for (const auto* name : {"Startup.ba2", "Animations.ba2", "Replacement.ba2", "Base - Main.ba2", "Patch - Main.ba2", "Disabled - Main.ba2", "Unused.ba2"}) { write(data + '/' + name, {}); }
         const auto snapshot = readLoadOrderSnapshot(instance, data);
         require(snapshot.valid(), qPrintable(snapshot.error));
+        require(readLoadOrderSnapshot(instance,data,"Test").valid(),"requested current profile rejected");
+        require(!readLoadOrderSnapshot(instance,data,"Different").valid(),"requested profile used another virtual view");
         require(snapshot.plugins.size() == 4, "implicit masters/enabled filter incorrect");
         require(snapshot.archives == QStringList({data + "/Startup.ba2", data + "/Replacement.ba2", data + "/Base - Main.ba2", data + "/Patch - Main.ba2"}), "INI override/active archive order incorrect");
         const auto firstFingerprint = snapshot.fingerprint;

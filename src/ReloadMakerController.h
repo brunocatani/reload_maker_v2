@@ -234,6 +234,10 @@ namespace reloadmaker
         void restoreSessionSelection();
         void startCommandServer();
         QJsonObject studioState() const;
+        QJsonObject installationState() const;
+        bool configureInstallation(const QJsonObject&);
+        void showSetup();
+        bool connectInstalledProfile();
         QJsonObject animationSetIdentity(int index) const;
         void cacheWeaponFitBounds();
         bool fitWeapon();
@@ -718,6 +722,8 @@ namespace reloadmaker
         QString _packageText;
         QString _gameDataText;
         QString _mo2Instance;
+        QString _requestedMo2Profile;
+        QString _profileHandoff;
         QToolButton* _sourceButton{nullptr};
         QLabel* _sourceLabel{nullptr};
         QLabel* _pluginLabel{nullptr};

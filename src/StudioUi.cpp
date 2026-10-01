@@ -84,6 +84,8 @@ void ReloadMakerController::createUi() {
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     header->addWidget(spacer);
     auto* openProject = new QPushButton("Open project", header);
+    auto* setupTools = new QPushButton("Setup && tools", header);header->addWidget(setupTools);
+    connect(setupTools,&QPushButton::clicked,this,&ReloadMakerController::showSetup);
     auto* saveProject = new QToolButton(header);
     saveProject->setText("Save project");
     saveProject->setPopupMode(QToolButton::MenuButtonPopup);
@@ -392,7 +394,7 @@ void ReloadMakerController::createUi() {
 }
 
 void ReloadMakerController::createSourceBar(QToolBar* bar) {
-    _mo2Instance = QSettings().value("paths/mo2Instance", "D:/FO4").toString();
+    _mo2Instance = QSettings().value("paths/mo2Instance").toString();
     _sourceButton = new QToolButton(bar);
     _sourceButton->setText("SOURCE");
     _sourceButton->setObjectName("SourceButton");

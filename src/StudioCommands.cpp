@@ -58,7 +58,10 @@ void write(const QString& path, const QByteArray& bytes) {
 void ReloadMakerController::startCommandServer() {
     auto* server = new QLocalServer(this);
     server->setSocketOptions(QLocalServer::UserAccessOption);
-    require(server->listen("ReloadMakerV2.local"),"Another Reload Maker V2 owns the local command pipe");
+    const auto pipe=QCoreApplication::instance()->property("commandPipe").toString();
+    const auto session=QCoreApplication::instance()->property("commandSession").toString();
+    require(!pipe.isEmpty()&&!session.isEmpty()&&server->listen(pipe),"Another Reload Maker owns this workspace's command pipe");
+    write(studioDataPath("local/settings/endpoint.json"),QJsonDocument(QJsonObject{{"version",1},{"pipe",pipe},{"session",session},{"workspace",studioRoot()},{"pid",double(QCoreApplication::applicationPid())}}).toJson());
     connect(server,&QLocalServer::newConnection,this,[this,server] {
         while(server->hasPendingConnections()) {
             auto* socket=server->nextPendingConnection(); socket->setParent(this);
@@ -77,6 +80,7 @@ void ReloadMakerController::startCommandServer() {
                     // Saved mechanisms/recipes own their revision field. Do
                     // not overwrite it with the live document generation.
                     response["documentRevision"]=double(_revision);
+                    response["session"]=QCoreApplication::instance()->property("commandSession").toString();
                     if(!response.contains("revision"))response["revision"]=double(_revision);
                     socket->write(QJsonDocument(response).toJson(QJsonDocument::Compact)+'\n');socket->flush();
                 }
@@ -105,7 +109,7 @@ QJsonObject ReloadMakerController::studioState() const {
     for(const auto& p:_savedHandPoses)poses.append(QJsonObject{{"id",p.id},{"name",p.name},{"hand",p.hand==PoseHand::Left?"left":"right"}});
     for(const auto& p:_partGrips)grips.append(QJsonObject{{"id",p.pose.id},{"name",p.pose.name},{"part",p.pose.placement.anchorName}});
     QJsonObject magazineGrabs;for(auto it=_magazineGrabGrips.cbegin();it!=_magazineGrabGrips.cend();++it)magazineGrabs[it.key()]=it.value();
-    return {{"revision",double(_revision)},{"busy",bool(_loadThread)||_reloadCapturing||_reloadCaptureQueued||_rebuildTimer->isActive()},{"loading",bool(_loadThread)},
+    return {{"revision",double(_revision)},{"session",QCoreApplication::instance()->property("commandSession").toString()},{"busy",bool(_loadThread)||_reloadCapturing||_reloadCaptureQueued||_rebuildTimer->isActive()},{"loading",bool(_loadThread)},
         {"capturing",_reloadCapturing},{"source",_package.sourcePath},{"gameData",_gameData},{"library",_libraryMode},
         {"workspace",_workspace},{"weaponIndex",_weaponCombo->currentIndex()},{"weapons",weapons},{"slots",configurationSlots},
         {"body",_bodyCombo->currentData().toString()},{"animationSets",sets},{"animationSet",_animationSetCombo->currentIndex()},
@@ -117,9 +121,11 @@ QJsonObject ReloadMakerController::studioState() const {
 }
 QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     const QString method=request["method"].toString();const auto p=request["params"].toObject();
-    const bool reading=method=="state"||method=="pose"||method=="render"||method=="reload"||method=="diagnostics"||method=="simulation_state"||method=="sound_state"||method=="grab_locations_state"||method=="collision_state"||method=="scope_state";
+    if(request.contains("expectedSession"))require(request["expectedSession"].toString()==QCoreApplication::instance()->property("commandSession").toString(),"Editor session changed; read state before editing");
+    const bool reading=method=="state"||method=="installation"||method=="pose"||method=="render"||method=="reload"||method=="diagnostics"||method=="simulation_state"||method=="sound_state"||method=="grab_locations_state"||method=="collision_state"||method=="scope_state";
     if(!reading&&request.contains("expectedRevision"))require(request["expectedRevision"].toDouble()==double(_revision),"Stale document revision; read state again");
     if(method=="state")return studioState();
+    if(method=="installation")return installationState();
     if(method=="simulation_state")return simulationState();
     if(method=="sound_state")return soundState();
     if(method=="scope_state")return scopeState();
@@ -128,6 +134,13 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     if(method=="grab_locations_state")return grabLocationsState();
     if(method=="grab_locations"){_lastError.clear();return configureGrabLocation(p);}
     if(method=="focus") {if(_window->isMinimized())_window->showNormal();_window->raise();_window->activateWindow();return studioState();}
+    if(method=="accept_source_session") {
+        require(!_profileHandoff.isEmpty()&&p["token"].toString()==_profileHandoff,"No matching MO2 handoff is pending");
+        require(!_loadThread&&!_reloadCapturing&&saveSession(),"The current project cannot close safely; source handoff cancelled");
+        _profileHandoff.clear();
+        QTimer::singleShot(0,_window,[this]{_window->close();});
+        return {{"accepted",true}};
+    }
     if(method=="diagnostics") {
         QJsonArray remaps;
         for(const auto& r:_remappedAttachments) {
@@ -150,12 +163,15 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     if(method=="cancel") {if(_loadThread)_loadThread->requestInterruption();if(_reloadCapturing)invalidateReloadCapture();return studioState();}
     require(!_loadThread&&!_reloadCapturing&&!_rebuildTimer->isActive(),"Source loading, assembly or reload capture is in progress; read state or cancel");
     _lastError.clear();
+    if(method=="configure_installation"){require(configureInstallation(p),_lastError);return installationState();}
+    if(method=="connect_profile"){require(connectInstalledProfile(),_lastError);return studioState();}
     if(method=="collisions"){refreshCollisions();return _collisions->command(p);}
     if(method=="open_source") {
         const QString path=p["path"].toString();require(QFileInfo(path).exists(),"Source folder or ZIP does not exist");
         startPackageLoad(path,p["gameData"].toString(_gameDataText));
     } else if(method=="open_library") {
         if(p.contains("instance")) { _mo2Instance=p["instance"].toString(); }
+        if(p.contains("profile")) { _requestedMo2Profile=p["profile"].toString(); }
         startLibraryLoad();
     } else if(method=="workspace") {const int index=p["index"].toInt(-1);require(validWorkspace(index),"Unknown workspace");setWorkspace(index);}
     else if(method=="author_reload_grips") {require(authorReloadGrips(),_lastError);}

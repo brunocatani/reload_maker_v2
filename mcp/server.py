@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP, Image
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(os.environ.get('RELOAD_MAKER_WORKSPACE', Path(__file__).resolve().parents[1])).resolve()
 os.environ['TEMP'] = os.environ['TMP'] = str(ROOT/'local/tmp')
 mcp = FastMCP('Reload Maker V2', instructions=(
     'The manually launched native editor must be running. Read get_state before editing and use '
@@ -17,10 +17,26 @@ mcp = FastMCP('Reload Maker V2', instructions=(
     'or proof of game integration. Save projects and authored records before switching work.'
 ))
 
+_session: str | None = None
+
 def command(method: str, params: dict | None = None, revision: int | None = None) -> dict:
+    global _session
+    endpoint_path=ROOT/'local/settings/endpoint.json'
+    try:
+        endpoint=json.loads(endpoint_path.read_text(encoding='utf-8'))
+    except (OSError, ValueError) as exc:
+        raise RuntimeError(f'Open Reload Maker with workspace {ROOT} before connecting') from exc
+    if endpoint.get('version')!=1 or not str(endpoint.get('pipe','')).startswith('ReloadMakerV2.') or not endpoint.get('session'):
+        raise RuntimeError('Invalid editor endpoint; reopen this workspace')
+    if Path(endpoint.get('workspace','')).resolve()!=ROOT:
+        raise RuntimeError('The endpoint belongs to another workspace')
+    if method=='state': _session=endpoint['session']
+    elif _session is not None and _session!=endpoint['session']:
+        raise RuntimeError('Editor session changed; read state before editing')
     request = {'method':method, 'params':params or {}}
+    request['expectedSession']=endpoint['session']
     if revision is not None: request['expectedRevision']=revision
-    with open(r'\\.\pipe\ReloadMakerV2.local','r+b',buffering=0) as pipe:
+    with open('\\\\.\\pipe\\'+endpoint['pipe'],'r+b',buffering=0) as pipe:
         pipe.write(json.dumps(request,allow_nan=False).encode()+b'\n')
         data=bytearray()
         while not data.endswith(b'\n'):
@@ -293,6 +309,24 @@ def use_operating_fingers(id: str, expected_revision: int) -> dict:
     """Assign saved finger shape to the current operating hand/group; wrist stays live. The unassigned other hand uses a skeleton-aware mirror."""
     return command('use_operating_fingers', {'id': id}, expected_revision)
 
+
+@mcp.tool()
+def get_installation() -> dict:
+    """Inspect game/Creation Kit roots, MO2 profiles, capabilities and active VFS status."""
+    return command('installation')
+
+@mcp.tool()
+def configure_installation(game_root: str, creation_kit_root: str, same_tools_root: bool,
+                           mo2_instance: str, profile: str, expected_revision: int) -> dict:
+    """Save setup without changing the active source. Collision cooking remains optional."""
+    return command('configure_installation', {'version': 1, 'gameRoot': game_root,
+        'creationKitRoot': creation_kit_root, 'sameToolsRoot': same_tools_root,
+        'mo2Instance': mo2_instance, 'profile': profile}, expected_revision)
+
+@mcp.tool()
+def connect_profile(expected_revision: int) -> dict:
+    """Connect saved setup only through the matching active MO2 virtual profile."""
+    return command('connect_profile', {}, expected_revision)
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser()

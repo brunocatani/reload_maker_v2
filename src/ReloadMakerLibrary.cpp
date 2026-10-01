@@ -75,6 +75,7 @@ namespace reloadmaker {
         const auto instance = _mo2Instance;
         const auto data = _gameDataText;
         const auto launch = _launchSnapshot;
+        const auto requested = _requestedMo2Profile;
         auto result = std::make_shared<LoadOrderLibrary>();
         setLoading(true, QStringLiteral("Reading the active MO2 profile…"));
         const auto progress = [this](const QString& message, int value, int total) {
@@ -84,9 +85,9 @@ namespace reloadmaker {
                 _loadingProgress->setValue(value);
             }, Qt::QueuedConnection);
         };
-        _loadThread = QThread::create([result, instance, data, launch, progress]() {
+        _loadThread = QThread::create([result, instance, data, launch, progress, requested]() {
             try {
-                const auto snapshot = readLoadOrderSnapshot(instance, data);
+                const auto snapshot = readLoadOrderSnapshot(instance, data, requested);
                 if (!snapshot.valid()) { result->error = snapshot.error; return; }
                 if (launch.valid() && (launch.instancePath != snapshot.instancePath || launch.fingerprint != snapshot.fingerprint)) {
                     result->error = QStringLiteral("MO2 profile/load order changed since this viewer attached. Relaunch through MO2 so virtual files and plugin order match.");
