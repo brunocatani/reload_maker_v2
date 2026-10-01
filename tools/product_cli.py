@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import runpy
 import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from product_backend import Backends
 
 
@@ -27,6 +28,11 @@ def main():
     build.add_argument('--pack', action='append', required=True)
     build.add_argument('--installation', required=True)
     build.add_argument('--initialize', action='store_true')
+    inspect = packs.add_parser('inspect-project')
+    inspect.add_argument('--project', required=True)
+    export = packs.add_parser('export')
+    export.add_argument('--project', required=True)
+    export.add_argument('--output', required=True)
     args = parser.parse_args(remaining)
     backends = Backends(Path(settings.application), Path(settings.workspace))
     if settings.cancel_file:
@@ -47,8 +53,16 @@ def main():
         if args.action == 'validate':
             loaded = [load_pack(Path(p)) for p in args.pack]
             result = dict(ok=True, packs=[dict(id=p['manifest']['id'], objects=len(p['objects'])) for p in loaded])
-        else:
+        elif args.action == 'build':
             result = asyncio.run(build_packs(args.pack, Path(args.installation), backends, args.initialize))
+        elif args.action == 'inspect-project':
+            from product_export import inspect_project
+            project, weapons = inspect_project(Path(args.project).resolve())
+            result = dict(ok=True, id=project['id'], name=project.get('name', project['id']),
+                          revision=project['revision'], weapons=weapons, objects=len(project['objects']))
+        else:
+            from product_export import export_pack
+            result = export_pack(args.project, args.output, backends)
     print(json.dumps(result, allow_nan=False))
 
 

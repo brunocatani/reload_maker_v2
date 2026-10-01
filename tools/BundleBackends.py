@@ -78,6 +78,9 @@ def main():
                      f'sdk/{config["dotnetSdk"]}'):
         copy_tree(dotnet/relative, net/relative)
     copy_tree(Path(config['nif']), out/'backends/nif')
+    validator = out/'backends/diamond/DiamondProfileCheck.exe'
+    validator.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(Path(config['validator']), validator)
     archive = out/'backends/archive'
     archive.mkdir(parents=True, exist_ok=True)
     for name in ('bsab.exe', 'Sharp.BSA.BA2.dll', 'ICSharpCode.SharpZipLib.dll',

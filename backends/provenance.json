@@ -40,6 +40,11 @@
     "Python": {
       "version": "3.14.3",
       "license": "Bundled LICENSE.txt and package dist-info licenses"
+    },
+    "DIAMOND content validator": {
+      "source": "DIAMOND/tools/ProfileCheck.cpp and DiamondProfile",
+      "purpose": "Uses the runtime parsers before complete pack publication",
+      "license": "Project source; distribution license review pending"
     }
   },
   "publicationReady": false

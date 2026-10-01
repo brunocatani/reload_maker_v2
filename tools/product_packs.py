@@ -11,7 +11,6 @@ import math
 import os
 from pathlib import Path, PurePosixPath
 import re
-import shutil
 import struct
 import uuid
 import yaml
@@ -252,15 +251,11 @@ async def build(packs, installation, backends, initialize=False):
                     require(info.get('ok') and data.get('bsVersion') == 130 and
                             types.get('bhkNPCollisionObject') == 1 and types.get('bhkPhysicsSystem') == 1,
                             f'Model has no cooked Fallout 4 collision: {source}')
-                    target = within(output, obj['model'])
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(source, target)
+                    # Authored packs own their finished assets. Copying models
+                    # into the generated companion would mask later pack updates
+                    # in MO2 and defeat source-content validation.
+                    require(digest(source) == expected, 'Selected object changed during validation')
                     seen[key] = expected
-        for entry in ledger['objects'].values():
-            if not entry['active']:
-                continue
-            require(within(output, entry['definition']['model']).is_file(), 'Selected object asset is missing')
-            require(digest(within(output, entry['definition']['model'])) == entry['assetSha256'], 'Selected object asset changed during the build')
         write_plugin_source(stage/'plugin-source', ledger)
         backends.prepare_serializer()
         backend = backends.adapter('plugin')

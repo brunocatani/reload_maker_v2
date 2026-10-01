@@ -318,8 +318,11 @@ def get_installation() -> dict:
 @mcp.tool()
 def pack_job(operation: str = 'state', packs: list[str] | None = None,
              installation: str = '', initialize: bool = False,
+             project: str = '', output: str = '',
              expected_revision: int | None = None) -> dict:
     """Validate/build selected finished packs, read the current job, or cancel.
+    Also supports inspect-project and export for a prepared pack project.
+    Export requires a new output folder and includes all configured content.
     Uses the same bundled builder as the manual UI and standalone command.
     New installations require initialize=True; existing IDs are never reset.
     Poll operation=state until complete/failed. Inspect the returned job ID.
@@ -328,7 +331,8 @@ def pack_job(operation: str = 'state', packs: list[str] | None = None,
     if operation not in ('state', 'cancel') and expected_revision is None:
         raise ValueError('Read the current document revision before starting a pack job')
     return command('pack_job', dict(operation=operation, packs=packs or [],
-                                   installation=installation, initialize=initialize), expected_revision)
+                                   installation=installation, initialize=initialize,
+                                   project=project, output=output), expected_revision)
 
 @mcp.tool()
 def configure_installation(game_root: str, creation_kit_root: str, same_tools_root: bool,

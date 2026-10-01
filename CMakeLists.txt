@@ -6,6 +6,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(STAGED "${CMAKE_BINARY_DIR}/native-engine")
 set(DIST "${CMAKE_BINARY_DIR}/dist/ReloadMakerV2")
 set(RELOADMAKER_BACKEND_BUNDLE "" CACHE PATH "Locally staged portable native/Python backend bundle")
+set(RELOADMAKER_CONTENT_VALIDATOR "" CACHE FILEPATH "Validated DIAMOND content checker for portable export")
 file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/local/tmp")
 execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/prepare_build.py" "${NIFSKOPE_SOURCE_DIR}" "${STAGED}" "${CMAKE_SOURCE_DIR}" COMMAND_ERROR_IS_FATAL ANY)
 add_custom_target(ReloadMakerV2 ALL
@@ -24,6 +25,11 @@ if(RELOADMAKER_BACKEND_BUNDLE)
     COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_SOURCE_DIR}/mcp" "${DIST}/mcp"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_SOURCE_DIR}/skills" "${DIST}/skills"
     VERBATIM)
+  if(RELOADMAKER_CONTENT_VALIDATOR)
+    add_custom_command(TARGET ReloadMakerV2 POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" -E make_directory "${DIST}/backends/diamond"
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${RELOADMAKER_CONTENT_VALIDATOR}" "${DIST}/backends/diamond/DiamondProfileCheck.exe" VERBATIM)
+  endif()
   file(GLOB product_tools "${CMAKE_SOURCE_DIR}/tools/product_*.py")
   add_custom_command(TARGET ReloadMakerV2 POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${product_tools} "${DIST}/tools/"

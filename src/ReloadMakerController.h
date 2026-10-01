@@ -242,6 +242,7 @@ namespace reloadmaker
         bool configureInstallation(const QJsonObject&);
         void showSetup();
         void showPackBuilder();
+        void showPackExporter();
         QJsonObject packCommand(const QJsonObject&);
         QProcess* _packProcess{};
         QJsonObject _packJob;

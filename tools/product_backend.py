@@ -67,6 +67,7 @@ class Backends:
     def capabilities(self):
         paths = dict(nif=self.application/'backends/nif/NifSkope.exe',
                      archive=self.application/'backends/archive/bsab.exe',
+                     content=self.application/'backends/diamond/DiamondProfileCheck.exe',
                      plugin=self.application/'backends/plugin/Spriggit.CLI.exe')
         result = {name: dict(available=path.is_file(), path=str(path)) for name, path in paths.items()}
         result['plugin']['available'] &= (self.application/'runtime/dotnet/dotnet.exe').is_file() and (self.application/'runtime/dotnet/sdk').is_dir()
