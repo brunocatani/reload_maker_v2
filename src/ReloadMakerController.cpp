@@ -1,5 +1,6 @@
 #include "ReloadMakerController.h"
 #include "InstallationSetup.h"
+#include "ReloadTemplates.h"
 #include "PoseEvaluator.h"
 #include "SlotOverlay.h"
 #include "LibraryResources.h"
@@ -1160,6 +1161,7 @@ namespace reloadmaker
         _nifBytesCache.clear();
         _clipCache.clear();
         _animationReadHashes.clear();
+        _assignedMechanism.reset();
         _graphCache.clear();
         _skeleton = {};
         _geometrySignature.clear();
@@ -1770,6 +1772,7 @@ namespace reloadmaker
         invalidateCollisions();
         invalidateReloadCapture();
         _rebuildTimer->stop();
+        _assignedMechanism=templateMechanism(assignedTemplate());
         restoreHandPosePreview();
         const auto poseControls = qScopeGuard([this]() { updateHandPoseControls(); });
         QElapsedTimer rebuildClock;

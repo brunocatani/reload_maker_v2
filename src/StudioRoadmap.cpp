@@ -2,6 +2,7 @@
 #include "StudioWindow.h"
 #include "StudioPaths.h"
 #include "SourceEvidence.h"
+#include "ReloadTemplates.h"
 #include "CollisionPanel.h"
 #include <QComboBox>
 #include <QCryptographicHash>
@@ -37,12 +38,8 @@ const QStringList instructions{
     "Audition the physical event cues. Check holds, reversals, insertion, catch release and dry fire; each crossing should sound once.",
     "Generate and inspect bounded hulls for the selected magazine. New world assets must be cooked with the configured Creation Kit tools before publication.",
     "Exercise Operate, save the current draft and publish a complete validated pack. The installation builder creates the separate local object ESP."};
-QString templateFor(WeaponMechanism type){
-    switch(type){case WeaponMechanism::Ar15:return "rifle.ar15-detachable.v1";case WeaponMechanism::M1A:return "rifle.operating-handle-rocking.v1";
-    case WeaponMechanism::ReciprocatingBolt:return "rifle.reciprocating-detachable.v1";case WeaponMechanism::BoltAction:return "sniper.manual-bolt-detachable.v1";
-    default:return "pistol.slide-detachable.v1";}
 }
-}
+QString ReloadMakerController::assignedTemplate() const {return currentWeapon()?_reloadTemplateAssignments[poseRecordKey(currentWeapon()->formId).toLower()].toString():QString();}
 QString ReloadMakerController::roadmapKey() const {
     if(!currentWeapon()||!configuration())return {};
     const auto choices=configuration()->savedChoices(*currentPlugin());
@@ -87,18 +84,22 @@ QJsonObject ReloadMakerController::auditSources(const QJsonObject& evidence) con
 }
 QJsonObject ReloadMakerController::roadmapState() const {
     const auto key=roadmapKey();const auto saved=_authoringRoadmaps[key].toObject();QJsonArray steps;
+    QJsonArray templates;for(const auto& item:reloadTemplates)templates.append(QJsonObject{{"id",item.id},{"label",item.label},{"category",item.category}});
     for(int i=0;i<titles.size();++i)steps.append(QJsonObject{{"index",i},{"title",titles[i]},{"instruction",instructions[i]}});
     return {{"key",key},{"weapon",currentWeapon()?poseRecordKey(currentWeapon()->formId):QString()},
-        {"template",currentWeapon()?templateFor(simulationMechanism()):QString()},
+        {"template",currentWeapon()?templateIdentity(simulationMechanism()):QString()},{"templates",templates},{"templateAssigned",!assignedTemplate().isEmpty()},
         {"steps",steps},{"selectedStep",saved["step"].toInt()},{"sourcesRecorded",saved["sources"].isObject()},
         {"project",_sessionPath},{"packProject",saved["packProject"].toString()}};
 }
 QJsonObject ReloadMakerController::roadmapCommand(const QJsonObject& request) {
     const auto operation=request["operation"].toString("state");if(operation=="state")return roadmapState();
-    const auto key=roadmapKey();if(key.isEmpty()||_loadThread||_reloadCapturing)throw std::runtime_error("Wait for a loaded weapon and completed capture");
+    const auto key=roadmapKey();if(key.isEmpty()||_loadThread||_reloadCapturing||_reloadCaptureQueued||_rebuildTimer->isActive())throw std::runtime_error("Wait for a loaded weapon and completed capture");
     auto saved=_authoringRoadmaps[key].toObject();
     if(!saved.contains("step"))saved["step"]=0;
-    if(operation=="record-sources") {
+    if(operation=="template") {
+        const auto id=request["id"].toString();if(!templateMechanism(id))throw std::runtime_error("Choose one of the supported behavior templates");
+        stopSimulation();_reloadTemplateAssignments[poseRecordKey(currentWeapon()->formId).toLower()]=id;_assignedMechanism=templateMechanism(id);saved["step"]=2;
+    } else if(operation=="record-sources") {
         const auto evidence=sourceEvidence();const auto audit=auditSources(evidence);
         if(!audit["compatible"].toBool())throw std::runtime_error("Loaded authoring data differs from the current resource bytes. Reconnect/reload the source before recording it.");
         saved["sources"]=evidence;
@@ -108,17 +109,19 @@ QJsonObject ReloadMakerController::roadmapCommand(const QJsonObject& request) {
     } else if(operation=="step") {
         const int step=request["index"].toInt(-1);if(step<0||step>=titles.size())throw std::runtime_error("Unknown authoring step");saved["step"]=step;
     } else throw std::runtime_error("Unknown roadmap operation");
-    _authoringRoadmaps[key]=saved;++_revision;if(!saveSession())throw std::runtime_error("Could not save the authoring roadmap");return roadmapState();
+    _authoringRoadmaps[key]=saved;++_revision;if(operation=="template")prepareSimulation();if(!saveSession())throw std::runtime_error("Could not save the authoring roadmap");return roadmapState();
 }
 void ReloadMakerController::showAuthoringRoadmap() {
     QDialog dialog(_window);dialog.setWindowTitle("Reload authoring roadmap");dialog.resize(940,670);
     auto* layout=new QVBoxLayout(&dialog);auto* heading=new QLabel;heading->setWordWrap(true);layout->addWidget(heading);
+    auto* templateRow=new QHBoxLayout;layout->addLayout(templateRow);auto* templates=new QComboBox;for(const auto& item:reloadTemplates)templates->addItem(item.label,item.id);templates->setCurrentIndex(templates->findData(roadmapState()["template"].toString()));templateRow->addWidget(templates,1);auto* assign=new QPushButton("Use this template");templateRow->addWidget(assign);
     auto* body=new QHBoxLayout;layout->addLayout(body,1);auto* list=new QListWidget;list->setMinimumWidth(320);body->addWidget(list);
     for(int i=0;i<titles.size();++i)list->addItem(QString("%1  %2").arg(i+1,2,10,QChar('0')).arg(titles[i]));
     auto* detail=new QPlainTextEdit;detail->setReadOnly(true);body->addWidget(detail,1);
     auto* actions=new QHBoxLayout;layout->addLayout(actions);auto* open=new QPushButton("Open this step");auto* record=new QPushButton("Record source inputs");auto* check=new QPushButton("Check for source changes");auto* save=new QPushButton("Save draft");
     for(auto* button:{open,record,check,save})actions->addWidget(button);
     const auto refresh=[&]{const auto state=roadmapState();heading->setText(state["weapon"].toString()+"\nCurrent behavior: "+state["template"].toString());check->setEnabled(state["sourcesRecorded"].toBool());};
+    connect(assign,&QPushButton::clicked,&dialog,[&]{try{roadmapCommand({{"operation","template"},{"id",templates->currentData().toString()}});refresh();list->setCurrentRow(2);detail->appendPlainText("Template assigned to this weapon. Review its native operating roles and test Operate before export.");}catch(const std::exception& e){detail->setPlainText(e.what());}});
     connect(list,&QListWidget::currentRowChanged,&dialog,[&](int step){if(step<0)return;detail->setPlainText(instructions[step]);try{roadmapCommand({{"operation","step"},{"index",step}});}catch(const std::exception& e){detail->appendPlainText(e.what());}});
     const auto sourceAction=[&](const QString& operation){try{const auto result=roadmapCommand({{"operation",operation}});refresh();
         if(operation=="record-sources")detail->setPlainText("Source bytes recorded for this exact weapon assembly. A mod does not need an ESP for a changed animation or model to be detected.");

@@ -331,15 +331,18 @@ def cook_world_object(job: str, output: str, expected_revision: int) -> dict:
 
 @mcp.tool()
 def authoring_roadmap(operation: str = 'state', index: int | None = None,
+                      id: str = '',
                       expected_revision: int | None = None) -> dict:
     """Inspect or navigate the twelve manual authoring steps. record-sources freezes
     relevant selected-assembly animation/model bytes; check-sources compares the
     actual current resource bytes, including same-path animation-only overrides.
+    template with an id from state.templates assigns that supported behavior to
+    the weapon across its attachment variations, then rebuilds its simulation.
     Checks retain all authored work. Source mode/profile are explicit in results.
     """
     if operation not in ('state', 'check-sources') and expected_revision is None:
         raise ValueError('Read the current revision before editing roadmap state')
-    return command('roadmap', dict(operation=operation, index=index), expected_revision)
+    return command('roadmap', dict(operation=operation, index=index, id=id), expected_revision)
 
 @mcp.tool()
 def get_installation() -> dict:

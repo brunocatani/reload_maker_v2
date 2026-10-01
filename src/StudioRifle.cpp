@@ -1,5 +1,6 @@
 #include "ReloadMakerController.h"
 #include "StudioPaths.h"
+#include "ReloadTemplates.h"
 #include <QComboBox>
 #include <QCryptographicHash>
 #include <QFileInfo>
@@ -12,6 +13,7 @@
 
 namespace reloadmaker {
 bool ReloadMakerController::isAr15Configuration() const {
+    if(_assignedMechanism)return *_assignedMechanism==WeaponMechanism::Ar15;
     return (isSrepConfiguration()&&currentWeapon()->editorId.compare("SREP_AR10",Qt::CaseInsensitive)!=0)||isMk18Configuration()||(currentWeapon()&&currentWeapon()->editorId.compare("WPNRU556",Qt::CaseInsensitive)==0);
 }
 bool ReloadMakerController::isSrepConfiguration() const {
@@ -35,6 +37,7 @@ bool ReloadMakerController::isMk18OverhaulConfiguration() const {
     return isMk18Configuration()&&currentPlugin()->origins.value(currentWeapon()->formId).winner.compare("MK18AttachmentOverhaul.esp",Qt::CaseInsensitive)==0;
 }
 bool ReloadMakerController::isM1AConfiguration() const {
+    if(_assignedMechanism)return *_assignedMechanism==WeaponMechanism::M1A;
     return currentWeapon()&&currentWeapon()->editorId.compare("WPNM1A",Qt::CaseInsensitive)==0;
 }
 bool ReloadMakerController::isThanatosConfiguration() const {
@@ -44,16 +47,18 @@ bool ReloadMakerController::isL118Configuration() const {
     return currentWeapon()&&currentWeapon()->editorId.compare("L118A2",Qt::CaseInsensitive)==0;
 }
 WeaponMechanism ReloadMakerController::simulationMechanism() const {
+    if(_assignedMechanism)return *_assignedMechanism;
     return isBoltActionConfiguration()?WeaponMechanism::BoltAction:isM1AConfiguration()?WeaponMechanism::M1A:
         isAr15Configuration()?WeaponMechanism::Ar15:isThanatosConfiguration()||isSrepConfiguration()?WeaponMechanism::ReciprocatingBolt:WeaponMechanism::PistolSlide;
 }
-bool ReloadMakerController::isRifleConfiguration() const {return isAr15Configuration()||isM1AConfiguration()||isThanatosConfiguration()||isSrepConfiguration();}
+bool ReloadMakerController::isRifleConfiguration() const {const auto mechanism=simulationMechanism();return mechanism==WeaponMechanism::Ar15||mechanism==WeaponMechanism::M1A||mechanism==WeaponMechanism::ReciprocatingBolt;}
 QString ReloadMakerController::currentTestbed() const {
     if(isSrepConfiguration()) {
         const auto name=currentWeapon()->editorId.toLower();
         return name=="srep_ar10"?"srep-ar10":name=="srep_xm16e1"?"srep-xm16e1":name.endsWith("honeybadger")?"srep-honeybadger":"srep-service";
     }
-    return isGlockConfiguration()?"glock":isMk18Configuration()?(isMk18OverhaulConfiguration()?"mk18-empire":"mk18"):isAr15Configuration()?"ru556":isM1AConfiguration()?"m1a":isThanatosConfiguration()?"thanatos":isL118Configuration()?"l118a2":isBoltActionConfiguration()?"timberwolf":QString();
+    const auto name=currentWeapon()?currentWeapon()->editorId.toLower():QString();
+    return isGlockConfiguration()?"glock":isMk18Configuration()?(isMk18OverhaulConfiguration()?"mk18-empire":"mk18"):name=="wpnru556"?"ru556":name=="wpnm1a"?"m1a":isThanatosConfiguration()?"thanatos":isL118Configuration()?"l118a2":name=="c14timberwolf"?"timberwolf":QString();
 }
 QString ReloadMakerController::testbedProject(const QString& name) const {
     if(name.startsWith("srep-"))return studioDataPath("workspace/"+name+"-native-reload.project.json");

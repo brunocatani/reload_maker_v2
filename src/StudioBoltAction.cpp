@@ -1,4 +1,5 @@
 #include "ReloadMakerController.h"
+#include "ReloadTemplates.h"
 #include <QCryptographicHash>
 #include <QJsonArray>
 #include <algorithm>
@@ -6,6 +7,7 @@
 
 namespace reloadmaker {
 bool ReloadMakerController::isBoltActionConfiguration() const {
+    if(_assignedMechanism)return *_assignedMechanism==WeaponMechanism::BoltAction;
     return currentWeapon()&&(currentWeapon()->editorId.compare("C14Timberwolf",Qt::CaseInsensitive)==0||isL118Configuration());
 }
 bool ReloadMakerController::prepareBoltActionMotion() {

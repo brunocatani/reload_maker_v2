@@ -249,10 +249,13 @@ namespace reloadmaker
         void showAuthoringRoadmap();
         QString roadmapKey() const;
         QJsonObject roadmapState() const;
+        QString assignedTemplate() const;
         QJsonObject roadmapCommand(const QJsonObject&);
         QJsonObject sourceEvidence() const;
         QJsonObject auditSources(const QJsonObject&) const;
         QJsonObject _authoringRoadmaps;
+        QJsonObject _reloadTemplateAssignments;
+        std::optional<WeaponMechanism> _assignedMechanism;
         mutable QHash<QString,QString> _animationReadHashes;
         QJsonObject packCommand(const QJsonObject&);
         QProcess* _packProcess{};
