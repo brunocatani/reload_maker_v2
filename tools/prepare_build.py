@@ -1,5 +1,6 @@
 """Stage the native engine without the NifSkope application or generic editor."""
 import json
+import hashlib
 import re
 import shutil
 import sys
@@ -44,7 +45,7 @@ patch('src/glview.h', [
     ('\tvoid selectPBRCubeMap();', '')])
 patch('src/gl/glshape.h', [
     ('\tvirtual void updateLodLevel() { lodTriangleCount = triangles.size(); }',
-     '\tvirtual void updateLodLevel() { lodTriangleCount = triangles.size(); }\n\tvoid reloadMakerDrawSurface();\n\tQVector<int> reloadMakerSkinBones() const;')])
+     '\tvirtual void updateLodLevel() { lodTriangleCount = triangles.size(); }\n\tvoid reloadMakerDrawSurface();\n\tQVector<int> reloadMakerSkinBones() const;\n\tQVector<Vector3> reloadMakerCollisionVertices() const;\n\tqsizetype reloadMakerCollisionTriangleCount() const;')])
 patch('src/glview.cpp', [
     ('#include "nifskope.h"', ''),
     ('#include "ui/settingsdialog.h"', ''),
@@ -127,6 +128,20 @@ original_sources = re.findall(r'^\s*(src/\S+\.cpp)\s*\\?$', pro, re.M)
 removed = [p for p in original_sources if p not in native]
 headers = [p[:-4]+'.h' for p in native if (source/(p[:-4]+'.h')).exists()]
 headers += ['src/xml/xmlconfig.h', 'src/qt5compat.hpp', 'src/gl/icontrollable.h', 'src/io/material.h']
+rock = project.parents[1]/'PROJECT_ROCK_V2/main_projects/ROCK/src'
+policies = ['physics-interaction/weapon/WeaponGapDecomposition.h', 'physics-interaction/weapon/WeaponGeometry.h', 'physics-interaction/weapon/WeaponGeometryTask.h', 'physics-interaction/weapon/WeaponEffectGeometryPolicy.h', 'physics-interaction/VectorMath.h', 'physics-interaction/weapon/WeaponCollisionInternal.h', 'physics-interaction/weapon/collision/GeneratedWeaponSources.cpp']
+# Changing upstream production defaults requires reviewing the offline adapter.
+constants = (rock/'physics-interaction/weapon/WeaponCollisionInternal.h').read_text(encoding='utf-8')
+for name, expected in {'MAX_CONVEX_HULL_POINTS':252, 'WEAPON_COLLISION_CONVEX_RADIUS_HAVOK':.01, 'WEAPON_COLLISION_POINT_DEDUP_GRID_HAVOK':.002, 'WEAPON_COLLISION_SUPPORT_FIT_TARGET_POINTS':96, 'WEAPON_COLLISION_SUPPORT_FIT_MAX_ERROR_GAME_UNITS':.5}.items():
+    token = re.search(r'\b'+name+r'\s*=\s*([^;]+);', constants)
+    if not token: raise RuntimeError(f'ROCK collision default missing: {name}')
+    value = token.group(1).strip().removesuffix('f')
+    actual = int(value,16) if value.startswith('0x') else float(value)
+    if actual != expected: raise RuntimeError(f'ROCK collision default changed: {name}; review CollisionAuthoring before building')
+digest = hashlib.sha256()
+for name in policies:
+    digest.update(name.encode()); digest.update((rock/name).read_bytes())
+write('RockCollisionProvenance.h', '#pragma once\ninline constexpr const char* kRockCollisionSourceHash="'+digest.hexdigest()+'";\n')
 app = project.as_posix()
 pro += '\n# Reload Maker V2: native engine only; independent application window.\n'
 pro += 'TARGET = ReloadMakerV2\nQMAKE_PRE_LINK =\n'
@@ -136,6 +151,8 @@ pro += 'FORMS = src/ui/checkablemessagebox.ui\n'
 pro += 'SOURCES += ' + ' '.join(p.as_posix() for p in (project/'src').glob('*.cpp')) + '\n'
 pro += 'HEADERS += ' + ' '.join(p.as_posix() for p in (project/'src').glob('*.h')) + '\n'
 pro += f'INCLUDEPATH += {app}/src\nDEFINES += RELOAD_MAKER_V2\n'
+pro += f'INCLUDEPATH += {rock.as_posix()} {stage.as_posix()}\nCONFIG += c++20\nQT += concurrent\n'
+pro += 'SOURCES += $$files($$PWD/lib/qhull/src/libqhull_r/*.c)\n'
 pro += 'win32:LIBS += -lxaudio2_8 -lole32\n'
 write('NifSkope.pro', pro)
 (project/'local/native-build-manifest.json').write_text(json.dumps({'nativeSources':native,'excludedApplicationSources':removed},indent=2))

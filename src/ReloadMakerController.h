@@ -20,6 +20,7 @@
 #include "SoundProfile.h"
 #include "AudioPreview.h"
 #include "OperatingGrabLocations.h"
+#include "CollisionAuthoring.h"
 
 #include <QHash>
 #include <QCache>
@@ -61,6 +62,7 @@ namespace reloadmaker
     class SlotOverlay;
     class GripViewport;
     class MagazineViewport;
+    class CollisionPanel;
     class ReloadMakerController final : public QObject
     {
         Q_OBJECT
@@ -144,7 +146,7 @@ namespace reloadmaker
         // Stable ids: persisted in projects and used by MCP clients (DIAMOND's
         // importer uses OperateWorkspace = 5). Retired ids (0 Source, 1 Preview,
         // 3 Mechanisms) are rejected; projects saved on them reopen in Operate.
-        enum Workspace : int { GripsWorkspace = 2, PhasesWorkspace = 4, OperateWorkspace = 5, SoundsWorkspace = 6 };
+        enum Workspace : int { GripsWorkspace = 2, PhasesWorkspace = 4, OperateWorkspace = 5, SoundsWorkspace = 6, CollisionsWorkspace = 7 };
         static bool simulationWorkspace(int value) { return value==OperateWorkspace||value==SoundsWorkspace; }
         static constexpr int kLoadoutPage = 0, kReloadPage = 1;
         void createSourceBar(QToolBar* bar);
@@ -157,6 +159,14 @@ namespace reloadmaker
         void setWorkspace(int workspace);
         void previewNativeClip(int row);
         [[nodiscard]] bool reloadCaptureAllowed() const noexcept;
+        void createCollisionsUi();
+        void refreshCollisions();
+        void invalidateCollisions();
+        CollisionProfile collisionSnapshot(int target,bool referenceOnly);
+        void paintCollisions();
+        QVector<int> _collisionTargets;
+        CollisionPanel* _collisions{};
+        QDockWidget* _collisionsDock{};
         void createSoundsUi();
         void prepareSounds();
         void refreshSoundsUi();

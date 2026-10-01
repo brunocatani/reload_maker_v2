@@ -72,7 +72,7 @@ void ReloadMakerController::createUi() {
     // Stable workspace ids are persisted in projects and used by MCP clients;
     // display order is independent of the id.
     const std::pair<QString, int> workspaces[]{{"Operate", OperateWorkspace},
-        {"Hands && grips", GripsWorkspace}, {"Reload phases", PhasesWorkspace},{"Sounds",SoundsWorkspace}};
+        {"Hands && grips", GripsWorkspace}, {"Reload phases", PhasesWorkspace},{"Sounds",SoundsWorkspace},{"Collisions",CollisionsWorkspace}};
     for (const auto& [title, id] : workspaces) {
         auto* button = new QPushButton(title, header);
         button->setCheckable(true);
@@ -309,6 +309,7 @@ void ReloadMakerController::createUi() {
         createReloadUi();
         createSimulationUi();
         createSoundsUi();
+    createCollisionsUi();
         createGrabLocationsUi();
 
 
@@ -523,7 +524,7 @@ void ReloadMakerController::refreshWeaponPicker() {
 }
 
 bool ReloadMakerController::validWorkspace(int workspace) {
-    return workspace == GripsWorkspace || workspace == PhasesWorkspace || simulationWorkspace(workspace);
+    return workspace == GripsWorkspace || workspace == PhasesWorkspace || workspace == CollisionsWorkspace || simulationWorkspace(workspace);
 }
 
 bool ReloadMakerController::mechanismPageActive() const {
@@ -556,6 +557,8 @@ void ReloadMakerController::setWorkspace(int workspace) {
     _packageDock->setWindowTitle(phases ? "RELOAD PHASES" : "LOADOUT");
     _simulationDock->setVisible(workspace == OperateWorkspace);
     _soundsDock->setVisible(workspace==SoundsWorkspace);
+    _collisionsDock->setVisible(workspace==CollisionsWorkspace);
+    if(workspace==CollisionsWorkspace){if(_playing)togglePlayback();_reloadPlaying=false;_reloadPreviewTimer->stop();refreshCollisions();}
     _reloadGraphDock->setVisible(phases);
     _reloadInspectorDock->setVisible(phases);
     _handPoseDock->setVisible(workspace == GripsWorkspace);

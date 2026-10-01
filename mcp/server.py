@@ -38,6 +38,16 @@ def get_state() -> dict:
     return command('state')
 
 @mcp.tool()
+def get_collision_state() -> dict:
+    """Read target indices, generated hulls, warnings and asynchronous generation status."""
+    return command('collision_state')
+
+@mcp.tool()
+def configure_collisions(changes: dict, expected_revision: int) -> dict:
+    """Workspace 7: select target index; defaults/generate (gapGame, supportErrorGame, targetPoints); import pre-Elric JSON path against installed model; open saved profile; hull index/enabled; view overlay/compare/isolated; save replaces this weapon/loadout/target profile; export to a local path; cancel worker. Points are source-local game units, not cooked Havok shapes."""
+    return command('collisions', changes, expected_revision)
+
+@mcp.tool()
 def get_diagnostics() -> dict:
     """Read current source/pose diagnostics without changing the project."""
     return command('diagnostics')
@@ -84,7 +94,7 @@ def control_playback(changes: dict, expected_revision: int) -> dict:
 
 @mcp.tool()
 def set_workspace(index: int, expected_revision: int) -> dict:
-    """Choose 0 Setup, 1 Preview, 2 Hands/grips, 3 Mechanisms, 4 Reload or 5 Simulate."""
+    """Choose 2 Hands/grips, 4 Reload phases, 5 Operate, 6 Sounds or 7 Collisions."""
     return command('workspace',{'index':index},expected_revision)
 
 @mcp.tool()

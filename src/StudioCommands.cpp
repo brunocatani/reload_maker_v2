@@ -3,6 +3,7 @@
 #include "StudioPaths.h"
 #include "ReloadGraph.h"
 #include "ReloadBundle.h"
+#include "CollisionPanel.h"
 #include "glview.h"
 #include <QCheckBox>
 #include <QComboBox>
@@ -116,11 +117,12 @@ QJsonObject ReloadMakerController::studioState() const {
 }
 QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     const QString method=request["method"].toString();const auto p=request["params"].toObject();
-    const bool reading=method=="state"||method=="pose"||method=="render"||method=="reload"||method=="diagnostics"||method=="simulation_state"||method=="sound_state"||method=="grab_locations_state";
+    const bool reading=method=="state"||method=="pose"||method=="render"||method=="reload"||method=="diagnostics"||method=="simulation_state"||method=="sound_state"||method=="grab_locations_state"||method=="collision_state";
     if(!reading&&request.contains("expectedRevision"))require(request["expectedRevision"].toDouble()==double(_revision),"Stale document revision; read state again");
     if(method=="state")return studioState();
     if(method=="simulation_state")return simulationState();
     if(method=="sound_state")return soundState();
+    if(method=="collision_state"){refreshCollisions();return _collisions->state();}
     if(method=="grab_locations_state")return grabLocationsState();
     if(method=="grab_locations"){_lastError.clear();return configureGrabLocation(p);}
     if(method=="focus") {if(_window->isMinimized())_window->showNormal();_window->raise();_window->activateWindow();return studioState();}
@@ -146,6 +148,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     if(method=="cancel") {if(_loadThread)_loadThread->requestInterruption();if(_reloadCapturing)invalidateReloadCapture();return studioState();}
     require(!_loadThread&&!_reloadCapturing&&!_rebuildTimer->isActive(),"Source loading, assembly or reload capture is in progress; read state or cancel");
     _lastError.clear();
+    if(method=="collisions"){refreshCollisions();return _collisions->command(p);}
     if(method=="open_source") {
         const QString path=p["path"].toString();require(QFileInfo(path).exists(),"Source folder or ZIP does not exist");
         startPackageLoad(path,p["gameData"].toString(_gameDataText));
@@ -237,6 +240,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     } else if(method=="action") {
         int index=p["index"].toInt(-1);require(index>=0&&index<_animationList->count(),"Invalid action index");previewNativeClip(index);
     } else if(method=="playback") {
+        invalidateCollisions();
         require(_clip.valid(),"Load a configured animation first");
         if(p.contains("mode")){const int mode=p["mode"].toInt(-1);require(mode==0||mode==1,"Mode must be 0 fixed or 1 native");_motionMode->setCurrentIndex(mode);}
         if(p.contains("seconds")){float t=number(p["seconds"]);const float duration=_reloadWorkspaceActive&&_reloadRecipe?_reloadRecipe->duration:playbackDuration();require(t>=0&&t<=duration,"Time is outside this animation");_playing=false;_playbackTimer->stop();if(_reloadWorkspaceActive){_reloadPlaying=false;_reloadPreviewTimer->stop();seekReload(t);}else{_playbackTime=t;require(applyPose(t),_poseError);updateTimelineText();}}

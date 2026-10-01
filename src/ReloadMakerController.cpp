@@ -1708,6 +1708,7 @@ namespace reloadmaker
     void ReloadMakerController::rebuildWeapon()
     {
         if (_loadThread) { return; }
+        invalidateCollisions();
         invalidateReloadCapture();
         _rebuildTimer->stop();
         restoreHandPosePreview();
@@ -2161,6 +2162,7 @@ namespace reloadmaker
     void ReloadMakerController::selectAnimation(QListWidgetItem* item)
     {
         if (_loadThread || !item || !_skeleton.valid()) { return; }
+        invalidateCollisions();
         // Internal selections (Operate, reload learning) block the list's
         // signals; keep the transport's clip picker on the loaded clip.
         if (_clipCombo) { const QSignalBlocker block(_clipCombo); _clipCombo->setCurrentIndex(_animationList->row(item)); }
@@ -2295,6 +2297,7 @@ namespace reloadmaker
 
     void ReloadMakerController::scrubTimeline(const int value)
     {
+        invalidateCollisions();
         restoreHandPosePreview();
         if (!_clip.valid()) {
             return;
