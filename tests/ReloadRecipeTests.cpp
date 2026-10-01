@@ -92,6 +92,8 @@ namespace {
         PartGrip restored;check(decodePartGrip(QJsonDocument(bundle["grips"].toArray()[0].toObject()).toJson(),restored,error),error);
         check(encodePartGrip(restored,error)==encodePartGrip(grip,error),"Export changed fingers or part placement");
         check(bundle["magazineGrabBindings"].toArray().size()==1,"Magazine assignment missing from bundle");
+        auto history=grip;history.pose.id=QUuid::createUuid().toString(QUuid::WithoutBraces);history.pose.placement.ownerModel="ReplacedByOverhaul.nif";
+        check(!encodeReloadBundle(r,{grip,history},{},bindings,error).isEmpty(),"Unassigned historical source-model fit blocked the current bundle");
         auto opposite=grip;opposite.pose.id=QUuid::createUuid().toString(QUuid::WithoutBraces);opposite.pose.hand=grip.pose.hand==PoseHand::Left?PoseHand::Right:PoseHand::Left;
         const auto baseKey=magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord);
         auto twoHands=bindings;twoHands[handAssignmentKey(baseKey,opposite.pose.hand)]=opposite.pose.id;

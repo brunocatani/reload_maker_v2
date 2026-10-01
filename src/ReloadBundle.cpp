@@ -51,7 +51,8 @@ QByteArray encodeReloadBundle(const ReloadRecipe& recipe,const QVector<PartGrip>
     const QString weapon=recipe.source["weaponRecord"].toString();
     auto library=savedLibrary;auto magazineGrabs=savedGrabs;
     QVector<HandPosePlacement> anchors;
-    for(const auto& grip:savedLibrary)if(grip.weaponRecord.compare(weapon,Qt::CaseInsensitive)==0&&magazineGrabSupported(grip.pose.placement))anchors.append(grip.pose.placement);
+    for(const auto& grip:savedLibrary)if(grip.weaponRecord.compare(weapon,Qt::CaseInsensitive)==0&&magazineGrabSupported(grip.pose.placement)&&
+        (savedGrabs.values().contains(grip.pose.id)||defaults.values().contains(grip.pose.id)))anchors.append(grip.pose.placement);
     for(const auto& track:recipe.tracks)if(magazineGrabSupported(track.anchor)) {
         // RU556's WeaponMagazine belongs to the receiver. Its installed Mag
         // attachment owns the grip; never materialize a magazine default on

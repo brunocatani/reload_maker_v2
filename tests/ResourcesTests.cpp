@@ -65,6 +65,15 @@ int main(int argc, char** argv)
         resources.close();
         require(!resources.isOpen() && resources.files().isEmpty() && !resources.contains(path),
                 "close retained the old index");
+        const auto base=temporary.filePath("base"),patch=temporary.filePath("patch");
+        write(QDir(base).filePath(path),"base");write(QDir(patch).filePath(path),"patch");
+        write(QDir(base).filePath("textures/base.dds"),"base-only");
+        require(resources.openPackages({base,patch},error),"Cannot index ordered source packages");
+        require(resources.read(path,error)=="patch"&&resources.provider(path)==patch,"Later package did not win");
+        require(resources.read("textures/base.dds",error)=="base-only","Master package resource lost");
+        require(QFile::remove(QDir(patch).filePath(path)),"Cannot remove winning test resource");
+        require(resources.read(path,error).isEmpty()&&!error.isEmpty(),"Broken winning package silently fell back");
+        resources.close();require(!resources.isOpen()&&resources.files().isEmpty(),"Layered index survived close");
         out << "PASS loose HKX indexing, bytes, normalized paths, missing-input failure and index lifetime\n";
 
         const QStringList args = app.arguments();

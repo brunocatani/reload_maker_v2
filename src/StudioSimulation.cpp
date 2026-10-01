@@ -167,14 +167,15 @@ void ReloadMakerController::prepareSimulation() {
     if(!simulationWorkspace(_workspace)||_loadThread||_reloadCapturing||!_reloadRecipe){updateSimulationControls();return;}
     if(_simulationActive)return;
     SimulationRig rig;_simulationError.clear();
-    if(!buildSimulationRig(*_reloadRecipe,rig,_simulationError,simulationMechanism())){updateSimulationControls();return;}
+    if(!buildCurrentSimulationRig(rig,_simulationError)){updateSimulationControls();return;}
     _simulationRig=rig;_simulationVisibility.clear();
     const auto& owner=_reloadRecipe->tracks[rig.magazine].anchor;
     const auto* config=configuration();auto* model=activeModel();
     _simulationMagazineSlot=0;
-    const int magazineAnchor=isRifleConfiguration()?currentMagazineAnchor():-1;
+    const bool installedMagazine=isRifleConfiguration()&&!isMk18Configuration();
+    const int magazineAnchor=installedMagazine?currentMagazineAnchor():-1;
     if(config&&model)for(auto it=_partRoots.cbegin();it!=_partRoots.cend();++it) {
-        const bool match=isRifleConfiguration()?magazineAnchor>=0&&it.value()==_handPoseAnchors[magazineAnchor].node:
+        const bool match=installedMagazine?magazineAnchor>=0&&it.value()==_handPoseAnchors[magazineAnchor].node:
             poseRecordKey(config->selected(it.key())).compare(owner.ownerRecord,Qt::CaseInsensitive)==0;
         if(match&&it.value().isValid()) {
             _simulationMagazineSlot=it.key();
@@ -200,7 +201,7 @@ void ReloadMakerController::prepareSimulation() {
     }
     if(isRifleConfiguration()) {
         if(!prepareRifleMotion()){updateSimulationControls();return;}
-        const auto& handle=_reloadRecipe->tracks[rig.slide].poses;
+        const auto& handle=rig.derivedHandle.isEmpty()?_reloadRecipe->tracks[rig.slide].poses:rig.derivedHandle;
         const float travel=reloadPoseDistance(handle[rig.closedFrame],handle[rig.openFrame]);
         for(int frame=0;frame<handle.size();++frame)if(reloadPoseDistance(handle[rig.closedFrame],handle[frame])>=travel*.95f){
             _glockReloadRackAt=_reloadRecipe->duration*frame/(_reloadRecipe->frames-1);break;
@@ -252,6 +253,7 @@ void ReloadMakerController::applySimulationVisibility() {
         const bool cartridge=visual.cartridge;
         const bool noRound=isRifleConfiguration()||isBoltActionConfiguration()?_simulation.magazineRounds==0:_simulation.magazine.seated()?(!_simulation.chambered&&_simulation.magazineRounds==0):_simulation.magazineRounds==0;
         bool hide=_simulationActive&&!authored&&(cartridge?noRound:(!_magazineRail||!_magazineRail->sharedBody())&&(visual.empty!=(_simulation.magazineRounds==0)));
+        hide|=_simulationActive&&!authored&&visual.nativeOnly;
         if(_simulationActive&&authored&&_reloadRecipe) {
             // Evaluate source visibility afresh at the current time so reverse
             // sampling and action switches never retain an earlier cull event.
@@ -284,6 +286,7 @@ bool ReloadMakerController::applySimulationPose() {
         const auto& rig=*_simulationRig;
         Transformf bolt;
         if(_simulation.action==SimulationAction::Fire)bolt=rifleFireBoltPose();
+        else if(_simulation.action==SimulationAction::Reload&&isMk18Configuration())bolt=holdOpen?rifleBoltPose(1):reloadTrackPose(*_reloadRecipe,rig.bolt,_simulation.seconds);
         else if(_simulation.action==SimulationAction::Reload) {
             const auto handle=reloadTrackPose(*_reloadRecipe,rig.slide,_simulation.seconds);
             const float travel=reloadPoseDistance(_reloadRecipe->tracks[rig.slide].poses[rig.closedFrame],_reloadRecipe->tracks[rig.slide].poses[rig.openFrame]);
@@ -475,7 +478,7 @@ void ReloadMakerController::updateSimulationControls() {
     _simulationSource->setVisible(glock||ar);
     if((glock||ar)&&_reloadRecipe) {
         const auto path=_reloadRecipe->source["animation"].toString();
-        const auto relative=path.section(isL118Configuration()?"l118/":bolt?"c14timb/":isThanatosConfiguration()?"diam107/":isM1AConfiguration()?"m1aanims/":ar?"ru556anims/":"glock19xanims/",1);
+        const auto relative=path.section(isL118Configuration()?"l118/":bolt?"c14timb/":isThanatosConfiguration()?"diam107/":isM1AConfiguration()?"m1aanims/":isMk18Configuration()?"mk18anims/":ar?"ru556anims/":"glock19xanims/",1);
         _simulationSource->setText("Reload source · "+relative+" · "+(bolt?"manual bolt action":_simulationAmmo.automatic?"automatic receiver":"semi-automatic receiver"));
         _simulationSource->setToolTip(path);
     }

@@ -69,6 +69,38 @@ namespace reloadmaker
         return it == _slots.cend() ? nullptr : &*it;
     }
 
+    QJsonObject WeaponConfiguration::savedChoices(const PluginContent& plugin) const
+    {
+        QJsonObject result;
+        for (const auto& slot : _slots) {
+            const auto key = slot.attachPoint ? "slot:" + recordIdentity(plugin,slot.attachPoint)
+                : "mod:" + recordIdentity(plugin,std::uint32_t(slot.key));
+            result[key.toLower()] = recordIdentity(plugin,selected(slot.key)).toLower();
+        }
+        return result;
+    }
+
+    QStringList WeaponConfiguration::restoreChoices(const PluginContent& plugin, const QJsonObject& choices)
+    {
+        QStringList missing;
+        for (auto it=choices.begin();it!=choices.end();++it) {
+            bool found=false;
+            for (const auto& slot : _slots) {
+                const auto key=(slot.attachPoint ? "slot:"+recordIdentity(plugin,slot.attachPoint)
+                    : "mod:"+recordIdentity(plugin,std::uint32_t(slot.key))).toLower();
+                if(key!=it.key().toLower()||!it.value().isString())continue;
+                const auto wanted=it.value().toString();
+                if(wanted.isEmpty()){(void)select(slot.key,0);found=true;break;}
+                for(auto id:slot.choices)if(recordIdentity(plugin,id).compare(wanted,Qt::CaseInsensitive)==0){
+                    (void)select(slot.key,id);found=true;break;
+                }
+                break;
+            }
+            if(!found)missing.append(it.key()+" = "+it.value().toString());
+        }
+        return missing;
+    }
+
     const ObjectModRecord* WeaponConfiguration::mod(std::uint32_t id) const
     {
         const auto it = std::find_if(_mods.cbegin(), _mods.cend(), [id](const auto& m) { return m.formId == id; });

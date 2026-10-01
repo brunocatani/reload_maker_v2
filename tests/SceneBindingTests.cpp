@@ -77,6 +77,11 @@ namespace
         const auto external = connections.find("P-External", {40}, error);
         require(connections.anchor(external, -1, error) == -1 && !error.isEmpty(), "missing named parent was guessed");
         require(connections.anchor(external, 99, error) == 99 && error.isEmpty(), "explicit rig anchor rejected");
+        connections.add({50,{{50,"Stock"}},{{"P-StockMove","WorkshopConnectPoints",transform({0,3.5f,0})}}});
+        const auto stock=connections.find("P-StockMove",{50},error);
+        require(connections.anchor(stock,-1,error)==50,"Owner-local stock movement escaped its model frame");
+        connections.add({60,{{60,"Stock"},{61,"WorkshopConnectPoints"}},{{"P-StockMove","WorkshopConnectPoints",{}}}});
+        require(connections.anchor(connections.find("P-StockMove",{60},error),-1,error)==61,"Actual connection-frame node lost precedence");
         for (const auto parentPose : {transform({0,25,5}), transform({3,12,5}, 20,-35,10)}) {
             const auto barrelRoot = composed(parentPose, connections.point(aBarrel)->local);
             const auto muzzleRoot = composed(barrelRoot, connections.point(muzzle)->local);

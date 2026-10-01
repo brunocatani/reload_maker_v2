@@ -1,6 +1,7 @@
 #include "ReloadMakerController.h"
 #include "StudioPaths.h"
 #include <QComboBox>
+#include <QCryptographicHash>
 #include <QFileInfo>
 #include <QPushButton>
 #include <QSettings>
@@ -11,7 +12,13 @@
 
 namespace reloadmaker {
 bool ReloadMakerController::isAr15Configuration() const {
-    return currentWeapon()&&currentWeapon()->editorId.compare("WPNRU556",Qt::CaseInsensitive)==0;
+    return isMk18Configuration()||(currentWeapon()&&currentWeapon()->editorId.compare("WPNRU556",Qt::CaseInsensitive)==0);
+}
+bool ReloadMakerController::isMk18Configuration() const {
+    return currentWeapon()&&(currentWeapon()->editorId.compare("WPNMK18",Qt::CaseInsensitive)==0||currentWeapon()->editorId.compare("WPNMK18UNIQUE",Qt::CaseInsensitive)==0);
+}
+bool ReloadMakerController::isMk18OverhaulConfiguration() const {
+    return isMk18Configuration()&&currentPlugin()->origins.value(currentWeapon()->formId).winner.compare("MK18AttachmentOverhaul.esp",Qt::CaseInsensitive)==0;
 }
 bool ReloadMakerController::isM1AConfiguration() const {
     return currentWeapon()&&currentWeapon()->editorId.compare("WPNM1A",Qt::CaseInsensitive)==0;
@@ -28,12 +35,40 @@ WeaponMechanism ReloadMakerController::simulationMechanism() const {
 }
 bool ReloadMakerController::isRifleConfiguration() const {return isAr15Configuration()||isM1AConfiguration()||isThanatosConfiguration();}
 QString ReloadMakerController::currentTestbed() const {
-    return isGlockConfiguration()?"glock":isAr15Configuration()?"ru556":isM1AConfiguration()?"m1a":isThanatosConfiguration()?"thanatos":isL118Configuration()?"l118a2":isBoltActionConfiguration()?"timberwolf":QString();
+    return isGlockConfiguration()?"glock":isMk18Configuration()?(isMk18OverhaulConfiguration()?"mk18-empire":"mk18"):isAr15Configuration()?"ru556":isM1AConfiguration()?"m1a":isThanatosConfiguration()?"thanatos":isL118Configuration()?"l118a2":isBoltActionConfiguration()?"timberwolf":QString();
 }
 QString ReloadMakerController::testbedProject(const QString& name) const {
+    if(name=="mk18"||name=="mk18-empire")return studioDataPath(name=="mk18"?"workspace/MK18-native-reload.project.json":"workspace/MK18-Empire-native-reload.project.json");
     return studioDataPath(name=="glock"?"workspace/Glock19x-magazine-grips.project.json":
         name=="ru556"?"workspace/RU556-native-reload.project.json":name=="m1a"?"workspace/M1A-native-reload.project.json":
         name=="l118a2"?"workspace/L118A2-native-reload.project.json":name=="thanatos"?"workspace/Thanatos-native-reload.project.json":"workspace/Timberwolf-native-reload.project.json");
+}
+
+bool ReloadMakerController::buildCurrentSimulationRig(SimulationRig& rig,QString& error) {
+    if(!isMk18Configuration())return buildSimulationRig(*_reloadRecipe,rig,error,simulationMechanism());
+    const auto& r=*_reloadRecipe;int bolt=-1;float stroke=0;
+    for(int i=0;i<r.tracks.size();++i)if(r.tracks[i].anchor.anchorName=="WeaponBolt")bolt=i;
+    if(bolt<0){error="MK18 has no native bolt binding.";return false;}
+    for(const auto& p:r.tracks[bolt].poses)stroke=std::max(stroke,reloadPoseDistance(p,r.tracks[bolt].poses.back()));
+    if(stroke>=.15f)return buildSimulationRig(r,rig,error,simulationMechanism(),true);
+    // Tactical/double-mag clips may never cycle the bolt. Their magazine and
+    // hands stay native; the manual action uses the standard MK18 empty reload.
+    const QString path="meshes/actors/character/_1stperson/animations/mk18anims/wpnreload.hkx";
+    const auto bytes=readAnimationResource(path,error);const auto clip=HkxReader::readClip(bytes,error);
+    const auto base=HkxReader::readClip(readAnimationResource(r.source["baseline"].toString(),error),error);
+    if(!clip.valid()||!base.valid())return false;
+    QVector<Transformf> sampled,baseline,local,global,boundLocal,boundGlobal,sceneLocal,sceneWorld,poses;
+    if(!samplePose(_skeleton,base,0,&_readyLocalPose,sampled,baseline,global,error))return false;
+    for(int f=0;f<r.frames;++f){
+        if(!samplePose(_skeleton,clip,clip.durationSeconds*f/(r.frames-1),&baseline,sampled,local,global,error)||
+           !evaluateSceneBindings(_skeleton,_nodeBindings,local,baseline,global,boundLocal,boundGlobal,error)||
+           !nativeMechanismScene(_reloadScenePlan,_nodeBindings,boundLocal,sceneLocal,sceneWorld,error))return false;
+        Transformf inverse;if(!invertUniformTransform(global[_weaponBoneIndex],inverse)){error="Invalid native bolt source frame.";return false;}
+        poses.append(composed(inverse,sceneWorld[_reloadTrackNodes[bolt]]));
+    }
+    if(!buildSimulationRig(r,rig,error,simulationMechanism(),true,poses))return false;
+    rig.mechanicalSource={{"animation",path},{"animationSha256",QString::fromLatin1(QCryptographicHash::hash(bytes,QCryptographicHash::Sha256).toHex())},{"duration",clip.durationSeconds}};
+    return true;
 }
 
 bool ReloadMakerController::prepareRifleMotion() {
@@ -77,6 +112,18 @@ bool ReloadMakerController::prepareRifleMotion() {
     for(int f=0;f<frames;++f){const float d=reloadPoseDistance(_rifleBoltCycle.front(),_rifleBoltCycle[f]);if(d>travel){travel=d;_rifleBoltOpen=f;}}
     int closed=-1;
     for(int f=_rifleBoltOpen+1;f<frames;++f)if(reloadPoseDistance(_rifleBoltCycle.front(),_rifleBoltCycle[f])<=travel*.002f){closed=f;break;}
+    if(isMk18Configuration()&&travel<.15f) {
+        // MK18 fires with a static bolt track. Its native reload supplies the
+        // complete stroke; replay that measured path at its firing cadence.
+        const auto& rig=*_simulationRig;const auto& source=rig.derivedBolt.isEmpty()?_reloadRecipe->tracks[rig.bolt].poses:rig.derivedBolt;
+        _rifleBoltCycle.clear();
+        for(int f=rig.closedFrame;f>=rig.openFrame;--f)_rifleBoltCycle.append(source[f]);
+        _rifleBoltOpen=_rifleBoltCycle.size()-1;
+        for(int f=rig.openFrame+1;f<=rig.closedFrame;++f)_rifleBoltCycle.append(source[f]);
+        if(_rifleBoltOpen<1||reloadPoseDistance(_rifleBoltCycle.front(),_rifleBoltCycle[_rifleBoltOpen])<.15f){_simulationError="MK18 native reload has no complete bolt stroke.";return false;}
+        _rifleBoltDuration=_rifleFireInterval;_rifleSingleDuration=clip.durationSeconds;
+        _rifleBoltSource=rig.derivedBolt.isEmpty()?_reloadRecipe->source["animation"].toString():rig.mechanicalSource["animation"].toString();return true;
+    }
     if(travel<.15f||closed<0){_simulationError="Single-fire source has no complete bolt stroke.";return false;}
     _rifleBoltDuration=clip.durationSeconds*closed/(frames-1);_rifleSingleDuration=clip.durationSeconds;
     _rifleBoltCycle.resize(closed+1);_rifleBoltSource=single->resourcePath;
@@ -113,7 +160,7 @@ void ReloadMakerController::setSimulationTrigger(bool pressed) {
 
 bool ReloadMakerController::selectTestbed(const QString& name) {
     if(_loadThread||_reloadCapturing||_rebuildTimer->isActive()){setStatus("Wait for the current weapon to finish loading.",true);return false;}
-    if(name!="glock"&&name!="ru556"&&name!="m1a"&&name!="timberwolf"&&name!="l118a2"&&name!="thanatos"){setStatus("Unknown weapon testbed.",true);return false;}
+    if(name!="glock"&&name!="ru556"&&name!="m1a"&&name!="timberwolf"&&name!="l118a2"&&name!="thanatos"&&name!="mk18"&&name!="mk18-empire"){setStatus("Unknown weapon testbed.",true);return false;}
     const auto current=currentTestbed();
     if(current==name){setWorkspace(OperateWorkspace);return true;}
     if(!current.isEmpty()) {

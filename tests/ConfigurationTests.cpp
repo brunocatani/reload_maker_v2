@@ -63,6 +63,19 @@ namespace
         require(config.availableSlots().contains(30), "new parent did not expose slot");
         require(config.select(10, 1) && config.activeMods().contains(5), "return to parent lost nested choice");
         require(config.select(10, 0) && !config.activeMods().contains(3), "empty parent kept its children active");
+        plugin.fileName="Parts.esp";
+        const auto saved=config.savedChoices(plugin);
+        auto shifted=plugin;
+        for(auto& mod:shifted.objectMods){
+            shifted.origins.insert(mod.formId+1000,{"Parts.esp","Parts.esp",mod.formId});
+            shifted.origins.insert(mod.attachPoint+1000,{"Parts.esp","Parts.esp",mod.attachPoint});
+            mod.formId+=1000;mod.attachPoint+=1000;
+        }
+        WeaponConfiguration reopened;reopened.initialize(shifted,weapon);
+        require(reopened.restoreChoices(shifted,saved).isEmpty(),"canonical choices did not survive reassigned catalog ids");
+        require(reopened.selected(1010)==0&&reopened.selected(1020)==1003,"empty/nested canonical choices changed on reopen");
+        auto absent=saved;absent["slot:parts.esp:00000a"]="Missing.esp:000001";
+        require(reopened.restoreChoices(shifted,absent).size()==1,"missing canonical record silently used numeric choice");
         // Cyclic metadata cannot create an unbounded traversal or a cyclic UI tree.
         plugin.objectMods[2].attachParentSlots.append(10);
         config.initialize(plugin, weapon);

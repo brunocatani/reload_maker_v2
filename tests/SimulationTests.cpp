@@ -219,6 +219,14 @@ void ar15Fixture(const QString& path) {
     check(rig.slide==1&&rig.bolt==0&&rig.magazine==4,"RU556 part roles are wrong");
     check(rig.slideTracks==QVector<int>({1})&&!rig.magazineTracks.contains(rig.bolt)&&!rig.magazineTracks.contains(2),"Magazine/handle ownership included the receiver bolt or release");
     check(reloadPoseDistance(simulationTrackPose(recipe,rig,1,0),simulationTrackPose(recipe,rig,1,1))>3.8f,"RU556 handle lost its source travel");
+    auto staticHandle=recipe;const auto rest=staticHandle.tracks[1].poses.back();staticHandle.tracks[1].poses.fill(rest,recipe.frames);
+    const auto boltRest=staticHandle.tracks[0].poses.back();
+    for(int f=0;f<recipe.frames;++f){auto& p=staticHandle.tracks[0].poses[f];p=boltRest;p.translation.y+=recipe.tracks[1].poses[f].translation.y-rest.translation.y;}
+    check(!buildSimulationRig(staticHandle,rig,error,WeaponMechanism::Ar15),"Static handle silently acquired an unrequested repair");
+    check(buildSimulationRig(staticHandle,rig,error,WeaponMechanism::Ar15,true),error);
+    const auto& bolt=staticHandle.tracks[0].poses;
+    for(int f=0;f<recipe.frames;++f){const auto& h=rig.derivedHandle[f];check(std::abs((h.translation.y-rest.translation.y)-(bolt[f].translation.y-bolt.back().translation.y))<.0001f,"Derived handle lost native bolt travel");}
+    check(reloadPoseDistance(staticHandle.tracks[1].poses.front(),rest)==0&&!simulationRigJson(staticHandle,rig,true)["derivedHandleMotion"].toObject().isEmpty(),"Static source was mutated or derivation provenance lost");
 }
 void m1aFixture(const QString& path) {
     QFile file(path);check(file.open(QIODevice::ReadOnly),"Missing M1A fixture");

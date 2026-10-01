@@ -299,12 +299,24 @@ namespace reloadmaker
                     result->package = PackageSource::prepare(path);
                     if (!result->package.ok()) { result->error = result->package.error; return; }
                     progress(QStringLiteral("Indexing package resources…"));
+                    if(!result->package.plugins.isEmpty()) {
+                        auto roots=result->package.roots;if(!dataPath.isEmpty())roots.prepend(data);
+                        if(!result->resources.openPackages(roots,result->error))return;
+                        // Reuse the same canonical form-key merger as MO2;
+                        // source packs are explicitly ordered, never guessed.
+                        QVector<PluginContent> catalogs;
+                        if(!dataPath.isEmpty())catalogs.append(EspReader::read(QDir(data).filePath("Fallout4.esm"),cancelled,true));
+                        for(const auto& file:result->package.plugins)catalogs.append(EspReader::read(file,cancelled));
+                        auto merged=mergeLoadOrder(catalogs,result->error);if(!result->error.isEmpty())return;
+                        merged.fileName="Local source pack";result->plugins.append(std::move(merged));
+                    } else {
                     if (!result->resources.open(result->package.rootPath, result->error)) { return; }
                     QDirIterator iterator(result->package.rootPath, {"*.esp", "*.esm", "*.esl"}, QDir::Files, QDirIterator::Subdirectories);
                     while (iterator.hasNext() && !cancelled()) {
                         const auto pluginPath = iterator.next();
                         progress(QStringLiteral("Reading %1").arg(QFileInfo(pluginPath).fileName()));
                         result->plugins.append(EspReader::read(pluginPath, cancelled));
+                    }
                     }
                     QSet<QString> readCatalogs;
                     for(const auto& plugin:result->plugins)for(const auto& master:plugin.masters) {
@@ -549,7 +561,7 @@ namespace reloadmaker
         _partSurfaces.insert(slot, std::move(surfaces));
     }
 
-    bool ReloadMakerController::remapAttachmentNodes(const ObjectModRecord& mod,int firstBlock,int lastBlock,QString& error)
+    bool ReloadMakerController::remapAttachmentNodes(const ObjectModRecord& mod,int firstBlock,int lastBlock,QString& error,bool completeAssembly)
     {
         auto* model=activeModel();const auto* plugin=currentPlugin();
         if(!model||!plugin){error="No assembly for attachment remapping";return false;}
@@ -563,7 +575,18 @@ namespace reloadmaker
                 if(node.isValid()){error="Ambiguous remapped branch: "+remap->node;return false;}
                 node=candidate;
             }
-            if(!node.isValid()){error="Missing remapped branch: "+remap->node;return false;}
+            // Handguards may supply a remap for a separately installed sight,
+            // handstop or bipod. Resolve those after the entire assembly exists.
+            // An unequipped optional branch has no transform to remap.
+            if(!node.isValid()) {
+                if(completeAssembly)appendDiagnostic("NODE REMAP inactive (branch not equipped): "+remap->node);
+                continue;
+            }
+            const auto applied=std::find_if(_remappedAttachments.cbegin(),_remappedAttachments.cend(),[&](const auto& r){return r.node==node;});
+            if(applied!=_remappedAttachments.cend()) {
+                if(applied->point!=remap->point){error="Conflicting remaps for branch: "+remap->node;return false;}
+                continue;
+            }
             const auto target=findConnectTarget("C-"+remap->point.mid(2),nullptr,configurationSlotKey(mod));
             if(!target.valid()){error=target.error;return false;}
             const int block=model->getBlockNumber(node);
@@ -720,7 +743,7 @@ namespace reloadmaker
 
     void ReloadMakerController::configureResourcePaths()
     {
-        setLibraryResources(_libraryMode ? &_packageResources : nullptr);
+        setLibraryResources(_libraryMode||!_package.plugins.isEmpty() ? &_packageResources : nullptr);
         if (_gameData.isEmpty()) {
             return;
         }
@@ -2104,6 +2127,9 @@ namespace reloadmaker
                 }
             }
             (void)createMissingBones();
+            for(const auto* mod:selected)if(mod&&!remapAttachmentNodes(*mod,0,destination->getBlockCount(),error,true)) {
+                QApplication::restoreOverrideCursor();setStatus("Cannot remap assembled attachment "+mod->editorId+": "+error,true);return;
+            }
             if (!buildNodeBindings(error)) {
                 QApplication::restoreOverrideCursor();
                 setStatus(QStringLiteral("Cannot bind assembled parts: %1").arg(error), true);

@@ -43,6 +43,8 @@ void ReloadMakerController::prepareMagazineInteraction() {
                 if(owner<0||below(_sceneNodes[_reloadTrackNodes[track]],_sceneNodes[_reloadTrackNodes[owner]]))owner=track;
             }
         }
+        if(magazine&&owner<0&&isMk18Configuration())for(int track=0;track<_reloadRecipe->tracks.size();++track)
+            if(_reloadRecipe->tracks[track].anchor.anchorName=="WeaponExtra3"&&below(index,_sceneNodes[_reloadTrackNodes[track]])){owner=track;break;}
         if(magazine&&owner>=0)shapes.append({index,owner});
         bool weapon=below(index,_weaponRoot);
         if(!weapon)for(const auto& root:_partRoots)if(below(index,root)){weapon=true;break;}
@@ -71,6 +73,11 @@ void ReloadMakerController::prepareMagazineInteraction() {
         if(shape.track==rig.magazine)fullBody=true;
         const auto name=model->get<QString>(shape.node,"Name");
         bool cartridge=isRifleConfiguration()?name.startsWith(isM1AConfiguration()?"Bullet:":"MagBullet:",Qt::CaseInsensitive):!isEmpty&&shape.track!=rig.magazine;
+        if(isMk18Configuration()) {
+            const auto shader=model->getBlockIndex(model->getLink(shape.node,"Shader Property"));
+            auto material=model->get<QString>(shader,"Name");material.replace('\\','/');
+            cartridge|=material.contains("/MK18/Ammo/",Qt::CaseInsensitive);
+        }
         if(isBoltActionConfiguration()) {
             // The source culls this static round stack and Child1's top round
             // on an empty reload. Magazine body/follower helpers are separate.
@@ -80,7 +87,7 @@ void ReloadMakerController::prepareMagazineInteraction() {
                 node=model->getBlockIndex(model->getParent(node));
             }
         }
-        _magazineVisuals.append({shape.node,model->get<int>(shape.node,"Flags"),isEmpty,shape.track,cartridge});
+        _magazineVisuals.append({shape.node,model->get<int>(shape.node,"Flags"),isEmpty,shape.track,cartridge,isMk18Configuration()&&!rig.magazineTracks.contains(shape.track)});
     }
     if((!empty&&!rail.sharedBody())||!fullBody){_magazineVisuals.clear();_magazineError="Magazine body geometry could not be resolved.";return;}
     _magazineRail=rail;

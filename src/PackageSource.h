@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <functional>
+#include <vector>
 
 class BA2File;
 
@@ -18,6 +19,8 @@ namespace reloadmaker
         QString sourcePath;
         QString error;
         bool fromArchive{ false };
+        QStringList plugins; // Optional ordered source-pack inputs, masters first.
+        QStringList roots;
 
         [[nodiscard]] bool ok() const noexcept { return error.isEmpty(); }
     };
@@ -43,6 +46,7 @@ namespace reloadmaker
         ResourceArchive& operator=(ResourceArchive&&) noexcept;
 
         [[nodiscard]] bool open(const QString& rootPath, QString& error);
+        [[nodiscard]] bool openPackages(const QStringList& roots, QString& error);
         // Archives are in game load order (last wins); loose files are the
         // already-resolved MO2 virtual view, not physical mod directories.
         [[nodiscard]] bool openLoadOrder(const QString& dataPath, const QStringList& archives,
@@ -64,5 +68,6 @@ namespace reloadmaker
         QHash<QString, QString> _looseFiles;
         QHash<QString, QString> _providers;
         QStringList _files;
+        std::vector<std::unique_ptr<ResourceArchive>> _layers;
     };
 }

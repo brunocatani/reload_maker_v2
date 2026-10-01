@@ -62,7 +62,7 @@ void ReloadMakerController::prepareGrabLocationFrame(){
     if(!_reloadRecipe){startReloadCapture();return;}
     if(!_simulationRig){
         SimulationRig rig;QString error;
-        if(!buildSimulationRig(*_reloadRecipe,rig,error,simulationMechanism())){setStatus(error,true);return;}
+        if(!buildCurrentSimulationRig(rig,error)){setStatus(error,true);return;}
         _simulationRig=rig;
     }
     refreshGrabLocationsUi();updateGripViewport();

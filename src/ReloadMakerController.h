@@ -243,6 +243,9 @@ namespace reloadmaker
         void createSimulationViewport();
         bool isGlockConfiguration() const;
         bool isAr15Configuration() const;
+        bool isMk18Configuration() const;
+        bool isMk18OverhaulConfiguration() const;
+        QString operatingGripKey(PoseHand hand) const;
         bool isM1AConfiguration() const;
         bool isThanatosConfiguration() const;
         bool isL118Configuration() const;
@@ -258,6 +261,7 @@ namespace reloadmaker
         QString currentTestbed() const;
         QString testbedProject(const QString& name) const;
         bool prepareRifleMotion();
+        bool buildCurrentSimulationRig(SimulationRig&,QString&);
         Transformf rifleBoltPose(float progress) const;
         Transformf rifleFireBoltPose() const;
         float simulationPoseSeconds() const;
@@ -295,7 +299,7 @@ namespace reloadmaker
         void updateMagazinePose();
         std::optional<MagazineRail> _magazineRail;
         QString _magazineError;
-        struct MagazineVisual {QPersistentModelIndex node;int flags{0};bool empty{false};int track{-1};bool cartridge{false};};
+        struct MagazineVisual {QPersistentModelIndex node;int flags{0};bool empty{false};int track{-1};bool cartridge{false};bool nativeOnly{false};};
         QVector<MagazineVisual> _magazineVisuals;
         MagazineViewport* _magazineViewport{nullptr};
         QPushButton* _magazineOut{nullptr};
@@ -504,7 +508,7 @@ namespace reloadmaker
         void scrollToFocusedSlot();
         void refreshSlotCallouts();
         void recordPartSurfaces(SlotKey slot, int firstBlock, int lastBlock);
-        bool remapAttachmentNodes(const ObjectModRecord& mod, int firstBlock, int lastBlock, QString& error);
+        bool remapAttachmentNodes(const ObjectModRecord& mod, int firstBlock, int lastBlock, QString& error,bool completeAssembly=false);
         struct RemappedAttachment {QPersistentModelIndex node, parent;QString keyword, point;SlotKey slot{0};};
         QVector<RemappedAttachment> _remappedAttachments;
         [[nodiscard]] bool recordPartAlignment(int firstBlock, int lastBlock, int anchorBone, QString& error);

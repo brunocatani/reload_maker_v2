@@ -8,6 +8,9 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 #include <QScopeGuard>
 #include <QProcess>
 #include <QRegularExpression>
@@ -230,7 +233,22 @@ namespace reloadmaker
         if (info.isFile() && info.suffix().compare(QStringLiteral("zip"), Qt::CaseInsensitive) == 0) {
             return prepareZip(info.canonicalFilePath());
         }
-        return packageError(path, QStringLiteral("Select a mod folder or ZIP file"));
+        if(info.isFile()&&info.fileName().endsWith(".reloadsources.json",Qt::CaseInsensitive)) {
+            QFile file(info.absoluteFilePath());
+            if(file.size()>65536||!file.open(QIODevice::ReadOnly))return packageError(path,"Cannot read source pack");
+            const auto doc=QJsonDocument::fromJson(file.readAll()).object();const auto inputs=doc["plugins"].toArray();
+            if(doc["format"]!="reload-maker-source-pack"||doc["version"]!=1||inputs.isEmpty()||inputs.size()>16)return packageError(path,"Invalid source pack");
+            auto result=packageReady(info.absolutePath(),info.canonicalFilePath());
+            for(const auto& input:inputs) {
+                const QFileInfo plugin(QDir(info.absolutePath()).absoluteFilePath(input.toString()));
+                const auto resolved=plugin.canonicalFilePath();
+                if(!input.isString()||!plugin.isFile()||resolved.isEmpty()||!(plugin.suffix().compare("esp",Qt::CaseInsensitive)==0||plugin.suffix().compare("esm",Qt::CaseInsensitive)==0||plugin.suffix().compare("esl",Qt::CaseInsensitive)==0))return packageError(path,"Source pack plugin is missing or invalid");
+                for(const auto& old:result.plugins)if(QFileInfo(old).fileName().compare(plugin.fileName(),Qt::CaseInsensitive)==0)return packageError(path,"Source pack repeats a plugin identity");
+                result.plugins.append(resolved);if(!result.roots.contains(plugin.canonicalPath()))result.roots.append(plugin.canonicalPath());
+            }
+            return result;
+        }
+        return packageError(path, QStringLiteral("Select a mod folder, ZIP or .reloadsources.json source pack"));
     }
 
     PreparedPackage PackageSource::prepareZip(const QString& path)
@@ -379,6 +397,18 @@ namespace reloadmaker
         }
     }
 
+    bool ResourceArchive::openPackages(const QStringList& roots,QString& error) {
+        close();error.clear();
+        if(roots.isEmpty()||roots.size()>17){error="Invalid package layer count";return false;}
+        for(const auto& root:roots) {
+            auto layer=std::make_unique<ResourceArchive>();
+            if(!layer->open(root,error)){close();return false;}
+            for(const auto& file:layer->files()){_files.append(file);_providers.insert(file,root);}
+            _layers.push_back(std::move(layer));
+        }
+        _files.sort();_files.removeDuplicates();return true;
+    }
+
     bool ResourceArchive::openLoadOrder(const QString& dataPath, const QStringList& archives,
         QString& error, const std::function<void(const QString&, int, int)>& progress,
         const std::function<bool()>& cancelled)
@@ -465,12 +495,13 @@ namespace reloadmaker
         _files.clear();
         _looseFiles.clear();
         _providers.clear();
+        _layers.clear();
         _archive.reset();
     }
 
     bool ResourceArchive::isOpen() const noexcept
     {
-        return static_cast<bool>(_archive);
+        return static_cast<bool>(_archive)||!_layers.empty();
     }
 
     QStringList ResourceArchive::filesWithSuffix(const QString& suffix) const
@@ -490,6 +521,7 @@ namespace reloadmaker
 
     bool ResourceArchive::contains(const QString& resourcePath) const
     {
+        if(!_layers.empty())return _providers.contains(normalizeResourcePath(resourcePath));
         if (!_archive) {
             return false;
         }
@@ -504,6 +536,10 @@ namespace reloadmaker
     QByteArray ResourceArchive::read(const QString& resourcePath, QString& error) const
     {
         error.clear();
+        if(!_layers.empty()) {
+            for(auto i=_layers.rbegin();i!=_layers.rend();++i)if((*i)->contains(resourcePath))return (*i)->read(resourcePath,error);
+            error="Resource is missing from the source pack: "+resourcePath;return {};
+        }
         if (!_archive) {
             error = QStringLiteral("Resource archive is not open");
             return {};

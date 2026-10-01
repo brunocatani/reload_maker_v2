@@ -12,6 +12,9 @@ namespace reloadmaker {
         QVector<int> magazineTracks;
         WeaponMechanism mechanism{WeaponMechanism::PistolSlide};
         int bolt{-1}; // AR bolt is independent of the input (charging-handle) track.
+        QVector<Transformf> derivedHandle; // Explicit static-handle repair from native bolt translation.
+        QVector<Transformf> derivedBolt;
+        QJsonObject mechanicalSource;
     };
     enum class SimulationAction { Idle, Fire, Reload, Held, Returning };
     struct WeaponSimulation {
@@ -55,7 +58,7 @@ namespace reloadmaker {
         bool _cycleArmed{false},_pullFromLock{false},_pulledRearward{false};
         struct PullSnapshot {bool chambered{false},locked{false},cycle{false};int rounds{0},ejected{0};float bolt{0},handle{0};bool spent{false},closing{false};int cases{0};} _pullSnapshot;
     };
-    bool buildSimulationRig(const ReloadRecipe& recipe, SimulationRig& rig, QString& error,WeaponMechanism profile=WeaponMechanism::PistolSlide);
+    bool buildSimulationRig(const ReloadRecipe& recipe, SimulationRig& rig, QString& error,WeaponMechanism profile=WeaponMechanism::PistolSlide,bool deriveHandleFromBolt=false,const QVector<Transformf>& boltOverride={});
     Transformf simulationTrackPose(const ReloadRecipe& recipe, const SimulationRig& rig, int track, float progress);
     QJsonObject simulationRigJson(const ReloadRecipe& recipe, const SimulationRig& rig, bool springReturn);
 }

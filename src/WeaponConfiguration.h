@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EspReader.h"
+#include <QJsonObject>
 
 namespace reloadmaker
 {
@@ -35,6 +36,8 @@ namespace reloadmaker
         [[nodiscard]] const QVector<ConfigurationSlot>& entries() const { return _slots; }
         [[nodiscard]] const QStringList& warnings() const { return _warnings; }
         [[nodiscard]] const ObjectModRecord* mod(std::uint32_t id) const;
+        [[nodiscard]] QJsonObject savedChoices(const PluginContent& plugin) const;
+        [[nodiscard]] QStringList restoreChoices(const PluginContent& plugin, const QJsonObject& choices);
 
     private:
         WeaponRecord _weapon;

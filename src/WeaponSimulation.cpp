@@ -17,7 +17,7 @@ bool descendant(const ReloadRecipe& r,int child,int parent) {
     return false;
 }
 }
-bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& error,WeaponMechanism profile) {
+bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& error,WeaponMechanism profile,bool deriveHandleFromBolt,const QVector<Transformf>& boltOverride) {
     error.clear();SimulationRig rig;rig.recipeId=r.id;rig.mechanism=profile;
     if(r.frames<3||r.tracks.isEmpty()){error="Capture a native reload before simulating.";return false;}
     for(int i=0;i<r.tracks.size();++i) {
@@ -36,7 +36,15 @@ bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& err
         error="This weapon shares one mesh owner for slide and magazine; separate magazine visibility is required.";return false;
     }
     if(profile!=WeaponMechanism::PistolSlide&&rig.bolt<0){error="The rifle bolt track is missing.";return false;}
-    const auto& slide=r.tracks[rig.slide].poses;const auto& rest=slide.back();
+    if(deriveHandleFromBolt) {
+        if(profile!=WeaponMechanism::Ar15||rig.bolt<0){error="Native bolt translation requires an independent AR handle.";return false;}
+        if(!boltOverride.isEmpty()&&boltOverride.size()!=r.frames){error="Incomplete native bolt override.";return false;}
+        rig.derivedBolt=boltOverride;
+        const auto& handle=r.tracks[rig.slide].poses;const auto& bolt=boltOverride.isEmpty()?r.tracks[rig.bolt].poses:boltOverride;
+        for(const auto& p:handle)if(reloadPoseDistance(p,handle.back())>.01f){error="Cannot replace an already animated charging handle.";return false;}
+        for(const auto& p:bolt){auto h=handle.back();h.translation.x+=p.translation.x-bolt.back().translation.x;h.translation.y+=p.translation.y-bolt.back().translation.y;h.translation.z+=p.translation.z-bolt.back().translation.z;rig.derivedHandle.append(h);}
+    }
+    const auto& slide=rig.derivedHandle.isEmpty()?r.tracks[rig.slide].poses:rig.derivedHandle;const auto& rest=slide.back();
     float travel=0;QVector<float> distance;distance.reserve(r.frames);
     for(const auto& p:slide) {
         if(!reloadPoseVisible(p)){error="The slide disappears within its source motion.";return false;}
@@ -75,15 +83,20 @@ bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& err
 }
 Transformf simulationTrackPose(const ReloadRecipe& r,const SimulationRig& rig,int track,float progress) {
     const float frame=rig.closedFrame+(rig.openFrame-rig.closedFrame)*std::clamp(progress,0.f,1.f);
+    if(track==rig.slide&&!rig.derivedHandle.isEmpty()){const int a=int(frame),b=std::min(a+1,int(rig.derivedHandle.size()-1));return interpolatedTransform(rig.derivedHandle[a],rig.derivedHandle[b],frame-a);}
+    if(track==rig.bolt&&!rig.derivedBolt.isEmpty()){const int a=int(frame),b=std::min(a+1,int(rig.derivedBolt.size()-1));return interpolatedTransform(rig.derivedBolt[a],rig.derivedBolt[b],frame-a);}
     return reloadTrackPose(r,track,r.duration*frame/(r.frames-1));
 }
 QJsonObject simulationRigJson(const ReloadRecipe& r,const SimulationRig& rig,bool springReturn) {
     const auto records=[&](const QVector<int>& indices) {
         QJsonArray result;for(int i:indices){const auto& t=r.tracks[i];result.append(QJsonObject{{"track",i},{"name",t.anchor.anchorName},{"label",t.label},{"record",t.anchor.ownerRecord},{"model",t.anchor.ownerModel},{"path",t.anchor.anchorPath}});}return result;
     };
-    return {{"format","reload-maker-simulation"},{"version",1},{"recipeId",rig.recipeId},
+    QJsonObject result{{"format","reload-maker-simulation"},{"version",1},{"recipeId",rig.recipeId},
         {"slideTrack",rig.slide},{"magazineTrack",rig.magazine},{"openFrame",rig.openFrame},{"closedFrame",rig.closedFrame},
         {"springReturn",springReturn&&rig.mechanism!=WeaponMechanism::BoltAction},{"slideTracks",records(rig.slideTracks)},{"magazineTracks",records(rig.magazineTracks)}};
+    if(!rig.derivedHandle.isEmpty()){QJsonArray poses;QString error;for(const auto& p:rig.derivedHandle){QJsonObject value;if(!encodePoseTransform(p,value,error))return {};poses.append(value);}result["derivedHandleMotion"]=QJsonObject{{"method","native-bolt-translation"},{"sourceTrack",rig.bolt},{"track",rig.slide},{"poses",poses}};}
+    if(!rig.derivedBolt.isEmpty()){QJsonArray poses;QString error;for(const auto& p:rig.derivedBolt){QJsonObject value;if(!encodePoseTransform(p,value,error))return {};poses.append(value);}result["derivedBoltMotion"]=QJsonObject{{"track",rig.bolt},{"source",rig.mechanicalSource},{"poses",poses}};}
+    return result;
 }
 bool WeaponSimulation::fire() {
     if(!canFire())return false;

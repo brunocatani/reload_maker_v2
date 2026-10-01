@@ -50,6 +50,7 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     QJsonObject choices;
     if (const auto* config = configuration()) for (const auto& slot : config->entries()) choices[QString::number(slot.key)] = QString::number(config->selected(slot.key));
     record["choices"] = choices;
+    if(const auto* config=configuration())record["recordChoices"]=config->savedChoices(*currentPlugin());
     record["simulationSpringReturn"] = _simulationSpring->isChecked();
     record["camera"] = _window->getGLView()->studioCameraState();
     const auto animationIdentity=animationSetIdentity(_animationSetCombo->currentIndex());
@@ -131,6 +132,11 @@ void ReloadMakerController::openSession(const QString& path) {
     if (!QFileInfo(record["gameData"].toString()).isDir() || (!record["library"].toBool() && !QFileInfo(record["package"].toString()).exists())) { setStatus("Project source is missing. Restore its original package/Data path before opening.",true); return; }
     // Validate all authored data before changing source or replacing a draft.
     QString error;
+    if(record.contains("recordChoices")) {
+        const auto choices=record["recordChoices"].toObject();
+        if(!record["recordChoices"].isObject()||choices.size()>1024){setStatus("Invalid saved attachment choices.",true);return;}
+        for(auto it=choices.begin();it!=choices.end();++it)if(!it.value().isString()||it.key().size()>1024||it.value().toString().size()>1024){setStatus("Invalid saved attachment identity.",true);return;}
+    }
     if(record.contains("scopeProfiles")) {
         if(!record["scopeProfiles"].isObject()||record["scopeProfiles"].toObject().size()>128){setStatus("Invalid scope profiles.",true);return;}
         const auto optics=record["scopeProfiles"].toObject();for(auto it=optics.begin();it!=optics.end();++it){ScopeProfile p;
@@ -199,9 +205,14 @@ void ReloadMakerController::restoreSessionSelection() {
     { const QSignalBlocker block(_bodyCombo); _bodyCombo->setCurrentIndex(std::max(0,_bodyCombo->findData(record["body"].toString()))); }
     refreshAttachments(); refreshConfigurationChoices();
     if (auto* config = configuration()) {
+        if(record.contains("recordChoices")) {
+            for(const auto& missing:config->restoreChoices(*currentPlugin(),record["recordChoices"].toObject()))
+                appendDiagnostic("PROJECT: unavailable saved record choice "+missing);
+        } else {
         const auto choices = record["choices"].toObject();
         for (auto it = choices.begin(); it != choices.end(); ++it) {
             if (!config->select(it.key().toULongLong(),it.value().toString().toUInt())) appendDiagnostic("PROJECT: unavailable saved slot choice "+it.key());
+        }
         }
     }
     refreshAttachments(); refreshConfigurationChoices();

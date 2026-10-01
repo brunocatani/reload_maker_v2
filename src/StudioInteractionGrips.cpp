@@ -15,6 +15,12 @@
 #include <limits>
 
 namespace reloadmaker {
+QString ReloadMakerController::operatingGripKey(PoseHand hand) const {
+    QString key=poseRecordKey(currentWeapon()->formId)+"|"+operatingGroup();
+    const int anchor=operatingAnchor();
+    if(isMk18Configuration()&&anchor>=0)key+="|"+normalizeNifPath(_handPoseAnchors[anchor].description.ownerModel);
+    return handAssignmentKey(key,hand);
+}
 QString ReloadMakerController::operatingGroup() const {return isAr15Configuration()?"charging_handle":isBoltActionConfiguration()||isThanatosConfiguration()?"bolt":isM1AConfiguration()?"operating_handle":"slide";}
 int ReloadMakerController::operatingAnchor() const {
     if(!_simulationRig||!_reloadRecipe)return -1;
@@ -35,7 +41,7 @@ bool ReloadMakerController::setInteractionHand(PoseHand hand) {
 void ReloadMakerController::resolveOperatingGrip() {
     _operatingGrip.reset();_operatingGripBinding=-1;_operatingGripError.clear();
     const int anchor=operatingAnchor();if(anchor<0||!currentWeapon())return;
-    const auto key=handAssignmentKey(poseRecordKey(currentWeapon()->formId)+"|"+operatingGroup(),_interactionHand);
+    const auto key=operatingGripKey(_interactionHand);
     const auto id=_operatingGrips.value(key);if(id.isEmpty())return;
     const PartGrip* found=nullptr;for(const auto& g:_partGrips)if(g.pose.id==id){if(found){_operatingGripError="Duplicate operating grip ID";return;}found=&g;}
     const auto& target=_handPoseAnchors[anchor].description;
@@ -74,7 +80,7 @@ bool ReloadMakerController::useOperatingGrip() {
     _interactionHand=_partGripDraft->pose.hand;
     const bool editing=_editingOperating;_editingOperating=false;
     const bool saved=savePartGrip();_editingOperating=editing;if(!saved)return false;
-    const auto key=handAssignmentKey(poseRecordKey(currentWeapon()->formId)+"|"+operatingGroup(),_interactionHand),previous=_operatingGrips.value(key);
+    const auto key=operatingGripKey(_interactionHand),previous=_operatingGrips.value(key);
     _operatingGrips[key]=_partGripDraft->pose.id;
     if(!saveSession()){if(previous.isEmpty())_operatingGrips.remove(key);else _operatingGrips[key]=previous;return false;}
     resolveOperatingGrip();updateInteractionGripUi();setStatus("Operating-group fit replaced for this hand. Project saved.");return true;
@@ -139,7 +145,7 @@ QJsonObject ReloadMakerController::exportInteractionGrips() const {
     if(!_reloadRecipe||!currentWeapon())return {};
     const auto weapon=poseRecordKey(currentWeapon()->formId);QJsonArray operating;
     for(const auto hand:{PoseHand::Left,PoseHand::Right}) {
-        const auto id=_operatingGrips.value(handAssignmentKey(weapon+"|"+operatingGroup(),hand));
+        const auto id=_operatingGrips.value(operatingGripKey(hand));
         if(id.isEmpty())continue;
         if(!_simulationRig)return {};
         bool found=false;for(const auto& g:_partGrips)if(g.pose.id==id){if(found||g.pose.hand!=hand||g.weaponRecord!=weapon)return {};found=true;QString error;auto fit=g;const auto& anchor=_reloadRecipe->tracks[_simulationRig->slide].anchor;
