@@ -126,6 +126,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     if(!reading&&request.contains("expectedRevision"))require(request["expectedRevision"].toDouble()==double(_revision),"Stale document revision; read state again");
     if(method=="state")return studioState();
     if(method=="installation")return installationState();
+    if(method=="pack_job")return packCommand(p);
     if(method=="simulation_state")return simulationState();
     if(method=="sound_state")return soundState();
     if(method=="scope_state")return scopeState();
@@ -136,7 +137,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     if(method=="focus") {if(_window->isMinimized())_window->showNormal();_window->raise();_window->activateWindow();return studioState();}
     if(method=="accept_source_session") {
         require(!_profileHandoff.isEmpty()&&p["token"].toString()==_profileHandoff,"No matching MO2 handoff is pending");
-        require(!_loadThread&&!_reloadCapturing&&saveSession(),"The current project cannot close safely; source handoff cancelled");
+        require(!_loadThread&&!_reloadCapturing&&!_packProcess&&saveSession(),"The current project cannot close safely; source handoff cancelled");
         _profileHandoff.clear();
         QTimer::singleShot(0,_window,[this]{_window->close();});
         return {{"accepted",true}};

@@ -1,0 +1,60 @@
+"""Shared headless entry point shipped with Reload Maker."""
+import argparse
+import asyncio
+import json
+import os
+from pathlib import Path
+import runpy
+import sys
+from product_backend import Backends
+
+
+def main():
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument('--workspace', required=True)
+    common.add_argument('--application', default=str(Path(__file__).resolve().parents[1]))
+    common.add_argument('--cancel-file')
+    settings, remaining = common.parse_known_args()
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest='command', required=True)
+    commands.add_parser('self-check')
+    automation = commands.add_parser('mcp')
+    automation.add_argument('--adapter', choices=['studio', 'nif', 'archive', 'plugin'], default='studio')
+    packs = commands.add_parser('packs').add_subparsers(dest='action', required=True)
+    validate = packs.add_parser('validate')
+    validate.add_argument('--pack', action='append', required=True)
+    build = packs.add_parser('build')
+    build.add_argument('--pack', action='append', required=True)
+    build.add_argument('--installation', required=True)
+    build.add_argument('--initialize', action='store_true')
+    args = parser.parse_args(remaining)
+    backends = Backends(Path(settings.application), Path(settings.workspace))
+    if settings.cancel_file:
+        os.environ['RELOAD_MAKER_CANCEL_FILE'] = str(Path(settings.cancel_file).resolve())
+    if args.command == 'self-check':
+        result = dict(ok=True, capabilities=backends.capabilities())
+    elif args.command == 'mcp':
+        if args.adapter == 'studio':
+            sys.argv = [str(backends.application/'mcp/server.py')]
+            runpy.run_path(sys.argv[0], run_name='__main__')
+        else:
+            if args.adapter == 'plugin':
+                backends.prepare_serializer()
+            backends.adapter(args.adapter).mcp.run()
+        return
+    else:
+        from product_packs import load_pack, build as build_packs
+        if args.action == 'validate':
+            loaded = [load_pack(Path(p)) for p in args.pack]
+            result = dict(ok=True, packs=[dict(id=p['manifest']['id'], objects=len(p['objects'])) for p in loaded])
+        else:
+            result = asyncio.run(build_packs(args.pack, Path(args.installation), backends, args.initialize))
+    print(json.dumps(result, allow_nan=False))
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as error:
+        print(json.dumps(dict(ok=False, error=str(error))))
+        sys.exit(1)

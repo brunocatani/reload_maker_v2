@@ -165,7 +165,7 @@ namespace reloadmaker
         applyStyle();
         setWorkspace(OperateWorkspace);
         startCommandServer();
-        _window->prepareClose = [this] { return saveSession(); };
+        _window->prepareClose = [this] { if(_packProcess){setStatus("Finish or cancel the pack build before closing.",true);return false;}return saveSession(); };
         _playbackTimer->setTimerType(Qt::PreciseTimer);
         _playbackTimer->setInterval(kPlaybackIntervalMilliseconds);
         connect(_playbackTimer, &QTimer::timeout, this, &ReloadMakerController::advancePlayback);

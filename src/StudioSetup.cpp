@@ -51,6 +51,9 @@ void ReloadMakerController::showSetup() {
     auto* mo2=browse("MO2 instance folder",current.mo2Instance);
     auto* profiles=new QComboBox(&dialog);form->addRow("MO2 profile",profiles);
     auto* workspace=new QLabel(QDir::toNativeSeparators(studioRoot()),&dialog);workspace->setTextInteractionFlags(Qt::TextSelectableByMouse);form->addRow("Workspace",workspace);
+    auto* mcp=new QLineEdit('"'+QDir::toNativeSeparators(QDir(QCoreApplication::applicationDirPath()).filePath("ReloadMakerMcp.cmd"))+"\" --workspace \""+QDir::toNativeSeparators(studioRoot())+'"',&dialog);
+    mcp->setReadOnly(true);form->addRow("External AI · MCP command",mcp);
+    auto* skills=new QLabel(QDir::toNativeSeparators(QDir(QCoreApplication::applicationDirPath()).filePath("skills")),&dialog);skills->setTextInteractionFlags(Qt::TextSelectableByMouse);form->addRow("Bundled AI instructions",skills);
     auto* report=new QPlainTextEdit(&dialog);report->setReadOnly(true);layout->addWidget(report,1);
     const auto value=[&]{return InstallationSetup{game->text(),kit->text(),mo2->text(),profiles->currentText(),same->isChecked()};};
     const auto refresh=[&]{const auto c=checkInstallation(value());QStringList text;
@@ -65,6 +68,8 @@ void ReloadMakerController::showSetup() {
     connect(same,&QCheckBox::toggled,&dialog,[&](bool enabled){kit->setEnabled(!enabled);refresh();});
     auto* buttons=new QDialogButtonBox(QDialogButtonBox::Save|QDialogButtonBox::Cancel,&dialog);layout->addWidget(buttons);
     auto* connectSource=buttons->addButton("Save and connect MO2",QDialogButtonBox::ActionRole);
+    auto* packs=buttons->addButton("Build installed packs…",QDialogButtonBox::ActionRole);
+    connect(packs,&QPushButton::clicked,&dialog,[&]{dialog.accept();QTimer::singleShot(0,this,&ReloadMakerController::showPackBuilder);});
     connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
     connect(buttons,&QDialogButtonBox::accepted,&dialog,[&]{if(configureInstallation(installationJson(value())))dialog.accept();else report->setPlainText(_lastError);});
     connect(connectSource,&QPushButton::clicked,&dialog,[&]{const auto c=checkInstallation(value());if(!c.gameReady||!c.profileReady){refresh();return;}

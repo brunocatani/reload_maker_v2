@@ -56,6 +56,7 @@ class QButtonGroup;
 class QToolButton;
 class QToolBar;
 class QAction;
+class QProcess;
 
 namespace reloadmaker
 {
@@ -75,6 +76,9 @@ namespace reloadmaker
         void openInitialPaths(const QString& packagePath, const QString& gameDataPath,
                               const QString& mo2Instance = {}, bool library = false);
         QJsonObject executeCommand(const QJsonObject& request);
+
+    signals:
+        void packJobChanged();
 
     private slots:
         void browsePackage();
@@ -237,6 +241,11 @@ namespace reloadmaker
         QJsonObject installationState() const;
         bool configureInstallation(const QJsonObject&);
         void showSetup();
+        void showPackBuilder();
+        QJsonObject packCommand(const QJsonObject&);
+        QProcess* _packProcess{};
+        QJsonObject _packJob;
+        QString _packCancelFile;
         bool connectInstalledProfile();
         QJsonObject animationSetIdentity(int index) const;
         void cacheWeaponFitBounds();
