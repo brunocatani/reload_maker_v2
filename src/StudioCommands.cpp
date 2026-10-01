@@ -128,6 +128,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     if(method=="installation")return installationState();
     if(method=="pack_job")return packCommand(p);
     if(method=="roadmap")return roadmapCommand(p);
+    if(method=="capture_prepared_part")return capturePreparedPart(p["output"].toString());
     if(method=="simulation_state")return simulationState();
     if(method=="sound_state")return soundState();
     if(method=="scope_state")return scopeState();

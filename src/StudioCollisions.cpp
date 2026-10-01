@@ -1,6 +1,7 @@
 #include "ReloadMakerController.h"
 #include "CollisionPanel.h"
 #include "StudioWindow.h"
+#include "StudioPaths.h"
 #include "glview.h"
 #include "gl/glshape.h"
 #include "model/nifmodel.h"
@@ -15,6 +16,11 @@
 #include <QOpenGLPaintDevice>
 #include <QPainter>
 #include <QQuaternion>
+#include <QSaveFile>
+#include <QDir>
+#include <QFileInfo>
+#include <QFileDialog>
+#include <QUuid>
 #include <stdexcept>
 
 // The native renderer remains the authority for skinning, LOD and transforms.
@@ -28,6 +34,23 @@ QVector<Vector3> Shape::reloadMakerCollisionVertices() const {
     }return result;
 }
 qsizetype Shape::reloadMakerCollisionTriangleCount()const{return std::clamp<qsizetype>(lodTriangleCount,0,triangles.size());}
+QJsonObject Shape::reloadMakerRigidMeshJson()const {
+    if(!transformRigid||verts.isEmpty()||verts.size()>65535||norms.size()!=verts.size()||tangents.size()!=verts.size()||bitangents.size()!=verts.size()||coords.isEmpty()||coords[0].size()!=verts.size()||lodTriangleCount!=triangles.size())return {};
+    QJsonArray positions,normals,tangent,uvs,indices,vertexColors;
+    for(qsizetype i=0;i<verts.size();++i) {
+        positions.append(QJsonArray{verts[i][0],verts[i][1],verts[i][2]});normals.append(QJsonArray{norms[i][0],norms[i][1],norms[i][2]});
+        // Match the native glTF exporter: NIF's bitangent is glTF's tangent.
+        const QVector3D n(norms[i][0],norms[i][1],norms[i][2]),t(bitangents[i][0],bitangents[i][1],bitangents[i][2]),b(tangents[i][0],tangents[i][1],tangents[i][2]);
+        tangent.append(QJsonArray{t.x(),t.y(),t.z(),QVector3D::dotProduct(QVector3D::crossProduct(n,t),b)>=0?1:-1});
+        uvs.append(QJsonArray{coords[0][i][0],coords[0][i][1]});
+        if(hasVertexColors){if(colors.size()!=verts.size())return {};vertexColors.append(QJsonArray{colors[i][0],colors[i][1],colors[i][2],colors[i][3]});}
+    }
+    for(const auto& triangle:triangles)for(int k=0;k<3;++k){if(triangle[k]>=verts.size())return {};indices.append(int(triangle[k]));}
+    QJsonObject result{{"positions",positions},{"normals",normals},{"tangents",tangent},{"uvs",uvs},{"indices",indices}};
+    if(hasVertexColors)result["colors"]=vertexColors;
+    if(coords.size()>1){if(coords[1].size()!=verts.size())return {};QJsonArray second;for(const auto& uv:coords[1])second.append(QJsonArray{uv[0],uv[1]});result["uvs2"]=second;}
+    return result;
+}
 
 namespace reloadmaker {
 namespace {
@@ -40,12 +63,17 @@ void ReloadMakerController::createCollisionsUi(){
     _collisions=new CollisionPanel;auto* scroll=new QScrollArea;scroll->setWidgetResizable(true);scroll->setWidget(_collisions);_collisionsDock->setWidget(scroll);_window->addDockWidget(Qt::RightDockWidgetArea,_collisionsDock);_collisionsDock->hide();
     _collisions->snapshot=[this](int index,bool reference){return collisionSnapshot(index,reference);};
     _collisions->cook=[this]{showCollisionCooker();};
+    _collisions->prepare=[this]{const auto output=QFileDialog::getSaveFileName(_window,"Capture visible part in the selected root frame",studioDataPath("exports/objects/PreparedMagazine.nif"),"Prepared world model (*.nif)");if(!output.isEmpty())capturePreparedPart(output);};
+    connect(this,&ReloadMakerController::packJobChanged,this,[this]{if(_packJob["operation"]!="prepare")return;
+        if(_packJob["phase"]=="complete"){const auto result=_packJob["result"].toObject();_preparedPart=result;setStatus("Prepared visible part saved · "+result["output"].toString());}
+        else if(_packJob["phase"]=="failed")setStatus(_packJob["error"].toString(),true);
+    });
     _collisions->changed=[this]{++_revision;_window->getGLView()->update();};
     connect(_window->getGLView(),&GLView::paintUpdate,this,[this]{paintCollisions();});
 }
 void ReloadMakerController::refreshCollisions(){if(!_collisions)return;QStringList names;_collisionTargets.clear();for(int i=0;i<_handPoseAnchor->count();++i)if(i==0||_handPoseAnchors[i].description.anchorKind=="installed-part"||_handPoseAnchors[i].description.anchorName=="WeaponMagazine"){names<<_handPoseAnchor->itemText(i);_collisionTargets.append(i);}_collisions->setTargets(names);}
-void ReloadMakerController::invalidateCollisions(){if(_collisions)_collisions->invalidate();}
-CollisionProfile ReloadMakerController::collisionSnapshot(int target,bool referenceOnly){
+void ReloadMakerController::invalidateCollisions(){_preparedPart={};if(_collisions)_collisions->invalidate();}
+CollisionProfile ReloadMakerController::collisionSnapshot(int target,bool referenceOnly,bool captureRender){
     require(_workspace==CollisionsWorkspace,"Open the Collisions tab first");require(!_loadThread&&!_reloadCapturing&&!_rebuildTimer->isActive(),"Wait for assembly and reload capture");
     const auto* weapon=currentWeapon();auto* model=activeModel();auto* view=_window->getGLView();require(weapon&&model&&view->getScene(),"Load a weapon first");require(target>=0&&target<_collisionTargets.size(),"Select a collision target");target=_collisionTargets[target];
     require(!_playing&&!_reloadPlaying,"Pause playback before creating a collision snapshot");
@@ -69,6 +97,8 @@ CollisionProfile ReloadMakerController::collisionSnapshot(int target,bool refere
         CollisionMesh source;source.name=model->get<QString>(node,"Name");source.path=path.join('/');source.model=weapon->baseModelPath;source.record=p.weapon;
         for(const auto& slot:configuration()->entries())if(_partRoots.value(slot.key)==owner){if(const auto* mod=configuration()->mod(configuration()->selected(slot.key))){source.model=mod->modelPath;source.record=poseRecordKey(mod->formId);}break;}
         source.key=source.record+"|"+source.model+"|"+source.path;require(!keys.contains(source.key),"Ambiguous duplicate node path; select a smaller source");keys.insert(source.key);source.frame=matrix(shape->worldTrans());
+        source.material=model->get<QString>(model->getBlockIndex(model->getLink(node,"Shader Property")),"Name");
+        if(captureRender){source.render=shape->reloadMakerRigidMeshJson();require(!source.render.isEmpty(),"Prepared world capture requires complete rigid geometry with UVs, normals and tangents at its highest detail");const auto shader=model->getBlockIndex(model->getLink(node,"Shader Property"));source.render["material"]=model->get<QString>(shader,"Name");require(!source.render["material"].toString().isEmpty(),"The selected shape needs an explicit source material path");}
         for(const auto& v:shape->reloadMakerCollisionVertices())source.vertices.append({v[0],v[1],v[2]});
         const auto count=shape->reloadMakerCollisionTriangleCount();totalTriangles+=count;require(totalTriangles<=1000000,"Snapshot exceeds one million triangles; choose a smaller part");
         for(qsizetype i=0;i<count;++i){const auto t=shape->triangles[i];source.triangles.append({quint32(t[0]),quint32(t[1]),quint32(t[2])});}if(source.triangles.isEmpty())continue;
@@ -78,6 +108,21 @@ CollisionProfile ReloadMakerController::collisionSnapshot(int target,bool refere
     if(referenceOnly){Transformf world;QString error;require(sceneNodeWorld(anchor.node,world,error),error);CollisionMesh reference;reference.key=p.target;reference.name=anchor.description.anchorName;reference.path=anchor.description.anchorPath;reference.model=anchor.description.ownerModel;reference.record=anchor.description.ownerRecord;reference.frame=matrix(world);
         const auto inverse=reference.frame.inverted();for(const auto& source:p.sources){const auto base=quint32(reference.vertices.size());for(auto point:source.vertices)reference.vertices.append(inverse.map(source.frame.map(point)));for(auto t:source.triangles)reference.triangles.append({t[0]+base,t[1]+base,t[2]+base});}reference.geometryHash=collisionGeometryHash(reference);p.sources={reference};
     }return p;
+}
+QJsonObject ReloadMakerController::capturePreparedPart(const QString& output) {
+    require(!_packProcess,"Wait for the active asset job");
+    const auto profile=collisionSnapshot(_collisions->state()["targetIndex"].toInt(-1),false,true);
+    const auto rootArray=profile.referencePose["rootToWorld"].toArray();require(rootArray.size()==16,"Select one magazine/part as the reference, not the whole weapon");
+    QMatrix4x4 root;for(int i=0;i<16;++i)root(i/4,i%4)=float(rootArray[i].toDouble());bool invertible=false;const auto inverse=root.inverted(&invertible);require(invertible,"Invalid prepared-model root");
+    const auto& selected=_collisions->profile();const bool same=selected.valid()&&selected.weapon==profile.weapon&&selected.configuration==profile.configuration&&selected.target==profile.target;
+    if(same)require(std::any_of(selected.sources.begin(),selected.sources.end(),[](const auto& source){return source.worldIncluded;}),"Include at least one world-model piece");
+    QJsonArray meshes;for(const auto& source:profile.sources){
+        if(same){const auto old=std::find_if(selected.sources.begin(),selected.sources.end(),[&](const auto& s){return s.key==source.key;});if(old!=selected.sources.end()){require(old->geometryHash==source.geometryHash,"Source geometry changed; regenerate and review world pieces");if(!old->worldIncluded)continue;}}
+        auto mesh=source.render;mesh["name"]=source.name;mesh["source"]=source.key;const auto local=inverse*source.frame;QJsonArray frame;for(int r=0;r<4;++r)for(int c=0;c<4;++c)frame.append(local(r,c));mesh["localToRoot"]=frame;meshes.append(mesh);}
+    require(!meshes.isEmpty(),"No selected world geometry remains");
+    const QJsonObject snapshot{{"format","reload-maker-visible-part"},{"version",1},{"units","game-units"},{"weapon",profile.weapon},{"target",profile.target},{"configuration",profile.configuration},{"referencePose",profile.referencePose},{"meshes",meshes}};
+    const auto path=studioDataPath("local/asset-jobs/"+QUuid::createUuid().toString(QUuid::WithoutBraces)+"/visible.json");QDir().mkpath(QFileInfo(path).absolutePath());QSaveFile file(path);const auto bytes=QJsonDocument(snapshot).toJson(QJsonDocument::Compact);require(bytes.size()<=64*1024*1024,"Choose a smaller part; snapshot exceeds 64 MiB");require(file.open(QIODevice::WriteOnly)&&file.write(bytes)==bytes.size()&&file.commit(),"Cannot freeze visible part geometry");
+    return packCommand({{"operation","prepare"},{"job",path},{"output",output}});
 }
 void ReloadMakerController::paintCollisions(){
     if(_workspace!=CollisionsWorkspace||!_collisions||!_collisions->overlay())return;

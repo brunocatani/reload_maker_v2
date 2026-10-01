@@ -47,5 +47,12 @@
       "license": "Project source; distribution license review pending"
     }
   },
-  "publicationReady": false
+  "publicationReady": false,
+  "templates": {
+    "assets/empty-world.nif": {
+      "sha256": "63dd49a921415f23fd6b52c8b5b0d78488209228d38c517905d2e36ffd1064f6",
+      "contract": "One identity NiNode, FO4 stream 130; no geometry, materials, skin or physics",
+      "origin": "Existing generated empty DIAMOND world-model template, verified through nif_mcp"
+    }
+  }
 }

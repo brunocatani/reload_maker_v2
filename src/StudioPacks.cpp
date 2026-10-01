@@ -37,7 +37,7 @@ QJsonObject ReloadMakerController::packCommand(const QJsonObject& request) {
         return _packJob;
     }
     if(_packProcess)throw std::runtime_error("A pack job is already running");
-    const bool authoring=operation=="export"||operation=="inspect-project",cooking=operation=="cook";
+    const bool authoring=operation=="export"||operation=="inspect-project",cooking=operation=="cook"||operation=="prepare";
     if(operation!="build"&&operation!="validate"&&!authoring&&!cooking)throw std::runtime_error("Unknown pack operation");
     const auto packs=request["packs"].toArray();
     if(!authoring&&!cooking&&(packs.isEmpty()||packs.size()>256))throw std::runtime_error("Select between one and 256 finished pack folders");
@@ -50,7 +50,7 @@ QJsonObject ReloadMakerController::packCommand(const QJsonObject& request) {
     QStringList arguments{"-B","-I",entry,"--workspace",studioRoot(),"--cancel-file",_packCancelFile};
     if(cooking) {
         if(!QFileInfo(request["job"].toString()).isFile()||request["output"].toString().isEmpty())throw std::runtime_error("Select a frozen asset job and new finished NIF path");
-        arguments<<"cook-object"<<"--job"<<request["job"].toString()<<"--output"<<request["output"].toString();
+        arguments<<(operation=="cook"?"cook-object":"prepare-object")<<"--job"<<request["job"].toString()<<"--output"<<request["output"].toString();
     } else arguments<<"packs"<<operation;
     if(authoring) {
         const auto project=request["project"].toString();

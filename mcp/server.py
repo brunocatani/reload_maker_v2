@@ -70,7 +70,7 @@ def get_collision_state() -> dict:
 
 @mcp.tool()
 def configure_collisions(changes: dict, expected_revision: int) -> dict:
-    """Workspace 7: select target index; defaults/generate (gapGame, supportErrorGame, targetPoints); import pre-Elric JSON path against installed model; open saved profile; hull index/enabled; view overlay/compare/isolated; save replaces this weapon/loadout/target profile; export to a local path; export-hulls converts enabled points into the selected magazine root for cooking; cancel worker. Saved profiles use source-local game units, not cooked Havok shapes."""
+    """Workspace 7: select target index; defaults/generate (gapGame, supportErrorGame, targetPoints); import pre-Elric JSON path against installed model; open saved profile; hull index/enabled; piece index/included controls prepared-world geometry and associated collision; view overlay/compare/isolated; save replaces this weapon/loadout/target profile; export to a local path; export-hulls converts enabled points into the selected magazine root for cooking; cancel worker. Saved profiles use source-local game units, not cooked Havok shapes."""
     return command('collisions', changes, expected_revision)
 
 @mcp.tool()
@@ -309,6 +309,16 @@ def use_operating_fingers(id: str, expected_revision: int) -> dict:
     """Assign saved finger shape to the current operating hand/group; wrist stays live. The unassigned other hand uses a skeleton-aware mirror."""
     return command('use_operating_fingers', {'id': id}, expected_revision)
 
+
+@mcp.tool()
+def capture_prepared_part(output: str, expected_revision: int) -> dict:
+    """In Collisions, freeze the selected part's currently visible rigid geometry,
+    UVs, normals, tangents, colors, materials and exact root frame into a prepared
+    world NIF. Pick the correct full/empty presentation first; hidden shapes are
+    excluded. Uses bundled native import, leaves source assets untouched, and
+    rejects unsupported/incomplete geometry. Poll pack_job(state) for completion.
+    """
+    return command('capture_prepared_part',dict(output=output),expected_revision)
 
 @mcp.tool()
 def cook_world_object(job: str, output: str, expected_revision: int) -> dict:

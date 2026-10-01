@@ -24,6 +24,9 @@ def main():
     cook = commands.add_parser('cook-object')
     cook.add_argument('--job', required=True)
     cook.add_argument('--output', required=True)
+    prepare = commands.add_parser('prepare-object')
+    prepare.add_argument('--job', required=True)
+    prepare.add_argument('--output', required=True)
     packs = commands.add_parser('packs').add_subparsers(dest='action', required=True)
     validate = packs.add_parser('validate')
     validate.add_argument('--pack', action='append', required=True)
@@ -45,6 +48,9 @@ def main():
     elif args.command == 'cook-object':
         from product_assets import cook_world_object
         result = cook_world_object(args.job, args.output, backends)
+    elif args.command == 'prepare-object':
+        from product_geometry import prepare_world_object
+        result = prepare_world_object(args.job, args.output, backends)
     elif args.command == 'mcp':
         if args.adapter == 'studio':
             sys.argv = [str(backends.application/'mcp/server.py')]

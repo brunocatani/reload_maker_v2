@@ -45,7 +45,8 @@ patch('src/glview.h', [
     ('\tvoid selectPBRCubeMap();', '')])
 patch('src/gl/glshape.h', [
     ('\tvirtual void updateLodLevel() { lodTriangleCount = triangles.size(); }',
-     '\tvirtual void updateLodLevel() { lodTriangleCount = triangles.size(); }\n\tvoid reloadMakerDrawSurface();\n\tQVector<int> reloadMakerSkinBones() const;\n\tQVector<Vector3> reloadMakerCollisionVertices() const;\n\tqsizetype reloadMakerCollisionTriangleCount() const;')])
+     '\tvirtual void updateLodLevel() { lodTriangleCount = triangles.size(); }\n\tvoid reloadMakerDrawSurface();\n\tQVector<int> reloadMakerSkinBones() const;\n\tQVector<Vector3> reloadMakerCollisionVertices() const;\n\tqsizetype reloadMakerCollisionTriangleCount() const;\n\tQJsonObject reloadMakerRigidMeshJson() const;'),
+    ('#include <QString>', '#include <QString>\n#include <QJsonObject>')])
 patch('src/glview.cpp', [
     ('#include "nifskope.h"', ''),
     ('#include "ui/settingsdialog.h"', ''),

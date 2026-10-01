@@ -8,7 +8,7 @@ root = Path(sys.argv[1])
 file = root/'dependency-manifest.json'
 manifest = json.loads(file.read_text())
 manifest['files'] = {}
-for folder in ('runtime', 'backends', 'mcp', 'tools', 'skills'):
+for folder in ('runtime', 'backends', 'mcp', 'tools', 'skills', 'assets'):
     for path in sorted((root/folder).rglob('*')):
         if path.is_file() and '__pycache__' not in path.parts:
             with path.open('rb') as stream:

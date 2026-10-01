@@ -96,6 +96,7 @@ def main():
     shutil.copy2(ROOT/'backends/provenance.json', out/'backends/provenance.json')
     copy_tree(ROOT/'mcp', out/'mcp')
     copy_tree(ROOT/'skills', out/'skills')
+    copy_tree(ROOT/'assets', out/'assets')
     (out/'tools').mkdir(exist_ok=True)
     for file in (ROOT/'tools').glob('product_*.py'):
         shutil.copy2(file, out/'tools'/file.name)
@@ -103,7 +104,7 @@ def main():
         if (ROOT/name).exists():
             shutil.copy2(ROOT/name, out/name)
     files = {}
-    for folder in ('runtime', 'backends', 'mcp', 'tools', 'skills'):
+    for folder in ('runtime', 'backends', 'mcp', 'tools', 'skills', 'assets'):
         for file in (out/folder).rglob('*'):
             if file.is_file() and '__pycache__' not in file.parts:
                 files[file.relative_to(out).as_posix()] = hashlib.file_digest(file.open('rb'), 'sha256').hexdigest()

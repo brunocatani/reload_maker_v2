@@ -9,6 +9,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
@@ -25,6 +26,9 @@ void ReloadMakerController::showCollisionCooker() {
     auto* instruction=new QLabel("Select the prepared rigid magazine NIF in the same reference frame as this collision profile. It must contain only the intended full or empty magazine geometry and no existing physics. The current enabled hulls and physical settings will be cooked with your configured Creation Kit.");
     instruction->setWordWrap(true);layout->addWidget(instruction);
     auto* row=new QHBoxLayout;layout->addLayout(row);auto* source=new QLineEdit;row->addWidget(source,1);
+    QJsonArray pieces;for(const auto& piece:_collisions->profile().sources)if(piece.worldIncluded)pieces.append(piece.key);
+    if(_preparedPart["target"].toString()==_collisions->profile().target&&_preparedPart["configuration"].toString()==_collisions->profile().configuration&&
+       _preparedPart["pieces"].toArray()==pieces&&_preparedPart["referencePose"].toObject()==_collisions->profile().referencePose)source->setText(_preparedPart["output"].toString());
     auto* browse=new QPushButton("Prepared render NIF…");row->addWidget(browse);
     connect(browse,&QPushButton::clicked,&dialog,[&]{const auto path=QFileDialog::getOpenFileName(&dialog,"Prepared magazine render model",studioDataPath("exports"),"Fallout 4 model (*.nif)");if(!path.isEmpty())source->setText(path);});
     layout->addWidget(new QLabel("New finished world model"));

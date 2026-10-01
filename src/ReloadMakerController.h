@@ -189,7 +189,7 @@ namespace reloadmaker
         bool _editingScopeUi{false};
         void refreshCollisions();
         void invalidateCollisions();
-        CollisionProfile collisionSnapshot(int target,bool referenceOnly);
+        CollisionProfile collisionSnapshot(int target,bool referenceOnly,bool captureRender=false);
         void paintCollisions();
         QVector<int> _collisionTargets;
         CollisionPanel* _collisions{};
@@ -244,6 +244,8 @@ namespace reloadmaker
         void showPackBuilder();
         void showPackExporter();
         void showCollisionCooker();
+        QJsonObject capturePreparedPart(const QString& output);
+        QJsonObject _preparedPart;
         void showAuthoringRoadmap();
         QString roadmapKey() const;
         QJsonObject roadmapState() const;

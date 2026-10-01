@@ -23,6 +23,9 @@ int main(int argc,char** argv){QCoreApplication app(argc,argv);try{
     const auto actual=cooked["hulls"].toArray()[0].toObject()["points"].toArray()[0].toArray();const auto expected=local.map(cookProfile.hulls[1].points[0]);
     check((QVector3D(actual[0].toDouble(),actual[1].toDouble(),actual[2].toDouble())-expected).length()<.00001f,"Cooked points are not in magazine-root space");
     cookProfile.referencePose={};check(collisionCookInput(cookProfile,error).isEmpty()&&!error.isEmpty(),"Missing root frame silently cooked");
+    auto pieces=input;CollisionMesh second=mesh;second.key="second";pieces.sources.append(second);pieces.sources[0].worldIncluded=false;
+    const auto selected=bakeCollision(pieces);check(selected.error.isEmpty(),selected.error);for(const auto& hull:selected.profile.hulls)check(hull.source=="second","Excluded world piece produced collision");
+    CollisionProfile selectedRoundTrip;check(readCollisionJson(collisionJson(selected.profile),selectedRoundTrip,error)&&!selectedRoundTrip.sources[0].worldIncluded&&selectedRoundTrip.sources[1].worldIncluded,"World-piece selection did not survive save/reopen");
     auto before=collisionJson(decoded);auto invalid=before;auto hulls=invalid["hulls"].toArray();auto h=hulls[0].toObject();h["source"]="missing";hulls[0]=h;invalid["hulls"]=hulls;check(!readCollisionJson(invalid,decoded,error)&&collisionJson(decoded)==before,"Invalid import mutated output");
     invalid=before;auto sources=invalid["sources"].toArray();auto s=sources[0].toObject();QJsonArray zero;for(int i=0;i<16;++i)zero.append(0);s["sourceToWorld"]=zero;sources[0]=s;invalid["sources"]=sources;check(!readCollisionJson(invalid,decoded,error),"Singular frame accepted");
     auto stop=std::make_shared<std::atomic<bool>>(true);check(!bakeCollision(input,stop).error.isEmpty(),"Cancelled worker continued");

@@ -10,8 +10,10 @@
 
 namespace reloadmaker {
 struct CollisionMesh {
-    QString key,name,model,record,path,geometryHash;
+    QString key,name,model,record,path,geometryHash,material;
+    bool worldIncluded{true};
     QMatrix4x4 frame;
+    QJsonObject render; // Populated only by an explicit prepared-model capture.
     QVector<QVector3D> vertices;
     QVector<std::array<quint32,3>> triangles;
 };

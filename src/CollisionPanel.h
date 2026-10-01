@@ -12,6 +12,7 @@ public:
     std::function<CollisionProfile(int,bool)> snapshot;
     std::function<void()> changed;
     std::function<void()> cook;
+    std::function<void()> prepare;
     void setTargets(const QStringList& names);
     void invalidate();
     void cancel();
@@ -30,6 +31,7 @@ private:
     QString savePath()const;
     QComboBox* _target{};
     QListWidget* _hulls{};
+    QListWidget* _pieces{};
     QLabel* _status{};
     QDoubleSpinBox *_gap{},*_error{},*_points{},*_mass{},*_radius{};
     QCheckBox *_overlay{},*_compare{},*_isolate{};

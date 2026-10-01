@@ -24,6 +24,7 @@ if(RELOADMAKER_BACKEND_BUNDLE)
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_SOURCE_DIR}/backends/provenance.json" "${DIST}/backends/provenance.json"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_SOURCE_DIR}/mcp" "${DIST}/mcp"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_SOURCE_DIR}/skills" "${DIST}/skills"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_SOURCE_DIR}/assets" "${DIST}/assets"
     VERBATIM)
   if(RELOADMAKER_CONTENT_VALIDATOR)
     add_custom_command(TARGET ReloadMakerV2 POST_BUILD
