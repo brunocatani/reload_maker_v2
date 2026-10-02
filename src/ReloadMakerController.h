@@ -24,6 +24,7 @@
 #include "OperatingGrabLocations.h"
 #include "CollisionAuthoring.h"
 #include "ScopeProfile.h"
+#include "commands/CommandRegistry.h"
 
 #include <QHash>
 #include <QJsonArray>
@@ -61,6 +62,7 @@ class QToolBar;
 class QAction;
 class QMenu;
 class QProcess;
+class QLocalSocket;
 
 namespace reloadmaker
 {
@@ -231,7 +233,48 @@ namespace reloadmaker
         QJsonObject _sourcePolicies;
         void openSession(const QString& path);
         void restoreSessionSelection();
+
+        // Command pipe and registry; definitions live in src/commands by area.
+        CommandRegistry _commands;
         void startCommandServer();
+        void acceptCommandClient(QLocalSocket* socket);
+        QJsonObject answerCommand(const QByteArray& line);
+        void requireIdle() const;
+        void registerCommands();
+        void registerDocumentCommands();
+        void registerSourceCommands();
+        void registerLoadoutCommands();
+        void registerSimulationCommands();
+        void registerHandCommands();
+        void registerMagazineCommands();
+        void registerOperatingCommands();
+        void registerReloadCommands();
+        void registerSoundCommands();
+        void registerGrabLocationCommands();
+        void registerCollisionCommands();
+        void registerScopeCommands();
+        void registerPackCommands();
+        QJsonObject diagnosticsState() const;
+        QJsonObject poseState() const;
+        QJsonObject importAuthoredRecords(const QJsonArray& paths);
+        QJsonObject exportRecord(const QString& kind);
+        QByteArray exportReloadBundle(QString& error);
+        void configureLoadout(const QJsonObject& params);
+        void controlPlayback(const QJsonObject& params);
+        void arrangeView(const QJsonObject& params);
+        QJsonObject renderView(const QJsonObject& params);
+        QJsonObject simulateOperation(const QJsonObject& params);
+        void moveSimulatedMagazine(const QJsonObject& params);
+        void editFingerJoints(const QJsonObject& params);
+        void saveHandPoseFromCommand(const QJsonObject& params);
+        void setGripPlacement(const QJsonObject& params);
+        QJsonObject mechanismOperation(const QJsonObject& params);
+        void setMechanismStage(const QJsonObject& params);
+        void editReloadWindow(const QJsonObject& params);
+        void updateReloadWindow(ReloadRecipe& recipe, int index, const QJsonObject& params) const;
+        void soundOperation(const QJsonObject& params);
+        void editSoundCueFromCommand(int index, const QJsonObject& params);
+
         QJsonObject studioState() const;
         QJsonObject installationState() const;
         bool configureInstallation(const QJsonObject&);

@@ -25,6 +25,11 @@ def patch(relative, replacements, finish=None):
         value = finish(value)
     write(relative, value)
 
+def replace_exactly(text, old, new, where, count=1):
+    if text.count(old) != count:
+        raise RuntimeError(f'Native adapter marker changed: {where}: {old[:90]}')
+    return text.replace(old, new)
+
 def remove_method(text, signature):
     start = text.index(signature)
     begin = text.index('{', start)
@@ -91,7 +96,7 @@ blocks = (source/'src/spells/blocks.cpp').read_text(encoding='utf-8')
 # Reuse native branch serialization through a caller-owned payload. Interactive
 # spell wrappers retain their original clipboard behavior; studio assembly does
 # not depend on clipboard ownership, external contents, or a stale prior copy.
-blocks=blocks.replace('#include <QMimeData>', '#include <QMimeData>\n#include <memory>',1)
+blocks=replace_exactly(blocks, '#include <QMimeData>', '#include <QMimeData>\n#include <memory>', 'src/spells/blocks.cpp')
 for spell,method,parameter,old,new,wrapper in [
     ('spCopyBranch','copyData','QMimeData& payload',
      '\t\tQMimeData * mime = new QMimeData;\n\t\tmime->setData( QString( STR_BR ).arg( nif->getVersion() ), data );\n\t\tQApplication::clipboard()->setMimeData( mime );',
@@ -111,7 +116,7 @@ begin = blocks.index('class spConvertBlock final')
 end = blocks.index('REGISTER_SPELL( spConvertBlock )', begin)+len('REGISTER_SPELL( spConvertBlock )')
 write('src/spells/blocks.cpp', blocks[:begin]+blocks[end:])
 model = (source/'src/model/nifmodel.cpp').read_text(encoding='utf-8')
-model = model.replace('spMeshFileImport::processAllItems( this );', 'throw NifSkopeError("Starfield mesh conversion is outside the Fallout 4 reload workflow");')
+model = replace_exactly(model, 'spMeshFileImport::processAllItems( this );', 'throw NifSkopeError("Starfield mesh conversion is outside the Fallout 4 reload workflow");', 'src/model/nifmodel.cpp', count=2)
 write('src/model/nifmodel.cpp', model)
 
 pro = (source / 'NifSkope.pro').read_text(encoding='utf-8')
@@ -149,8 +154,15 @@ pro += 'TARGET = ReloadMakerV2\nQMAKE_PRE_LINK =\n'
 pro += 'SOURCES -= ' + ' '.join(removed) + '\n'
 pro += 'HEADERS = ' + ' '.join(headers) + '\n'
 pro += 'FORMS = src/ui/checkablemessagebox.ui\n'
-pro += 'SOURCES += ' + ' '.join(p.as_posix() for p in (project/'src').glob('*.cpp')) + '\n'
-pro += 'HEADERS += ' + ' '.join(p.as_posix() for p in (project/'src').glob('*.h')) + '\n'
+app_sources = sorted((project/'src').rglob('*.cpp'))
+# qmake writes every object file into one folder, so basenames must be unique
+# across the application and the staged native sources.
+object_names = [Path(p).stem.lower() for p in native] + [p.stem.lower() for p in app_sources]
+duplicates = sorted({name for name in object_names if object_names.count(name) > 1})
+if duplicates:
+    raise SystemExit('Source basenames must be unique for qmake objects: ' + ', '.join(duplicates))
+pro += 'SOURCES += ' + ' '.join(p.as_posix() for p in app_sources) + '\n'
+pro += 'HEADERS += ' + ' '.join(p.as_posix() for p in sorted((project/'src').rglob('*.h'))) + '\n'
 pro += f'INCLUDEPATH += {app}/src\nDEFINES += RELOAD_MAKER_V2\n'
 pro += f'INCLUDEPATH += {rock.as_posix()} {stage.as_posix()}\nCONFIG += c++20\nQT += concurrent\n'
 pro += 'SOURCES += $$files($$PWD/lib/qhull/src/libqhull_r/*.c)\n'
