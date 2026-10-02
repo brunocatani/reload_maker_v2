@@ -11,6 +11,6 @@ struct BoltCycle {
     float ejectProgress{0},inputTravel{0};
     Vec3f inputAxis{};
 };
-bool analyzeBoltCycle(BoltCycle& cycle,float ejectSeconds,QString& error);
+bool analyzeBoltCycle(BoltCycle& cycle,float ejectSeconds,QString& error,bool ejectAtRear=false);
 Transformf boltCyclePose(const BoltCycle& cycle,int track,float progress,bool closing);
 }

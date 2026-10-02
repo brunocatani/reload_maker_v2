@@ -14,6 +14,7 @@
 #include "ReloadRecipe.h"
 #include "ReloadDriveViewport.h"
 #include "WeaponSimulation.h"
+#include "OperatingSetup.h"
 #include "WeaponAmmunition.h"
 #include "ActionCatalog.h"
 #include "BoltCycle.h"
@@ -324,7 +325,13 @@ namespace reloadmaker
         void releaseSimulation(bool cancel);
         QJsonObject simulationState() const;
         QJsonObject exportSimulation() const;
-        QJsonObject exportRuntimeConfiguration() const;
+    QJsonObject exportRuntimeConfiguration() const;
+    QString runtimeTrackPath(int track) const;
+        QJsonObject operatingSetupState();
+        QJsonObject configureOperatingSetup(const QJsonObject&);
+        void showOperatingSetup();
+        bool buildSourceSimulationRig(SimulationRig&,QString&);
+        bool buildConfiguredSimulationRig(const OperatingSetup&,SimulationRig&,QString&);
         QJsonObject saveConfiguredReload(const QJsonObject& request);
         void showConfigurationSaver();
         QJsonObject exportSlideProfile() const;

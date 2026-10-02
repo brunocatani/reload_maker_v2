@@ -330,6 +330,23 @@ def cook_world_object(job: str, output: str, expected_revision: int) -> dict:
     return command('pack_job', dict(operation='cook',job=job,output=output), expected_revision)
 
 @mcp.tool()
+def get_operating_setup() -> dict:
+    """Read current native track roles, follower choices, source clips and saved movements."""
+    return command('operating_setup_state')
+
+@mcp.tool()
+def configure_operating_setup(operation: str, expected_revision: int, settings: dict | None = None) -> dict:
+    """Save/reset this captured assembly's operating roles and movement source.
+    Start from get_operating_setup.settings. Modes: preset, reload, clip (path and
+    baseline), manual (saved movement IDs per track). Explicit open/closed sample
+    order may reverse a native path. Manual spring parts use an opening path;
+    manual bolts use a full cycle. Both -1 endpoints request stroke detection.
+    Fire mode is preset/native/stroke. Source changes require review; no wrist
+    orientation is imposed by this setup. Test Operate before runtime export.
+    """
+    return command('operating_setup',dict(operation=operation,settings=settings or {}),expected_revision)
+
+@mcp.tool()
 def inspect_sources(evidence: dict) -> dict:
     """Compare expected animation/model bytes with a fresh current source view.
     evidence has version=1 and resources[{kind: animation|model, path, sha256}].

@@ -56,6 +56,7 @@ QJsonObject ReloadMakerController::sourceEvidence() const {
     };
     const auto recipe=_reloadRecipe->source;
     for(const auto* field:{"animation","baseline"})if(!recipe[field].toString().isEmpty())add("animation",recipe[field].toString(),{},recipe[QString(field)+"Sha256"].toString());
+    if(_simulationRig)for(const auto* field:{"animation","baseline"}){const auto source=_simulationRig->mechanicalSource;const auto path=source[field].toString();if(!path.isEmpty())add("animation",path,{},source[QString(field)+"Sha256"].toString());}
     for(const auto& action:_animationActions)if(action.family==ActionFamily::Fire||action.family==ActionFamily::Cycle){
         for(const auto& path:{action.resourcePath,action.baselineResourcePath})if(!path.isEmpty()) {
             const auto key=ResourceArchive::normalizeResourcePath(path);const auto expected=_animationReadHashes.value(key);
@@ -107,7 +108,7 @@ QJsonObject ReloadMakerController::roadmapState() const {
 QJsonObject ReloadMakerController::roadmapCommand(const QJsonObject& request) {
     const auto operation=request["operation"].toString("state");if(operation=="state")return roadmapState();
     const auto key=roadmapKey();if(key.isEmpty()||_loadThread||_reloadCapturing||_reloadCaptureQueued||_rebuildTimer->isActive())throw std::runtime_error("Wait for a loaded weapon and completed capture");
-    auto saved=_authoringRoadmaps[key].toObject();
+    auto saved=_authoringRoadmaps.value(key).toObject();
     if(!saved.contains("step"))saved["step"]=0;
     if(operation=="template") {
         const auto id=request["id"].toString();if(!templateMechanism(id))throw std::runtime_error("Choose one of the supported behavior templates");
@@ -147,6 +148,7 @@ void ReloadMakerController::showAuthoringRoadmap() {
     connect(open,&QPushButton::clicked,&dialog,[&]{const int step=list->currentRow();dialog.accept();
         QTimer::singleShot(0,this,[this,step]{if(step==0){showSetup();return;}if(step==11){setWorkspace(OperateWorkspace);showConfigurationSaver();return;}
             if(step==9){setWorkspace(SoundsWorkspace);return;}if(step==10){setWorkspace(CollisionsWorkspace);return;}
+            if(step==3||step==4){setWorkspace(OperateWorkspace);showOperatingSetup();return;}
             if(step==7||step==8){setWorkspace(GripsWorkspace);if(step==8)(void)openGrabLocations();return;}
             if(step==1||step==2){setWorkspace(OperateWorkspace);return;}setWorkspace(PhasesWorkspace);});
     });

@@ -14,14 +14,16 @@ bool ReloadMakerController::prepareBoltActionMotion() {
     _boltCycle={};_boltFiredPose.clear();_boltCycleSource={};
     const auto cycle=std::find_if(_animationActions.cbegin(),_animationActions.cend(),[](const auto& a){return a.family==ActionFamily::Cycle;});
     const auto fire=std::find_if(_animationActions.cbegin(),_animationActions.cend(),[](const auto& a){return a.family==ActionFamily::Fire&&!a.automatic;});
-    if(cycle==_animationActions.cend()||fire==_animationActions.cend()){_simulationError="A native bolt-cycle and firing clip are required.";return false;}
+    const auto& rig=*_simulationRig;const bool authoredCycle=rig.manualCycle;
+    if((!authoredCycle&&cycle==_animationActions.cend())||fire==_animationActions.cend()){_simulationError="A bolt-cycle source and native firing clip are required.";return false;}
     QString error;
-    const auto bytes=readAnimationResource(cycle->resourcePath,error),baseBytes=readAnimationResource(cycle->baselineResourcePath,error);
-    const auto clip=HkxReader::readClip(bytes,error),base=HkxReader::readClip(baseBytes,error);
+    const auto bytes=authoredCycle?QByteArray():readAnimationResource(cycle->resourcePath,error),baseBytes=readAnimationResource(authoredCycle?fire->baselineResourcePath:cycle->baselineResourcePath,error);
+    const auto clip=authoredCycle?HkxClip{}:HkxReader::readClip(bytes,error),base=HkxReader::readClip(baseBytes,error);
     const auto fireBytes=readAnimationResource(fire->resourcePath,error);
     const auto firing=HkxReader::readClip(fireBytes,error);
-    if(!clip.valid()||!base.valid()||!firing.valid()){_simulationError="Cannot read bolt-cycle sources: "+error;return false;}
-    for(const auto& name:{"WeaponBolt","WeaponExtra1","WeaponOptics2"}) {
+    if((!authoredCycle&&!clip.valid())||!base.valid()||!firing.valid()){_simulationError="Cannot read bolt-cycle sources: "+error;return false;}
+    if(rig.customSetup){_boltCycle.tracks=rig.slideTracks;_boltCycle.tracks.removeAll(rig.slide);_boltCycle.tracks.prepend(rig.slide);for(int track:_boltCycle.tracks){(void)track;_boltCycle.poses.append(QVector<Transformf>{});}}
+    else for(const auto& name:{"WeaponBolt","WeaponExtra1","WeaponOptics2"}) {
         int track=-1;
         for(int i=0;i<_reloadRecipe->tracks.size();++i)if(_reloadRecipe->tracks[i].surface&&_reloadRecipe->tracks[i].anchor.anchorName==name) {
             if(track>=0){_simulationError="Ambiguous bolt follower: "+QString(name);return false;}track=i;
@@ -29,8 +31,8 @@ bool ReloadMakerController::prepareBoltActionMotion() {
         if(track<0){_simulationError="Missing bolt follower: "+QString(name);return false;}
         _boltCycle.tracks.append(track);_boltCycle.poses.append(QVector<Transformf>{});
     }
-    _boltCycle.duration=clip.durationSeconds;
-    const int frames=int(std::ceil(clip.durationSeconds*120))+1;
+    _boltCycle.duration=authoredCycle?rig.motionDuration:clip.durationSeconds;
+    const int frames=authoredCycle?_reloadRecipe->frames:int(std::ceil(clip.durationSeconds*120))+1;
     if(frames<3||frames>maximumReloadFrames){_simulationError="Native bolt cycle exceeds the sampling limit.";return false;}
     QVector<Transformf> sampled,baseline,local,global,boundLocal,boundGlobal,sceneLocal,sceneWorld;
     if(!samplePose(_skeleton,base,0,&_readyLocalPose,sampled,baseline,global,error)){_simulationError=error;return false;}
@@ -43,17 +45,20 @@ bool ReloadMakerController::prepareBoltActionMotion() {
         return true;
     };
     QVector<Transformf> poses;
-    for(int f=0;f<frames;++f) {
+    if(authoredCycle){for(int i=0;i<_boltCycle.tracks.size();++i)_boltCycle.poses[i]=simulationTrackCurve(*_reloadRecipe,rig,_boltCycle.tracks[i]);}
+    else for(int f=0;f<frames;++f) {
         if(!sample(clip,clip.durationSeconds*f/(frames-1),poses)){_simulationError=error;return false;}
         for(int i=0;i<poses.size();++i)_boltCycle.poses[i].append(poses[i]);
     }
-    float eject=-1;
-    for(const auto& event:clip.annotations)if(event.text.compare("EjectShellCasing",Qt::CaseInsensitive)==0){eject=event.timeSeconds;break;}
-    if(!analyzeBoltCycle(_boltCycle,eject,error)||!sample(firing,firing.durationSeconds,_boltFiredPose)){_simulationError=error;return false;}
+    float eject=authoredCycle?rig.manualEjectSeconds:-1;
+    if(!authoredCycle)for(const auto& event:clip.annotations)if(event.text.compare("EjectShellCasing",Qt::CaseInsensitive)==0){eject=event.timeSeconds;break;}
+    const bool ejectAtRear=authoredCycle&&rig.authoring["mode"]=="manual"&&eject<0;
+    if(!analyzeBoltCycle(_boltCycle,eject,error,ejectAtRear)||!sample(firing,firing.durationSeconds,_boltFiredPose)){_simulationError=error;return false;}
     const auto hash=[](const QByteArray& data){return QString::fromLatin1(QCryptographicHash::hash(data,QCryptographicHash::Sha256).toHex());};
-    _boltCycleSource={{"animation",cycle->resourcePath},{"animationSha256",hash(bytes)},
+    _boltCycleSource=authoredCycle?rig.mechanicalSource:QJsonObject{{"animation",cycle->resourcePath},{"animationSha256",hash(bytes)},
         {"baseline",cycle->baselineResourcePath},{"baselineSha256",hash(baseBytes)},
         {"fireAnimation",fire->resourcePath},{"fireSha256",hash(fireBytes)},{"ejectSeconds",eject}};
+    if(authoredCycle){_boltCycleSource["fireAnimation"]=fire->resourcePath;_boltCycleSource["fireSha256"]=hash(fireBytes);}
     _simulationRig->slideTracks=_boltCycle.tracks;
     return true;
 }

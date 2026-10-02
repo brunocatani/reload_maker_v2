@@ -1,5 +1,6 @@
 #include "WeaponSimulation.h"
 #include "BoltCycle.h"
+#include "OperatingSetup.h"
 #include <QCoreApplication>
 #include <QFile>
 #include <QJsonDocument>
@@ -38,6 +39,20 @@ void fixture(const QString& path) {
     const auto slide=simulationTrackPose(r,rig,0,1),barrel=simulationTrackPose(r,rig,1,1);
     check(slide.translation.y< -3&&std::abs(barrel.rotation.x)>.02f,"Barrel tilt was replaced with rigid slide translation");
     check(reloadPoseDistance(simulationTrackPose(r,rig,6,.5f),simulationTrackPose(r,rig,6,0))>.1f,"Cartridge trajectory is missing");
+    const auto original=rig;SimulationParts roles;roles.operating=rig.slide;roles.bolt=rig.bolt;roles.magazine=rig.magazine;roles.followers=rig.slideTracks;roles.openFrame=rig.openFrame;roles.closedFrame=rig.closedFrame;
+    auto renamed=r;renamed.tracks[roles.operating].anchor.anchorName="AuthoredOperatingPart";
+    SimulationRig authored;check(buildSimulationRig(renamed,authored,error,WeaponMechanism::PistolSlide,false,{},&roles),error);
+    for(int track:roles.followers)for(float u:{0.f,.2f,.5f,.8f,1.f})check(reloadPoseDistance(simulationTrackPose(r,original,track,u),simulationTrackPose(renamed,authored,track,u))<.0001f,"Explicit operating roles changed a complete native follower curve");
+    roles.curves[roles.operating]=r.tracks[roles.operating].poses;
+    for(int frame=roles.openFrame;frame<=roles.closedFrame;++frame)roles.curves[roles.operating][frame].translation.x+=.2f*(roles.closedFrame-frame)/(roles.closedFrame-roles.openFrame);
+    check(buildSimulationRig(r,authored,error,WeaponMechanism::PistolSlide,false,{},&roles),error);
+    check(std::abs(simulationTrackPose(r,authored,roles.operating,1).translation.x-simulationTrackPose(r,original,roles.operating,1).translation.x-.2f)<.0001f,"Authored movement override was ignored");
+    check(reloadPoseDistance(simulationTrackPose(r,authored,roles.followers[1],.5f),simulationTrackPose(r,original,roles.followers[1],.5f))<.0001f,"Independent follower motion was overwritten");
+    OperatingSetup setup;setup.recipeId=r.id;setup.parts=roles;OperatingSetup decoded;
+    check(readOperatingSetup(operatingSetupJson(setup),decoded,error),error);
+    auto invalid=operatingSetupJson(setup);auto duplicate=invalid["followers"].toArray();duplicate.append(duplicate[0]);invalid["followers"]=duplicate;check(!readOperatingSetup(invalid,decoded,error),"Duplicate operating follower accepted");
+    auto missing=roles;missing.followers.removeAll(missing.operating);check(!buildSimulationRig(r,authored,error,WeaponMechanism::PistolSlide,false,{},&missing),"Operating group omitted its primary part");
+    auto outside=roles;outside.closedFrame=r.frames;check(!buildSimulationRig(r,authored,error,WeaponMechanism::PistolSlide,false,{},&outside),"Out-of-range movement window accepted");
     auto bad=r;bad.tracks[rig.slide].poses.fill(bad.tracks[rig.slide].poses.back(),r.frames);
     check(!buildSimulationRig(bad,rig,error),"Static slide must reject simulation");
     bad=r;bad.tracks[4].anchor.ownerRecord=bad.tracks[0].anchor.ownerRecord;bad.tracks[4].anchor.ownerModel=bad.tracks[0].anchor.ownerModel;

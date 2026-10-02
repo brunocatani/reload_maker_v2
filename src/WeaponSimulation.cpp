@@ -17,17 +17,17 @@ bool descendant(const ReloadRecipe& r,int child,int parent) {
     return false;
 }
 }
-bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& error,WeaponMechanism profile,bool deriveHandleFromBolt,const QVector<Transformf>& boltOverride) {
+bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& error,WeaponMechanism profile,bool deriveHandleFromBolt,const QVector<Transformf>& boltOverride,const SimulationParts* selected) {
     error.clear();SimulationRig rig;rig.recipeId=r.id;rig.mechanism=profile;
     if(r.frames<3||r.tracks.isEmpty()){error="Capture a native reload before simulating.";return false;}
     for(int i=0;i<r.tracks.size();++i) {
         const auto& t=r.tracks[i];
         if(t.poses.size()!=r.frames||t.parent>=r.tracks.size()||t.parent< -1){error="Invalid simulation source tracks.";return false;}
-        if(t.surface&&t.anchor.anchorName.compare(profile==WeaponMechanism::Ar15||profile==WeaponMechanism::M1A?"WeaponExtra1":"WeaponBolt",Qt::CaseInsensitive)==0) {
+        if(t.surface&&(selected?i==selected->operating:t.anchor.anchorName.compare(profile==WeaponMechanism::Ar15||profile==WeaponMechanism::M1A?"WeaponExtra1":"WeaponBolt",Qt::CaseInsensitive)==0)) {
             if(rig.slide>=0){error="This assembly has multiple slide owners.";return false;}rig.slide=i;
         }
-        if(t.surface&&t.anchor.anchorName.compare("WeaponBolt",Qt::CaseInsensitive)==0)rig.bolt=i;
-        if(t.surface&&t.anchor.anchorName.compare("WeaponMagazine",Qt::CaseInsensitive)==0) {
+        if(t.surface&&(selected?i==selected->bolt:t.anchor.anchorName.compare("WeaponBolt",Qt::CaseInsensitive)==0))rig.bolt=i;
+        if(t.surface&&(selected?i==selected->magazine:t.anchor.anchorName.compare("WeaponMagazine",Qt::CaseInsensitive)==0)) {
             if(rig.magazine>=0){error="This assembly has multiple magazine owners.";return false;}rig.magazine=i;
         }
     }
@@ -36,26 +36,36 @@ bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& err
         error="This weapon shares one mesh owner for slide and magazine; separate magazine visibility is required.";return false;
     }
     if(profile!=WeaponMechanism::PistolSlide&&rig.bolt<0){error="The rifle bolt track is missing.";return false;}
+    if(selected){
+        if((selected->openFrame<0)!=(selected->closedFrame<0)||selected->openFrame>=r.frames||selected->closedFrame>=r.frames){error="Operating window is outside this capture.";return false;}
+        if(rig.slide==rig.magazine||(profile==WeaponMechanism::Ar15&&rig.slide==rig.bolt)){error="Operating, magazine and independent charging-handle roles overlap.";return false;}
+        for(auto it=selected->curves.cbegin();it!=selected->curves.cend();++it){if(it.key()<0||it.key()>=r.tracks.size()||it.value().size()!=r.frames){error="Incomplete authored movement samples.";return false;}for(const auto& pose:it.value()){QJsonObject value;if(!encodePoseTransform(pose,value,error))return false;}}
+        rig.authoredCurves=selected->curves;
+    }
     if(deriveHandleFromBolt) {
         if(profile!=WeaponMechanism::Ar15||rig.bolt<0){error="Native bolt translation requires an independent AR handle.";return false;}
         if(!boltOverride.isEmpty()&&boltOverride.size()!=r.frames){error="Incomplete native bolt override.";return false;}
         rig.derivedBolt=boltOverride;
-        const auto& handle=r.tracks[rig.slide].poses;const auto& bolt=boltOverride.isEmpty()?r.tracks[rig.bolt].poses:boltOverride;
+        const auto& handle=simulationTrackCurve(r,rig,rig.slide);const auto& bolt=boltOverride.isEmpty()?simulationTrackCurve(r,rig,rig.bolt):boltOverride;
         for(const auto& p:handle)if(reloadPoseDistance(p,handle.back())>.01f){error="Cannot replace an already animated charging handle.";return false;}
         for(const auto& p:bolt){auto h=handle.back();h.translation.x+=p.translation.x-bolt.back().translation.x;h.translation.y+=p.translation.y-bolt.back().translation.y;h.translation.z+=p.translation.z-bolt.back().translation.z;rig.derivedHandle.append(h);}
     }
-    const auto& slide=rig.derivedHandle.isEmpty()?r.tracks[rig.slide].poses:rig.derivedHandle;const auto& rest=slide.back();
+    const bool explicitWindow=selected&&selected->openFrame>=0;
+    const auto& slide=simulationTrackCurve(r,rig,rig.slide);const auto& rest=explicitWindow?slide[selected->closedFrame]:slide.back();
     float travel=0;QVector<float> distance;distance.reserve(r.frames);
-    for(const auto& p:slide) {
+    for(int frame=0;frame<slide.size();++frame) {
+        if(explicitWindow&&(frame<selected->openFrame||frame>selected->closedFrame)){distance.append(0);continue;}
+        const auto& p=slide[frame];
         if(!reloadPoseVisible(p)){error="The slide disappears within its source motion.";return false;}
         const float d=reloadPoseDistance(rest,p);distance.append(d);travel=std::max(travel,d);
     }
     if(travel<.15f){error="The reload has no measurable slide stroke.";return false;}
     // The last open-to-closed stroke avoids the spare-magazine relocation in
     // an empty reload's opening frames. No weapon-specific frame numbers.
-    for(int f=r.frames-2;f>=0;--f)if(distance[f]>=travel*.995f){rig.openFrame=f;break;}
-    rig.closedFrame=-1;
-    for(int f=rig.openFrame+1;f<r.frames;++f)if(distance[f]<=travel*.002f){rig.closedFrame=f;break;}
+    if(selected&&selected->openFrame>=0){rig.openFrame=selected->openFrame;rig.closedFrame=selected->closedFrame;
+        if(rig.openFrame<0||rig.closedFrame>=r.frames||rig.closedFrame<=rig.openFrame){error="Choose an open frame followed by its closed frame.";return false;}}
+    else {for(int f=r.frames-2;f>=0;--f)if(distance[f]>=travel*.995f){rig.openFrame=f;break;}
+        rig.closedFrame=-1;for(int f=rig.openFrame+1;f<r.frames;++f)if(distance[f]<=travel*.002f){rig.closedFrame=f;break;}}
     if(rig.closedFrame<=rig.openFrame){error="The reload does not finish a complete slide-closing stroke.";return false;}
     float previous=distance[rig.openFrame];
     for(int f=rig.openFrame+1;f<=rig.closedFrame;++f) {
@@ -79,13 +89,24 @@ bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& err
             motion=std::max(motion,reloadPoseDistance(t.poses[rig.closedFrame],t.poses[f]));
         if(i==rig.slide||motion>.01f)rig.slideTracks.append(i);
     }
+    if(selected){
+        if(selected->followers.isEmpty()||selected->followers.size()>16||!selected->followers.contains(rig.slide)){error="Include the operating part and every required follower (maximum 16).";return false;}
+        QVector<int> followers;
+        for(int index:selected->followers){if(index<0||index>=r.tracks.size()||!r.tracks[index].surface||followers.contains(index)){error="Select distinct native follower surfaces.";return false;}followers.append(index);}
+        rig.slideTracks=followers;
+    }
     output=std::move(rig);return true;
+}
+const QVector<Transformf>& simulationTrackCurve(const ReloadRecipe& r,const SimulationRig& rig,int track) {
+    if(track==rig.slide&&!rig.derivedHandle.isEmpty())return rig.derivedHandle;
+    if(track==rig.bolt&&!rig.derivedBolt.isEmpty())return rig.derivedBolt;
+    const auto authored=rig.authoredCurves.constFind(track);if(authored!=rig.authoredCurves.cend())return authored.value();
+    return r.tracks[track].poses;
 }
 Transformf simulationTrackPose(const ReloadRecipe& r,const SimulationRig& rig,int track,float progress) {
     const float frame=rig.closedFrame+(rig.openFrame-rig.closedFrame)*std::clamp(progress,0.f,1.f);
-    if(track==rig.slide&&!rig.derivedHandle.isEmpty()){const int a=int(frame),b=std::min(a+1,int(rig.derivedHandle.size()-1));return interpolatedTransform(rig.derivedHandle[a],rig.derivedHandle[b],frame-a);}
-    if(track==rig.bolt&&!rig.derivedBolt.isEmpty()){const int a=int(frame),b=std::min(a+1,int(rig.derivedBolt.size()-1));return interpolatedTransform(rig.derivedBolt[a],rig.derivedBolt[b],frame-a);}
-    return reloadTrackPose(r,track,r.duration*frame/(r.frames-1));
+    if(!rig.authoredCurves.contains(track)&&!(track==rig.slide&&!rig.derivedHandle.isEmpty())&&!(track==rig.bolt&&!rig.derivedBolt.isEmpty()))return reloadTrackPose(r,track,r.duration*frame/(r.frames-1));
+    const auto& curve=simulationTrackCurve(r,rig,track);const int a=int(frame),b=std::min(a+1,int(curve.size()-1));return interpolatedTransform(curve[a],curve[b],frame-a);
 }
 QJsonObject simulationRigJson(const ReloadRecipe& r,const SimulationRig& rig,bool springReturn) {
     const auto records=[&](const QVector<int>& indices) {
@@ -96,6 +117,7 @@ QJsonObject simulationRigJson(const ReloadRecipe& r,const SimulationRig& rig,boo
         {"springReturn",springReturn&&rig.mechanism!=WeaponMechanism::BoltAction},{"slideTracks",records(rig.slideTracks)},{"magazineTracks",records(rig.magazineTracks)}};
     if(!rig.derivedHandle.isEmpty()){QJsonArray poses;QString error;for(const auto& p:rig.derivedHandle){QJsonObject value;if(!encodePoseTransform(p,value,error))return {};poses.append(value);}result["derivedHandleMotion"]=QJsonObject{{"method","native-bolt-translation"},{"sourceTrack",rig.bolt},{"track",rig.slide},{"poses",poses}};}
     if(!rig.derivedBolt.isEmpty()){QJsonArray poses;QString error;for(const auto& p:rig.derivedBolt){QJsonObject value;if(!encodePoseTransform(p,value,error))return {};poses.append(value);}result["derivedBoltMotion"]=QJsonObject{{"track",rig.bolt},{"source",rig.mechanicalSource},{"poses",poses}};}
+    if(rig.customSetup){QJsonArray curves;auto indices=rig.authoredCurves.keys();std::sort(indices.begin(),indices.end());for(int index:indices){QJsonArray poses;QString error;for(const auto& p:rig.authoredCurves[index]){QJsonObject value;if(!encodePoseTransform(p,value,error))return {};poses.append(value);}curves.append(QJsonObject{{"track",index},{"poses",poses}});}result["operatingSetup"]=rig.authoring;result["authoredCurves"]=curves;result["motionSource"]=rig.mechanicalSource;}
     return result;
 }
 bool WeaponSimulation::fire() {

@@ -20,6 +20,17 @@ QJsonArray runtimeCurve(const QVector<Transformf>& poses,int first,int last,bool
     return result;
 }
 }
+QString ReloadMakerController::runtimeTrackPath(int track) const {
+    requireCapture(track>=0&&track<_reloadTrackNodes.size()&&_weaponBoneIndex>=0,"Missing native part binding");
+    const auto binding=std::find_if(_nodeBindings.cbegin(),_nodeBindings.cend(),[&](const auto& b){return b.nodeIndex==_reloadTrackNodes[track];});
+    requireCapture(binding!=_nodeBindings.cend(),"Part has no native animation binding");
+    QStringList path;int bone=binding->boneIndex;
+    for(int depth=0;bone>=0&&bone<_skeleton.bones.size()&&depth<64;++depth) {
+        path.prepend(_skeleton.bones[bone].name);if(bone==_weaponBoneIndex)break;bone=_skeleton.bones[bone].parentIndex;
+    }
+    requireCapture(bone==_weaponBoneIndex&&path.size()>1,"Part is outside the native Weapon hierarchy");
+    return path.join('/');
+}
 QJsonObject ReloadMakerController::exportRuntimeConfiguration() const {
     requireCapture(_simulationActive&&_simulationRig&&_reloadRecipe&&_magazineRail&&currentWeapon()&&configuration(),"Prepare this configuration in Operate first");
     requireCapture(_simulationError.isEmpty()&&_magazineError.isEmpty()&&_magazineGrabError.isEmpty(),"Resolve the current simulation/magazine errors before capture");
@@ -39,15 +50,15 @@ QJsonObject ReloadMakerController::exportRuntimeConfiguration() const {
         if(!indices.contains(rig.bolt))indices.append(rig.bolt);
         if(type==WeaponMechanism::M1A)for(int i=0;i<recipe.tracks.size();++i)if(recipe.tracks[i].anchor.anchorName=="WeaponMagazineChild1"||recipe.tracks[i].anchor.anchorName=="WeaponMagazineChild2"||recipe.tracks[i].anchor.anchorName=="WeaponMagazineChild3")if(!indices.contains(i))indices.append(i);
         profile={{"recipeId",recipe.id},{"animation",recipe.source["animation"]},{"animationSha256",recipe.source["animationSha256"]},
-            {"duration",recipe.duration*(rig.closedFrame-rig.openFrame)/(recipe.frames-1)},
+            {"duration",(rig.motionDuration>0?rig.motionDuration:recipe.duration)*(rig.closedFrame-rig.openFrame)/(recipe.frames-1)},
             {"slideTrack",indices.indexOf(rig.slide)},{"boltTrack",indices.indexOf(rig.bolt)}};
         QJsonArray tracks;
         for(const int index:indices) {
             requireCapture(index>=0&&index<recipe.tracks.size(),"An operating follower has no captured source track");
             const auto& source=recipe.tracks[index];const auto& a=source.anchor;
-            const auto& poses=index==rig.slide&&!rig.derivedHandle.isEmpty()?rig.derivedHandle:source.poses;
+            const auto& poses=simulationTrackCurve(recipe,rig,index);
             QJsonObject track{{"name",a.anchorName},{"model",a.ownerModel},{"record",a.ownerRecord},{"sourcePath",a.anchorPath},
-                {"poses",runtimeCurve(poses,rig.openFrame,rig.closedFrame)}};
+                {"runtimePath",runtimeTrackPath(index)},{"poses",runtimeCurve(poses,rig.openFrame,rig.closedFrame)}};
             if(type==WeaponMechanism::Ar15&&isSrepConfiguration()&&a.anchorName=="WeaponExtra2")track["boltFollower"]=true;
             if(type==WeaponMechanism::M1A&&a.anchorName.startsWith("WeaponMagazineChild")) {
                 const auto normalized=[&](int frame){Transformf inverse;requireCapture(invertUniformTransform(recipe.tracks[rail.fullTrack].poses[frame],inverse),"Invalid magazine payload frame");return composed(composed(recipe.tracks[rail.fullTrack].poses[0],inverse),source.poses[frame]);};
@@ -72,6 +83,7 @@ QJsonObject ReloadMakerController::exportRuntimeConfiguration() const {
         }
     }
     profile["receiver"]=receiverKey;profile["magazine"]=magazineKey;
+    if(rig.customSetup){profile["operatingSetup"]=rig.authoring;profile["motionSource"]=rig.mechanicalSource;}
     const auto& operating=recipe.tracks[rig.slide].anchor;
     if(operating.ownerRecord!=receiverKey&&operating.ownerRecord!=magazineKey){selection["operatingPart"]=operating.ownerRecord;profile["operatingPart"]=operating.ownerRecord;}
     const auto interactions=exportInteractionGrips();requireCapture(!interactions.isEmpty(),"Resolve the operating finger assignments before capture");
@@ -81,6 +93,7 @@ QJsonObject ReloadMakerController::exportRuntimeConfiguration() const {
     QJsonObject magazine{{"record",magazineKey},{"model",anchor.ownerModel},{"capacity",_simulationAmmo.capacity},
         {"rail",magazineRailJson(rail)},{"seat",runtimePose(full.poses[0])},{"fullName",full.anchor.anchorName},
         {"emptyName",recipe.tracks[rail.emptyTrack].anchor.anchorName},{"sourceRecipeId",recipe.id},{"emptyHidePrefix",""}};
+    magazine["fullPath"]=runtimeTrackPath(rail.fullTrack);magazine["emptyPath"]=runtimeTrackPath(rail.emptyTrack);
     QString error;
     for(const auto hand:{PoseHand::Left,PoseHand::Right}) {
         if(hand==PoseHand::Right&&type==WeaponMechanism::PistolSlide)continue;

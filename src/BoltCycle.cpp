@@ -3,7 +3,7 @@
 #include <cmath>
 
 namespace reloadmaker {
-bool analyzeBoltCycle(BoltCycle& c,float ejectSeconds,QString& error) {
+bool analyzeBoltCycle(BoltCycle& c,float ejectSeconds,QString& error,bool ejectAtRear) {
     error.clear();
     if(c.poses.isEmpty()||c.tracks.size()!=c.poses.size()||c.duration<=0||c.poses.front().size()<3){error="Incomplete native bolt cycle.";return false;}
     const int frames=c.poses.front().size();
@@ -28,7 +28,7 @@ bool analyzeBoltCycle(BoltCycle& c,float ejectSeconds,QString& error) {
         float d=0;for(const auto& track:c.poses)d=std::max(d,reloadPoseDistance(track.back(),track[f]));
         if(d<=travel*.002f){c.last=f;break;}
     }
-    const float ejectFrame=ejectSeconds/c.duration*(frames-1);
+    const float ejectFrame=ejectAtRear?float(c.rear):ejectSeconds/c.duration*(frames-1);
     if(c.rear<=c.first||c.last<=c.rear||!std::isfinite(ejectFrame)||ejectFrame<c.first||ejectFrame>c.rear){error=QString("Incomplete bolt cycle: opening %1, rear %2, locking %3, ejection %4 (of %5 frames).").arg(c.first).arg(c.rear).arg(c.last).arg(ejectFrame).arg(frames);return false;}
     const auto lengths=[&](int first,int last) {
         QVector<float> result{0};float total=0;

@@ -69,6 +69,12 @@ QString ReloadMakerController::testbedProject(const QString& name) const {
 }
 
 bool ReloadMakerController::buildCurrentSimulationRig(SimulationRig& rig,QString& error) {
+    const auto saved=_authoringRoadmaps.value(roadmapKey()).toObject().value("operating").toObject();
+    if(saved.isEmpty())return buildSourceSimulationRig(rig,error);
+    OperatingSetup setup;if(!readOperatingSetup(saved,setup,error))return false;
+    return buildConfiguredSimulationRig(setup,rig,error);
+}
+bool ReloadMakerController::buildSourceSimulationRig(SimulationRig& rig,QString& error) {
     // SREP's native bolt cycles while its separate charging handle is static.
     // Derive only the manual handle translation from that measured bolt stroke.
     if(isSrepConfiguration()) {
@@ -112,13 +118,13 @@ bool ReloadMakerController::prepareRifleMotion() {
     _rifleBoltCycle.clear();_rifleBoltOpen=0;_rifleFireInterval=0;_rifleBoltSource.clear();
     const auto single=std::find_if(_animationActions.cbegin(),_animationActions.cend(),[](const auto& a){return a.family==ActionFamily::Fire&&!a.automatic;});
     const auto automatic=std::find_if(_animationActions.cbegin(),_animationActions.cend(),[](const auto& a){return a.family==ActionFamily::Fire&&a.automatic;});
-    if(single==_animationActions.cend()||(!isThanatosConfiguration()&&automatic==_animationActions.cend())){_simulationError="Rifle needs its native firing motion and applicable cadence.";return false;}
+    if(single==_animationActions.cend()||(_simulationAmmo.automatic&&automatic==_animationActions.cend())){_simulationError="Rifle needs its native firing motion and applicable cadence.";return false;}
     QString error;
     const auto bytes=readAnimationResource(single->resourcePath,error);
     const auto clip=HkxReader::readClip(bytes,error);
     const auto base=HkxReader::readClip(readAnimationResource(single->baselineResourcePath,error),error);
     if(!clip.valid()||!base.valid()){_simulationError="Cannot read rifle fire source: "+error;return false;}
-    if(isThanatosConfiguration()) {
+    if(isThanatosConfiguration()||automatic==_animationActions.cend()) {
         // The installed Thanatos receivers are semi-automatic. Its inherited
         // automatic graph clip has a variable cadence and is not their source.
         if(_simulationAmmo.automatic){_simulationError="This Thanatos profile requires a semi-automatic receiver.";return false;}
@@ -149,10 +155,10 @@ bool ReloadMakerController::prepareRifleMotion() {
     for(int f=0;f<frames;++f){const float d=reloadPoseDistance(_rifleBoltCycle.front(),_rifleBoltCycle[f]);if(d>travel){travel=d;_rifleBoltOpen=f;}}
     int closed=-1;
     for(int f=_rifleBoltOpen+1;f<frames;++f)if(reloadPoseDistance(_rifleBoltCycle.front(),_rifleBoltCycle[f])<=travel*.002f){closed=f;break;}
-    if(isMk18Configuration()&&travel<.15f) {
+    if((_simulationRig->presetFire&&isMk18Configuration()&&travel<.15f)||_simulationRig->fireFromStroke) {
         // MK18 fires with a static bolt track. Its native reload supplies the
         // complete stroke; replay that measured path at its firing cadence.
-        const auto& rig=*_simulationRig;const auto& source=rig.derivedBolt.isEmpty()?_reloadRecipe->tracks[rig.bolt].poses:rig.derivedBolt;
+        const auto& rig=*_simulationRig;const auto& source=simulationTrackCurve(*_reloadRecipe,rig,rig.bolt);
         _rifleBoltCycle.clear();
         for(int f=rig.closedFrame;f>=rig.openFrame;--f)_rifleBoltCycle.append(source[f]);
         _rifleBoltOpen=_rifleBoltCycle.size()-1;

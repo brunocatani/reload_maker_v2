@@ -107,6 +107,7 @@ void ReloadMakerController::createSimulationUi() {
     connect(_operatingFingerPicker,qOverload<int>(&QComboBox::activated),this,[this](int index){if(index>0)(void)useOperatingFingers(_operatingFingerPicker->itemData(index).toString());});
     auto* grabLocations=new QPushButton("CONFIGURE GRAB LOCATIONS",panel);layout->addWidget(grabLocations);
     connect(grabLocations,&QPushButton::clicked,this,[this]{(void)openGrabLocations();});
+    auto* operatingSetup=new QPushButton("OPERATING PARTS AND MOVEMENT",panel);layout->addWidget(operatingSetup);connect(operatingSetup,&QPushButton::clicked,this,&ReloadMakerController::showOperatingSetup);
     _simulationSpring=new QCheckBox("Slide returns when released",panel);_simulationSpring->setChecked(true);layout->addWidget(_simulationSpring);
     _simulationNoExtender=new QCheckBox("QuickHands: standard magazine grip",panel);layout->addWidget(_simulationNoExtender);
     _simulationNoExtender->setToolTip("Use the package's optional NoExtender reload with the unextended standard magazine and a QuickHands animation set.");
@@ -567,30 +568,22 @@ QJsonObject ReloadMakerController::exportSlideProfile() const {
     const auto original=QJsonDocument::fromJson(encoded).object()["tracks"].toArray();
     QJsonArray tracks;
     for(const int index:rig.slideTracks) {
-        if(index<0||index>=_reloadTrackNodes.size())return {};
-        const auto binding=std::find_if(_nodeBindings.cbegin(),_nodeBindings.cend(),[&](const auto& b){return b.nodeIndex==_reloadTrackNodes[index];});
-        if(binding==_nodeBindings.cend())return {};
         // A model-relative NIF path is not a path in the game's assembled rig.
         // Keep the model identity and export the HKX bone ancestry separately.
-        QStringList path;int bone=binding->boneIndex;
-        for(int depth=0;bone>=0&&bone<_skeleton.bones.size()&&depth<64;++depth) {
-            path.prepend(_skeleton.bones[bone].name);
-            if(bone==_weaponBoneIndex)break;
-            bone=_skeleton.bones[bone].parentIndex;
-        }
-        if(bone!=_weaponBoneIndex)return {};
-        const auto source=original[index].toObject();const auto poses=source["poses"].toArray();QJsonArray stroke;
-        for(int f=rig.openFrame;f<=rig.closedFrame;++f)stroke.append(poses[f]);
-        tracks.append(QJsonObject{{"anchor",source["anchor"]},{"runtimePath",path.join('/')},{"poses",stroke}});
+        QString path;try{path=runtimeTrackPath(index);}catch(const std::exception&){return {};}
+        const auto source=original[index].toObject();const auto& poses=simulationTrackCurve(recipe,rig,index);QJsonArray stroke;
+        for(int f=rig.openFrame;f<=rig.closedFrame;++f){const auto& p=poses[f];stroke.append(QJsonArray{p.translation.x,p.translation.y,p.translation.z,p.rotation.x,p.rotation.y,p.rotation.z,p.rotation.w,p.scale.x,p.scale.y,p.scale.z});}
+        tracks.append(QJsonObject{{"anchor",source["anchor"]},{"runtimePath",path},{"poses",stroke}});
     }
     QJsonObject result{{"format","reload-maker-slide-profile"},{"version",1},{"recipeId",recipe.id},{"source",recipe.source},
         {"framePath",_skeleton.bones[_weaponBoneIndex].name},{"space","weapon-local"},
         {"sourceFirstFrame",rig.openFrame},{"sourceLastFrame",rig.closedFrame},{"sourceFrames",recipe.frames},
-        {"frames",rig.closedFrame-rig.openFrame+1},{"duration",recipe.duration*(rig.closedFrame-rig.openFrame)/(recipe.frames-1)},
+        {"frames",rig.closedFrame-rig.openFrame+1},{"duration",(rig.motionDuration>0?rig.motionDuration:recipe.duration)*(rig.closedFrame-rig.openFrame)/(recipe.frames-1)},
         {"slideTrack",rig.slideTracks.indexOf(rig.slide)},{"openFrame",0},{"closedFrame",rig.closedFrame-rig.openFrame},
         {"springReturn",_simulationSpring->isChecked()},{"tracks",tracks}};
     const auto fingers=exportInteractionGrips()["operatingFingers"].toArray();
     if(!fingers.isEmpty())result["operatingFingers"]=fingers;
+    if(rig.customSetup)result["motionSource"]=rig.mechanicalSource;
     return result;
 }
 QJsonObject ReloadMakerController::exportSimulation() const {

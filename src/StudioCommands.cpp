@@ -122,13 +122,15 @@ QJsonObject ReloadMakerController::studioState() const {
 QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     const QString method=request["method"].toString();const auto p=request["params"].toObject();
     if(request.contains("expectedSession"))require(request["expectedSession"].toString()==QCoreApplication::instance()->property("commandSession").toString(),"Editor session changed; read state before editing");
-    const bool reading=method=="state"||method=="installation"||method=="pose"||method=="render"||method=="reload"||method=="diagnostics"||method=="simulation_state"||method=="sound_state"||method=="grab_locations_state"||method=="collision_state"||method=="scope_state"||method=="inspect_sources";
+    const bool reading=method=="state"||method=="installation"||method=="pose"||method=="render"||method=="reload"||method=="diagnostics"||method=="simulation_state"||method=="sound_state"||method=="grab_locations_state"||method=="collision_state"||method=="scope_state"||method=="inspect_sources"||method=="operating_setup_state";
     if(!reading&&request.contains("expectedRevision"))require(request["expectedRevision"].toDouble()==double(_revision),"Stale document revision; read state again");
     if(method=="state")return studioState();
     if(method=="installation")return installationState();
     if(method=="inspect_sources")return auditSources(p["evidence"].toObject());
     if(method=="pack_job")return packCommand(p);
     if(method=="roadmap")return roadmapCommand(p);
+    if(method=="operating_setup_state")return operatingSetupState();
+    if(method=="operating_setup")return configureOperatingSetup(p);
     if(method=="capture_prepared_part")return capturePreparedPart(p["output"].toString());
     if(method=="capture_magazine_world"){require(p["empty"].isBool(),"Choose the full or empty presentation");return captureMagazineWorld(p["empty"].toBool());}
     if(method=="save_configured_reload")return saveConfiguredReload(p);

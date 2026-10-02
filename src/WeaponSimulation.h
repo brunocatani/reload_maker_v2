@@ -1,9 +1,16 @@
 #pragma once
 #include "ReloadRecipe.h"
 #include "MagazineInteraction.h"
+#include <QHash>
 
 namespace reloadmaker {
     enum class WeaponMechanism { PistolSlide, Ar15, M1A, BoltAction, ReciprocatingBolt };
+    struct SimulationParts {
+        int operating{-1},bolt{-1},magazine{-1};
+        QVector<int> followers;
+        int openFrame{-1},closedFrame{-1};
+        QHash<int,QVector<Transformf>> curves;
+    };
     // Indices belong to this exact captured recipe, never to scene blocks.
     struct SimulationRig {
         QString recipeId;
@@ -15,6 +22,10 @@ namespace reloadmaker {
         QVector<Transformf> derivedHandle; // Explicit static-handle repair from native bolt translation.
         QVector<Transformf> derivedBolt;
         QJsonObject mechanicalSource;
+        QHash<int,QVector<Transformf>> authoredCurves;
+        bool customSetup{false},manualCycle{false},fireFromStroke{false},presetFire{true};
+        float motionDuration{0},manualEjectSeconds{-1};
+        QJsonObject authoring;
     };
     enum class SimulationAction { Idle, Fire, Reload, Held, Returning };
     struct WeaponSimulation {
@@ -58,7 +69,8 @@ namespace reloadmaker {
         bool _cycleArmed{false},_pullFromLock{false},_pulledRearward{false};
         struct PullSnapshot {bool chambered{false},locked{false},cycle{false};int rounds{0},ejected{0};float bolt{0},handle{0};bool spent{false},closing{false};int cases{0};} _pullSnapshot;
     };
-    bool buildSimulationRig(const ReloadRecipe& recipe, SimulationRig& rig, QString& error,WeaponMechanism profile=WeaponMechanism::PistolSlide,bool deriveHandleFromBolt=false,const QVector<Transformf>& boltOverride={});
+    bool buildSimulationRig(const ReloadRecipe& recipe, SimulationRig& rig, QString& error,WeaponMechanism profile=WeaponMechanism::PistolSlide,bool deriveHandleFromBolt=false,const QVector<Transformf>& boltOverride={},const SimulationParts* selected=nullptr);
+    const QVector<Transformf>& simulationTrackCurve(const ReloadRecipe&,const SimulationRig&,int track);
     Transformf simulationTrackPose(const ReloadRecipe& recipe, const SimulationRig& rig, int track, float progress);
     QJsonObject simulationRigJson(const ReloadRecipe& recipe, const SimulationRig& rig, bool springReturn);
 }
