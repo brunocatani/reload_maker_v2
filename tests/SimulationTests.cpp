@@ -1,6 +1,7 @@
 #include "WeaponSimulation.h"
 #include "BoltCycle.h"
 #include "OperatingSetup.h"
+#include "MagazineGuide.h"
 #include <QCoreApplication>
 #include <QFile>
 #include <QJsonDocument>
@@ -11,6 +12,22 @@
 using namespace reloadmaker;
 namespace {
 void check(bool valid,const QString& error){if(!valid)throw std::runtime_error(error.toStdString());}
+void guideAuthoring() {
+    MagazineRail original;original.connection.rotation={0,0,.70710678f,.70710678f};original.outward={0,0,-1};original.travel=10;original.captureRadius=1;original.releaseMargin=.6f;
+    MagazineGuide guide{QString(64,'a'),QVector3D(1,0,0),17,1.25f,.8f};QString error;MagazineGuide decoded;
+    check(readMagazineGuide(magazineGuideJson(guide),decoded,error),error);
+    auto changed=original;check(applyMagazineGuide(decoded,changed,error),error);
+    check((changed.outward-QVector3D(0,1,0)).length()<.0001f,"Guide ignored the connection rotation");
+    for(float u:{0.f,.2f,.7f,1.f})check(reloadPoseDistance(magazineAnimationDelta(original,u*original.travel),magazineAnimationDelta(changed,u*changed.travel))<.0001f,"Guide flattened or displaced the original visual path");
+    const auto curves=changed.motion;guide.travel=23;guide.outwardInConnection={0,1,0};check(applyMagazineGuide(guide,changed,error),error);
+    for(int i=0;i<curves.size();++i)check(reloadPoseDistance(curves[i],changed.motion[i])<.0001f,"Repeated guide editing accumulated visual transforms");
+    MagazineMotion mag;mag.phase=MagazinePhase::Free;mag.offset=changed.outward*11+QVector3D(0,0,3);mag.moveFree(changed,changed.outward*11-QVector3D(0,0,3));
+    check(mag.phase==MagazinePhase::Rail&&std::abs(mag.distance-11)<.001f,"Custom guide did not capture at the swept entry depth");
+    mag.moveRail(changed,0);check(mag.seated(),"Custom guide did not seat");
+    for(const auto& pair:{qMakePair(QString("travel"),QJsonValue(0)),qMakePair(QString("captureRadius"),QJsonValue(30)),qMakePair(QString("releaseMargin"),QJsonValue(-1)),qMakePair(QString("outwardInConnection"),QJsonValue(QJsonArray{0,0,0}))}) {
+        auto bad=magazineGuideJson(guide);bad[pair.first]=pair.second;check(!readMagazineGuide(bad,decoded,error),"Invalid guide was accepted");
+    }
+}
 void stateTransitions() {
     WeaponSimulation s;s.configureAmmunition(17,true);check(s.dropMagazine(),"Drop must work at rest");
     check(!s.magazinePresent()&&s.fire(),"Removing magazine must retain the chambered shot");
@@ -279,6 +296,12 @@ void m1aFixture(const QString& path) {
         check(reloadPoseDistance(magazineAnimationDelta(rail,input),rail.motion[i])<.0005f,"Linear input lost a native motion sample");
     }
     check((magazineAnimationOffset(rail,rail.travel*.4f)-magazineInputOffset(rail,rail.travel*.4f)).length()>.1f,"Animation was flattened into the input line");
+    auto adjusted=rail;MagazineGuide authored{QString(64,'b'),QVector3D(0,0,-1),rail.travel*1.4f,rail.captureRadius,rail.releaseMargin};
+    check(applyMagazineGuide(authored,adjusted,error),error);
+    for(int i=0;i<rail.motion.size();++i) {
+        const float fraction=rail.motionDistances[i]/rail.motionDistances.back();
+        check(reloadPoseDistance(magazineAnimationDelta(adjusted,adjusted.travel*fraction),rail.motion[i])<.0005f,"Edited hand guide lost M14 rocking samples");
+    }
     // A Barrett-style insertion rotates right up to its seated frame, so
     // there may be no rotation-aligned sample within the near-well interval.
     auto rocking=r;
@@ -300,7 +323,7 @@ void m1aFixture(const QString& path) {
 }
 }
 int main(int argc,char** argv) {
-    QCoreApplication app(argc,argv);
+    QCoreApplication app(argc,argv);guideAuthoring();
     try {stateTransitions();ammunitionTransitions();nativeReloadEvents();ar15Transitions();boltActionTransitions();check(app.arguments().size()>=2,"Pass the Glock project fixture");fixture(app.arguments()[1]);if(app.arguments().size()>2)ar15Fixture(app.arguments()[2]);if(app.arguments().size()>3)m1aFixture(app.arguments()[3]);if(app.arguments().size()>4)boltCycleFixture(app.arguments()[4]);
         QTextStream(stdout)<<"PASS simulation state ownership, drop/fire persistence, regrab/cancel/return/reset, actual slide/barrel/cartridge curves and complete magazine ownership\n";return 0;
     }catch(const std::exception& e){QTextStream(stderr)<<"FAIL "<<e.what()<<'\n';return 1;}

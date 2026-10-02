@@ -160,6 +160,7 @@ QJsonObject magazineRailJson(const MagazineRail& r) {
         for(int i=0;i<r.motion.size();++i){QJsonObject delta;if(!encodePoseTransform(r.motion[i],delta,error))return {};samples.append(QJsonObject{{"progress",r.motionDistances[i]/r.motionDistances.back()},{"deltaInWeapon",delta}});}
         result["inputPath"]="straight";result["motionSamples"]=samples;
     }
+    if(!r.inputSetup.isEmpty())result["inputSetup"]=r.inputSetup;
     return result;
 }
 }

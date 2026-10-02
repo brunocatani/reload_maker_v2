@@ -1,6 +1,7 @@
 #include "ReloadMakerController.h"
 #include "StudioWindow.h"
 #include "MagazineViewport.h"
+#include "MagazineGuide.h"
 #include "glview.h"
 #include "gl/glshape.h"
 #include "model/nifmodel.h"
@@ -106,6 +107,12 @@ void ReloadMakerController::prepareMagazineInteraction() {
         _magazineVisuals.append({shape.node,model->get<int>(shape.node,"Flags"),isEmpty,shape.track,cartridge,isMk18Configuration()&&!rig.magazineTracks.contains(shape.track)});
     }
     if((!empty&&!rail.sharedBody())||!fullBody){_magazineVisuals.clear();_magazineError="Magazine body geometry could not be resolved.";return;}
+    const auto guide=_authoringRoadmaps.value(roadmapKey()).toObject().value("magazineGuide").toObject();
+    if(!guide.isEmpty()) {
+        MagazineGuide configured;if(!readMagazineGuide(guide,configured,_magazineError))return;
+        if(configured.recipeId!=_reloadRecipe->id){_magazineError="Magazine guide source changed. Review or reset its configuration.";return;}
+        if(!applyMagazineGuide(configured,rail,_magazineError))return;
+    }
     _magazineRail=rail;
 }
 void ReloadMakerController::updateMagazinePose() {

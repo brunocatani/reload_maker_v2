@@ -8,3 +8,4 @@ SOURCES += SimulationTests.cpp ../src/WeaponSimulation.cpp ../src/ReloadRecipe.c
 SOURCES += ../src/MagazineInteraction.cpp
 SOURCES += ../src/BoltCycle.cpp
 SOURCES += ../src/OperatingSetup.cpp
+SOURCES += ../src/MagazineGuide.cpp

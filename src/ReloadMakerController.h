@@ -330,6 +330,9 @@ namespace reloadmaker
         QJsonObject operatingSetupState();
         QJsonObject configureOperatingSetup(const QJsonObject&);
         void showOperatingSetup();
+        QJsonObject magazineGuideState() const;
+        QJsonObject configureMagazineGuide(const QJsonObject&);
+        void showMagazineGuide();
         bool buildSourceSimulationRig(SimulationRig&,QString&);
         bool buildConfiguredSimulationRig(const OperatingSetup&,SimulationRig&,QString&);
         QJsonObject saveConfiguredReload(const QJsonObject& request);

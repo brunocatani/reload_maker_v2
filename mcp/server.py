@@ -335,6 +335,21 @@ def get_operating_setup() -> dict:
     return command('operating_setup_state')
 
 @mcp.tool()
+def get_magazine_guide() -> dict:
+    """Inspect this assembly's finite input guide and independent visible magazine path."""
+    return command('magazine_guide_state')
+
+@mcp.tool()
+def configure_magazine_guide(operation: str, expected_revision: int, settings: dict | None = None) -> dict:
+    """Save or reset the magazine guide without flattening the visible animation.
+
+    Start from get_magazine_guide.settings. Direction is a unit vector outward
+    in the connection's local frame. Travel, pickup radius and release margin
+    are in game units. Edits replace the selected assembly's guide and save.
+    """
+    return command('magazine_guide',dict(operation=operation,settings=settings or {}),expected_revision)
+
+@mcp.tool()
 def configure_operating_setup(operation: str, expected_revision: int, settings: dict | None = None) -> dict:
     """Save/reset this captured assembly's operating roles and movement source.
     Start from get_operating_setup.settings. Modes: preset, reload, clip (path and
