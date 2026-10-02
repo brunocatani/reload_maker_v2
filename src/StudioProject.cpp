@@ -1,5 +1,6 @@
 #include "ReloadMakerController.h"
 #include "MagazineGuide.h"
+#include "AuthoringProgress.h"
 #include "StudioPaths.h"
 #include "SourceEvidence.h"
 #include "ReloadTemplates.h"
@@ -150,6 +151,8 @@ void ReloadMakerController::openSession(const QString& path) {
             if(!value.isObject()||step<0||step>11||(plan.contains("sources")&&!validSourceEvidence(plan["sources"].toObject(),error))||
                  (plan.contains("operating")&&!readOperatingSetup(plan["operating"].toObject(),setup,error))||
                  (plan.contains("magazineGuide")&&!readMagazineGuide(plan["magazineGuide"].toObject(),guide,error))||
+                 (plan.contains("reviews")&&(!plan["reviews"].isObject()||!validAuthoringReviews(plan["reviews"].toObject())))||
+                 (plan.contains("collisionDrafts")&&(!plan["collisionDrafts"].isObject()||!validCollisionDrafts(plan["collisionDrafts"].toObject())))||
                  (plan.contains("magazineSetup")&&!readMagazineSetup(plan["magazineSetup"].toObject(),magazine,error))){setStatus("Invalid saved authoring roadmap: "+error,true);return;}}
     }
     if(record.contains("recordChoices")) {

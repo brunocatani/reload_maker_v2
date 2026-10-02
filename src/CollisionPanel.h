@@ -10,7 +10,7 @@ public:
     explicit CollisionPanel(QWidget* parent=nullptr);
     ~CollisionPanel() override;
     std::function<CollisionProfile(int,bool)> snapshot;
-    std::function<void()> changed;
+    std::function<void(bool)> changed; // true only for authored geometry/physics changes
     std::function<void()> cook;
     std::function<void()> prepare;
     void setTargets(const QStringList& names);
@@ -25,7 +25,7 @@ public:
     bool isolated()const;
     int selected()const;
 private:
-    void refresh();
+    void refresh(bool authored=false);
     void showError(const QString& error);
     CollisionProfile context(bool referenceOnly);
     QString savePath()const;

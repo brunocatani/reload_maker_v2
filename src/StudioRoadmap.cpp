@@ -19,6 +19,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <stdexcept>
+#include <algorithm>
 
 namespace reloadmaker {
 namespace {
@@ -99,7 +100,7 @@ QJsonObject ReloadMakerController::auditSources(const QJsonObject& evidence) con
 QJsonObject ReloadMakerController::roadmapState() const {
     const auto key=roadmapKey();const auto saved=_authoringRoadmaps[key].toObject();QJsonArray steps;
     QJsonArray templates;for(const auto& item:reloadTemplates)templates.append(QJsonObject{{"id",item.id},{"label",item.label},{"category",item.category}});
-    for(int i=0;i<titles.size();++i)steps.append(QJsonObject{{"index",i},{"title",titles[i]},{"instruction",instructions[i]}});
+    steps=roadmapProgress();for(int i=0;i<titles.size();++i){auto step=steps[i].toObject();step["title"]=titles[i];step["instruction"]=instructions[i];steps[i]=step;}
     return {{"key",key},{"weapon",currentWeapon()?poseRecordKey(currentWeapon()->formId):QString()},
         {"template",currentWeapon()?templateIdentity(simulationMechanism()):QString()},{"templates",templates},{"templateAssigned",!assignedTemplate().isEmpty()},
         {"steps",steps},{"selectedStep",saved["step"].toInt()},{"sourcesRecorded",saved["sources"].isObject()},
@@ -120,6 +121,12 @@ QJsonObject ReloadMakerController::roadmapCommand(const QJsonObject& request) {
     } else if(operation=="check-sources") {
         if(!saved["sources"].isObject())throw std::runtime_error("Record the source inputs first");
         return auditSources(saved["sources"].toObject());
+    } else if(operation=="review"||operation=="unreview") {
+        const int step=request["index"].toInt(-1);if(step<0||step>=titles.size())throw std::runtime_error("Unknown authoring step");
+        auto reviews=saved.value("reviews").toObject();
+        if(operation=="unreview")reviews.remove(QString::number(step));
+        else {const auto status=roadmapProgress()[step].toObject();if(!status["canReview"].toBool())throw std::runtime_error(status["message"].toString().toStdString());reviews[QString::number(step)]=status["fingerprint"];}
+        saved["reviews"]=reviews;saved["step"]=step;
     } else if(operation=="step") {
         const int step=request["index"].toInt(-1);if(step<0||step>=titles.size())throw std::runtime_error("Unknown authoring step");saved["step"]=step;
     } else throw std::runtime_error("Unknown roadmap operation");
@@ -134,9 +141,17 @@ void ReloadMakerController::showAuthoringRoadmap() {
     auto* detail=new QPlainTextEdit;detail->setReadOnly(true);body->addWidget(detail,1);
     auto* actions=new QHBoxLayout;layout->addLayout(actions);auto* open=new QPushButton("Open this step");auto* record=new QPushButton("Record source inputs");auto* check=new QPushButton("Check for source changes");auto* save=new QPushButton("Save draft");
     for(auto* button:{open,record,check,save})actions->addWidget(button);
-    const auto refresh=[&]{const auto state=roadmapState();heading->setText(state["weapon"].toString()+"\nCurrent behavior: "+state["template"].toString());check->setEnabled(state["sourcesRecorded"].toBool());};
+    auto* reviewActions=new QHBoxLayout;layout->addLayout(reviewActions);auto* back=new QPushButton("Previous step");auto* reviewed=new QPushButton("Mark this step reviewed");auto* draft=new QPushButton("Return to draft");auto* next=new QPushButton("Next step");for(auto* button:{back,reviewed,draft,next})reviewActions->addWidget(button);
+    const auto refresh=[&]{const auto state=roadmapState();int done=0;
+        for(const auto& value:state["steps"].toArray()){const auto step=value.toObject();const int i=step["index"].toInt();const auto status=step["status"].toString();done+=status=="reviewed";list->item(i)->setText(QString("%1  %2\n       %3").arg(i+1,2,10,QChar('0')).arg(titles[i],status));}
+        heading->setText(state["weapon"].toString()+"\nCurrent behavior: "+state["template"].toString()+QString(" · %1 / 12 reviewed\nReview marks track authored data. Pack validation remains mandatory.").arg(done));check->setEnabled(state["sourcesRecorded"].toBool());
+        const int index=list->currentRow();if(index>=0){const auto step=state["steps"].toArray()[index].toObject();open->setEnabled(step["available"].toBool());reviewed->setEnabled(step["canReview"].toBool());draft->setEnabled(step["status"]=="reviewed"||step["status"]=="needs-review");back->setEnabled(index>0);next->setEnabled(index<11);detail->setPlainText(instructions[index]+"\n\nStatus: "+step["status"].toString()+"\n"+step["message"].toString());}
+    };
     connect(assign,&QPushButton::clicked,&dialog,[&]{try{roadmapCommand({{"operation","template"},{"id",templates->currentData().toString()}});refresh();list->setCurrentRow(2);detail->appendPlainText("Template assigned to this weapon. Review its native operating roles and test Operate before export.");}catch(const std::exception& e){detail->setPlainText(e.what());}});
-    connect(list,&QListWidget::currentRowChanged,&dialog,[&](int step){if(step<0)return;detail->setPlainText(instructions[step]);try{roadmapCommand({{"operation","step"},{"index",step}});}catch(const std::exception& e){detail->appendPlainText(e.what());}});
+    connect(list,&QListWidget::currentRowChanged,&dialog,[&](int step){if(step<0)return;try{roadmapCommand({{"operation","step"},{"index",step}});refresh();}catch(const std::exception& e){detail->setPlainText(e.what());}});
+    connect(back,&QPushButton::clicked,&dialog,[&]{list->setCurrentRow(std::max(0,list->currentRow()-1));});connect(next,&QPushButton::clicked,&dialog,[&]{list->setCurrentRow(std::min(11,list->currentRow()+1));});
+    const auto review=[&](bool mark){try{roadmapCommand({{"operation",mark?"review":"unreview"},{"index",list->currentRow()}});refresh();}catch(const std::exception& e){detail->setPlainText(e.what());}};
+    connect(reviewed,&QPushButton::clicked,&dialog,[&]{review(true);});connect(draft,&QPushButton::clicked,&dialog,[&]{review(false);});
     const auto sourceAction=[&](const QString& operation){try{const auto result=roadmapCommand({{"operation",operation}});refresh();
         if(operation=="record-sources")detail->setPlainText("Source bytes recorded for this exact weapon assembly. A mod does not need an ESP for a changed animation or model to be detected.");
         else {QString text=result["compatible"].toBool()?"Relevant source bytes are unchanged.":"Source changes require review; your authored work is retained.";

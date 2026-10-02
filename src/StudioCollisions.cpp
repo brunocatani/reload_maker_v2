@@ -69,7 +69,7 @@ void ReloadMakerController::createCollisionsUi(){
         if(_packJob["phase"]=="complete"){const auto result=_packJob["result"].toObject();_preparedPart=result;setStatus("Prepared visible part saved · "+result["output"].toString());}
         else if(_packJob["phase"]=="failed")setStatus(_packJob["error"].toString(),true);
     });
-    _collisions->changed=[this]{++_revision;_window->getGLView()->update();};
+    _collisions->changed=[this](bool authored){if(authored)rememberCollisionDraft();++_revision;_window->getGLView()->update();};
     connect(_window->getGLView(),&GLView::paintUpdate,this,[this]{paintCollisions();});
 }
 void ReloadMakerController::refreshCollisions(){if(!_collisions)return;QStringList names;_collisionTargets.clear();for(int i=0;i<_handPoseAnchor->count();++i)if(i==0||_handPoseAnchors[i].description.anchorKind=="installed-part"||_handPoseAnchors[i].description.anchorName=="WeaponMagazine"){names<<_handPoseAnchor->itemText(i);_collisionTargets.append(i);}if(_magazineWorldSnapshot){names<<(_magazineWorldSnapshot->referencePose["presentation"].toString()+" magazine world object");_collisionTargets.append(-1);}_collisions->setTargets(names);}

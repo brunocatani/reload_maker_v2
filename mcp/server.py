@@ -419,6 +419,10 @@ def authoring_roadmap(operation: str = 'state', index: int | None = None,
     actual current resource bytes, including same-path animation-only overrides.
     template with an id from state.templates assigns that supported behavior to
     the weapon across its attachment variations, then rebuilds its simulation.
+    Steps include availability, blockers and data-dependent review status.
+    Use review/unreview with an index only after actually inspecting that step;
+    changing relevant inputs invalidates its review and dependent steps. Review
+    marks never bypass native source, collision or pack validation.
     Checks retain all authored work. Source mode/profile are explicit in results.
     """
     if operation not in ('state', 'check-sources') and expected_revision is None:

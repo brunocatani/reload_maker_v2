@@ -254,6 +254,8 @@ namespace reloadmaker
         void showAuthoringRoadmap();
         QString roadmapKey() const;
         QJsonObject roadmapState() const;
+        QJsonArray roadmapProgress() const;
+        void rememberCollisionDraft();
         QString assignedTemplate() const;
         QJsonObject roadmapCommand(const QJsonObject&);
         QJsonObject sourceEvidence() const;

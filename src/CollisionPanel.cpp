@@ -52,14 +52,14 @@ CollisionPanel::CollisionPanel(QWidget* parent):QWidget(parent){
     _status=label("No collision snapshot yet.");_status->setTextInteractionFlags(Qt::TextSelectableByMouse);
     label("Preview shows convex point envelopes. Cook prepared magazine uses your configured Creation Kit to produce a finished collision model. Live Havok contacts still require an in-game test.")->setObjectName("Hint");layout->addStretch();
     connect(_target,qOverload<int>(&QComboBox::activated),this,[this]{invalidate();});
-    connect(_hulls,&QListWidget::currentRowChanged,this,[this]{if(changed)changed();});
-    connect(_hulls,&QListWidget::itemChanged,this,[this](QListWidgetItem* item){if(_refreshing)return;const int index=_hulls->row(item);if(index>=0&&index<_profile.hulls.size()){_profile.hulls[index].enabled=item->checkState()==Qt::Checked;_dirty=true;refresh();}});
-    connect(_pieces,&QListWidget::itemChanged,this,[this](QListWidgetItem* item){if(_refreshing)return;const int index=_pieces->row(item);if(index<0||index>=_profile.sources.size())return;auto& source=_profile.sources[index];source.worldIncluded=item->checkState()==Qt::Checked;if(!source.worldIncluded)for(auto& hull:_profile.hulls)if(hull.source==source.key)hull.enabled=false;_dirty=true;refresh();});
-    for(auto* check:{_overlay,_compare,_isolate})connect(check,&QCheckBox::toggled,this,[this]{if(changed)changed();});
-    for(auto* s:{_mass,_radius})connect(s,qOverload<double>(&QDoubleSpinBox::valueChanged),this,[this]{if(_refreshing||!_profile.valid())return;_profile.settings.mass=_mass->value();_profile.settings.radius=_radius->value();_dirty=true;refresh();});
+    connect(_hulls,&QListWidget::currentRowChanged,this,[this]{if(changed)changed(false);});
+    connect(_hulls,&QListWidget::itemChanged,this,[this](QListWidgetItem* item){if(_refreshing)return;const int index=_hulls->row(item);if(index>=0&&index<_profile.hulls.size()){_profile.hulls[index].enabled=item->checkState()==Qt::Checked;_dirty=true;refresh(true);}});
+    connect(_pieces,&QListWidget::itemChanged,this,[this](QListWidgetItem* item){if(_refreshing)return;const int index=_pieces->row(item);if(index<0||index>=_profile.sources.size())return;auto& source=_profile.sources[index];source.worldIncluded=item->checkState()==Qt::Checked;if(!source.worldIncluded)for(auto& hull:_profile.hulls)if(hull.source==source.key)hull.enabled=false;_dirty=true;refresh(true);});
+    for(auto* check:{_overlay,_compare,_isolate})connect(check,&QCheckBox::toggled,this,[this]{if(changed)changed(false);});
+    for(auto* s:{_mass,_radius})connect(s,qOverload<double>(&QDoubleSpinBox::valueChanged),this,[this]{if(_refreshing||!_profile.valid())return;_profile.settings.mass=_mass->value();_profile.settings.radius=_radius->value();_dirty=true;refresh(true);});
     connect(&_worker,&QFutureWatcher<CollisionResult>::finished,this,[this]{
         const auto result=_worker.result();_generating=false;if(_cancel&&_cancel->load()){refresh();return;}
-        if(!result.error.isEmpty()){showError(result.error);return;}_baseline=_profile;_profile=result.profile;_dirty=true;_lastError.clear();refresh();
+        if(!result.error.isEmpty()){showError(result.error);return;}_baseline=_profile;_profile=result.profile;_dirty=true;_lastError.clear();refresh(true);
     });
 }
 CollisionPanel::~CollisionPanel(){cancel();_worker.waitForFinished();}
@@ -68,7 +68,7 @@ void CollisionPanel::invalidate(){cancel();_profile={};_baseline={};_dirty=false
 void CollisionPanel::setTargets(const QStringList& names){if(_target->count()==names.size()){bool same=true;for(int i=0;i<names.size();++i)same&=_target->itemText(i)==names[i];if(same)return;}invalidate();_target->clear();_target->addItems(names);}
 bool CollisionPanel::overlay()const{return _overlay->isChecked();}bool CollisionPanel::compare()const{return _compare->isChecked();}bool CollisionPanel::isolated()const{return _isolate->isChecked();}int CollisionPanel::selected()const{return _hulls->currentRow();}
 void CollisionPanel::showError(const QString& error){_lastError=error;refresh();}
-void CollisionPanel::refresh(){
+void CollisionPanel::refresh(bool authored){
     _refreshing=true;const int row=_hulls->currentRow();_hulls->clear();for(const auto& h:_profile.hulls){auto* item=new QListWidgetItem(QString("%1 · %2 points").arg(h.name).arg(h.points.size()),_hulls);item->setFlags(item->flags()|Qt::ItemIsUserCheckable);item->setCheckState(h.enabled?Qt::Checked:Qt::Unchecked);}
     _hulls->setCurrentRow(_hulls->count()?std::clamp(row,0,_hulls->count()-1):-1);
     _pieces->clear();for(const auto& source:_profile.sources){auto* item=new QListWidgetItem(source.name+"\n"+QFileInfo(source.material).fileName(),_pieces);item->setToolTip(source.path+"\n"+source.material);item->setFlags(item->flags()|Qt::ItemIsUserCheckable);item->setCheckState(source.worldIncluded?Qt::Checked:Qt::Unchecked);}
@@ -76,7 +76,7 @@ void CollisionPanel::refresh(){
     QString text=_generating?"Generating on a cancellable worker…":_profile.valid()?QString("%1 hulls · %2 source triangles\n%3\n%4").arg(_profile.hulls.size()).arg(_profile.inputTriangles).arg(_dirty?"Unsaved changes":"Saved profile").arg(_lastPath):"No collision snapshot yet.";
     if(!_profile.warnings.isEmpty())text+="\n"+_profile.warnings.join('\n');
     if(!_lastError.isEmpty())text+="\n"+_lastError;
-    _status->setText(text);_refreshing=false;if(changed)changed();
+    _status->setText(text);_refreshing=false;if(changed)changed(authored);
 }
 CollisionProfile CollisionPanel::context(bool referenceOnly){require(bool(snapshot),"No scene provider");auto p=snapshot(_target->currentIndex(),referenceOnly);if(p.weapon==_profile.weapon&&p.configuration==_profile.configuration&&p.target==_profile.target)for(auto& source:p.sources)for(const auto& old:_profile.sources)if(source.key==old.key&&source.geometryHash==old.geometryHash)source.worldIncluded=old.worldIncluded;p.settings.gap=_gap->value();p.settings.error=_error->value();p.settings.targetPoints=int(_points->value());p.settings.mass=_mass->value();p.settings.radius=_radius->value();return p;}
 QString CollisionPanel::savePath()const{QString name=_profile.weapon+"_"+_target->currentText();name.replace(QRegularExpression("[^A-Za-z0-9_-]+"),"_");name=name.left(80);const auto key=(_profile.weapon+"|"+_profile.configuration+"|"+_profile.target).toUtf8();return studioDataPath("collisions/"+name+"_"+QString::fromLatin1(QCryptographicHash::hash(key,QCryptographicHash::Sha256).toHex())+".json");}
@@ -84,7 +84,7 @@ QJsonObject CollisionPanel::state()const{auto out=collisionSummary(_profile);QJs
 QJsonObject CollisionPanel::command(const QJsonObject& args){
     const auto op=args["operation"].toString();if(op=="cancel"){cancel();return state();}require(!_generating,"Collision generation is still running; wait or cancel");
     if(args.contains("target")){const auto index=args["target"].toInt(-1);require(index>=0&&index<_target->count(),"Unknown collision target");if(index!=_target->currentIndex()){invalidate();_target->setCurrentIndex(index);}}
-    _lastError.clear();
+    _lastError.clear();bool authored=false;
     if(op=="select"){}
     else if(op=="prepare"){require(bool(prepare),"Visible part capture is unavailable");prepare();return state();}
     else if(op=="cook"){require(_profile.valid()&&bool(cook),"Generate a magazine collision profile first");cook();return state();}
@@ -99,7 +99,7 @@ QJsonObject CollisionPanel::command(const QJsonObject& args){
         QFile file(path);require(file.size()<=32*1024*1024&&file.open(QIODevice::ReadOnly),"Cannot read collision JSON (maximum 32 MB)");const auto bytes=file.readAll();QJsonParseError parse;const auto doc=QJsonDocument::fromJson(bytes,&parse);require(parse.error==QJsonParseError::NoError&&doc.isObject(),"Invalid collision JSON");CollisionProfile next;QString error;
         if(legacy){auto result=importCollisionHullInput(doc.object(),context(true));require(result.error.isEmpty(),result.error);next=std::move(result.profile);next.sourceHash=QString::fromLatin1(QCryptographicHash::hash(bytes,QCryptographicHash::Sha256).toHex());}
         else{require(readCollisionJson(doc.object(),next,error),error);const auto current=context(next.origin=="diamond-pre-elric-input");require(next.weapon==current.weapon&&next.configuration==current.configuration&&next.target==current.target,"Profile belongs to a different weapon, loadout or target");for(auto& source:next.sources){auto it=std::find_if(current.sources.begin(),current.sources.end(),[&](const auto& s){return s.key==source.key&&s.geometryHash==source.geometryHash;});require(it!=current.sources.end(),"Source geometry/pose changed; regenerate or import against its explicit reference");source.frame=it->frame;source.material=it->material;}next.referencePose["rootToWorld"]=current.referencePose["rootToWorld"];}
-        _baseline=_profile;_profile=std::move(next);_dirty=legacy;_lastPath=path;
+        _baseline=_profile;_profile=std::move(next);_dirty=legacy;_lastPath=path;authored=true;
     }else if(op=="save"||op=="export"||op=="browse_export"||op=="export-hulls"){
         require(_profile.valid(),"Generate or load a profile first");require(std::any_of(_profile.hulls.begin(),_profile.hulls.end(),[](const auto& h){return h.enabled;}),"Enable at least one hull");QString path=op=="save"?savePath():args["path"].toString();
         if(op=="browse_export")path=QFileDialog::getSaveFileName(this,"Export collision points",studioDataPath("exports/collision.json"),"Collision JSON (*.json)");
@@ -108,11 +108,11 @@ QJsonObject CollisionPanel::command(const QJsonObject& args){
         QString error;const auto document=op=="export-hulls"?collisionCookInput(_profile,error):collisionJson(_profile);require(error.isEmpty(),error);
         QDir().mkpath(QFileInfo(full).absolutePath());QSaveFile file(full);const auto bytes=QJsonDocument(document).toJson();require(file.open(QIODevice::WriteOnly)&&file.write(bytes)==bytes.size()&&file.commit(),"Could not save collision profile");_lastPath=full;if(op!="export-hulls")_dirty=false;
     }else if(op=="piece"){
-        const int i=args["index"].toInt(-1);require(i>=0&&i<_profile.sources.size()&&args["included"].isBool(),"Choose a source piece and included boolean");auto& source=_profile.sources[i];source.worldIncluded=args["included"].toBool();if(!source.worldIncluded)for(auto& hull:_profile.hulls)if(hull.source==source.key)hull.enabled=false;_dirty=true;
+        const int i=args["index"].toInt(-1);require(i>=0&&i<_profile.sources.size()&&args["included"].isBool(),"Choose a source piece and included boolean");auto& source=_profile.sources[i];authored=source.worldIncluded!=args["included"].toBool();source.worldIncluded=args["included"].toBool();if(!source.worldIncluded)for(auto& hull:_profile.hulls)if(hull.source==source.key){authored|=hull.enabled;hull.enabled=false;}_dirty|=authored;
     }else if(op=="hull"){
-        const int i=args["index"].toInt(-1);require(i>=0&&i<_profile.hulls.size(),"Unknown hull");_hulls->setCurrentRow(i);if(args.contains("enabled")){require(args["enabled"].isBool(),"Expected enabled boolean");_profile.hulls[i].enabled=args["enabled"].toBool();_dirty=true;}
+        const int i=args["index"].toInt(-1);require(i>=0&&i<_profile.hulls.size(),"Unknown hull");_hulls->setCurrentRow(i);if(args.contains("enabled")){require(args["enabled"].isBool(),"Expected enabled boolean");authored=_profile.hulls[i].enabled!=args["enabled"].toBool();_profile.hulls[i].enabled=args["enabled"].toBool();_dirty|=authored;}
     }else if(op=="view"){
         for(auto pair:{std::pair{"overlay",_overlay},std::pair{"compare",_compare},std::pair{"isolated",_isolate}})if(args.contains(pair.first)){require(args[pair.first].isBool(),"Expected view boolean");pair.second->setChecked(args[pair.first].toBool());}
-    }else require(false,"Unknown collision operation");refresh();return state();
+    }else require(false,"Unknown collision operation");refresh(authored);return state();
 }
 }

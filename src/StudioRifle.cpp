@@ -69,6 +69,7 @@ QString ReloadMakerController::testbedProject(const QString& name) const {
 }
 
 bool ReloadMakerController::buildCurrentSimulationRig(SimulationRig& rig,QString& error) {
+    if(!_assignedMechanism&&currentTestbed().isEmpty()){error="Choose a behavior template in Author reload before configuring this weapon.";return false;}
     const auto saved=_authoringRoadmaps.value(roadmapKey()).toObject().value("operating").toObject();
     if(saved.isEmpty())return buildSourceSimulationRig(rig,error);
     OperatingSetup setup;if(!readOperatingSetup(saved,setup,error))return false;
