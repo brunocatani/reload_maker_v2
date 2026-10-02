@@ -17,14 +17,15 @@ QJsonObject ReloadMakerController::magazineGuideState() const {
     if(!_reloadRecipe||_loadThread||_reloadCapturing||_reloadCaptureQueued||_rebuildTimer->isActive())throw std::runtime_error("Wait for the magazine's current source capture");
     const auto saved=_authoringRoadmaps.value(roadmapKey()).toObject().value("magazineGuide").toObject();
     const bool stale=!saved.isEmpty()&&saved["recipeId"]!=_reloadRecipe->id;
-    if(!_magazineRail&&saved.isEmpty())throw std::runtime_error((_magazineError.isEmpty()?QString("Prepare the selected magazine in Operate first"):_magazineError).toStdString());
+    if(!_simulationRig&&saved.isEmpty())throw std::runtime_error("Choose the operating and magazine roles first");
     QJsonObject settings=saved;
-    if(settings.isEmpty()) {
+    if(settings.isEmpty()&&_magazineRail) {
         const auto rail=magazineRailJson(*_magazineRail);
         settings={{"version",1},{"recipeId",_reloadRecipe->id},{"outwardInConnection",rail["outwardInConnection"]},
             {"travel",rail["travel"]},{"captureRadius",rail["captureRadius"]},{"releaseMargin",rail["releaseMargin"]}};
     }
-    return {{"settings",settings},{"saved",!saved.isEmpty()},{"stale",stale},{"ready",_magazineRail.has_value()},
+    if(settings.isEmpty())settings=magazineGuideJson(MagazineGuide{_reloadRecipe->id,QVector3D(0,0,-1),10,1,.6f});
+    return {{"settings",settings},{"saved",!saved.isEmpty()},{"stale",stale},{"ready",_magazineRail.has_value()},{"canConfigure",_simulationRig.has_value()},
         {"rail",_magazineRail?magazineRailJson(*_magazineRail):QJsonObject{}},{"error",_magazineError}};
 }
 QJsonObject ReloadMakerController::configureMagazineGuide(const QJsonObject& request) {
@@ -34,8 +35,8 @@ QJsonObject ReloadMakerController::configureMagazineGuide(const QJsonObject& req
     else if(request["operation"]=="save") {
         MagazineGuide guide;QString error;
         if(!readMagazineGuide(request["settings"].toObject(),guide,error))throw std::runtime_error(error.toStdString());
-        if(!_magazineRail||guide.recipeId!=_reloadRecipe->id)throw std::runtime_error("Guide source changed; reset and review the current magazine before saving");
-        auto checked=*_magazineRail;if(!applyMagazineGuide(guide,checked,error))throw std::runtime_error(error.toStdString());
+        if(!_simulationRig||guide.recipeId!=_reloadRecipe->id)throw std::runtime_error("Guide source changed; reset and review the current magazine before saving");
+        if(_magazineRail){auto checked=*_magazineRail;if(!applyMagazineGuide(guide,checked,error))throw std::runtime_error(error.toStdString());}
         plan["magazineGuide"]=magazineGuideJson(guide);
     }else throw std::runtime_error("Choose save or reset for the magazine guide");
     stopSimulation();_authoringRoadmaps[key]=plan;++_revision;prepareSimulation();
@@ -55,13 +56,14 @@ void ReloadMakerController::showMagazineGuide() {
     auto* travel=field("travel","Hand travel");auto* capture=field("captureRadius","Pickup distance from line");auto* release=field("releaseMargin","Pull-out release margin");
     auto* status=new QLabel(state["stale"].toBool()?"Source changed. Restore the current source guide before editing.":state["error"].toString());status->setWordWrap(true);layout->addWidget(status);
     auto* actions=new QHBoxLayout;layout->addLayout(actions);auto* save=new QPushButton("Save and preview guide");auto* reset=new QPushButton("Restore source guide");auto* done=new QPushButton("Done");actions->addWidget(save);actions->addWidget(reset);actions->addWidget(done);
-    save->setEnabled(state["ready"].toBool()&&!state["stale"].toBool());
+    save->setEnabled(state["canConfigure"].toBool()&&!state["stale"].toBool());
+    if(!state["ready"].toBool()&&!state["saved"].toBool())status->setText("No usable native extraction was found. These are manual starting values: choose an outward direction and hand travel. Geometry determines the initial visible clearance; a saved movement can replace that path.");
     connect(save,&QPushButton::clicked,dialog,[=,this]{try{
         QVector3D axis(float(axes[0]->value()),float(axes[1]->value()),float(axes[2]->value()));if(axis.lengthSquared()<1e-8f)throw std::runtime_error("Choose a nonzero outward direction");axis.normalize();
         MagazineGuide guide{recipe,axis,float(travel->value()),float(capture->value()),float(release->value())};
         configureMagazineGuide({{"operation","save"},{"settings",magazineGuideJson(guide)}});setWorkspace(OperateWorkspace);
         if(_simulationActive&&_magazineRail){_simulation.magazine.animateOut();_simulation.magazine.tick(*_magazineRail,1);updateMagazinePose();}
-        status->setText("Saved for this assembly. The guide is visible; use GRAB to test entry anywhere along it.");
+        status->setText(_magazineRail?"Saved for this assembly. The guide is visible; use GRAB to test entry anywhere along it.":_magazineError);
     }catch(const std::exception& e){status->setText(e.what());}});
     connect(reset,&QPushButton::clicked,dialog,[=,this]{try{if(!_reloadRecipe||_reloadRecipe->id!=recipe)throw std::runtime_error("Source changed; reopen guide settings");configureMagazineGuide({{"operation","reset"}});dialog->close();}catch(const std::exception& e){status->setText(e.what());}});
     connect(done,&QPushButton::clicked,dialog,&QDialog::close);dialog->show();

@@ -89,6 +89,13 @@ void fixture(const QString& path) {
     for(float x:{-1.f,1.f})for(float y:{-2.f,2.f})for(float z:{-5.f,3.f})body.append({x,y,z});
     for(float x:{-2.f,2.f})for(float y:{-3.f,14.f})for(float z:{-6.f,5.f})frame.append({x,y,z});
     MagazineRail rail;check(buildMagazineRail(r,4,"P-Mag",{},body,frame,rail,error),error);
+    auto noExtraction=r;noExtraction.tracks[rail.emptyTrack].poses.fill(noExtraction.tracks[rail.emptyTrack].poses.front(),r.frames);
+    MagazineRail authoredDirection;
+    check(!buildMagazineRail(noExtraction,4,"Authored",{},body,frame,authoredDirection,error,false,rail.emptyTrack),"Static source invented an extraction direction");
+    check(buildMagazineRail(noExtraction,4,"Authored",{},body,frame,authoredDirection,error,false,rail.emptyTrack,&rail.outward),error);
+    check(authoredDirection.outward==rail.outward&&std::abs(authoredDirection.travel-rail.travel)<.0001f,"Authored direction did not preserve complete geometry clearance");
+    const QVector3D invalidDirection{};
+    check(!buildMagazineRail(noExtraction,4,"Authored",{},body,frame,authoredDirection,error,false,rail.emptyTrack,&invalidDirection),"Zero authored direction accepted");
     PartMechanism movement;movement.id=QUuid::createUuid().toString(QUuid::WithoutBraces);movement.name="Authored magazine extraction";
     movement.weaponRecord=r.source["weaponRecord"].toString();movement.anchor=r.tracks[4].anchor;
     Transformf inverse;check(invertUniformTransform(r.tracks[4].poses.front(),inverse),"Fixture has invalid rest frame");

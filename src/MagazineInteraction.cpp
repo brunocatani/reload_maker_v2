@@ -10,7 +10,7 @@ QVector3D v(Vec3f p){return {p.x,p.y,p.z};}
 bool finite(const QVector3D& p){return std::isfinite(p.x())&&std::isfinite(p.y())&&std::isfinite(p.z());}
 }
 bool buildMagazineRail(const ReloadRecipe& r,int full,const QString& name,const Transformf& connection,
-    const QVector<QVector3D>& body,const QVector<QVector3D>& weapon,MagazineRail& out,QString& error,bool finalApproach,int selectedEmpty) {
+    const QVector<QVector3D>& body,const QVector<QVector3D>& weapon,MagazineRail& out,QString& error,bool finalApproach,int selectedEmpty,const QVector3D* authoredOutward) {
     error.clear();MagazineRail rail;rail.fullTrack=full;rail.connection=connection;rail.connectionName=name;
     if(full<0||full>=r.tracks.size()||body.size()<3||weapon.isEmpty()||name.isEmpty()){error="Magazine connection or native geometry is missing.";return false;}
     const auto& main=r.tracks[full];
@@ -55,6 +55,7 @@ bool buildMagazineRail(const ReloadRecipe& r,int full,const QString& name,const 
     // Its final translation still defines a straight hand-input direction;
     // buildMagazineAnimation retains the complete independent visual curve.
     if(finalApproach&&rail.outward.isNull())rail.outward=approach;
+    if(rail.outward.lengthSquared()<.9f&&authoredOutward&&finite(*authoredOutward)&&std::abs(authoredOutward->lengthSquared()-1)<.001f)rail.outward=*authoredOutward;
     if(rail.outward.lengthSquared()<.9f){error="No aligned magazine extraction segment was found.";return false;}
     float magazineMin=std::numeric_limits<float>::max(),weaponMax=-magazineMin;
     float radius=0;

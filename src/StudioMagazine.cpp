@@ -21,6 +21,7 @@ HandPosePlacement ReloadMakerController::simulationMagazineAnchor() const {
 }
 void ReloadMakerController::prepareMagazineInteraction() {
     _magazineRail.reset();_magazineVisuals.clear();_magazineError.clear();_magazineSetup.reset();
+    _m1aLoadedMagazineFrame=0;_m1aEmptyMagazineFrame=0;
     if(!_simulationRig||!_reloadRecipe)return;
     auto* model=activeModel();auto* scene=_window->getGLView()->getScene();
     const auto& rig=*_simulationRig;
@@ -88,8 +89,15 @@ void ReloadMakerController::prepareMagazineInteraction() {
         for(const auto& vertex:shape->verts){const auto point=composed(world,Transformf{{vertex[0],vertex[1],vertex[2]}}).translation;output.append({point.x,point.y,point.z});}
     }
     MagazineRail rail;
-    if(!buildMagazineRail(*_reloadRecipe,rig.magazine,connectionName,connection,body,frame,rail,_magazineError,isM1AConfiguration()||isBoltActionConfiguration()||isThanatosConfiguration(),_magazineSetup?_magazineSetup->emptyTrack:-1))return;
-    if((!_magazineSetup||_magazineSetup->motion=="preset")&&(isM1AConfiguration()||isBoltActionConfiguration()||isThanatosConfiguration())) {
+    const auto guide=_authoringRoadmaps.value(roadmapKey()).toObject().value("magazineGuide").toObject();
+    MagazineGuide configured;QVector3D authoredOutward;
+    if(!guide.isEmpty()) {
+        if(!readMagazineGuide(guide,configured,_magazineError))return;
+        if(configured.recipeId!=_reloadRecipe->id){_magazineError="Magazine guide source changed. Review or reset its configuration.";return;}
+        const auto axis=rotated(connection.rotation,{configured.outwardInConnection.x(),configured.outwardInConnection.y(),configured.outwardInConnection.z()});authoredOutward=QVector3D(axis.x,axis.y,axis.z).normalized();
+    }
+    if(!buildMagazineRail(*_reloadRecipe,rig.magazine,connectionName,connection,body,frame,rail,_magazineError,isM1AConfiguration()||isBoltActionConfiguration()||isThanatosConfiguration(),_magazineSetup?_magazineSetup->emptyTrack:-1,guide.isEmpty()?nullptr:&authoredOutward))return;
+    if((!_magazineSetup||_magazineSetup->motion=="preset")&&!currentTestbed().isEmpty()&&(isM1AConfiguration()||isBoltActionConfiguration()||isThanatosConfiguration())) {
         float entry=-1,empty=-1;
         for(const auto& event:_reloadClip.annotations) {
             if(event.text.endsWith(isL118Configuration()?"L115A3_ReloadMagIn":isBoltActionConfiguration()?"C14_MagInserting":isThanatosConfiguration()?"WPNM107Magin":"WPNM1AMagIn",Qt::CaseInsensitive))entry=event.timeSeconds;
@@ -149,10 +157,7 @@ void ReloadMakerController::prepareMagazineInteraction() {
         for(bool state:{false,true})if(std::none_of(_magazineVisuals.begin(),_magazineVisuals.end(),[&](const auto& v){return !v.cartridge&&!v.nativeOnly&&(rail.sharedBody()||v.empty==state);})){_magazineError="Full and empty presentations each need a body.";return;}
     }
     if((!empty&&!rail.sharedBody())||!fullBody){_magazineVisuals.clear();_magazineError="Magazine body geometry could not be resolved.";return;}
-    const auto guide=_authoringRoadmaps.value(roadmapKey()).toObject().value("magazineGuide").toObject();
     if(!guide.isEmpty()) {
-        MagazineGuide configured;if(!readMagazineGuide(guide,configured,_magazineError))return;
-        if(configured.recipeId!=_reloadRecipe->id){_magazineError="Magazine guide source changed. Review or reset its configuration.";return;}
         if(!applyMagazineGuide(configured,rail,_magazineError))return;
     }
     if(!referenceJson.isEmpty()&&reference.connectionMode!="source")rail.handle={rail.connection.translation.x,rail.connection.translation.y,rail.connection.translation.z};

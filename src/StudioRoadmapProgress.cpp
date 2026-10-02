@@ -48,7 +48,7 @@ QJsonArray ReloadMakerController::roadmapProgress() const {
     QJsonObject presentation=saved.value("magazineSetup").toObject();if(magazine){presentation["fullTrack"]=_magazineRail->fullTrack;presentation["emptyTrack"]=_magazineRail->emptyTrack;presentation["loadedFrame"]=sampledMagazinePayload()?_m1aLoadedMagazineFrame:0;presentation["emptyFrame"]=sampledMagazinePayload()?_m1aEmptyMagazineFrame:0;}
     if(saved.contains("magazineReference"))presentation["reference"]=saved.value("magazineReference");
     steps[5]={rig,magazine,_magazineError.isEmpty()?"Inspect full, empty and pre-feed presentations around the native carrier.":_magazineError,presentation};
-    steps[6]={magazine,magazine,"Test pickup along the finite straight guide and inspect the independent visible movement.",magazine?magazineRailJson(*_magazineRail):QJsonObject{}};
+    steps[6]={rig,magazine,magazine?"Test pickup along the finite straight guide and inspect the independent visible movement.":"Define an outward guide when the source has no usable extraction; complete the magazine reference first.",magazine?magazineRailJson(*_magazineRail):saved.value("magazineGuide").toObject()};
     QJsonArray hands;bool fitted=magazine;QString handError;
     if(magazine)for(const auto hand:{PoseHand::Left,PoseHand::Right}) {
         if(hand==PoseHand::Right&&simulationMechanism()==WeaponMechanism::PistolSlide)continue;
