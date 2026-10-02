@@ -97,10 +97,9 @@ void ReloadMakerController::startCommandServer() {
     for(auto* w:_window->findChildren<QListWidget*>()) connect(w,&QListWidget::currentRowChanged,this,[this]{++_revision;});
 }
 QJsonObject ReloadMakerController::studioState() const {
-    QJsonArray weapons,actions,sets,configurationSlots,anchors,poses,grips;
+    QJsonArray weapons,actions,configurationSlots,anchors,poses,grips;
     for(int i=0;i<_weaponSelections.size();++i){const auto& selection=_weaponSelections[i];const auto& plugin=_plugins[selection.pluginIndex];const auto& w=plugin.weapons[selection.weaponIndex];weapons.append(QJsonObject{{"index",i},{"name",w.name},{"editorId",w.editorId},{"formId",QString::number(w.formId,16)},{"plugin",plugin.fileName}});}
     for(int i=0;i<_animationList->count();++i)actions.append(QJsonObject{{"index",i},{"name",_animationList->item(i)->text()},{"path",_animationList->item(i)->data(Qt::UserRole).toString()}});
-    for(int i=0;i<_animationSetCombo->count();++i)sets.append(QJsonObject{{"index",i},{"name",_animationSetCombo->itemText(i)},{"details",_animationSetCombo->itemData(i,Qt::ToolTipRole).toString()},{"identity",animationSetIdentity(i)}});
     if(const auto* config=configuration())for(const auto& slot:config->entries()){
         QJsonArray choices;for(auto id:slot.choices)if(const auto* m=config->mod(id))choices.append(QJsonObject{{"id",QString::number(id)},{"record",poseRecordKey(id)},{"name",m->name},{"editorId",m->editorId},{"model",m->modelPath}});
         configurationSlots.append(QJsonObject{{"key",QString::number(slot.key)},{"name",slot.label},{"selected",QString::number(config->selected(slot.key))},{"choices",choices}});
@@ -112,7 +111,7 @@ QJsonObject ReloadMakerController::studioState() const {
     return {{"revision",double(_revision)},{"session",QCoreApplication::instance()->property("commandSession").toString()},{"busy",bool(_loadThread)||_reloadCapturing||_reloadCaptureQueued||_rebuildTimer->isActive()},{"loading",bool(_loadThread)},
         {"capturing",_reloadCapturing},{"source",_package.sourcePath},{"gameData",_gameData},{"library",_libraryMode},
         {"workspace",_workspace},{"weaponIndex",_weaponCombo->currentIndex()},{"weapons",weapons},{"slots",configurationSlots},
-        {"body",_bodyCombo->currentData().toString()},{"animationSets",sets},{"animationSet",_animationSetCombo->currentIndex()},
+        {"body",_bodyCombo->currentData().toString()},{"animationSource",animationSourceIdentity()},
         {"actions",actions},{"action",_activeAction},{"animation",_activeAnimationPath},{"seconds",_playbackTime},{"duration",playbackDuration()},
         {"playing",_playing||_reloadPlaying},{"motionMode",_motionMode->currentIndex()},{"anchors",anchors},
         {"interaction",interactionGripState()},{"handPoses",poses},{"partGrips",grips},{"magazineGrabGrips",magazineGrabs},{"magazineEditor",magazineEditorState()},{"recipeWindows",_reloadRecipe?int(_reloadRecipe->windows.size()):0},
@@ -273,16 +272,15 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
         const auto mod=p["mod"].toString().toUInt(&modOk);
         if(p.contains("slot"))require(slotOk&&modOk&&p["slot"].isString()&&p["mod"].isString(),"Slot and modification IDs must be decimal strings from the current state");
         if(p.contains("body"))require(_bodyCombo->findData(p["body"].toString())>=0,"Unknown body");
-        if(p.contains("animationSet"))require(p["animationSet"].toInt(-1)>=0&&p["animationSet"].toInt(-1)<_animationSetCombo->count(),"Invalid animation set");
+        require(!p.contains("animationSet"),"Animation sets follow the equipped OMODs; select weapon parts instead.");
         if(p.contains("reloadNoExtender")) {
             require(p["reloadNoExtender"].isBool(),"reloadNoExtender must be a boolean");
-            require(!p.contains("slot")&&!p.contains("animationSet"),"Select parts and animation set before choosing the optional reload clip");
+            require(!p.contains("slot"),"Select parts before choosing the optional reload clip");
             require(!p["reloadNoExtender"].toBool()||!glockNoExtenderPath().isEmpty(),"NoExtender requires the standard Glock magazine and a QuickHands set");
             _glockNoExtender=p["reloadNoExtender"].toBool();
         }
         if(p.contains("body")){const int index=_bodyCombo->findData(p["body"].toString());require(index>=0,"Unknown body");_bodyCombo->setCurrentIndex(index);}
-        if(p.contains("slot")){auto* config=configuration();require(config&&config->select(slot,mod),"Invalid slot or modification");refreshAttachments();refreshConfigurationChoices();}
-        if(p.contains("animationSet")){int index=p["animationSet"].toInt(-1);require(index>=0&&index<_animationSetCombo->count(),"Invalid animation set");_animationSetCombo->setCurrentIndex(index);}
+        if(p.contains("slot")){auto* config=configuration();require(config&&config->select(slot,mod),"Invalid slot or modification");refreshAttachments();}
         rebuildWeapon();
     } else if(method=="action") {
         int index=p["index"].toInt(-1);require(index>=0&&index<_animationList->count(),"Invalid action index");previewNativeClip(index);

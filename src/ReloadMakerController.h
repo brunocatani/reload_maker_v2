@@ -104,22 +104,6 @@ namespace reloadmaker
             int weaponIndex{ -1 };
         };
 
-        struct AnimationSubgraphSelection
-        {
-            int recordIndex{ -2 };
-            int entryIndex{ -2 };
-
-            [[nodiscard]] bool prompt() const noexcept
-            {
-                return recordIndex == -2 && entryIndex == -2;
-            }
-
-            [[nodiscard]] bool automatic() const noexcept
-            {
-                return recordIndex == -1 && entryIndex == -1;
-            }
-        };
-
         struct ConnectTarget
         {
             QPersistentModelIndex parent;
@@ -281,7 +265,7 @@ namespace reloadmaker
         QJsonObject _packJob;
         QString _packCancelFile;
         bool connectInstalledProfile();
-        QJsonObject animationSetIdentity(int index) const;
+        QJsonObject animationSourceIdentity() const;
         void cacheWeaponFitBounds();
         bool fitWeapon();
         QVector<QVector3D> _weaponFitCorners;
@@ -592,7 +576,7 @@ namespace reloadmaker
         void appendDiagnostic(const QString& message);
         void refreshWeapons();
         void refreshAttachments();
-        void refreshConfigurationChoices();
+        void showLoadoutChoices(SlotKey key);
         void scrollToFocusedSlot();
         void refreshSlotCallouts();
         void recordPartSurfaces(SlotKey slot, int firstBlock, int lastBlock);
@@ -604,7 +588,6 @@ namespace reloadmaker
         void clearAssetCaches();
         [[nodiscard]] WeaponConfiguration* configuration();
         [[nodiscard]] const WeaponConfiguration* configuration() const;
-        void refreshAnimationSetChoices();
         void refreshAnimations();
         void configureResourcePaths();
         void openPackage(const QString& path);
@@ -810,13 +793,13 @@ namespace reloadmaker
         QString _requestedMo2Profile;
         QString _profileHandoff;
         QMenu* _sourceMenu{nullptr};
+        QToolButton* _pluginSearch{nullptr};
         QLabel* _sourceLabel{nullptr};
         QComboBox* _weaponPicker{nullptr};
         QComboBox* _clipCombo{nullptr};
         QLabel* _loadoutTitle{nullptr};
         QComboBox* _weaponCombo{ nullptr };
         QComboBox* _bodyCombo{ nullptr };
-        QComboBox* _animationSetCombo{ nullptr };
         QTabWidget* _pages{ nullptr };
         QComboBox* _pluginFilter{nullptr};
         QLabel* _loadingLabel{nullptr};
@@ -859,7 +842,6 @@ namespace reloadmaker
         QVector<PluginContent> _plugins;
         QVector<WeaponSelection> _weaponSelections;
         mutable QHash<int, WeaponConfiguration> _configurations;
-        QVector<AnimationSubgraphSelection> _animationSubgraphSelections;
         QString _gameData;
         HkxSkeleton _skeleton;
         // GUI-thread caches; source models are never attached or mutated in place.

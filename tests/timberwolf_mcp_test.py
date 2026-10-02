@@ -53,62 +53,58 @@ edit('save_project',path=str(backup));results={'magazines':[],'receivers':[],'am
 try:
     edit('testbed',name='timberwolf');s=ready();sim()
     slots={a['name']:a for a in s['slots']}
-    sets=[a for a in s['animationSets'] if a['identity'].get('mode')=='explicit']
-    assert len(sets)==2
-    for animation in sets:
-        edit('configure',animationSet=animation['index']);ready()
-        for choice in slots['Magazine']['choices']:
-            select(slots['Magazine'],choice);s=op('reset');sim()
-            capacity=10 if 'Extended' in choice['name'] else 5
-            assert s['ammunition']['capacity']==capacity and not s['ammunition']['automatic']
-            assert not s['setup']['springReturn']
-            closed=relative('WeaponBolt');pin=relative('WeaponOptics2')
-            op('trigger_down');shot=op('step',seconds=3)
-            assert shot['ammunition']['shotsFired']==1 and not shot['ammunition']['canFire']
-            assert shot['boltAction']['spentCase'] and shot['ammunition']['magazineRounds']==capacity-1
-            assert math.dist(closed[0],relative('WeaponBolt')[0])<.005,'Fire opened a manual bolt'
-            assert math.dist(pin[0],relative('WeaponOptics2')[0])>.3,'Firing pin did not preserve its fired position'
-            op('pull',progress=.4);op('release');held=op('step',seconds=3)
-            assert abs(held['slide']-.4)<.001 and held['boltAction']['spentCase']
-            assert max(abs(a-b) for a,b in zip(closed[1],relative('WeaponBolt')[1]))>.5,'Native bolt lift was flattened'
-            threshold=held['boltAction']['ejectProgress'];op('pull',progress=(1+threshold)/2)
-            assert sim()['boltAction']['casesEjected']==1 and not sim()['boltAction']['spentCase']
-            op('release',cancel=True);s=sim();assert s['boltAction']['spentCase'] and s['boltAction']['casesEjected']==0
-            op('pull',progress=(1+threshold)/2);op('pull',progress=0);op('release')
-            assert not sim()['ammunition']['chambered'],'Short stroke fed without reaching rear'
-            op('pull',progress=1);op('release');s=op('step',seconds=2)
-            assert s['slide']==1 and s['boltAction']['closingPath'] and not s['ammunition']['slideLocked']
-            assert math.dist(closed[0],relative('WeaponBolt')[0])>8
-            photo(choice['record'].split(':')[1]+'-open')
-            dropped=op('drop_magazine');assert all(a['flags']&1 for a in dropped['magazineRoots'])
-            grabbed=op('grab_magazine');assert grabbed['magazineGrip']['applied'],grabbed['magazineGrip']
-            for shape in grabbed['magazineShapes']:
-                assert shape['flags']==shape['originalFlags'],'Fresh magazine changed native variant visibility'
-            rail=grabbed['magazineRail'];assert rail['inputPath']=='straight' and rail['version']==3
-            capture=op('move_magazine',position=[a*rail['travel']*.6 for a in rail['outwardInWeapon']])
-            assert capture['magazine']['phase']=='Full magazine on rail'
-            op('move_magazine',distance=rail['travel']*.3)
-            seated=op('move_magazine',distance=0)
-            assert seated['magazinePresent'] and seated['slide']==1 and not seated['ammunition']['chambered']
-            op('pull',progress=.2);assert not sim()['ammunition']['canFire']
-            op('pull',progress=0);op('release');s=sim()
-            assert s['ammunition']['canFire'] and s['ammunition']['magazineRounds']==capacity-1
-            assert math.dist(pin[0],relative('WeaponOptics2')[0])<.005,'Lock failed to cock firing pin'
-            for n in range(capacity):
-                op('fire');op('step',seconds=2);op('pull',progress=1);op('pull',progress=0);op('release')
-            empty=sim();assert not empty['ammunition']['chambered'] and not empty['ammunition']['slideLocked']
-            assert empty['boltAction']['casesEjected']==capacity+1
-            for shape in empty['magazineShapes']:
-                assert shape['flags']==(shape['originalFlags']|1 if shape['cartridge'] else shape['originalFlags']),shape
-            op('mag_out');op('step',seconds=1);op('drop_magazine');op('grab_magazine')
-            photo(choice['record'].split(':')[1]+'-held');op('cancel_magazine')
-            op('pull',progress=1);op('pull',progress=0);op('release')
-            assert not sim()['ammunition']['chambered'],'Absent magazine created a round'
-            op('reset');op('fire');op('step',seconds=2);op('reload');loaded=op('step',seconds=10)
-            assert loaded['ammunition']['canFire'] and not loaded['boltAction']['spentCase']
-            assert loaded['ammunition']['magazineRounds']==capacity-1 and loaded['boltAction']['casesEjected']==1
-            results['magazines'].append({'record':choice['record'],'animationSet':animation['name'],'capacity':capacity})
-            print('PASS magazine',choice['name'],'set',animation['index'],flush=True)
+    for choice in slots['Magazine']['choices']:
+        select(slots['Magazine'],choice);s=op('reset');sim()
+        capacity=10 if 'Extended' in choice['name'] else 5
+        assert s['ammunition']['capacity']==capacity and not s['ammunition']['automatic']
+        assert not s['setup']['springReturn']
+        closed=relative('WeaponBolt');pin=relative('WeaponOptics2')
+        op('trigger_down');shot=op('step',seconds=3)
+        assert shot['ammunition']['shotsFired']==1 and not shot['ammunition']['canFire']
+        assert shot['boltAction']['spentCase'] and shot['ammunition']['magazineRounds']==capacity-1
+        assert math.dist(closed[0],relative('WeaponBolt')[0])<.005,'Fire opened a manual bolt'
+        assert math.dist(pin[0],relative('WeaponOptics2')[0])>.3,'Firing pin did not preserve its fired position'
+        op('pull',progress=.4);op('release');held=op('step',seconds=3)
+        assert abs(held['slide']-.4)<.001 and held['boltAction']['spentCase']
+        assert max(abs(a-b) for a,b in zip(closed[1],relative('WeaponBolt')[1]))>.5,'Native bolt lift was flattened'
+        threshold=held['boltAction']['ejectProgress'];op('pull',progress=(1+threshold)/2)
+        assert sim()['boltAction']['casesEjected']==1 and not sim()['boltAction']['spentCase']
+        op('release',cancel=True);s=sim();assert s['boltAction']['spentCase'] and s['boltAction']['casesEjected']==0
+        op('pull',progress=(1+threshold)/2);op('pull',progress=0);op('release')
+        assert not sim()['ammunition']['chambered'],'Short stroke fed without reaching rear'
+        op('pull',progress=1);op('release');s=op('step',seconds=2)
+        assert s['slide']==1 and s['boltAction']['closingPath'] and not s['ammunition']['slideLocked']
+        assert math.dist(closed[0],relative('WeaponBolt')[0])>8
+        photo(choice['record'].split(':')[1]+'-open')
+        dropped=op('drop_magazine');assert all(a['flags']&1 for a in dropped['magazineRoots'])
+        grabbed=op('grab_magazine');assert grabbed['magazineGrip']['applied'],grabbed['magazineGrip']
+        for shape in grabbed['magazineShapes']:
+            assert shape['flags']==shape['originalFlags'],'Fresh magazine changed native variant visibility'
+        rail=grabbed['magazineRail'];assert rail['inputPath']=='straight' and rail['version']==3
+        capture=op('move_magazine',position=[a*rail['travel']*.6 for a in rail['outwardInWeapon']])
+        assert capture['magazine']['phase']=='Full magazine on rail'
+        op('move_magazine',distance=rail['travel']*.3)
+        seated=op('move_magazine',distance=0)
+        assert seated['magazinePresent'] and seated['slide']==1 and not seated['ammunition']['chambered']
+        op('pull',progress=.2);assert not sim()['ammunition']['canFire']
+        op('pull',progress=0);op('release');s=sim()
+        assert s['ammunition']['canFire'] and s['ammunition']['magazineRounds']==capacity-1
+        assert math.dist(pin[0],relative('WeaponOptics2')[0])<.005,'Lock failed to cock firing pin'
+        for n in range(capacity):
+            op('fire');op('step',seconds=2);op('pull',progress=1);op('pull',progress=0);op('release')
+        empty=sim();assert not empty['ammunition']['chambered'] and not empty['ammunition']['slideLocked']
+        assert empty['boltAction']['casesEjected']==capacity+1
+        for shape in empty['magazineShapes']:
+            assert shape['flags']==(shape['originalFlags']|1 if shape['cartridge'] else shape['originalFlags']),shape
+        op('mag_out');op('step',seconds=1);op('drop_magazine');op('grab_magazine')
+        photo(choice['record'].split(':')[1]+'-held');op('cancel_magazine')
+        op('pull',progress=1);op('pull',progress=0);op('release')
+        assert not sim()['ammunition']['chambered'],'Absent magazine created a round'
+        op('reset');op('fire');op('step',seconds=2);op('reload');loaded=op('step',seconds=10)
+        assert loaded['ammunition']['canFire'] and not loaded['boltAction']['spentCase']
+        assert loaded['ammunition']['magazineRounds']==capacity-1 and loaded['boltAction']['casesEjected']==1
+        results['magazines'].append({'record':choice['record'],'animationSource':command('state')['animationSource'],'capacity':capacity})
+        print('PASS magazine',choice['name'],flush=True)
     for choice in slots['Receiver']['choices']:
         select(slots['Receiver'],choice);s=op('reset');op('trigger_down');s=op('step',seconds=3)
         assert not s['ammunition']['automatic'] and s['ammunition']['shotsFired']==1 and s['boltAction']['spentCase']

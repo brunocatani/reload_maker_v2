@@ -46,6 +46,7 @@ namespace reloadmaker {
         if (_sourceMenu) _sourceMenu->setEnabled(!loading);
         if (_weaponPicker) _weaponPicker->setEnabled(!loading && _weaponPicker->count() > 0);
         if (_pluginFilter) _pluginFilter->setEnabled(!loading);
+        if (_pluginSearch) _pluginSearch->setEnabled(!loading && _pluginFilter->count() > 0);
         _pages->setTabEnabled(kLoadoutPage, !loading);
         if(_pages->count()>kReloadPage)_pages->setTabEnabled(kReloadPage,!loading);
         if(_reloadInspectorDock)_reloadInspectorDock->setEnabled(!loading);

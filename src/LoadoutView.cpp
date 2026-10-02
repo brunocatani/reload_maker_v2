@@ -27,17 +27,21 @@ void LoadoutDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
     }
     if (section == kSlotHeader) {
         const bool focused = index.data(kFocusedRole).toBool();
-        QFont font = option.font; font.setPointSizeF(font.pointSizeF() * .82); font.setBold(true); font.setLetterSpacing(QFont::PercentageSpacing, 110);
+        const bool enabled = index.flags() & Qt::ItemIsEnabled;
+        const bool hovered = option.state.testFlag(QStyle::State_MouseOver);
+        const QRect button = option.rect.adjusted(4,3,-4,-3);
+        painter->setPen(QPen(QColor(enabled&&focused?"#4c928b":"#344951"),1));
+        painter->setBrush(QColor(enabled?(hovered?"#284347":"#203038"):"#19242a"));painter->drawRoundedRect(button,5,5);
+        const QRect r=button.adjusted(12,8,-12,-8);
+        QFont font = option.font; font.setPointSizeF(font.pointSizeF() * .85); font.setBold(true);
         painter->setFont(font);
-        const QRect r = option.rect.adjusted(8, 0, -8, -2);
-        if (focused) {
-            painter->setPen(Qt::NoPen); painter->setBrush(QColor("#74c4b3"));
-            painter->drawRoundedRect(QRect(r.left() - 6, r.bottom() - 13, 3, 12), 1.5, 1.5);
-        }
-        painter->setPen(QColor(focused ? "#bfe9df" : "#6f8f8c"));
-        painter->drawText(r, Qt::AlignLeft | Qt::AlignBottom, text.toUpper());
-        painter->setPen(QColor("#4f666a"));
-        painter->drawText(r, Qt::AlignRight | Qt::AlignBottom, index.data(kCaptionRole).toString());
+        const auto caption=index.data(kCaptionRole).toString();const int captionWidth=QFontMetrics(font).horizontalAdvance(caption)+12;
+        painter->setPen(QColor(enabled?"#9fd3c9":"#66777c"));
+        painter->drawText(r,Qt::AlignLeft|Qt::AlignTop,QFontMetrics(font).elidedText(text.toUpper(),Qt::ElideRight,std::max(0,r.width()-captionWidth)));
+        painter->drawText(r, Qt::AlignRight | Qt::AlignTop,caption);
+        painter->setFont(option.font);painter->setPen(QColor(enabled?"#e2eeee":"#66777c"));
+        painter->drawText(r,Qt::AlignLeft|Qt::AlignBottom,option.fontMetrics.elidedText(index.data(kSelectionRole).toString(),Qt::ElideRight,r.width()-18));
+        if(enabled)painter->drawText(r,Qt::AlignRight|Qt::AlignBottom,QStringLiteral("›"));
         painter->restore();
         return;
     }
@@ -71,7 +75,7 @@ QSize LoadoutDelegate::sizeHint(const QStyleOptionViewItem& option, const QModel
     const int line = option.fontMetrics.height();
     switch (index.data(kSectionRole).toInt()) {
     case kCategoryHeader: return {option.rect.width(), line * 2 + 12};
-    case kSlotHeader: return {option.rect.width(), line + 12};
+    case kSlotHeader: return {option.rect.width(), line * 2 + 28};
     default: return {option.rect.width(), line + 12};
     }
 }

@@ -183,21 +183,6 @@ void ReloadMakerController::createUi() {
     _partList->setObjectName("Loadout");
     _partList->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     setupLayout->addWidget(_partList, 1);
-    auto* previewTitle = new QLabel("PREVIEW", setup);
-    previewTitle->setObjectName("Section");
-    setupLayout->addWidget(previewTitle);
-    auto* animationForm = new QFormLayout;
-    _bodyCombo = new QComboBox(setup);
-    _bodyCombo->addItem("Male arms", "male");
-    _bodyCombo->addItem("Female arms", "female");
-    _animationSetCombo = new QComboBox(setup);
-    _animationSetCombo->setMinimumContentsLength(18);
-    _animationSetCombo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-    _animationSetCombo->setMaxVisibleItems(24);
-    _animationSetCombo->setToolTip("Animation / reload set. Automatic follows the installed parts' keywords.");
-    animationForm->addRow("Arms", _bodyCombo);
-    animationForm->addRow("Animations", _animationSetCombo);
-    setupLayout->addLayout(animationForm);
     _pages->addTab(setup, "Loadout");
     // One native clip list; Reload phases shows it, Hands & grips uses the
     // transport's clip picker over the same model.
@@ -264,6 +249,8 @@ void ReloadMakerController::createUi() {
     _motionMode->setToolTip("Weapon fixed holds the weapon frame still while hands and moving parts keep their native relative motion.");
     _showArmsCheck = new QCheckBox("Arms && hands", _window);
     _showArmsCheck->setChecked(true);
+    _bodyCombo = new QComboBox(_window);_bodyCombo->setObjectName("ArmsBodyPicker");_bodyCombo->setAccessibleName("Hand model");
+    _bodyCombo->addItem("Male arms", "male");_bodyCombo->addItem("Female arms", "female");
 
         connect(_weaponCombo, qOverload<int>(&QComboBox::currentIndexChanged),
                 this, [this](int selectedIndex) {
@@ -271,25 +258,15 @@ void ReloadMakerController::createUi() {
                     if(beginWeaponProject(selectedIndex))return;
                     refreshWeaponPicker();
                     refreshAttachments();
-                    refreshConfigurationChoices();
+
                     scheduleRebuild();
                 });
         connect(_bodyCombo, qOverload<int>(&QComboBox::currentIndexChanged),
                 this, [this](int) { rebuildWeapon(); });
-        connect(_animationSetCombo, qOverload<int>(&QComboBox::currentIndexChanged),
-                this, [this](int) { scheduleRebuild(); });
         connect(_partSearch, &QLineEdit::textChanged, this, [this]() { refreshAttachments(); });
-        // Clicking an option installs it; clicking a slot header only
-        // highlights that slot in the viewport.
         const auto choosePart = [this](QListWidgetItem* item) {
-            if (!item) return;
-            const int section = item->data(kSectionRole).toInt();
-            if (section == kCategoryHeader) return;
-            _focusedSlot = item->data(kSlotRole).toULongLong();
-            auto* config = configuration();
-            const bool changed = section == 0 && config && config->select(_focusedSlot, item->data(kFormIdRole).toUInt());
-            refreshAttachments();
-            if (changed) scheduleRebuild();
+            if(item&&item->data(kSectionRole).toInt()==kSlotHeader&&(item->flags()&Qt::ItemIsEnabled))
+                showLoadoutChoices(item->data(kSlotRole).toULongLong());
         };
         connect(_partList, &QListWidget::itemClicked, this, choosePart);
         connect(_partList, &QListWidget::itemActivated, this, choosePart);
@@ -393,6 +370,7 @@ void ReloadMakerController::createUi() {
     camera->addSeparator();
     camera->addWidget(_motionMode);
     camera->addWidget(_showArmsCheck);
+    camera->addWidget(_bodyCombo);
     connect(labels,&QCheckBox::toggled,this,[this](bool show) {
         _showPartLabels=show;if(_slotOverlay)_slotOverlay->setActive(show&&_pages->currentIndex()==kLoadoutPage);
     });

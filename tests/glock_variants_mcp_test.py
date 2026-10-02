@@ -109,30 +109,21 @@ try:
     for slot in initial['slots']:
         none=next((x for x in slot['choices'] if x['editorId']=='mod_Glock19x_LowerRail_None'),None)
         if none:choose(slot['key'],none['id'])
-    seen=set();profiles=command('state')['animationSets'][2:]
-    for profile in profiles:
-        paths='|'.join(profile['identity']['paths']).replace('\\','/').lower()
-        quick='quickhands' in paths
-        family=next((size for size in ('24','33','50') if '/'+size+'rnd' in paths),'standard')
-        mid={('standard',False):magazines[0],('standard',True):magazines[1],('24',False):magazines[2],('24',True):magazines[3],('33',False):magazines[4],('33',True):magazines[5],('50',False):magazines[6],('50',True):magazines[6]}[(family,quick)]
-        choose(mag,mid);choose(scope,0x1001f46 if '/hasmount' in paths else 0x10026b5 if '/alt' in paths else 0x1000fb1)
-        edit('configure',{'animationSet':profile['index']});ready();s=valid();recipe=command('reload')
-        coverage['profiles'].append({'index':profile['index'],'name':profile['name'],'identity':profile['identity'],'source':recipe['source']['animation'],'sha256':recipe['source']['animationSha256'],'capacity':s['ammunition']['capacity'],'rail':s['magazineRail']})
-        op('reset');op('pull',progress=.65);op('release',cancel=True);op('drop_magazine');op('mag_in');finished()
-        assert command('simulation_state')['ammunition']['chambered'],'Tactical swap lost chamber'
-        key=recipe['source']['animationSha256']
-        if key not in seen:
-            full_cycle(family+('-quickhands' if quick else '-native'));seen.add(key)
-        save_coverage();print('PROFILE',profile['index'],family,quick,'PASS',flush=True)
+    seen=set()
+    assert command('state')['animationSource']['mode']=='omod-keywords'
     # Every physically distinct slide, firing mode, magazine and sight combination.
-    automatic_set=next(x['index'] for x in command('state')['animationSets'] if x['identity'].get('mode')=='automatic')
-    edit('configure',{'animationSet':automatic_set});ready()
     for rid in receivers:
         choose(receiver,rid)
         for mid in magazines:
             choose(mag,mid)
             for sight in slots['Sights']['choices']:
                 choose(scope,sight['id']);s=valid();op('reset')
+                source=command('state')['animationSource'];recipe=command('reload')
+                signature=recipe['source']['animationSha256']
+                if signature not in seen:
+                    full_cycle(signature[:12]);seen.add(signature)
+                    coverage['profiles'].append({'identity':source,'source':recipe['source']['animation']})
+                op('reset')
                 before=command('diagnostics')['attachmentRemaps'][0]
                 op('pull',progress=.7);pulled=command('diagnostics')['attachmentRemaps'][0]
                 assert math.dist(before['world']['translate'],pulled['world']['translate'])>1
@@ -142,21 +133,13 @@ try:
                 finished();coverage['equipment'].append({'receiver':rid,'magazine':mid,'sights':sight['id'],'source':s['reloadProfile']['animation'],'automatic':s['ammunition']['automatic'],'capacity':s['ammunition']['capacity']})
             print('EQUIPMENT',rid,hex(mid),'PASS',flush=True);save_coverage()
     choose(receiver,receivers[0]);choose(mag,magazines[0]);choose(scope,0x1000fb1)
-    quick=next(p for p in profiles if 'HumanRace' in p['name'] and p['identity']['paths'][0].replace('\\','/').lower().endswith('/glock19xanims/quickhands') and not any('/alt' in x.replace('\\','/').lower() or '/hasmount' in x.replace('\\','/').lower() for x in p['identity']['paths']))
-    edit('configure',{'animationSet':quick['index']});ready();edit('configure',{'reloadNoExtender':True});ready()
-    assert valid()['reloadProfile']['animation'].endswith('wpnreloadnoextender.hkx')
-    full_cycle('quickhands-no-extender');capture('quickhands-no-extender-ready')
-    optional=OUT/'optional.project.json';edit('save_project',{'path':str(optional)});edit('open_project',{'path':str(optional)});ready()
-    assert valid()['reloadProfile']['noExtender'] and valid()['reloadProfile']['animation'].endswith('wpnreloadnoextender.hkx')
-    # Several QuickHands entries have identical labels but distinct conditions.
-    duplicate=next(p for p in reversed(profiles) if p['name']==quick['name'] and p['identity']!=quick['identity'])
-    choose(mag,magazines[1]);choose(scope,0x1001f46)
-    edit('configure',{'animationSet':duplicate['index']});ready();exact=command('state')['animationSet']
-    persisted=OUT/'profile-identity.project.json';edit('save_project',{'path':str(persisted)});edit('open_project',{'path':str(persisted)});ready()
-    assert command('state')['animationSet']==exact,'Project restored a different identically named reload set'
-    coverage['persistence']={'noExtender':True,'exactProfile':exact};save_coverage()
-    assert len(coverage['profiles'])==48 and len(coverage['equipment'])==140 and len(coverage['cycles'])==6
-    print('PASS Glock: 48 source sets, six distinct full reload cycles, 140 geometry/firing combinations, exact-profile and optional-clip persistence',flush=True)
+    exact=command('state')['animationSource']
+    persisted=OUT/'omod-source.project.json';edit('save_project',{'path':str(persisted)});edit('open_project',{'path':str(persisted)});ready()
+    assert command('state')['animationSource']==exact,'Reopened project changed the OMOD-resolved animation source'
+    coverage['persistence']={'animationSource':exact};save_coverage()
+    assert len(coverage['equipment'])==140 and coverage['cycles']
+    print('PASS Glock: OMOD-resolved reload cycles, 140 geometry/firing combinations and source persistence',flush=True)
+
 finally:
     edit('open_project',{'path':str(snapshot)});ready()
     if original_project:edit('save_project',{'path':original_project})

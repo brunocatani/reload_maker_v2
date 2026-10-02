@@ -28,19 +28,16 @@
 #include <algorithm>
 
 namespace reloadmaker {
-QJsonObject ReloadMakerController::animationSetIdentity(int index)const {
-    if(index<0||index>=_animationSubgraphSelections.size())return {};
-    const auto selection=_animationSubgraphSelections[index];
-    if(selection.automatic())return {{"mode","automatic"}};
-    const auto* plugin=currentPlugin();
-    if(selection.prompt()||!plugin||selection.recordIndex<0||selection.recordIndex>=plugin->animationSubgraphs.size())return {};
-    const auto& record=plugin->animationSubgraphs[selection.recordIndex];
-    if(selection.entryIndex<0||selection.entryIndex>=record.entries.size())return {};
-    const auto& entry=record.entries[selection.entryIndex];QStringList keywords;
-    for(auto id:entry.requiredKeywords)keywords.append(recordIdentity(*plugin,id));
-    keywords.sort(Qt::CaseInsensitive);
-    return {{"mode","explicit"},{"record",recordIdentity(*plugin,record.formId)},{"keywords",QJsonArray::fromStringList(keywords)},
-        {"paths",QJsonArray::fromStringList(entry.animationSearchPaths)},{"behavior",entry.behaviorPath}};
+QJsonObject ReloadMakerController::animationSourceIdentity() const {
+    QJsonObject identity{{"mode","omod-keywords"}};
+    const auto* plugin=currentPlugin();if(!plugin||!currentWeapon())return identity;
+    const auto* selected=plugin->resolveFirstPersonSubgraph(activeAnimationKeywords());if(!selected)return identity;
+    for(const auto& record:plugin->animationSubgraphs)for(const auto& entry:record.entries)if(&entry==selected) {
+        identity["record"]=recordIdentity(*plugin,record.formId);
+        identity["paths"]=QJsonArray::fromStringList(entry.animationSearchPaths);identity["behavior"]=entry.behaviorPath;
+        return identity;
+    }
+    return identity;
 }
 QString ReloadMakerController::suggestedSessionPath() const {
     if(!currentWeapon())return studioDataPath("workspace/projects/new.project.json");
@@ -86,7 +83,7 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     QJsonObject record{{"format",1},{"kind","reload-maker-v2-project"},{"package",_package.sourcePath},{"gameData",_gameData},
         {"weaponName",currentWeapon()->name.isEmpty()?currentWeapon()->editorId:currentWeapon()->name},{"weaponEditorId",currentWeapon()->editorId},
         {"library",_libraryMode},{"mo2Instance",_mo2Instance},{"mo2Profile",_libraryMode?_launchSnapshot.profileName:QString()},{"weapon",poseRecordKey(currentWeapon()->formId)},
-        {"body",_bodyCombo->currentData().toString()},{"animationSet",_animationSetCombo->currentText()},
+        {"body",_bodyCombo->currentData().toString()},{"animationSource",animationSourceIdentity()},
         {"animation",_activeAnimationPath},{"seconds",_playbackTime},{"motionMode",_motionMode->currentIndex()},
         {"transitions",_transitionCheck->isChecked()},{"showArms",_showArmsCheck->isChecked()},{"workspace",_workspace},
         {"hand",_handPoseSide->currentData().toInt()},{"fingerJoint",_fingerJoint->currentIndex()},
@@ -102,8 +99,6 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     if(const auto* config=configuration())record["recordChoices"]=config->savedChoices(*currentPlugin());
     record["simulationSpringReturn"] = _simulationSpring->isChecked();
     record["camera"] = _window->getGLView()->studioCameraState();
-    const auto animationIdentity=animationSetIdentity(_animationSetCombo->currentIndex());
-    if(!animationIdentity.isEmpty())record["animationSetIdentity"] = animationIdentity;
     record["glockReloadNoExtender"] = _glockNoExtender;
     QJsonObject magazineGrabs;for(auto it=_magazineGrabGrips.cbegin();it!=_magazineGrabGrips.cend();++it)magazineGrabs[it.key()]=it.value();
     record["magazineGrabGrips"]=magazineGrabs;
@@ -281,7 +276,7 @@ void ReloadMakerController::restoreSessionSelection() {
     }
     alignPluginToWeapon();refreshWeaponPicker();
     { const QSignalBlocker block(_bodyCombo); _bodyCombo->setCurrentIndex(std::max(0,_bodyCombo->findData(record["body"].toString()))); }
-    refreshAttachments(); refreshConfigurationChoices();
+    refreshAttachments();
     if (auto* config = configuration()) {
         if(record.contains("recordChoices")) {
             for(const auto& missing:config->restoreChoices(*currentPlugin(),record["recordChoices"].toObject()))
@@ -293,15 +288,7 @@ void ReloadMakerController::restoreSessionSelection() {
         }
         }
     }
-    refreshAttachments(); refreshConfigurationChoices();
-    int animationSet = _animationSetCombo->findText(record["animationSet"].toString());
-    if(record.contains("animationSetIdentity")) {
-        animationSet=-1;const auto identity=record["animationSetIdentity"].toObject();
-        for(int i=0;i<_animationSetCombo->count();++i)if(!identity.isEmpty()&&animationSetIdentity(i)==identity){animationSet=i;break;}
-        if(animationSet<0){setStatus("The saved animation set's exact source conditions are no longer available.",true);return;}
-    }
-    if (animationSet < 0 && _animationSetCombo->count() > 0) { setStatus("The project's animation set no longer exists.",true); return; }
-    { const QSignalBlocker block(_animationSetCombo); _animationSetCombo->setCurrentIndex(animationSet); }
+    refreshAttachments();
     _glockNoExtender=record["glockReloadNoExtender"].toBool(false);
     _authoringRoadmaps=record["authoringRoadmaps"].toObject();
     _reloadTemplateAssignments=record["reloadTemplates"].toObject();

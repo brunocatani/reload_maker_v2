@@ -105,7 +105,7 @@ def select_testbed(name: str, expected_revision: int) -> dict:
 
 @mcp.tool()
 def configure_weapon(changes: dict, expected_revision: int) -> dict:
-    """Change body male/female, animationSet index, or slot and mod decimal-string IDs. Glock: after selecting the standard magazine and a QuickHands set, reloadNoExtender enables the package's optional unextended-magazine clip. Set it separately from slots/animationSet. Configuration changes rebuild the native interaction source."""
+    """Change body male/female, or slot and mod decimal-string IDs. Animation sets always resolve from equipped weapon/OMOD keywords. Glock: with the standard magazine and OMOD-resolved QuickHands animations, reloadNoExtender enables the optional unextended-magazine clip. Set it separately from slots. Configuration changes rebuild the native interaction source."""
     return command('configure',changes,expected_revision)
 
 @mcp.tool()

@@ -6,19 +6,24 @@
 #include <QBrush>
 #include <QColor>
 #include <QComboBox>
-#include <QCompleter>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListView>
 #include <QMenu>
+#include <QPainter>
 #include <QSettings>
 #include <QSet>
 #include <QSignalBlocker>
+#include <QSortFilterProxyModel>
 #include <QToolBar>
+#include <QToolButton>
 #include <QTimer>
+#include <QVBoxLayout>
+#include <QWidgetAction>
 
 namespace reloadmaker {
 namespace {
@@ -74,12 +79,30 @@ QStringList ReloadMakerController::sourcePluginMasters(const QString& name) cons
 void ReloadMakerController::createSourceBar(QToolBar* bar) {
     _mo2Instance=QSettings().value("paths/mo2Instance").toString();
     _sourceLabel=new QLabel("No source",bar);_sourceLabel->setObjectName("SourceLabel");bar->addWidget(_sourceLabel);
-    bar->addWidget(new QLabel("  Plugin",bar));_pluginFilter=new QComboBox(bar);_pluginFilter->setObjectName("SourcePluginPicker");
+    _pluginFilter=new QComboBox(bar);_pluginFilter->setObjectName("SourcePluginPicker");_pluginFilter->setAccessibleName("Plugin");
     _pluginFilter->setMinimumContentsLength(24);_pluginFilter->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-    _pluginFilter->setMaxVisibleItems(30);_pluginFilter->setEditable(true);_pluginFilter->setInsertPolicy(QComboBox::NoInsert);
-    _pluginFilter->lineEdit()->setPlaceholderText("Select a plugin…");_pluginFilter->completer()->setFilterMode(Qt::MatchContains);
-    _pluginFilter->completer()->setCompletionMode(QCompleter::PopupCompletion);bar->addWidget(_pluginFilter);
-    bar->addWidget(new QLabel("  Weapon",bar));_weaponPicker=new QComboBox(bar);_weaponPicker->setObjectName("SourceWeaponPicker");
+    _pluginFilter->setMaxVisibleItems(30);_pluginFilter->setPlaceholderText("Select a plugin…");bar->addWidget(_pluginFilter);
+    _pluginSearch=new QToolButton(bar);_pluginSearch->setObjectName("SourcePluginSearch");
+    _pluginSearch->setAccessibleName("Search plugins");_pluginSearch->setToolTip("Search plugins by name");
+    QPixmap icon(32,32);icon.fill(Qt::transparent);
+    {QPainter painter(&icon);painter.setRenderHint(QPainter::Antialiasing);painter.setPen(QPen(QColor("#dbe7e9"),2.8));
+        painter.drawEllipse(QRectF(5,5,15,15));painter.drawLine(QPointF(18,18),QPointF(27,27));}
+    _pluginSearch->setIcon(QIcon(icon));_pluginSearch->setIconSize(QSize(20,20));
+    _pluginSearch->setPopupMode(QToolButton::InstantPopup);bar->addWidget(_pluginSearch);
+    auto* searchMenu=new QMenu(_pluginSearch);_pluginSearch->setMenu(searchMenu);
+    auto* panel=new QWidget(searchMenu);panel->setMinimumWidth(400);auto* layout=new QVBoxLayout(panel);
+    auto* search=new QLineEdit(panel);search->setObjectName("PluginSearchText");search->setPlaceholderText("Search plugins…");search->setClearButtonEnabled(true);layout->addWidget(search);
+    auto* matches=new QSortFilterProxyModel(panel);matches->setSourceModel(_pluginFilter->model());
+    matches->setFilterRole(Qt::UserRole);matches->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    auto* results=new QListView(panel);results->setObjectName("PluginSearchResults");results->setModel(matches);
+    results->setMinimumHeight(250);layout->addWidget(results);
+    auto* searchAction=new QWidgetAction(searchMenu);searchAction->setDefaultWidget(panel);searchMenu->addAction(searchAction);
+    connect(search,&QLineEdit::textChanged,panel,[matches,results](const QString& text){matches->setFilterFixedString(text);results->setCurrentIndex(matches->index(0,0));});
+    const auto choose=[this,searchMenu](const QModelIndex& index){if(!index.isValid())return;const auto name=index.data(Qt::UserRole).toString();searchMenu->hide();(void)selectSourcePlugin(name);};
+    connect(results,&QListView::clicked,panel,choose);connect(results,&QListView::activated,panel,choose);
+    connect(search,&QLineEdit::returnPressed,panel,[results,choose]{choose(results->currentIndex());});
+    connect(searchMenu,&QMenu::aboutToShow,panel,[this,search,results,matches]{search->clear();results->setCurrentIndex(matches->index(_pluginFilter->currentIndex(),0));search->setFocus();});
+    _weaponPicker=new QComboBox(bar);_weaponPicker->setObjectName("SourceWeaponPicker");_weaponPicker->setAccessibleName("Weapon");
     _weaponPicker->setMinimumContentsLength(24);_weaponPicker->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     _weaponPicker->setMaxVisibleItems(30);_weaponPicker->setPlaceholderText("Choose a plugin first…");bar->addWidget(_weaponPicker);
     connect(_pluginFilter,qOverload<int>(&QComboBox::activated),this,[this](int i){(void)selectSourcePlugin(_pluginFilter->itemData(i).toString());});
@@ -89,7 +112,7 @@ void ReloadMakerController::createSourceBar(QToolBar* bar) {
 void ReloadMakerController::refreshSourceBar() {
     if(!_sourceLabel)return;
     if(!_libraryMode&&!_package.sourcePath.isEmpty()&&!_testbedSourcesLoaded)refreshDevelopmentSources();
-    _sourceLabel->setText(_libraryMode?"Dynamic · "+_launchSnapshot.profileName:_package.sourcePath.isEmpty()?"No source":"Development source");
+    _sourceLabel->setText(_libraryMode?"MO2":_package.sourcePath.isEmpty()?"No source":"Development source");
     _sourceLabel->setToolTip(_libraryMode?_launchSnapshot.instancePath+"\nProfile: "+_launchSnapshot.profileName+"\nWinning records follow this profile's load order.":_package.sourcePath);
     const auto key=_libraryMode?"mo2:"+_launchSnapshot.instancePath+"/"+_launchSnapshot.profileName:"package:"+_package.sourcePath;
     auto chosen=_browserSourceKey==key?_pluginFilter->currentData().toString():QString();_browserSourceKey=key;
@@ -99,6 +122,7 @@ void ReloadMakerController::refreshSourceBar() {
     for(const auto& name:sourcePluginOrder())_pluginFilter->addItem(name,name);
     _pluginFilter->setCurrentIndex(pluginIndex(_pluginFilter,chosen));
     _pluginFilter->setEnabled(!_loadThread&&_pluginFilter->count()>0);
+    _pluginSearch->setEnabled(_pluginFilter->isEnabled());
     for(int i=0;i<_pluginFilter->count();++i){const auto name=_pluginFilter->itemData(i).toString();
         _pluginFilter->setItemData(i,QString("%1\n%2 editable weapon record(s) in the loaded source.\nAmber: selected plugin · teal: required master.").arg(name).arg(counts.value(name.toLower())),Qt::ToolTipRole);}
     if(_pluginFilter->currentIndex()<0)alignPluginToWeapon();
@@ -164,7 +188,7 @@ bool ReloadMakerController::selectSourcePlugin(const QString& name) {
     if(currentWeapon()&&!selectionPlugins(_weaponCombo->currentIndex()).contains(name,Qt::CaseInsensitive)) {
         if(!saveSession()){alignPluginToWeapon();return false;}
         {const QSignalBlocker block(_weaponCombo);_weaponCombo->setCurrentIndex(-1);}
-        clearAssetCaches();_sessionPath.clear();refreshAttachments();refreshConfigurationChoices();
+        clearAssetCaches();_sessionPath.clear();refreshAttachments();
     }
     updatePluginColors();refreshWeaponPicker();++_revision;return true;
 }

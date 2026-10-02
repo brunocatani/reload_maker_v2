@@ -10,10 +10,11 @@ constexpr int kInstalledRole = Qt::UserRole + 21; // option currently installed 
 constexpr int kSectionRole = Qt::UserRole + 22;   // row kind: 0 option, kCategoryHeader, kSlotHeader
 constexpr int kFocusedRole = Qt::UserRole + 23;   // slot header of the slot highlighted in the viewport
 constexpr int kSlotRole = Qt::UserRole + 24;      // slot key owning the row
+constexpr int kSelectionRole = Qt::UserRole + 25; // installed choice on the slot button
 constexpr int kCategoryHeader = 1;
 constexpr int kSlotHeader = 2;
 
-// Flat workbench list: category headers, slot headers and option rows.
+// Compact slot buttons in the workbench and option rows in its picker dialogs.
 class LoadoutDelegate final : public QStyledItemDelegate {
 public:
     using QStyledItemDelegate::QStyledItemDelegate;

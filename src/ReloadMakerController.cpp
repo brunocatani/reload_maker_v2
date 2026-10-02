@@ -20,6 +20,8 @@
 #include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDockWidget>
 #include <QEvent>
 #include <QFileDialog>
@@ -93,46 +95,6 @@ namespace reloadmaker
                         QStringLiteral("reciever"), Qt::CaseInsensitive) ||
                     record.name.contains(
                         QStringLiteral("receiver"), Qt::CaseInsensitive));
-        }
-
-        [[nodiscard]] QString significantAnimationRoot(
-            const AnimationSubgraphEntry& entry)
-        {
-            for (QString path : entry.animationSearchPaths) {
-                path.replace(QLatin1Char('\\'), QLatin1Char('/'));
-                const QString lower = path.toLower();
-                if (lower.endsWith(QStringLiteral("/paired")) ||
-                    lower.endsWith(QStringLiteral("/common")) ||
-                    lower.endsWith(QStringLiteral("/gammagun"))) {
-                    continue;
-                }
-                const qsizetype animations = lower.indexOf(
-                    QStringLiteral("/animations/"));
-                if (animations >= 0) {
-                    path = path.mid(animations + 12);
-                }
-                path.replace(QLatin1Char('/'), QStringLiteral(" › "));
-                return path;
-            }
-            return QStringLiteral("Unnamed animation search stack");
-        }
-
-        [[nodiscard]] bool subgraphCompatibleWithWeapon(
-            const AnimationSubgraphEntry& entry,
-            const PluginContent& plugin,
-            const WeaponRecord& weapon)
-        {
-            for (const std::uint32_t required : entry.requiredKeywords) {
-                const bool identifiesAWeapon = std::any_of(
-                    plugin.weapons.cbegin(), plugin.weapons.cend(),
-                    [required](const WeaponRecord& candidate) {
-                        return candidate.keywords.contains(required);
-                    });
-                if (identifiesAWeapon && !weapon.keywords.contains(required)) {
-                    return false;
-                }
-            }
-            return true;
         }
 
         [[nodiscard]] QString normalizedKey(const QString& value)
@@ -413,7 +375,7 @@ namespace reloadmaker
             .arg(_weaponSelections.size()).arg(total).arg(hidden).arg(counts.join("; ")));
         _weaponCombo->setCurrentIndex(-1); // Source -> plugin -> weapon; never select an unrelated first record.
         refreshAttachments();
-        refreshConfigurationChoices();
+
         updateSimulationControls();
         if (_pendingSession.isEmpty() && _weaponCombo->currentIndex() >= 0 && !_gameData.isEmpty()) {
             _rebuildTimer->start();
@@ -450,9 +412,7 @@ namespace reloadmaker
 
     void ReloadMakerController::refreshAttachments()
     {
-        // One flat workbench list: category headers, a header per slot and
-        // every option under it. Slot nesting (muzzle on barrel on receiver)
-        // is deliberately not shown; unavailable slots are grouped instead.
+        // One button-like row per slot. Its choices live in the slot dialog.
         const QSignalBlocker blocker(_partList);
         const int scroll = _partList->verticalScrollBar()->value();
         _partList->clear();
@@ -494,22 +454,11 @@ namespace reloadmaker
                 slotRow->setData(kSlotRole, QVariant::fromValue<qulonglong>(slot.key));
                 slotRow->setData(kFocusedRole, slot.key == _focusedSlot);
                 slotRow->setData(kCaptionRole, enabled ? QStringLiteral("%1 options").arg(slot.choices.size()) : QStringLiteral("unavailable"));
-                slotRow->setFlags(Qt::ItemIsEnabled);
+                const auto* installed=config->mod(selected);
+                slotRow->setData(kSelectionRole,installed?partName(*installed):QStringLiteral("Empty"));
+                slotRow->setFlags(enabled ? Qt::ItemIsEnabled | Qt::ItemIsSelectable : Qt::NoItemFlags);
+                slotRow->setToolTip(enabled?QStringLiteral("Choose %1").arg(slot.label):QStringLiteral("Install the required parent part to use this slot."));
                 if (slot.unverified) { slotRow->setToolTip(QStringLiteral("Partial slot/association metadata; compatibility needs review.")); }
-                const auto addOption = [&](std::uint32_t id, const QString& text, const QString& tip) {
-                    auto* item = addRow(text, 0);
-                    item->setData(kSlotRole, QVariant::fromValue<qulonglong>(slot.key));
-                    item->setData(kFormIdRole, id);
-                    item->setData(kInstalledRole, id == selected);
-                    item->setToolTip(tip);
-                    item->setFlags(enabled ? Qt::ItemIsEnabled | Qt::ItemIsSelectable : Qt::NoItemFlags);
-                };
-                if (slotMatch) { addOption(0, QStringLiteral("Empty"), QStringLiteral("Remove this part. Attachments on it become unavailable; their choices are kept.")); }
-                for (const auto* mod : options) {
-                    addOption(mod->formId, partName(*mod), QStringLiteral("%1\n%2\n%3%4").arg(mod->editorId, formIdText(mod->formId),
-                        mod->modelPath.isEmpty() ? QStringLiteral("Configuration only; no mesh") : mod->modelPath,
-                        mod->metadataWarning.isEmpty() ? QString() : QStringLiteral("\n") + mod->metadataWarning));
-                }
             }
         }
         _partList->verticalScrollBar()->setValue(scroll);
@@ -518,6 +467,40 @@ namespace reloadmaker
             .arg(plugin ? (_libraryMode ? plugin->origins.value(weapon->formId).plugin : plugin->fileName) : QString())
             .arg(config->activeMods().size()));
         if (_slotOverlay) { _slotOverlay->setSelected(_focusedSlot); }
+    }
+
+    void ReloadMakerController::showLoadoutChoices(SlotKey key)
+    {
+        if(_loadThread||_reloadCapturing||_rebuildTimer->isActive())return;
+        const auto* config=configuration();const auto* slot=config?config->slot(key):nullptr;
+        if(!slot||!config->availableSlots().contains(key))return;
+        const auto weapon=selectionRecordKey(_weaponCombo->currentIndex());const auto source=_browserSourceKey;
+        _focusedSlot=key;if(_slotOverlay)_slotOverlay->setSelected(key);
+        QDialog dialog(_window);dialog.setObjectName("LoadoutChoices");dialog.setWindowTitle("Choose "+slot->label);dialog.resize(560,520);
+        auto* layout=new QVBoxLayout(&dialog);auto* title=new QLabel(slot->label,&dialog);title->setObjectName("Section");layout->addWidget(title);
+        auto* search=new QLineEdit(&dialog);search->setPlaceholderText("Filter "+slot->label.toLower()+" options…");search->setClearButtonEnabled(true);layout->addWidget(search);
+        auto* choices=new QListWidget(&dialog);choices->setObjectName("LoadoutOptions");choices->setItemDelegate(new LoadoutDelegate(choices));layout->addWidget(choices,1);
+        const auto add=[&](std::uint32_t id,const QString& text,const QString& tip){
+            auto* item=new QListWidgetItem(text,choices);item->setData(kFormIdRole,id);item->setData(kInstalledRole,id==config->selected(key));item->setToolTip(tip);
+            if(id==config->selected(key))choices->setCurrentItem(item);
+        };
+        add(0,"Empty","Remove this part. Dependent slots become unavailable; their choices are kept.");
+        for(auto id:slot->choices)if(const auto* mod=config->mod(id))add(id,cleanPartName(mod->name.isEmpty()?mod->editorId:mod->name),
+            QString("%1\n%2\n%3\n%4").arg(mod->editorId,formIdText(id),mod->modelPath,mod->metadataWarning));
+        auto* buttons=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,&dialog);buttons->button(QDialogButtonBox::Ok)->setText("Use selected");layout->addWidget(buttons);
+        connect(search,&QLineEdit::textChanged,&dialog,[choices,buttons](const QString& query){
+            for(int i=0;i<choices->count();++i){auto* item=choices->item(i);item->setHidden(!item->text().contains(query,Qt::CaseInsensitive)&&!item->toolTip().contains(query,Qt::CaseInsensitive));}
+            buttons->button(QDialogButtonBox::Ok)->setEnabled(choices->currentItem()&&!choices->currentItem()->isHidden());
+        });
+        connect(choices,&QListWidget::currentItemChanged,&dialog,[buttons](QListWidgetItem* current){buttons->button(QDialogButtonBox::Ok)->setEnabled(current&&!current->isHidden());});
+        connect(buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
+        connect(choices,&QListWidget::itemDoubleClicked,&dialog,&QDialog::accept);
+        if(dialog.exec()!=QDialog::Accepted||!choices->currentItem()||choices->currentItem()->isHidden())return;
+        auto* current=configuration();
+        if(source!=_browserSourceKey||weapon!=selectionRecordKey(_weaponCombo->currentIndex())||!current||!current->availableSlots().contains(key))return;
+        const auto id=choices->currentItem()->data(kFormIdRole).toUInt();
+        if(current->selected(key)==id)return;
+        if(current->select(key,id)){refreshAttachments();scheduleRebuild();++_revision;}
     }
 
     void ReloadMakerController::scrollToFocusedSlot()
@@ -665,80 +648,6 @@ namespace reloadmaker
         // Descendant cartridge tracks and other imported models stay independent.
         for (int block : siblings) { _partAlignmentAnchors.insert(block, anchor); }
         return true;
-    }
-
-    void ReloadMakerController::refreshConfigurationChoices()
-    {
-        refreshAnimationSetChoices();
-    }
-
-    void ReloadMakerController::refreshAnimationSetChoices()
-    {
-        const QSignalBlocker blocker(_animationSetCombo);
-        _animationSetCombo->clear();
-        _animationSubgraphSelections.clear();
-        _animationSetCombo->addItem(
-            QStringLiteral("Select an animation / reload set…"));
-        _animationSubgraphSelections.append(AnimationSubgraphSelection{});
-        _animationSetCombo->addItem(
-            QStringLiteral("Automatic from selected OMOD keywords"));
-        _animationSetCombo->setItemData(
-            1,
-            QStringLiteral(
-                "Use only the weapon and OMOD keywords decoded from the plugin. "
-                "This can be incomplete for complex weapon mods."),
-            Qt::ToolTipRole);
-        _animationSubgraphSelections.append(
-            AnimationSubgraphSelection{ -1, -1 });
-
-        const PluginContent* plugin = currentPlugin();
-        const WeaponRecord* weapon = currentWeapon();
-        if (!plugin || !weapon) {
-            return;
-        }
-
-        int candidateCount = 0;
-        int onlyCandidate = -1;
-        for (int recordIndex = 0;
-             recordIndex < plugin->animationSubgraphs.size();
-             ++recordIndex) {
-            const AnimationSubgraphRecord& record =
-                plugin->animationSubgraphs.at(recordIndex);
-            for (int entryIndex = 0; entryIndex < record.entries.size(); ++entryIndex) {
-                const AnimationSubgraphEntry& entry = record.entries.at(entryIndex);
-                if (!entry.firstPerson() ||
-                    !subgraphCompatibleWithWeapon(entry, *plugin, *weapon)) {
-                    continue;
-                }
-
-                QStringList keywordText;
-                for (const std::uint32_t keyword : entry.requiredKeywords) {
-                    keywordText.append(formIdText(keyword));
-                }
-                const int comboIndex = _animationSetCombo->count();
-                _animationSetCombo->addItem(
-                    QStringLiteral("%1  ·  %2")
-                        .arg(significantAnimationRoot(entry), record.editorId));
-                _animationSetCombo->setItemData(
-                    comboIndex,
-                    QStringLiteral(
-                        "RACE: %1\nRequired keywords: %2\nBehavior: %3\nSearch order:\n  %4")
-                        .arg(record.editorId,
-                             keywordText.join(QStringLiteral(", ")),
-                             entry.behaviorPath,
-                             entry.animationSearchPaths.join(
-                                 QStringLiteral("\n  "))),
-                    Qt::ToolTipRole);
-                _animationSubgraphSelections.append(
-                    AnimationSubgraphSelection{ recordIndex, entryIndex });
-                ++candidateCount;
-                if (candidateCount == 1) {
-                    onlyCandidate = comboIndex;
-                }
-            }
-        }
-
-        _animationSetCombo->setCurrentIndex(candidateCount == 1 ? onlyCandidate : 1);
     }
 
     void ReloadMakerController::refreshAnimations()
@@ -917,41 +826,10 @@ namespace reloadmaker
             return false;
         }
         const QVector<std::uint32_t> keywords = activeAnimationKeywords();
-        const int selectionIndex = _animationSetCombo->currentIndex();
-        if (selectionIndex < 0 ||
-            selectionIndex >= _animationSubgraphSelections.size()) {
-            error = QStringLiteral("Choose an animation / reload set");
-            return false;
-        }
-        const AnimationSubgraphSelection selection =
-            _animationSubgraphSelections.at(selectionIndex);
-        if (selection.prompt()) {
-            error = QStringLiteral(
-                "Choose an explicit animation / reload set, or select the automatic keyword mode");
-            return false;
-        }
-
-        const AnimationSubgraphEntry* subgraph = nullptr;
-        QString subgraphAuthority;
-        if (selection.automatic()) {
-            subgraph = plugin->resolveFirstPersonSubgraph(keywords);
-            subgraphAuthority = QStringLiteral("automatic-keywords");
-        } else if (selection.recordIndex >= 0 &&
-                   selection.recordIndex < plugin->animationSubgraphs.size()) {
-            const AnimationSubgraphRecord& record =
-                plugin->animationSubgraphs.at(selection.recordIndex);
-            if (selection.entryIndex >= 0 &&
-                selection.entryIndex < record.entries.size()) {
-                subgraph = &record.entries.at(selection.entryIndex);
-                subgraphAuthority = QStringLiteral("explicit:%1")
-                                        .arg(record.editorId);
-            }
-        }
+        const auto* subgraph = plugin->resolveFirstPersonSubgraph(keywords);
+        const QString subgraphAuthority = QStringLiteral("automatic-keywords");
         if (!subgraph) {
-            error = selection.automatic()
-                ? QStringLiteral(
-                      "The configured weapon keywords match no first-person RACE subgraph; choose an explicit animation / reload set")
-                : QStringLiteral("The selected animation / reload set is no longer available");
+            error = QStringLiteral("The equipped weapon and OMOD keywords match no first-person animation subgraph.");
             return false;
         }
         _animationSearchPaths = subgraph->animationSearchPaths;

@@ -50,55 +50,51 @@ try:
     for name in ['glock','ru556']:
         edit('testbed',name=name);s=ready();sim();preserved[name]=s['magazineGrabGrips']
     edit('testbed',name='m1a');s=ready()
-    choices={a['key']:a['selected'] for a in s['slots']};initial_set=s['animationSet']
+    choices={a['key']:a['selected'] for a in s['slots']}
     magazine=next(a for a in s['slots'] if a['name']=='Magazine')
     receiver=next(a for a in s['slots'] if a['name']=='Receiver')
-    sets=[a for a in s['animationSets'] if a['identity'].get('mode')=='explicit' and a['identity'].get('record')=='M1A.esp:001081']
-    assert len(sets)==2
-    for animation in sets:
-        edit('configure',animationSet=animation['index']);ready()
-        for choice in magazine['choices']:
-            edit('configure',slot=magazine['key'],mod=choice['id']);ready();s=op('reset');sim()
-            capacity=20 if 'Extended' in choice['name'] else 10
-            assert s['ammunition']['capacity']==capacity and not s['ammunition']['automatic']
-            assert s['magazineRail']['version']==3 and s['magazineRail']['inputPath']=='straight' and len(s['magazineRail']['motionSamples'])>10
-            closed=relative('WeaponBolt');handle=relative('WeaponExtra1');receiver_pose=relative('WeaponExtra3')
-            op('trigger_down');op('step',seconds=.075)
-            assert math.dist(closed[0],relative('WeaponBolt')[0])>1,'Missing firing bolt motion'
-            assert math.dist(handle[0],relative('WeaponExtra1')[0])>1,'Operating handle did not reciprocate'
-            op('step',seconds=1);assert sim()['ammunition']['shotsFired']==1,'Semi-auto held trigger repeated'
-            for _ in range(capacity-1):op('fire');op('step',seconds=1)
-            empty=sim();assert empty['m1a']['boltLocked'] and not empty['ammunition']['chambered']
-            open_bolt=relative('WeaponBolt');open_handle=relative('WeaponExtra1')
-            assert math.dist(handle[0],open_handle[0])>7 and math.dist(closed[0],open_bolt[0])>4
-            assert max(abs(a-b) for ra,rb in zip(closed[1],open_bolt[1]) for a,b in zip(ra,rb))>.1,'Bolt rotation was flattened'
-            for shape in empty['magazineShapes']:
-                if shape['cartridge']:assert shape['flags']&1,'Empty magazine still shows cartridges'
-                elif shape['name'].startswith('MagFollower:'):assert not shape['flags']&1,'Follower was hidden as a cartridge'
-            op('mag_out');op('step',seconds=.7)
-            dropped=op('drop_magazine');assert all(a['flags']&1 for a in dropped['magazineRoots'])
-            assert math.dist(receiver_pose[0],relative('WeaponExtra3')[0])<.005,'Drop moved receiver geometry'
-            grabbed=op('grab_magazine');assert grabbed['magazineGrip']['applied'],grabbed['magazineGrip']
-            assert all(not a['flags']&1 for a in grabbed['magazineShapes'] if a['cartridge'])
-            if animation==sets[0]:photo(choice['record'].split(':')[1]+'-held')
-            rail=grabbed['magazineRail'];axis=rail['outwardInWeapon'];distance=rail['travel']*.6
-            capture=op('move_magazine',position=[a*distance for a in axis]);assert capture['magazine']['phase']=='Full magazine on rail'
-            op('move_magazine',distance=distance)
-            a=relative('Mag')
-            moved=op('move_magazine',distance=rail['travel']*.1)
-            assert math.dist(moved['magazine']['offset'],[v*rail['travel']*.1 for v in axis])<.0001
-            b=relative('Mag');assert max(abs(x-y) for ra,rb in zip(a[1],b[1]) for x,y in zip(ra,rb))>.05,'Linear input flattened native magazine rotation'
-            seated=op('move_magazine',distance=0)
-            assert seated['magazinePresent'] and seated['m1a']['boltLocked'] and not seated['ammunition']['chambered']
-            op('pull',progress=1.08);op('release',cancel=True);assert sim()['m1a']['boltLocked']
-            op('pull',progress=1.08);op('release');fed=op('step',seconds=1)
-            assert fed['ammunition']['chambered'] and fed['ammunition']['magazineRounds']==capacity-1
-            op('pull',progress=1);assert sim()['ammunition']['roundsEjected']==1
-            op('release');op('step',seconds=1)
-            op('reload');loaded=op('step',seconds=10)
-            assert loaded['ammunition']['canFire'] and loaded['ammunition']['magazineRounds']==capacity-1
-            results['magazines'].append({'record':choice['record'],'animationSet':animation['name'],'capacity':capacity,'motionSamples':len(rail['motionSamples'])})
-            print('PASS magazine',choice['name'],'set',animation['index'],flush=True)
+    for choice in magazine['choices']:
+        edit('configure',slot=magazine['key'],mod=choice['id']);ready();s=op('reset');sim()
+        capacity=20 if 'Extended' in choice['name'] else 10
+        assert s['ammunition']['capacity']==capacity and not s['ammunition']['automatic']
+        assert s['magazineRail']['version']==3 and s['magazineRail']['inputPath']=='straight' and len(s['magazineRail']['motionSamples'])>10
+        closed=relative('WeaponBolt');handle=relative('WeaponExtra1');receiver_pose=relative('WeaponExtra3')
+        op('trigger_down');op('step',seconds=.075)
+        assert math.dist(closed[0],relative('WeaponBolt')[0])>1,'Missing firing bolt motion'
+        assert math.dist(handle[0],relative('WeaponExtra1')[0])>1,'Operating handle did not reciprocate'
+        op('step',seconds=1);assert sim()['ammunition']['shotsFired']==1,'Semi-auto held trigger repeated'
+        for _ in range(capacity-1):op('fire');op('step',seconds=1)
+        empty=sim();assert empty['m1a']['boltLocked'] and not empty['ammunition']['chambered']
+        open_bolt=relative('WeaponBolt');open_handle=relative('WeaponExtra1')
+        assert math.dist(handle[0],open_handle[0])>7 and math.dist(closed[0],open_bolt[0])>4
+        assert max(abs(a-b) for ra,rb in zip(closed[1],open_bolt[1]) for a,b in zip(ra,rb))>.1,'Bolt rotation was flattened'
+        for shape in empty['magazineShapes']:
+            if shape['cartridge']:assert shape['flags']&1,'Empty magazine still shows cartridges'
+            elif shape['name'].startswith('MagFollower:'):assert not shape['flags']&1,'Follower was hidden as a cartridge'
+        op('mag_out');op('step',seconds=.7)
+        dropped=op('drop_magazine');assert all(a['flags']&1 for a in dropped['magazineRoots'])
+        assert math.dist(receiver_pose[0],relative('WeaponExtra3')[0])<.005,'Drop moved receiver geometry'
+        grabbed=op('grab_magazine');assert grabbed['magazineGrip']['applied'],grabbed['magazineGrip']
+        assert all(not a['flags']&1 for a in grabbed['magazineShapes'] if a['cartridge'])
+        photo(choice['record'].split(':')[1]+'-held')
+        rail=grabbed['magazineRail'];axis=rail['outwardInWeapon'];distance=rail['travel']*.6
+        capture=op('move_magazine',position=[a*distance for a in axis]);assert capture['magazine']['phase']=='Full magazine on rail'
+        op('move_magazine',distance=distance)
+        a=relative('Mag')
+        moved=op('move_magazine',distance=rail['travel']*.1)
+        assert math.dist(moved['magazine']['offset'],[v*rail['travel']*.1 for v in axis])<.0001
+        b=relative('Mag');assert max(abs(x-y) for ra,rb in zip(a[1],b[1]) for x,y in zip(ra,rb))>.05,'Linear input flattened native magazine rotation'
+        seated=op('move_magazine',distance=0)
+        assert seated['magazinePresent'] and seated['m1a']['boltLocked'] and not seated['ammunition']['chambered']
+        op('pull',progress=1.08);op('release',cancel=True);assert sim()['m1a']['boltLocked']
+        op('pull',progress=1.08);op('release');fed=op('step',seconds=1)
+        assert fed['ammunition']['chambered'] and fed['ammunition']['magazineRounds']==capacity-1
+        op('pull',progress=1);assert sim()['ammunition']['roundsEjected']==1
+        op('release');op('step',seconds=1)
+        op('reload');loaded=op('step',seconds=10)
+        assert loaded['ammunition']['canFire'] and loaded['ammunition']['magazineRounds']==capacity-1
+        results['magazines'].append({'record':choice['record'],'animationSource':command('state')['animationSource'],'capacity':capacity,'motionSamples':len(rail['motionSamples'])})
+        print('PASS magazine',choice['name'],flush=True)
     for choice in receiver['choices']:
         edit('configure',slot=receiver['key'],mod=choice['id']);ready();s=op('reset')
         assert not s['ammunition']['automatic']
@@ -107,7 +103,6 @@ try:
         results['receivers'].append(choice['record'])
     for key,value in choices.items():
         if next(a for a in command('state')['slots'] if a['key']==key)['selected']!=value:edit('configure',slot=key,mod=value);ready()
-    edit('configure',animationSet=initial_set);ready()
     exported=edit('export',kind='simulation');payload=json.loads(Path(exported['path']).read_text(encoding='utf-8'))
     assert payload['format']=='reload-maker-m1a-simulation' and payload['reciprocatingHandle'] and payload['magazineInteraction']['version']==3
     bundled=edit('export',kind='reload_bundle');bundle=json.loads(Path(bundled['path']).read_text(encoding='utf-8'))
@@ -117,6 +112,6 @@ try:
     for name in ['glock','ru556']:
         edit('testbed',name=name);s=ready();assert s['magazineGrabGrips']==preserved[name];sim()
     (OUT/'validated.json').write_text(json.dumps(results,indent=2),encoding='utf-8')
-    print('PASS M1A normal/Quick reloads, all magazines/receivers, source bolt rotation and handle coupling, straight input with animated magazine, payload states, native fits and exports')
+    print('PASS M1A OMOD-resolved reloads, all magazines/receivers, source bolt rotation and handle coupling, straight input with animated magazine, payload states, native fits and exports')
 finally:
     edit('open_project',path=str(backup));ready();edit('save_project',path=original)
