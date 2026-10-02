@@ -88,6 +88,7 @@ void ReloadMakerController::createUi() {
     connect(setupTools,&QPushButton::clicked,this,&ReloadMakerController::showSetup);
     auto* roadmap=new QPushButton("Author reload",header);header->addWidget(roadmap);
     connect(roadmap,&QPushButton::clicked,this,&ReloadMakerController::showAuthoringRoadmap);
+    auto* coverage=new QPushButton("Reload library",header);header->addWidget(coverage);connect(coverage,&QPushButton::clicked,this,&ReloadMakerController::showPackCoverage);
     auto* saveProject = new QToolButton(header);
     saveProject->setText("Save project");
     saveProject->setPopupMode(QToolButton::MenuButtonPopup);
@@ -539,8 +540,10 @@ void ReloadMakerController::refreshWeaponPicker() {
         const QString origin = _libraryMode ? plugin.origins.value(weapon.formId).plugin : plugin.fileName;
         if (!filter.isEmpty() && origin.compare(filter, Qt::CaseInsensitive) != 0 &&
             plugin.origins.value(weapon.formId).winner.compare(filter, Qt::CaseInsensitive) != 0) continue;
-        _weaponPicker->addItem(weapon.name.isEmpty() ? weapon.editorId : weapon.name, index);
-        _weaponPicker->setItemData(_weaponPicker->count() - 1, QStringLiteral("%1 · %2").arg(weapon.editorId, origin), Qt::ToolTipRole);
+        const auto covered=coverageLabel(selectionRecordKey(index));
+        _weaponPicker->addItem((weapon.name.isEmpty()?weapon.editorId:weapon.name)+(covered.isEmpty()?QString():" · "+covered),index);
+        const auto winner=plugin.origins.value(weapon.formId).winner;
+        _weaponPicker->setItemData(_weaponPicker->count()-1,QStringLiteral("%1\nOrigin: %2\nWinning weapon record: %3\n%4").arg(weapon.editorId,origin,winner.isEmpty()?plugin.fileName:winner,covered.isEmpty()?"Workspace coverage has not been scanned":covered+" · check the selected configuration's sources before export"),Qt::ToolTipRole);
     }
     _weaponPicker->setCurrentIndex(_weaponPicker->findData(_weaponCombo->currentIndex()));
     _weaponPicker->setEnabled(_weaponPicker->count() > 0 && !_loadThread);

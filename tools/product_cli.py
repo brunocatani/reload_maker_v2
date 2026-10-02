@@ -36,6 +36,8 @@ def main():
     build.add_argument('--initialize', action='store_true')
     inspect = packs.add_parser('inspect-project')
     inspect.add_argument('--project', required=True)
+    coverage = packs.add_parser('inventory')
+    coverage.add_argument('--project', action='append', default=[])
     export = packs.add_parser('export')
     export.add_argument('--project', required=True)
     export.add_argument('--output', required=True)
@@ -69,7 +71,10 @@ def main():
         return
     else:
         from product_packs import load_pack, build as build_packs
-        if args.action == 'validate':
+        if args.action == 'inventory':
+            from product_coverage import inventory
+            result=inventory(settings.workspace,args.project)
+        elif args.action == 'validate':
             loaded = [load_pack(Path(p)) for p in args.pack]
             result = dict(ok=True, packs=[dict(id=p['manifest']['id'], objects=len(p['objects'])) for p in loaded])
         elif args.action == 'build':

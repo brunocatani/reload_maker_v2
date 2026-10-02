@@ -126,6 +126,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     if(!reading&&request.contains("expectedRevision"))require(request["expectedRevision"].toDouble()==double(_revision),"Stale document revision; read state again");
     if(method=="state")return studioState();
     if(method=="installation")return installationState();
+    if(method=="pack_coverage")return packCoverageState(p["refresh"].toBool());
     if(method=="inspect_sources")return auditSources(p["evidence"].toObject());
     if(method=="pack_job")return packCommand(p);
     if(method=="roadmap")return roadmapCommand(p);

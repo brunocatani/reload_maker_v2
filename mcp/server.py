@@ -431,6 +431,15 @@ def get_installation() -> dict:
     return command('installation')
 
 @mcp.tool()
+def get_pack_coverage(refresh: bool = False) -> dict:
+    """Show authored pack projects by source weapon. Refresh starts a background
+    inventory job; poll pack_job until complete, then read this again. Includes
+    workspace/packs and previously selected project paths. Saved coverage does
+    not establish current source compatibility or in-game enablement.
+    """
+    return command('pack_coverage',dict(refresh=refresh))
+
+@mcp.tool()
 def pack_job(operation: str = 'state', packs: list[str] | None = None,
              installation: str = '', initialize: bool = False,
              project: str = '', output: str = '',

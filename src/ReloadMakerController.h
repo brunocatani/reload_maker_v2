@@ -337,6 +337,13 @@ namespace reloadmaker
         QJsonObject magazineSetupState() const;
         QJsonObject configureMagazineSetup(const QJsonObject&);
         void showMagazineSetup();
+        QJsonObject packCoverageState(bool refresh=false);
+        void showPackCoverage();
+        QString selectionRecordKey(int selection) const;
+        QString coverageLabel(const QString& record) const;
+        void updatePackCoverage(const QJsonObject&);
+        QJsonObject _packCoverage;
+        QHash<QString,QString> _coverageLabels;
         QString magazinePiecePath(const QModelIndex&) const;
         bool sampledMagazinePayload() const;
         bool buildSourceSimulationRig(SimulationRig&,QString&);

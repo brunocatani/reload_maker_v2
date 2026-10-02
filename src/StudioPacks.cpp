@@ -42,10 +42,11 @@ QJsonObject ReloadMakerController::packCommand(const QJsonObject& request) {
     }
     if(_packProcess)throw std::runtime_error("A pack job is already running");
     const bool saving=operation=="save-configuration";
+    const bool inventory=operation=="inventory";
     const bool authoring=operation=="export"||operation=="inspect-project"||saving,cooking=operation=="cook"||operation=="prepare";
-    if(operation!="build"&&operation!="validate"&&!authoring&&!cooking)throw std::runtime_error("Unknown pack operation");
+    if(operation!="build"&&operation!="validate"&&!authoring&&!cooking&&!inventory)throw std::runtime_error("Unknown pack operation");
     const auto packs=request["packs"].toArray();
-    if(!authoring&&!cooking&&(packs.isEmpty()||packs.size()>256))throw std::runtime_error("Select between one and 256 finished pack folders");
+    if(!authoring&&!cooking&&!inventory&&(packs.isEmpty()||packs.size()>256))throw std::runtime_error("Select between one and 256 finished pack folders");
     const QDir application(QCoreApplication::applicationDirPath());
     const auto python=application.filePath("runtime/python/python.exe");
     const auto entry=application.filePath("tools/product_cli.py");
@@ -57,7 +58,10 @@ QJsonObject ReloadMakerController::packCommand(const QJsonObject& request) {
         if(!QFileInfo(request["job"].toString()).isFile()||request["output"].toString().isEmpty())throw std::runtime_error("Select a frozen asset job and new finished NIF path");
         arguments<<(operation=="cook"?"cook-object":"prepare-object")<<"--job"<<request["job"].toString()<<"--output"<<request["output"].toString();
     } else arguments<<"packs"<<operation;
-    if(authoring) {
+    if(inventory) {
+        const auto projects=request["projects"].toArray();if(projects.size()>512)throw std::runtime_error("Too many explicit pack projects");
+        for(const auto& project:projects){if(!project.isString()||project.toString().isEmpty())throw std::runtime_error("Choose a pack project path");arguments<<"--project"<<project.toString();}
+    }else if(authoring) {
         const auto project=request["project"].toString();
         if(project.isEmpty()||(!saving&&!QFileInfo(project).isFile()))throw std::runtime_error("Select an authored pack project");
         arguments<<"--project"<<project;
@@ -88,7 +92,9 @@ QJsonObject ReloadMakerController::packCommand(const QJsonObject& request) {
         const bool success=code==0&&status==QProcess::NormalExit&&result["ok"].toBool();
         _packJob["phase"]=success?"complete":"failed";_packJob["result"]=result;
         if(!success)_packJob["error"]=result.value("error").toString(QString::fromUtf8(process->readAllStandardError()).right(8192));
-        QFile::remove(_packCancelFile);_packProcess=nullptr;process->deleteLater();emit packJobChanged();
+        QFile::remove(_packCancelFile);_packProcess=nullptr;process->deleteLater();
+        if(success&&_packJob["operation"]=="inventory")updatePackCoverage(result);
+        emit packJobChanged();
     });
     process->start();emit packJobChanged();return _packJob;
 }
