@@ -236,6 +236,8 @@ namespace reloadmaker
         void refreshFingerEditor();
         void editFinger(int joint, const Quaternionf& rotation);
         bool saveSession(const QString& path = {});
+        QString suggestedSessionPath() const;
+        bool beginWeaponProject(int selectedIndex);
         void openSession(const QString& path);
         void restoreSessionSelection();
         void startCommandServer();

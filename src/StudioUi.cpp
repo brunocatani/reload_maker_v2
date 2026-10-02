@@ -99,7 +99,7 @@ void ReloadMakerController::createUi() {
     saveAs->setShortcut(QKeySequence::SaveAs);
     saveProject->setMenu(saveMenu);
     connect(saveAs,&QAction::triggered,this,[this] {
-        const auto path=QFileDialog::getSaveFileName(_window,"Save Reload Maker project",studioDataPath("workspace/reload.project.json"),"Reload Maker project (*.json)");
+        const auto path=QFileDialog::getSaveFileName(_window,"Save Reload Maker project",suggestedSessionPath(),"Reload Maker project (*.json)");
         if(!path.isEmpty())saveSession(path);
     });
     auto* importRecords = new QPushButton("Import", header);
@@ -260,7 +260,8 @@ void ReloadMakerController::createUi() {
     _showArmsCheck->setChecked(true);
 
         connect(_weaponCombo, qOverload<int>(&QComboBox::currentIndexChanged),
-                this, [this](int) {
+                this, [this](int selectedIndex) {
+                    if(beginWeaponProject(selectedIndex))return;
                     refreshWeaponPicker();
                     refreshAttachments();
                     refreshConfigurationChoices();

@@ -113,6 +113,7 @@ namespace reloadmaker {
                 setStatus(result->error, true); return;
             }
             setLibraryResources(nullptr);
+            if(_pendingSession.isEmpty())_sessionPath.clear();
             clearAssetCaches();
             _libraryMode = true;
             _launchSnapshot = result->snapshot;

@@ -2,6 +2,7 @@
 #include "MagazineGuide.h"
 #include "MagazineReference.h"
 #include "AuthoringProgress.h"
+#include "AuthoringPaths.h"
 #include "StudioPaths.h"
 #include "SourceEvidence.h"
 #include "ReloadTemplates.h"
@@ -40,12 +41,49 @@ QJsonObject ReloadMakerController::animationSetIdentity(int index)const {
     return {{"mode","explicit"},{"record",recordIdentity(*plugin,record.formId)},{"keywords",QJsonArray::fromStringList(keywords)},
         {"paths",QJsonArray::fromStringList(entry.animationSearchPaths)},{"behavior",entry.behaviorPath}};
 }
+QString ReloadMakerController::suggestedSessionPath() const {
+    if(!currentWeapon())return studioDataPath("workspace/projects/new.project.json");
+    const auto normalize=[](QString value){return value.replace('\\','/').toLower();};
+    QJsonObject source{{"data",normalize(_gameData)}};
+    if(_libraryMode) {
+        source["mode"]="mo2-profile";source["instance"]=normalize(_launchSnapshot.instancePath);source["profile"]=_launchSnapshot.profileName.toLower();
+    }else {
+        source["mode"]=_package.resourceData.isEmpty()?"ordered-packages":"explicit-data";
+        if(!_package.plugins.isEmpty()){QJsonArray inputs;for(const auto& path:_package.plugins)inputs.append(normalize(path));source["plugins"]=inputs;}
+        else source["package"]=normalize(_package.sourcePath);
+        if(!_package.resourceData.isEmpty())source["resourceData"]=normalize(_package.resourceData);
+    }
+    const auto relative=authoringProjectPath(poseRecordKey(currentWeapon()->formId),source);
+    return relative.isEmpty()?QString():studioDataPath(relative);
+}
+bool ReloadMakerController::beginWeaponProject(int selectedIndex) {
+    const int previousIndex=_renderedWeapon;
+    if(_loadThread||!_pendingSession.isEmpty()||previousIndex<0||selectedIndex<0||previousIndex==selectedIndex)return false;
+    QString oldPath;
+    {const QSignalBlocker blocker(_weaponCombo);_weaponCombo->setCurrentIndex(previousIndex);
+        if(_reloadCapturing||_packProcess){setStatus("Finish the current capture or pack job before changing weapons.",true);return true;}
+        if(!saveSession())return true;
+        oldPath=_sessionPath;
+        _weaponCombo->setCurrentIndex(selectedIndex);
+    }
+    const auto next=suggestedSessionPath();_sessionPath.clear();
+    if(QFileInfo(next).isFile()) {
+        openSession(next);
+        if(!_loadThread&&_pendingSession.isEmpty()) {
+            const QSignalBlocker blocker(_weaponCombo);_weaponCombo->setCurrentIndex(previousIndex);_sessionPath=oldPath;refreshWeaponPicker();
+        }
+        return true;
+    }
+    return false;
+}
 bool ReloadMakerController::saveSession(const QString& requested) {
     if (!currentWeapon() || _loadThread) return true;
-    const QString path = requested.isEmpty() ? (_sessionPath.isEmpty() ? studioDataPath("workspace/current.project.json") : _sessionPath) : requested;
+    const QString path = requested.isEmpty() ? (_sessionPath.isEmpty() ? suggestedSessionPath() : _sessionPath) : requested;
+    if(path.isEmpty()){setStatus("Cannot identify this weapon's originating plugin for saving.",true);return false;}
     const QString absolute = QFileInfo(path).absoluteFilePath();
     if (!absolute.startsWith(QDir(studioRoot()).absolutePath()+"/", Qt::CaseInsensitive)) { setStatus("Save projects inside the Reload Maker V2 workspace.", true); return false; }
     QJsonObject record{{"format",1},{"kind","reload-maker-v2-project"},{"package",_package.sourcePath},{"gameData",_gameData},
+        {"weaponName",currentWeapon()->name.isEmpty()?currentWeapon()->editorId:currentWeapon()->name},{"weaponEditorId",currentWeapon()->editorId},
         {"library",_libraryMode},{"mo2Instance",_mo2Instance},{"mo2Profile",_libraryMode?_launchSnapshot.profileName:QString()},{"weapon",poseRecordKey(currentWeapon()->formId)},
         {"body",_bodyCombo->currentData().toString()},{"animationSet",_animationSetCombo->currentText()},
         {"animation",_activeAnimationPath},{"seconds",_playbackTime},{"motionMode",_motionMode->currentIndex()},

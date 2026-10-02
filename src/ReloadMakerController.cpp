@@ -249,7 +249,7 @@ namespace reloadmaker
 
     void ReloadMakerController::openPackage(const QString& path)
     {
-        startPackageLoad(path, _gameDataText);
+        startPackageLoad(path, _gameDataText,true);
     }
 
     /* Source indexing is worker-owned; installation and every NifModel/GL call

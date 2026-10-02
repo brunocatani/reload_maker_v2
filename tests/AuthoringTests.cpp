@@ -1,4 +1,5 @@
 #include "AuthoringProgress.h"
+#include "AuthoringPaths.h"
 #include <QCoreApplication>
 #include <QSet>
 #include <QTextStream>
@@ -8,6 +9,13 @@ void check(bool value,const char* message){if(!value)throw std::runtime_error(me
 int main(int argc,char** argv) {
     QCoreApplication application(argc,argv);
     try {
+        const QJsonObject source{{"mode","mo2-profile"},{"profile","game test"}};
+        const auto path=authoringProjectPath("Example Weapon.esp:000AbC",source);
+        check(path.startsWith("workspace/projects/example weapon.esp/000abc/")&&path.endsWith("/authoring.project.json"),"Authoring path lost originating plugin/weapon grouping");
+        check(path==authoringProjectPath("example weapon.ESP:000abc",source),"Record case split one authoring identity");
+        check(path!=authoringProjectPath("Example Weapon.esp:000abc",{{"mode","mo2-profile"},{"profile","overhaul"}}),"Two source profiles share a save destination");
+        for(const auto* invalid:{"../Mod.esp:000abc","Folder\\Mod.esp:000abc","Mod.esp:1234567","Mod:000abc"})
+            check(authoringProjectPath(invalid,source).isEmpty(),"Unsafe or ambiguous weapon namespace accepted");
         std::array<AuthoringStepInput,12> inputs;for(int i=0;i<12;++i)inputs[i]={true,true,QString(),{{"input",i}}};
         const auto initial=authoringProgress(inputs,{});QJsonObject reviews;for(int i=0;i<12;++i)reviews[QString::number(i)]=initial[i].toObject()["fingerprint"];
         check(validAuthoringReviews(reviews),"Cannot read valid reviews");for(const auto& item:authoringProgress(inputs,reviews))check(item.toObject()["status"]=="reviewed","Unchanged data lost its review");

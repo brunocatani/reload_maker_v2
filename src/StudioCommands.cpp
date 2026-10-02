@@ -117,7 +117,7 @@ QJsonObject ReloadMakerController::studioState() const {
         {"playing",_playing||_reloadPlaying},{"motionMode",_motionMode->currentIndex()},{"anchors",anchors},
         {"interaction",interactionGripState()},{"handPoses",poses},{"partGrips",grips},{"magazineGrabGrips",magazineGrabs},{"magazineEditor",magazineEditorState()},{"recipeWindows",_reloadRecipe?int(_reloadRecipe->windows.size()):0},
         {"recipeTracks",_reloadRecipe?int(_reloadRecipe->tracks.size()):0},{"status",_window->statusBar()->currentMessage()},
-        {"lastError",_lastError},{"project",_sessionPath},{"camera",_window->getGLView()->studioCameraState()},{"nativeApplicationShell",false}};
+        {"lastError",_lastError},{"project",_sessionPath},{"suggestedProject",suggestedSessionPath()},{"camera",_window->getGLView()->studioCameraState()},{"nativeApplicationShell",false}};
 }
 QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     const QString method=request["method"].toString();const auto p=request["params"].toObject();
@@ -185,7 +185,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     if(method=="collisions"){refreshCollisions();return _collisions->command(p);}
     if(method=="open_source") {
         const QString path=p["path"].toString();require(QFileInfo(path).exists(),"Source folder or ZIP does not exist");
-        startPackageLoad(path,p["gameData"].toString(_gameDataText));
+        startPackageLoad(path,p["gameData"].toString(_gameDataText),true);
     } else if(method=="open_library") {
         if(p.contains("instance")) { _mo2Instance=p["instance"].toString(); }
         if(p.contains("profile")) { _requestedMo2Profile=p["profile"].toString(); }
@@ -253,7 +253,8 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
         require(_lastError.isEmpty(),_lastError);++_revision;return simulationState();
     }
     else if(method=="select_weapon") {
-        const int index=p["index"].toInt(-1);require(index>=0&&index<_weaponCombo->count(),"Unknown weapon index");_weaponCombo->setCurrentIndex(index);rebuildWeapon();
+        const int index=p["index"].toInt(-1);require(index>=0&&index<_weaponCombo->count(),"Unknown weapon index");_weaponCombo->setCurrentIndex(index);
+        require(_weaponCombo->currentIndex()==index,"Weapon change failed: "+_lastError);if(!_loadThread)rebuildWeapon();
     } else if(method=="configure") {
         bool slotOk=false,modOk=false;
         const auto slot=p["slot"].toString().toULongLong(&slotOk);

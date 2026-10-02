@@ -11,7 +11,12 @@ def run():
     bad=work/'workspace/packs/unfinished/pack.project.json';bad.parent.mkdir(parents=True);bad.write_text('[]')
     broken=work/'workspace/packs/broken/pack.project.json';broken.parent.mkdir(parents=True)
     draft=json.loads(Path(paths[0]).read_text());broken.write_text(json.dumps(draft)) # Relative immutable inputs are deliberately missing here.
+    for context in ('base','overhaul'):
+        editor=work/'workspace/projects/example.esp/000800'/context/'authoring.project.json';editor.parent.mkdir(parents=True)
+        editor.write_text(json.dumps(dict(format=1,kind='reload-maker-v2-project',weapon='Example.esp:000800',weaponName='Example rifle',library=True,mo2Profile=context)))
     result=inventory(work,paths+[paths[0]])
+    assert len(result['authoringProjects'])==2 and {p['context'] for p in result['authoringProjects']}=={'base','overhaul'}
+    assert all(p['kind']=='authoring' and p['weapons'][0]['record']=='example.esp:000800' for p in result['authoringProjects'])
     valid=[p for p in result['projects'] if p['status']=='saved'];errors=[p for p in result['projects'] if p['status']=='invalid']
     assert len(valid)==12 and len(errors)==2 and all(p['error'] for p in errors)
     recognized=next(p for p in errors if Path(p['project'])==broken)
