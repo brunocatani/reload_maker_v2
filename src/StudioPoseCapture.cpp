@@ -45,7 +45,7 @@ void ReloadMakerController::applySavedPoseToPart() {
 }
 
 int ReloadMakerController::magazineGrabAnchor(const HandPosePlacement& placement)const {
-    if(isRifleConfiguration()) {
+    if(isRifleConfiguration()||_authoringRoadmaps.value(roadmapKey()).toObject().contains("magazineReference")) {
         const int index=currentMagazineAnchor();
         return index>=0&&sameGripAnchor(placement,_handPoseAnchors[index].description)?index:-1;
     }
@@ -121,7 +121,7 @@ void ReloadMakerController::resolveMagazineGrabGrip() {
     _simulationMagazineGrip->clear();_simulationMagazineGrip->addItem("Magazine grip · native hand",QString());
     if(!_simulationRig||!_reloadRecipe)return;
     const auto anchor=simulationMagazineAnchor();
-    if(!magazineGrabSupported(anchor))return;
+    if(anchor.ownerRecord.isEmpty()||magazineGrabAnchor(anchor)<0)return;
     const auto weapon=poseRecordKey(currentWeapon()->formId);
     const auto selected=magazineGripFor(weapon,anchor,_partGrips,_magazineGrabGrips,_magazineGrabDefaults,_magazineGrabError,_interactionHand);
     const auto id=selected?selected->pose.id:QString();
@@ -132,7 +132,7 @@ void ReloadMakerController::resolveMagazineGrabGrip() {
     _magazineGrabBridge={};
     for(int i=0;i<_nodeBindings.size();++i)if(_nodeBindings[i].nodeIndex==_reloadTrackNodes[_simulationRig->magazine]){_magazineGrabBinding=i;break;}
     if(_magazineGrabBinding<0){_magazineGrabError="The magazine grip has no live binding.";return;}
-    if(isRifleConfiguration()) {
+    if(isRifleConfiguration()||!sameGripAnchor(anchor,_reloadRecipe->tracks[_simulationRig->magazine].anchor)) {
         const int reference=currentMagazineAnchor();
         Transformf world,inverse;
         if(reference<0||!sceneNodeWorld(_handPoseAnchors[reference].node,world,_magazineGrabError)||

@@ -2,6 +2,7 @@
 #include "StudioWindow.h"
 #include "MagazineViewport.h"
 #include "MagazineGuide.h"
+#include "MagazineReference.h"
 #include "glview.h"
 #include "gl/glshape.h"
 #include "model/nifmodel.h"
@@ -12,7 +13,7 @@
 
 namespace reloadmaker {
 HandPosePlacement ReloadMakerController::simulationMagazineAnchor() const {
-    if(isRifleConfiguration()) {
+    if(isRifleConfiguration()||_authoringRoadmaps.value(roadmapKey()).toObject().contains("magazineReference")) {
         const int index=currentMagazineAnchor();
         return index>=0?_handPoseAnchors[index].description:HandPosePlacement{};
     }
@@ -36,7 +37,16 @@ void ReloadMakerController::prepareMagazineInteraction() {
     const auto anchor=simulationMagazineAnchor();
     ConnectTarget target;QString connectionName;
     Transformf connection;
-    if(isSrepEmbeddedMagazine()) {
+    const auto referenceJson=_authoringRoadmaps.value(roadmapKey()).toObject().value("magazineReference").toObject();
+    MagazineReference reference;
+    if(!referenceJson.isEmpty()&&(!readMagazineReference(referenceJson,reference,_magazineError)||reference.recipeId!=_reloadRecipe->id||currentMagazineAnchor()<0)) {
+        if(_magazineError.isEmpty())_magazineError="Magazine reference changed. Review its current carrier and hand reference.";return;
+    }
+    if(!referenceJson.isEmpty()&&reference.connectionMode!="source") {
+        Transformf carrier;if(!sceneNodeWorld(_sceneNodes[_reloadTrackNodes[rig.magazine]],carrier,_magazineError))return;
+        connectionName="Authored magazine connection";
+        connection=composed(carrier,reference.connectionMode=="custom"?reference.connectionInCarrier:Transformf{});
+    } else if(isSrepEmbeddedMagazine()) {
         connectionName="P-Mag";
         if(!sceneNodeWorld(_sceneNodes[_reloadTrackNodes[rig.magazine]],connection,_magazineError))return;
     } else {
@@ -93,6 +103,15 @@ void ReloadMakerController::prepareMagazineInteraction() {
     if(_magazineSetup) {
         _m1aLoadedMagazineFrame=_magazineSetup->loadedFrame;_m1aEmptyMagazineFrame=_magazineSetup->emptyFrame;
         if(_magazineSetup->motion=="native"&&!buildMagazineAnimation(*_reloadRecipe,_magazineSetup->entrySeconds,body,rail,_magazineError))return;
+        if(_magazineSetup->motion=="manual") {
+            const auto movement=std::find_if(_mechanisms.cbegin(),_mechanisms.cend(),[&](const auto& m){return m.id==_magazineSetup->movementId;});
+            if(movement==_mechanisms.cend()){_magazineError="The saved magazine movement is missing";return;}
+            for(const auto& follower:movement->followers) {
+                const auto found=std::find_if(_handPoseAnchors.cbegin(),_handPoseAnchors.cend(),[&](const auto& a){return sameMechanismPart(a.description,follower.anchor);});
+                if(found==_handPoseAnchors.cend()||!below(found->node,_sceneNodes[_reloadTrackNodes[rig.magazine]])){_magazineError="Magazine movement followers must belong to its physical carrier";return;}
+            }
+            if(!buildManualMagazineAnimation(*_reloadRecipe,*movement,body,rail,_magazineError))return;
+        }
     }
     bool empty=false,fullBody=false;
     for(const auto& shape:shapes) {
@@ -136,6 +155,7 @@ void ReloadMakerController::prepareMagazineInteraction() {
         if(configured.recipeId!=_reloadRecipe->id){_magazineError="Magazine guide source changed. Review or reset its configuration.";return;}
         if(!applyMagazineGuide(configured,rail,_magazineError))return;
     }
+    if(!referenceJson.isEmpty()&&reference.connectionMode!="source")rail.handle={rail.connection.translation.x,rail.connection.translation.y,rail.connection.translation.z};
     _magazineRail=rail;
 }
 void ReloadMakerController::updateMagazinePose() {

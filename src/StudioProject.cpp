@@ -1,5 +1,6 @@
 #include "ReloadMakerController.h"
 #include "MagazineGuide.h"
+#include "MagazineReference.h"
 #include "AuthoringProgress.h"
 #include "StudioPaths.h"
 #include "SourceEvidence.h"
@@ -147,10 +148,11 @@ void ReloadMakerController::openSession(const QString& path) {
         const auto plans=record["authoringRoadmaps"].toObject();
         if(!record["authoringRoadmaps"].isObject()||plans.size()>512){setStatus("Invalid authoring roadmap collection.",true);return;}
         for(const auto& value:plans){const auto plan=value.toObject();const int step=plan["step"].toInt(-1);
-            OperatingSetup setup;MagazineGuide guide;MagazineSetup magazine;
+            OperatingSetup setup;MagazineGuide guide;MagazineSetup magazine;MagazineReference reference;
             if(!value.isObject()||step<0||step>11||(plan.contains("sources")&&!validSourceEvidence(plan["sources"].toObject(),error))||
                  (plan.contains("operating")&&!readOperatingSetup(plan["operating"].toObject(),setup,error))||
                  (plan.contains("magazineGuide")&&!readMagazineGuide(plan["magazineGuide"].toObject(),guide,error))||
+                 (plan.contains("magazineReference")&&!readMagazineReference(plan["magazineReference"].toObject(),reference,error))||
                  (plan.contains("reviews")&&(!plan["reviews"].isObject()||!validAuthoringReviews(plan["reviews"].toObject())))||
                  (plan.contains("collisionDrafts")&&(!plan["collisionDrafts"].isObject()||!validCollisionDrafts(plan["collisionDrafts"].toObject())))||
                  (plan.contains("magazineSetup")&&!readMagazineSetup(plan["magazineSetup"].toObject(),magazine,error))){setStatus("Invalid saved authoring roadmap: "+error,true);return;}}

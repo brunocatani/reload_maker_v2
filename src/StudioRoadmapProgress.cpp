@@ -46,6 +46,7 @@ QJsonArray ReloadMakerController::roadmapProgress() const {
          {"openFrame",rig?_simulationRig->openFrame:-1},{"closedFrame",rig?_simulationRig->closedFrame:-1},{"fireDuration",isRifleConfiguration()?_rifleBoltDuration:0},
          {"boltTravel",isBoltActionConfiguration()?_boltCycle.inputTravel:0},{"boltEjection",isBoltActionConfiguration()?_boltCycle.ejectProgress:0}}};
     QJsonObject presentation=saved.value("magazineSetup").toObject();if(magazine){presentation["fullTrack"]=_magazineRail->fullTrack;presentation["emptyTrack"]=_magazineRail->emptyTrack;presentation["loadedFrame"]=sampledMagazinePayload()?_m1aLoadedMagazineFrame:0;presentation["emptyFrame"]=sampledMagazinePayload()?_m1aEmptyMagazineFrame:0;}
+    if(saved.contains("magazineReference"))presentation["reference"]=saved.value("magazineReference");
     steps[5]={rig,magazine,_magazineError.isEmpty()?"Inspect full, empty and pre-feed presentations around the native carrier.":_magazineError,presentation};
     steps[6]={magazine,magazine,"Test pickup along the finite straight guide and inspect the independent visible movement.",magazine?magazineRailJson(*_magazineRail):QJsonObject{}};
     QJsonArray hands;bool fitted=magazine;QString handError;

@@ -2,17 +2,26 @@
 #include "BoltCycle.h"
 #include "OperatingSetup.h"
 #include "MagazineGuide.h"
+#include "MagazineReference.h"
 #include <QCoreApplication>
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QTextStream>
+#include <QUuid>
 #include <stdexcept>
 #include <cmath>
 using namespace reloadmaker;
 namespace {
 void check(bool valid,const QString& error){if(!valid)throw std::runtime_error(error.toStdString());}
 void guideAuthoring() {
+    HandPosePlacement anchor{"animated-part","CustomBox","Root/CustomBox","Model.nif","Mod.esp:001234"};
+    MagazineReference reference{QString(64,'a'),magazineReferenceKey(anchor),"custom",Transformf{{1,2,3},{0,0,.70710678f,.70710678f}}};
+    QString referenceError;MagazineReference parsed;
+    check(readMagazineReference(magazineReferenceJson(reference),parsed,referenceError),referenceError);
+    check(reloadPoseDistance(reference.connectionInCarrier,parsed.connectionInCarrier)<1e-5f,"Connection frame changed during round trip");
+    auto renamed=anchor;renamed.anchorPath+="/Other";check(magazineReferenceKey(anchor)!=magazineReferenceKey(renamed),"Reference identity omitted its exact path");
+    auto invalid=magazineReferenceJson(reference);invalid["anchorKey"]="CustomBox";check(!readMagazineReference(invalid,parsed,referenceError),"Ambiguous named reference accepted");
     MagazineRail original;original.connection.rotation={0,0,.70710678f,.70710678f};original.outward={0,0,-1};original.travel=10;original.captureRadius=1;original.releaseMargin=.6f;
     MagazineGuide guide{QString(64,'a'),QVector3D(1,0,0),17,1.25f,.8f};QString error;MagazineGuide decoded;
     check(readMagazineGuide(magazineGuideJson(guide),decoded,error),error);
@@ -80,6 +89,20 @@ void fixture(const QString& path) {
     for(float x:{-1.f,1.f})for(float y:{-2.f,2.f})for(float z:{-5.f,3.f})body.append({x,y,z});
     for(float x:{-2.f,2.f})for(float y:{-3.f,14.f})for(float z:{-6.f,5.f})frame.append({x,y,z});
     MagazineRail rail;check(buildMagazineRail(r,4,"P-Mag",{},body,frame,rail,error),error);
+    PartMechanism movement;movement.id=QUuid::createUuid().toString(QUuid::WithoutBraces);movement.name="Authored magazine extraction";
+    movement.weaponRecord=r.source["weaponRecord"].toString();movement.anchor=r.tracks[4].anchor;
+    Transformf inverse;check(invertUniformTransform(r.tracks[4].poses.front(),inverse),"Fixture has invalid rest frame");
+    const auto local=rotated(inverse.rotation,{rail.outward.x()*rail.travel*3,rail.outward.y()*rail.travel*3,rail.outward.z()*rail.travel*3});
+    const float components[]{local.x,local.y,local.z};for(int axis=0;axis<3;++axis)if(std::abs(components[axis])>.0001f){MechanismStage stage;stage.axis=axis;stage.to=components[axis];movement.stages.append(stage);}
+    MechanismStage tilt;tilt.rotation=true;tilt.axis=0;tilt.to=20;movement.stages.append(tilt);
+    auto manual=rail;check(buildManualMagazineAnimation(r,movement,body,manual,error),error);
+    check(manual.motion.size()>16&&std::abs(manual.motion.back().rotation.w)<.999f,"Saved Move/Rotate magazine path lost rotation");
+    check(manual.outward==rail.outward&&manual.travel==rail.travel,"Visible movement changed the hand guide");
+    check(reloadPoseDistance(magazineAnimationDelta(manual,0),{})<1e-5f,"Authored magazine is not seated at zero");
+    auto badMovement=movement;badMovement.anchor.anchorPath+="/unrelated";
+    check(!buildManualMagazineAnimation(r,badMovement,body,manual,error),"Other-part magazine movement accepted");
+    badMovement=movement;badMovement.stages={MechanismStage{}};badMovement.stages[0].to=.001f;
+    check(!buildManualMagazineAnimation(r,badMovement,body,manual,error),"Incomplete extraction accepted");
     check(rail.fullTrack==4&&rail.emptyTrack==3,"Wrong full/empty branch");
     check(rail.outward.y()<-.2f&&rail.outward.z()<-.9f,"Rail lost the weapon-specific tilted extraction axis");
     check(rail.magazineMinProjection+rail.travel>rail.weaponMaxProjection,"Magazine does not completely clear the weapon");

@@ -16,7 +16,9 @@ bool magazineGrabSupported(const HandPosePlacement& anchor) {
 std::optional<PartGrip> magazineGripFor(const QString& weapon,const HandPosePlacement& anchor,
     const QVector<PartGrip>& library,const QHash<QString,QString>& assignments,
     const QHash<QString,QString>& defaults,QString& error,std::optional<PoseHand> hand) {
-    error.clear();if(!magazineGrabSupported(anchor))return {};
+    // The caller resolves the magazine role. A part's name is not its role;
+    // explicit assignments still require the exact owner-qualified frame.
+    error.clear();if(anchor.ownerRecord.isEmpty()||anchor.ownerModel.isEmpty()||anchor.anchorPath.isEmpty())return {};
     const auto key=magazineGrabKey(weapon,anchor.ownerRecord);
     const auto forHand=[&](const QHash<QString,QString>& values,const QString& base) {
         if(hand&&values.contains(handAssignmentKey(base,*hand)))return values.value(handAssignmentKey(base,*hand));
@@ -30,7 +32,7 @@ std::optional<PartGrip> magazineGripFor(const QString& weapon,const HandPosePlac
     if(id.isEmpty())return {};
     const PartGrip* found=nullptr;
     for(const auto& grip:library)if(grip.pose.id==id){if(found){error="Duplicate magazine grip ID";return {};}found=&grip;}
-    if(!found||found->weaponRecord.compare(weapon,Qt::CaseInsensitive)!=0||!magazineGrabSupported(found->pose.placement)||(hand&&found->pose.hand!=*hand)) {
+    if(!found||found->weaponRecord.compare(weapon,Qt::CaseInsensitive)!=0||(hand&&found->pose.hand!=*hand)) {
         error="The magazine fit is missing or belongs to another weapon";return {};
     }
     if(custom) {
@@ -46,12 +48,13 @@ std::optional<PartGrip> magazineGripFor(const QString& weapon,const HandPosePlac
 }
 QByteArray encodeReloadBundle(const ReloadRecipe& recipe,const QVector<PartGrip>& savedLibrary,
     const QVector<PartMechanism>& mechanisms,const QHash<QString,QString>& savedGrabs,QString& error,
-    const QHash<QString,QString>& defaults) {
+    const QHash<QString,QString>& defaults,const HandPosePlacement* selectedMagazine) {
     error.clear();const auto raw=encodeReloadRecipe(recipe,error);if(raw.isEmpty())return {};
     const QString weapon=recipe.source["weaponRecord"].toString();
     auto library=savedLibrary;auto magazineGrabs=savedGrabs;
     QVector<HandPosePlacement> anchors;
-    for(const auto& grip:savedLibrary)if(grip.weaponRecord.compare(weapon,Qt::CaseInsensitive)==0&&magazineGrabSupported(grip.pose.placement)&&
+    if(selectedMagazine)anchors.append(*selectedMagazine);
+    for(const auto& grip:savedLibrary)if(grip.weaponRecord.compare(weapon,Qt::CaseInsensitive)==0&&
         (savedGrabs.values().contains(grip.pose.id)||defaults.values().contains(grip.pose.id)))anchors.append(grip.pose.placement);
     for(const auto& track:recipe.tracks)if(magazineGrabSupported(track.anchor)) {
         // RU556's WeaponMagazine belongs to the receiver. Its installed Mag
@@ -110,7 +113,7 @@ QByteArray encodeReloadBundle(const ReloadRecipe& recipe,const QVector<PartGrip>
         const auto* grip=findGrip(magazineGrabs[key]);if(!grip)return {};
         const auto base=magazineGrabKey(weapon,grip->pose.placement.ownerRecord),handKey=handAssignmentKey(base,grip->pose.hand);
         if(key==base&&magazineGrabs.contains(handKey))continue;
-        if((key!=base&&key!=handKey)||!magazineGrabSupported(grip->pose.placement)) {
+        if(key!=base&&key!=handKey) {
             error="Magazine grab assignment does not match a supported magazine: "+grip->pose.name;return {};
         }
         if(!include(*grip))return {};

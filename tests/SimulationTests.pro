@@ -10,3 +10,4 @@ SOURCES += ../src/BoltCycle.cpp
 SOURCES += ../src/OperatingSetup.cpp
 SOURCES += ../src/MagazineGuide.cpp
 SOURCES += ../src/MagazineSetup.cpp
+SOURCES += ../src/PartMechanism.cpp ../src/MagazineReference.cpp

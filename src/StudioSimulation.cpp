@@ -480,7 +480,7 @@ void ReloadMakerController::updateSimulationControls() {
     updateInteractionGripUi();
     const bool native=_simulation.action==SimulationAction::Fire||_simulation.action==SimulationAction::Reload;
     const bool busy=native||_simulation.magazine.busy();
-    _simulationMagazineGrip->setEnabled(_simulationActive&&!busy&&_simulation.action==SimulationAction::Idle&&_simulationRig&&_reloadRecipe&&magazineGrabSupported(_reloadRecipe->tracks[_simulationRig->magazine].anchor));
+    _simulationMagazineGrip->setEnabled(_simulationActive&&!busy&&_simulation.action==SimulationAction::Idle&&_simulationRig&&_reloadRecipe&&currentMagazineAnchor()>=0);
     const bool bolt=isBoltActionConfiguration(),ar=isRifleConfiguration()||bolt;
     _simulationInstructions->setText(bolt?"After firing, pull the bolt back to eject, then push it forward to feed and lock. Release holds its position. Magazine: enter the angled line and push straight in.":isM1AConfiguration()||isThanatosConfiguration()?"Drag the operating handle to rack. FIRE shoots once per press. GRAB: enter the angled line, then move straight along it or use the wheel. The magazine follows its reload motion. Esc cancels.":ar?"Drag the charging handle to rack. Hold FIRE for automatic fire. GRAB: move the mouse, wheel for depth, enter the guide and push in. Esc cancels.":"Drag the slide to rack. GRAB: move the mouse, wheel for depth, enter the guide and push in. Esc cancels.");
     _simulationSlideRelease->setVisible(!bolt);_simulationSpring->setVisible(!bolt);

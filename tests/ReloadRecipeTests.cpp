@@ -130,6 +130,9 @@ namespace {
         check(resolved&&resolved->pose.id==custom.pose.id,"Weapon default overwrote an individual fit");
         auto wrong=drum;wrong.ownerModel="Different.nif";
         check(!magazineGripFor(grip.weaponRecord,wrong,{grip,custom},assigned,defaults,error)&&!error.isEmpty(),"Mismatched custom fit silently fell back to default");
+        auto named=grip;named.pose.placement.anchorName="CustomBox";named.pose.placement.anchorPath="Assembly/CustomBox";
+        const auto namedFit=magazineGripFor(grip.weaponRecord,named.pose.placement,{named},bindings,{},error);
+        check(namedFit&&sameGripAnchor(namedFit->pose.placement,named.pose.placement),"Explicit magazine role still depends on a hardcoded part name");
         auto defaultRecipe=r;defaultRecipe.tracks[2].anchor=drum;
         defaultRecipe.id=reloadRecipeIdentity(defaultRecipe);
         for(auto& window:defaultRecipe.windows)for(auto& member:window.members)if(member.track==2)member.gripId=inherited->pose.id;

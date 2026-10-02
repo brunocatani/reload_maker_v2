@@ -98,6 +98,12 @@ QJsonObject ReloadMakerController::exportRuntimeConfiguration() const {
         {"emptyName",recipe.tracks[rail.emptyTrack].anchor.anchorName},{"sourceRecipeId",recipe.id},{"emptyHidePrefix",""}};
     magazine["fullPath"]=runtimeTrackPath(rail.fullTrack);magazine["emptyPath"]=runtimeTrackPath(rail.emptyTrack);
     if(_magazineSetup)magazine["presentationSetup"]=magazineSetupJson(*_magazineSetup);
+    if(_magazineSetup&&_magazineSetup->motion=="manual") {
+        const auto movement=std::find_if(_mechanisms.cbegin(),_mechanisms.cend(),[&](const auto& m){return m.id==_magazineSetup->movementId;});
+        requireCapture(movement!=_mechanisms.cend(),"The authored magazine movement is missing");QString sourceError;
+        const auto bytes=encodeMechanism(*movement,sourceError);requireCapture(!bytes.isEmpty(),sourceError);
+        magazine["motionSource"]=QJsonObject{{"method","authored-part-local-stages"},{"definition",QJsonDocument::fromJson(bytes).object()}};
+    }
     QString error;
     for(const auto hand:{PoseHand::Left,PoseHand::Right}) {
         if(hand==PoseHand::Right&&type==WeaponMechanism::PistolSlide)continue;
@@ -113,6 +119,11 @@ QJsonObject ReloadMakerController::exportRuntimeConfiguration() const {
     Transformf carrier,referenceWorld,inverse;
     requireCapture(sceneNodeWorld(_sceneNodes[_reloadTrackNodes[rail.fullTrack]],carrier,error)&&sceneNodeWorld(_handPoseAnchors[reference].node,referenceWorld,error)&&invertUniformTransform(carrier,inverse),"Cannot establish the magazine carrier frame");
     magazine["modelInMagazine"]=runtimePose(composed(inverse,referenceWorld));
+    const auto referenceSetup=_authoringRoadmaps.value(roadmapKey()).toObject().value("magazineReference").toObject();
+    if(!referenceSetup.isEmpty()&&referenceSetup.value("connectionMode")!="source") {
+        const auto point=composed(inverse,rail.connection).translation;
+        magazine["capturePointInMagazine"]=QJsonArray{point.x,point.y,point.z};
+    }
     QJsonArray parts,emptyParts;
     const auto normalizedPart=[&](const ReloadTrack& track,int frame){Transformf inv;requireCapture(invertUniformTransform(full.poses[frame],inv),"Invalid payload carrier");return composed(composed(full.poses[0],inv),track.poses[frame]);};
     // These assemblies synthesize timing-only magazine bones absent from their

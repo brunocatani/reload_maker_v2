@@ -340,6 +340,10 @@ namespace reloadmaker
         QJsonObject configureMagazineGuide(const QJsonObject&);
         void showMagazineGuide();
         QJsonObject magazineSetupState() const;
+        QJsonObject magazineReferenceState() const;
+        QJsonObject configureMagazineReference(const QJsonObject&);
+        void showMagazineReference();
+        bool magazineReferenceCandidate(int anchor) const;
         QJsonObject configureMagazineSetup(const QJsonObject&);
         void showMagazineSetup();
         QJsonObject packCoverageState(bool refresh=false);

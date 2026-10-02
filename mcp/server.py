@@ -340,6 +340,24 @@ def get_magazine_guide() -> dict:
     return command('magazine_guide_state')
 
 @mcp.tool()
+def get_magazine_reference() -> dict:
+    """List exact eligible magazine hand-reference frames and connection settings."""
+    return command('magazine_reference_state')
+
+
+@mcp.tool()
+def configure_magazine_reference(operation: str, expected_revision: int, settings: dict | None = None) -> dict:
+    """Save/reset the selected assembly's hand reference and seated connection.
+
+    Start with get_magazine_reference.settings and an anchorKey from anchors.
+    source uses the native mount; carrier uses the full-body pivot; custom uses
+    connectionInCarrier, an exact position/rotation/scale frame in that body.
+    Hand fits stay saved but must match the newly chosen reference before reuse.
+    """
+    return command('magazine_reference',dict(operation=operation,settings=settings or {}),expected_revision)
+
+
+@mcp.tool()
 def get_magazine_presentation() -> dict:
     """Read this magazine's native bodies, payload samples and individual piece roles."""
     return command('magazine_setup_state')

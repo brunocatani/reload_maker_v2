@@ -16,5 +16,5 @@ std::optional<PartGrip> magazineGripFor(const QString& weapon,const HandPosePlac
     const QHash<QString,QString>& defaults,QString& error,std::optional<PoseHand> hand={});
 QByteArray encodeReloadBundle(const ReloadRecipe& recipe,const QVector<PartGrip>& grips,
     const QVector<PartMechanism>& mechanisms,const QHash<QString,QString>& magazineGrabs,QString& error,
-    const QHash<QString,QString>& defaults={});
+    const QHash<QString,QString>& defaults={},const HandPosePlacement* selectedMagazine=nullptr);
 }

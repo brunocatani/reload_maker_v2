@@ -112,6 +112,30 @@ bool buildMagazineAnimation(const ReloadRecipe& recipe,float entrySeconds,const 
     candidate.motion.append(clear);candidate.motionDistances.append(length);
     rail=std::move(candidate);return true;
 }
+bool buildManualMagazineAnimation(const ReloadRecipe& recipe,const PartMechanism& movement,
+    const QVector<QVector3D>& body,MagazineRail& rail,QString& error) {
+    error.clear();
+    if(rail.fullTrack<0||rail.fullTrack>=recipe.tracks.size()||body.isEmpty()||
+       !sameMechanismPart(movement.anchor,recipe.tracks[rail.fullTrack].anchor)||!validateMechanism(movement,error)) {
+        if(error.isEmpty())error="Choose a saved movement for the exact full magazine carrier";return false;
+    }
+    const auto& rest=recipe.tracks[rail.fullTrack].poses.front();Transformf inverse,startInverse;
+    if(!invertUniformTransform(rest,inverse)||!invertUniformTransform(mechanismDelta(movement,0),startInverse)) {error="Invalid authored magazine rest frame";return false;}
+    MagazineRail candidate=rail;candidate.motion={Transformf{}};candidate.motionDistances={0};float length=0;
+    // Ordered Move/Rotate stages are the visible path. The independent input
+    // guide continues to drive progress without imposing these wrist turns.
+    const int samples=movement.stages.size()*16;
+    for(int i=1;i<=samples;++i) {
+        const auto local=composed(mechanismDelta(movement,float(i)/16),startInverse);
+        const auto delta=composed(composed(rest,local),inverse);const float step=reloadPoseDistance(candidate.motion.back(),delta);
+        if(step<1e-5f)continue;length+=step;candidate.motion.append(delta);candidate.motionDistances.append(length);
+    }
+    if(candidate.motion.size()<2||length<.1f){error="The magazine movement has no measurable extraction";return false;}
+    float minimum=std::numeric_limits<float>::max();
+    for(const auto& point:body)minimum=std::min(minimum,QVector3D::dotProduct(v(composed(candidate.motion.back(),Transformf{{point.x(),point.y(),point.z()}}).translation),rail.outward));
+    if(!std::isfinite(minimum)||minimum<rail.weaponMaxProjection+rail.clearance) {error="Extend the saved magazine movement until the complete body clears the weapon";return false;}
+    rail=std::move(candidate);return true;
+}
 bool MagazineMotion::animateOut(){if(!seated())return false;phase=MagazinePhase::Outgoing;elapsed=0;distance=0;offset={};return true;}
 bool MagazineMotion::animateIn(const MagazineRail& rail){if(phase!=MagazinePhase::Absent&&phase!=MagazinePhase::OutsideEmpty)return false;phase=MagazinePhase::Incoming;elapsed=0;distance=rail.travel;offset=magazineInputOffset(rail,distance);return true;}
 bool MagazineMotion::grab(const MagazineRail& rail){if(phase!=MagazinePhase::Absent&&phase!=MagazinePhase::OutsideEmpty)return false;phase=MagazinePhase::Free;distance=rail.travel+rail.captureRadius*2;offset=magazineAnimationOffset(rail,distance);return true;}

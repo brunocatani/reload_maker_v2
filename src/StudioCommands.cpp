@@ -122,7 +122,7 @@ QJsonObject ReloadMakerController::studioState() const {
 QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     const QString method=request["method"].toString();const auto p=request["params"].toObject();
     if(request.contains("expectedSession"))require(request["expectedSession"].toString()==QCoreApplication::instance()->property("commandSession").toString(),"Editor session changed; read state before editing");
-    const bool reading=method=="state"||method=="installation"||method=="pose"||method=="render"||method=="reload"||method=="diagnostics"||method=="simulation_state"||method=="sound_state"||method=="grab_locations_state"||method=="collision_state"||method=="scope_state"||method=="inspect_sources"||method=="operating_setup_state"||method=="magazine_guide_state"||method=="magazine_setup_state";
+    const bool reading=method=="state"||method=="installation"||method=="pose"||method=="render"||method=="reload"||method=="diagnostics"||method=="simulation_state"||method=="sound_state"||method=="grab_locations_state"||method=="collision_state"||method=="scope_state"||method=="inspect_sources"||method=="operating_setup_state"||method=="magazine_guide_state"||method=="magazine_setup_state"||method=="magazine_reference_state";
     if(!reading&&request.contains("expectedRevision"))require(request["expectedRevision"].toDouble()==double(_revision),"Stale document revision; read state again");
     if(method=="state")return studioState();
     if(method=="installation")return installationState();
@@ -133,6 +133,8 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     if(method=="pack_job")return packCommand(p);
     if(method=="roadmap")return roadmapCommand(p);
     if(method=="magazine_guide_state")return magazineGuideState();
+    if(method=="magazine_reference_state")return magazineReferenceState();
+    if(method=="magazine_reference")return configureMagazineReference(p);
     if(method=="magazine_setup_state")return magazineSetupState();
     if(method=="magazine_setup")return configureMagazineSetup(p);
     if(method=="magazine_guide")return configureMagazineGuide(p);
@@ -409,7 +411,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
         else if(kind=="sounds"){const auto record=exportSounds();require(!record.isEmpty(),"Prepare a weapon in Operate before exporting sounds");bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
         else if(kind=="simulation"){const auto record=exportSimulation();require(!record.isEmpty(),"Prepare a simulation before exporting");bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
         else if(kind=="runtime_configuration"){const auto record=exportRuntimeConfiguration();bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
-        else if(kind=="reload_bundle"){require(_reloadRecipe.has_value(),"Learn the configured reload first");bytes=encodeReloadBundle(*_reloadRecipe,_partGrips,_mechanisms,_magazineGrabGrips,error,_magazineGrabDefaults);if(!bytes.isEmpty()){auto bundle=QJsonDocument::fromJson(bytes).object();const auto interactions=exportInteractionGrips();require(!interactions.isEmpty(),"Operating grip assignments could not be resolved for export");if(!interactions["operatingGroups"].toArray().isEmpty()||interactions.contains("grabLocations")){bundle["version"]=2;bundle["authoredInteractions"]=interactions;}bytes=QJsonDocument(bundle).toJson();}id=_reloadRecipe->id;}
+        else if(kind=="reload_bundle"){require(_reloadRecipe.has_value(),"Learn the configured reload first");const auto magazine=simulationMagazineAnchor();bytes=encodeReloadBundle(*_reloadRecipe,_partGrips,_mechanisms,_magazineGrabGrips,error,_magazineGrabDefaults,magazine.ownerRecord.isEmpty()?nullptr:&magazine);if(!bytes.isEmpty()){auto bundle=QJsonDocument::fromJson(bytes).object();const auto interactions=exportInteractionGrips();require(!interactions.isEmpty(),"Operating grip assignments could not be resolved for export");if(!interactions["operatingGroups"].toArray().isEmpty()||interactions.contains("grabLocations")){bundle["version"]=2;bundle["authoredInteractions"]=interactions;}bytes=QJsonDocument(bundle).toJson();}id=_reloadRecipe->id;}
         else if(kind=="reload"){require(_reloadRecipe.has_value(),"No reload recipe");bytes=encodeReloadRecipe(*_reloadRecipe,error);id=_reloadRecipe->id;}
         else if(kind=="grip"){require(_partGripDraft.has_value(),"No grip draft");bytes=encodePartGrip(*_partGripDraft,error);id=_partGripDraft->pose.id;}
         else if(kind=="mechanism"){require(_mechanismDraft.has_value(),"No mechanism draft");bytes=encodeMechanism(*_mechanismDraft,error);id=_mechanismDraft->id;}

@@ -1,13 +1,15 @@
 #include "MagazineSetup.h"
 #include <QJsonArray>
 #include <QRegularExpression>
+#include <QUuid>
 #include <cmath>
 namespace reloadmaker {
 bool readMagazineSetup(const QJsonObject& json,MagazineSetup& out,QString& error) {
     const auto fail=[&](const char* why){error=why;return false;};MagazineSetup value;
     if(json["version"]!=1||!QRegularExpression("^[a-f0-9]{64}$").match(json["recipeId"].toString()).hasMatch())return fail("Magazine presentation needs the current source recipe");
     value.recipeId=json["recipeId"].toString();value.motion=json["motion"].toString();
-    if(value.motion!="preset"&&value.motion!="linear"&&value.motion!="native")return fail("Choose source behavior, linear extraction or sampled native insertion");
+    if(value.motion!="preset"&&value.motion!="linear"&&value.motion!="native"&&value.motion!="manual")return fail("Choose source behavior, linear extraction, native insertion or a saved movement");
+    if(value.motion=="manual") {value.movementId=json["movementId"].toString();if(QUuid(value.movementId).isNull())return fail("Choose a saved magazine movement");}
     const auto integer=[](QJsonValue v,int high){return v.isDouble()&&v.toDouble()==std::floor(v.toDouble())&&v.toInt(-1)>=0&&v.toInt(high)<high;};
     if(!integer(json["emptyTrack"],maximumReloadTracks)||!integer(json["loadedFrame"],maximumReloadFrames)||!integer(json["emptyFrame"],maximumReloadFrames))return fail("Select the empty body and payload samples");
     value.emptyTrack=json["emptyTrack"].toInt();value.loadedFrame=json["loadedFrame"].toInt();value.emptyFrame=json["emptyFrame"].toInt();
@@ -24,7 +26,8 @@ bool readMagazineSetup(const QJsonObject& json,MagazineSetup& out,QString& error
 }
 QJsonObject magazineSetupJson(const MagazineSetup& value) {
     QJsonArray pieces;for(auto it=value.pieces.cbegin();it!=value.pieces.cend();++it)pieces.append(QJsonObject{{"path",it.key()},{"role",it.value()}});
-    return {{"version",1},{"recipeId",value.recipeId},{"motion",value.motion},{"emptyTrack",value.emptyTrack},{"loadedFrame",value.loadedFrame},
+    QJsonObject result{{"version",1},{"recipeId",value.recipeId},{"motion",value.motion},{"emptyTrack",value.emptyTrack},{"loadedFrame",value.loadedFrame},
         {"emptyFrame",value.emptyFrame},{"sampledPayload",value.sampledPayload},{"entrySeconds",value.entrySeconds},{"pieces",pieces}};
+    if(value.motion=="manual")result["movementId"]=value.movementId;return result;
 }
 }
