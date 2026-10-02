@@ -3,6 +3,8 @@ param(
     [string]$Suite = 'HkxReader',
     [string]$QtBin = 'C:\msys64\ucrt64\bin',
     [string]$NifSkopeSource = 'F:\fo4dev\devtools\nifskope-upgraded\nifskope-cli',
+    # Fixture paths passed after the named parameters reach the suite unchanged.
+    [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$TestArguments = @()
 )
 

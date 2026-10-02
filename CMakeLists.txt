@@ -36,3 +36,27 @@ if(RELOADMAKER_BACKEND_BUNDLE)
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${product_tools} "${DIST}/tools/"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/RefreshDependencyManifest.py" "${DIST}" VERBATIM)
 endif()
+
+# Behavioral suites. Each test builds its qmake suite before running it, so the
+# tests share one compiler lock to stay within the two-process build cap.
+enable_testing()
+set(RELOADMAKER_GLOCK_PACKAGE "F:/fo4dev/personal_devtools/reload_maker/example_mods/glock" CACHE PATH
+    "Read-only original Glock package used as an integration fixture")
+set(simulation_fixtures "${CMAKE_SOURCE_DIR}/tests/fixtures/simulation")
+set(reloadmaker_suites HkxReader Resources Pose SceneBinding Configuration Library Installation Authoring HandPose
+    PartGrip GripViewport Mechanism ReloadRecipe Simulation Ammunition ActionCatalog Sound GrabLocations ScopeProfile
+    Collision)
+foreach(suite IN LISTS reloadmaker_suites)
+  set(suite_arguments "")
+  if(suite STREQUAL "Simulation")
+    set(suite_arguments "${simulation_fixtures}/glock-simulation.project.json"
+        "${simulation_fixtures}/ru556-reload-recipe.json" "${simulation_fixtures}/m1a-reload-recipe.json")
+  elseif(suite STREQUAL "Ammunition")
+    set(suite_arguments "${RELOADMAKER_GLOCK_PACKAGE}/Glock19x.esp")
+  endif()
+  add_test(NAME ${suite}
+    COMMAND powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_SOURCE_DIR}/tools/Invoke-Tests.ps1"
+            -Suite ${suite} -QtBin "${QT_BIN}" -NifSkopeSource "${NIFSKOPE_SOURCE_DIR}" ${suite_arguments}
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+  set_tests_properties(${suite} PROPERTIES RESOURCE_LOCK reloadmaker-compiler TIMEOUT 1800)
+endforeach()
