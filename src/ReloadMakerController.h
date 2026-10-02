@@ -15,6 +15,7 @@
 #include "ReloadDriveViewport.h"
 #include "WeaponSimulation.h"
 #include "OperatingSetup.h"
+#include "MagazineSetup.h"
 #include "WeaponAmmunition.h"
 #include "ActionCatalog.h"
 #include "BoltCycle.h"
@@ -333,6 +334,11 @@ namespace reloadmaker
         QJsonObject magazineGuideState() const;
         QJsonObject configureMagazineGuide(const QJsonObject&);
         void showMagazineGuide();
+        QJsonObject magazineSetupState() const;
+        QJsonObject configureMagazineSetup(const QJsonObject&);
+        void showMagazineSetup();
+        QString magazinePiecePath(const QModelIndex&) const;
+        bool sampledMagazinePayload() const;
         bool buildSourceSimulationRig(SimulationRig&,QString&);
         bool buildConfiguredSimulationRig(const OperatingSetup&,SimulationRig&,QString&);
         QJsonObject saveConfiguredReload(const QJsonObject& request);
@@ -347,6 +353,7 @@ namespace reloadmaker
         QString _magazineError;
         struct MagazineVisual {QPersistentModelIndex node;int flags{0};bool empty{false};int track{-1};bool cartridge{false};bool nativeOnly{false};};
         QVector<MagazineVisual> _magazineVisuals;
+        std::optional<MagazineSetup> _magazineSetup;
         MagazineViewport* _magazineViewport{nullptr};
         QPushButton* _magazineOut{nullptr};
         QPushButton* _magazineIn{nullptr};

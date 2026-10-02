@@ -41,6 +41,12 @@ def run(captures,assets):
         except ValueError:pass
         else:raise AssertionError('Stale writer accepted')
         assert digest(project)==again['sha256']
+        presentation=read(capture);presentation['magazine']['presentationSetup']={'recipeId':presentation['magazine']['sourceRecipeId'],'pieces':[{'path':'changed','role':'cartridge'}]}
+        changed=work/name/'presentation.json';write(changed,presentation)
+        try:save_configuration(project,changed,backends,expected=again['sha256'])
+        except ValueError as error:assert 'recapture and cook' in str(error)
+        else:raise AssertionError('Changed payload reused old cooked models')
+        assert digest(project)==again['sha256']
         bad=read(capture);bad['magazine']['grip']['fingerLocalTransforms']=[]
         write(work/name/'invalid.json',bad)
         try:save_configuration(project,work/name/'invalid.json',backends,expected=again['sha256'])

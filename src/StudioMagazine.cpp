@@ -7,6 +7,8 @@
 #include "model/nifmodel.h"
 #include <QTimer>
 #include <cmath>
+#include <algorithm>
+#include <QSet>
 
 namespace reloadmaker {
 HandPosePlacement ReloadMakerController::simulationMagazineAnchor() const {
@@ -17,10 +19,16 @@ HandPosePlacement ReloadMakerController::simulationMagazineAnchor() const {
     return _simulationRig&&_reloadRecipe?_reloadRecipe->tracks[_simulationRig->magazine].anchor:HandPosePlacement{};
 }
 void ReloadMakerController::prepareMagazineInteraction() {
-    _magazineRail.reset();_magazineVisuals.clear();_magazineError.clear();
+    _magazineRail.reset();_magazineVisuals.clear();_magazineError.clear();_magazineSetup.reset();
     if(!_simulationRig||!_reloadRecipe)return;
     auto* model=activeModel();auto* scene=_window->getGLView()->getScene();
     const auto& rig=*_simulationRig;
+    const auto setupJson=_authoringRoadmaps.value(roadmapKey()).toObject().value("magazineSetup").toObject();
+    if(!setupJson.isEmpty()) {
+        MagazineSetup setup;if(!readMagazineSetup(setupJson,setup,_magazineError))return;
+        if(setup.recipeId!=_reloadRecipe->id||setup.emptyTrack>=_reloadRecipe->tracks.size()||setup.loadedFrame>=_reloadRecipe->frames||setup.emptyFrame>=_reloadRecipe->frames){_magazineError="Magazine source changed. Review or reset its presentation.";return;}
+        _magazineSetup=setup;
+    }
     const auto below=[&](QModelIndex child,const QModelIndex& parent) {
         for(int depth=0;child.isValid()&&depth<model->getBlockCount();++depth){if(child==parent)return true;child=model->getBlockIndex(model->getParent(child));}return false;
     };
@@ -70,8 +78,8 @@ void ReloadMakerController::prepareMagazineInteraction() {
         for(const auto& vertex:shape->verts){const auto point=composed(world,Transformf{{vertex[0],vertex[1],vertex[2]}}).translation;output.append({point.x,point.y,point.z});}
     }
     MagazineRail rail;
-    if(!buildMagazineRail(*_reloadRecipe,rig.magazine,connectionName,connection,body,frame,rail,_magazineError,isM1AConfiguration()||isBoltActionConfiguration()||isThanatosConfiguration()))return;
-    if(isM1AConfiguration()||isBoltActionConfiguration()||isThanatosConfiguration()) {
+    if(!buildMagazineRail(*_reloadRecipe,rig.magazine,connectionName,connection,body,frame,rail,_magazineError,isM1AConfiguration()||isBoltActionConfiguration()||isThanatosConfiguration(),_magazineSetup?_magazineSetup->emptyTrack:-1))return;
+    if((!_magazineSetup||_magazineSetup->motion=="preset")&&(isM1AConfiguration()||isBoltActionConfiguration()||isThanatosConfiguration())) {
         float entry=-1,empty=-1;
         for(const auto& event:_reloadClip.annotations) {
             if(event.text.endsWith(isL118Configuration()?"L115A3_ReloadMagIn":isBoltActionConfiguration()?"C14_MagInserting":isThanatosConfiguration()?"WPNM107Magin":"WPNM1AMagIn",Qt::CaseInsensitive))entry=event.timeSeconds;
@@ -81,6 +89,10 @@ void ReloadMakerController::prepareMagazineInteraction() {
         _m1aEmptyMagazineFrame=std::clamp(qRound(empty/_reloadRecipe->duration*(_reloadRecipe->frames-1)),0,_reloadRecipe->frames-1);
         _m1aLoadedMagazineFrame=std::clamp(qRound(entry/_reloadRecipe->duration*(_reloadRecipe->frames-1)),0,_reloadRecipe->frames-1);
         if(!buildMagazineAnimation(*_reloadRecipe,entry,body,rail,_magazineError))return;
+    }
+    if(_magazineSetup) {
+        _m1aLoadedMagazineFrame=_magazineSetup->loadedFrame;_m1aEmptyMagazineFrame=_magazineSetup->emptyFrame;
+        if(_magazineSetup->motion=="native"&&!buildMagazineAnimation(*_reloadRecipe,_magazineSetup->entrySeconds,body,rail,_magazineError))return;
     }
     bool empty=false,fullBody=false;
     for(const auto& shape:shapes) {
@@ -105,6 +117,17 @@ void ReloadMakerController::prepareMagazineInteraction() {
             }
         }
         _magazineVisuals.append({shape.node,model->get<int>(shape.node,"Flags"),isEmpty,shape.track,cartridge,isMk18Configuration()&&!rig.magazineTracks.contains(shape.track)});
+    }
+    if(_magazineSetup) {
+        QSet<QString> seen;
+        for(auto& visual:_magazineVisuals) {
+            const auto path=magazinePiecePath(visual.node);const auto role=_magazineSetup->pieces.value(path);
+            if(path.isEmpty()||seen.contains(path)||role.isEmpty()){_magazineError="Native magazine pieces changed. Review every body, cartridge and spare.";return;}
+            if(role!="spare"&&!below(visual.node,_sceneNodes[_reloadTrackNodes[rail.fullTrack]])&&!below(visual.node,_sceneNodes[_reloadTrackNodes[rail.emptyTrack]])){_magazineError="Pieces outside the selected full/empty carriers must be marked as animation-only spares.";return;}
+            seen.insert(path);visual.cartridge=role=="cartridge";visual.nativeOnly=role=="spare";
+        }
+        if(seen.size()!=_magazineSetup->pieces.size()){_magazineError="A saved magazine piece is absent from this source.";return;}
+        for(bool state:{false,true})if(std::none_of(_magazineVisuals.begin(),_magazineVisuals.end(),[&](const auto& v){return !v.cartridge&&!v.nativeOnly&&(rail.sharedBody()||v.empty==state);})){_magazineError="Full and empty presentations each need a body.";return;}
     }
     if((!empty&&!rail.sharedBody())||!fullBody){_magazineVisuals.clear();_magazineError="Magazine body geometry could not be resolved.";return;}
     const auto guide=_authoringRoadmaps.value(roadmapKey()).toObject().value("magazineGuide").toObject();

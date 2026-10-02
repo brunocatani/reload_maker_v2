@@ -340,6 +340,23 @@ def get_magazine_guide() -> dict:
     return command('magazine_guide_state')
 
 @mcp.tool()
+def get_magazine_presentation() -> dict:
+    """Read this magazine's native bodies, payload samples and individual piece roles."""
+    return command('magazine_setup_state')
+
+@mcp.tool()
+def configure_magazine_presentation(operation: str, expected_revision: int, settings: dict | None = None) -> dict:
+    """Save/reset the selected magazine's full/empty presentation.
+
+    Start from get_magazine_presentation.settings. Select an emptyTrack from
+    its native body candidates, sampledPayload and source loadedFrame/emptyFrame.
+    Motion is preset, linear or native (entrySeconds). Every piece path keeps
+    an explicit body/cartridge/spare role. After changes, recapture and cook both
+    world models; a model built with another presentation cannot be reused.
+    """
+    return command('magazine_setup',dict(operation=operation,settings=settings or {}),expected_revision)
+
+@mcp.tool()
 def configure_magazine_guide(operation: str, expected_revision: int, settings: dict | None = None) -> dict:
     """Save or reset the magazine guide without flattening the visible animation.
 

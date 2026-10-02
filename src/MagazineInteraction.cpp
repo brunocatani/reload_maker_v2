@@ -10,11 +10,13 @@ QVector3D v(Vec3f p){return {p.x,p.y,p.z};}
 bool finite(const QVector3D& p){return std::isfinite(p.x())&&std::isfinite(p.y())&&std::isfinite(p.z());}
 }
 bool buildMagazineRail(const ReloadRecipe& r,int full,const QString& name,const Transformf& connection,
-    const QVector<QVector3D>& body,const QVector<QVector3D>& weapon,MagazineRail& out,QString& error,bool finalApproach) {
+    const QVector<QVector3D>& body,const QVector<QVector3D>& weapon,MagazineRail& out,QString& error,bool finalApproach,int selectedEmpty) {
     error.clear();MagazineRail rail;rail.fullTrack=full;rail.connection=connection;rail.connectionName=name;
     if(full<0||full>=r.tracks.size()||body.size()<3||weapon.isEmpty()||name.isEmpty()){error="Magazine connection or native geometry is missing.";return false;}
     const auto& main=r.tracks[full];
-    for(int i=0;i<r.tracks.size();++i) {
+    if(selectedEmpty>=r.tracks.size()||(selectedEmpty>=0&&!r.tracks[selectedEmpty].surface)){error="Empty magazine needs a native surface track.";return false;}
+    rail.emptyTrack=selectedEmpty;
+    for(int i=0;selectedEmpty<0&&i<r.tracks.size();++i) {
         const auto& t=r.tracks[i];
         if(i!=full&&t.surface&&t.parent<0&&t.anchor.ownerRecord==main.anchor.ownerRecord&&t.anchor.ownerModel==main.anchor.ownerModel&&
             reloadPoseDistance(t.poses.front(),main.poses.front())<.1f) {

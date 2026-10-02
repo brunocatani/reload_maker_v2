@@ -146,10 +146,11 @@ void ReloadMakerController::openSession(const QString& path) {
         const auto plans=record["authoringRoadmaps"].toObject();
         if(!record["authoringRoadmaps"].isObject()||plans.size()>512){setStatus("Invalid authoring roadmap collection.",true);return;}
         for(const auto& value:plans){const auto plan=value.toObject();const int step=plan["step"].toInt(-1);
-            OperatingSetup setup;MagazineGuide guide;
+            OperatingSetup setup;MagazineGuide guide;MagazineSetup magazine;
             if(!value.isObject()||step<0||step>11||(plan.contains("sources")&&!validSourceEvidence(plan["sources"].toObject(),error))||
                  (plan.contains("operating")&&!readOperatingSetup(plan["operating"].toObject(),setup,error))||
-                 (plan.contains("magazineGuide")&&!readMagazineGuide(plan["magazineGuide"].toObject(),guide,error))){setStatus("Invalid saved authoring roadmap: "+error,true);return;}}
+                 (plan.contains("magazineGuide")&&!readMagazineGuide(plan["magazineGuide"].toObject(),guide,error))||
+                 (plan.contains("magazineSetup")&&!readMagazineSetup(plan["magazineSetup"].toObject(),magazine,error))){setStatus("Invalid saved authoring roadmap: "+error,true);return;}}
     }
     if(record.contains("recordChoices")) {
         const auto choices=record["recordChoices"].toObject();

@@ -79,6 +79,9 @@ def save_configuration(project_path,capture_path,backends,expected='',pack_id=''
         records=profiles.setdefault('embeddedMagazineReceivers',[])
         for key in snapshot['profileHeader']['embeddedMagazineReceivers']:
             if form_key(key) not in {form_key(k) for k in records}:records.append(key)
+    prior_magazine=next((m for m in documents['magazines']['magazines'] if form_key(m['record'])==magazine),None)
+    if prior_magazine and prior_magazine.get('presentationSetup')!=snapshot['magazine'].get('presentationSetup'):
+        require(full and empty,'Magazine presentation changed; recapture and cook both world models before saving')
     replace_record(documents['magazines']['magazines'],snapshot['magazine'],lambda p:form_key(p['record']))
     replace_record(documents['sounds']['profiles'],snapshot['sounds'],lambda p:(form_key(p['weapon']),form_key(p['magazine'])))
     if snapshot['grabs']:
@@ -105,6 +108,8 @@ def save_configuration(project_path,capture_path,backends,expected='',pack_id=''
                     'Finished model belongs to another weapon, magazine, presentation or reference frame')
             require(source.get('sourceRecipeId')==snapshot['magazine'].get('sourceRecipeId'),
                     'Magazine motion changed; recapture both world models for this configured reload')
+            require(source.get('presentationSetup')==snapshot['magazine'].get('presentationSetup'),
+                    'Magazine model was cooked with another body/payload presentation')
             require(all(current_resources.get(r['path'].replace('\\','/').lower())==r['sha256'] for r in source['sources']['resources']),
                     'World model source bytes differ from the configured reload')
             asset_inputs.append((model,receipt,digest(model),digest(receipt)))

@@ -150,6 +150,7 @@ void ReloadMakerController::showAuthoringRoadmap() {
             if(step==9){setWorkspace(SoundsWorkspace);return;}if(step==10){setWorkspace(CollisionsWorkspace);return;}
             if(step==3||step==4){setWorkspace(OperateWorkspace);showOperatingSetup();return;}
             if(step==6){setWorkspace(OperateWorkspace);showMagazineGuide();return;}
+            if(step==5){setWorkspace(OperateWorkspace);showMagazineSetup();return;}
             if(step==7||step==8){setWorkspace(GripsWorkspace);if(step==8)(void)openGrabLocations();return;}
             if(step==1||step==2){setWorkspace(OperateWorkspace);return;}setWorkspace(PhasesWorkspace);});
     });

@@ -44,6 +44,7 @@ QJsonObject ReloadMakerController::captureMagazineWorld(bool empty) {
         captured.configuration=QString::fromLatin1(QCryptographicHash::hash(QJsonDocument(choices).toJson(QJsonDocument::Compact),QCryptographicHash::Sha256).toHex());
         captured.referencePose={{"space","magazine-carrier"},{"magazineRecord",anchor.ownerRecord},{"model",anchor.ownerModel},
             {"presentation",empty?"empty":"full"},{"sourceRecipeId",_reloadRecipe->id},{"rootToWorld",assetMatrixJson(root)},{"sources",sourceEvidence()}};
+        if(_magazineSetup)captured.referencePose["presentationSetup"]=magazineSetupJson(*_magazineSetup);
         QSet<int> included;qsizetype total=0;
         for(auto* shape:view->getScene()->shapes){
             if(!shape||shape->isHidden())continue;

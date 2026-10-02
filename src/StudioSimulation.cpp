@@ -85,6 +85,7 @@ void ReloadMakerController::createSimulationUi() {
     configureMagazine->setToolTip("Edit this magazine's hand fit with Move / Rotate. Save replaces its assignment and saves the project.");
     connect(configureMagazine,&QPushButton::clicked,this,[this]{(void)editMagazineGrip();});
     auto* guide=new QPushButton("CONFIGURE INSERTION GUIDE",panel);layout->addWidget(guide);connect(guide,&QPushButton::clicked,this,&ReloadMakerController::showMagazineGuide);
+    auto* presentation=new QPushButton("MAGAZINE MODELS AND PAYLOAD",panel);layout->addWidget(presentation);connect(presentation,&QPushButton::clicked,this,&ReloadMakerController::showMagazineSetup);
     _simulationMagazineGrip->setToolTip("Saved hand grip for this magazine, used by GRAB. Create one in Hands & grips by selecting a pose and clicking its contact point.");
     connect(_simulationMagazineGrip,qOverload<int>(&QComboBox::activated),this,[this](int index) {
         if(!_simulationRig||!_reloadRecipe)return;
@@ -327,10 +328,10 @@ bool ReloadMakerController::applySimulationPose() {
         targets.insert(_reloadTrackNodes[_simulationRig->bolt],rifleFireBoltPose());
     // A newly seated magazine has a top round, not a magically loaded chamber.
     // The source feed curve takes over only during a completed rack/return cycle.
-    if(!isM1AConfiguration()&&_simulation.action!=SimulationAction::Fire&&_simulation.action!=SimulationAction::Reload&&!_simulation.chambered&&!_simulation.feedCycleActive())
+    if(!sampledMagazinePayload()&&_simulation.action!=SimulationAction::Fire&&_simulation.action!=SimulationAction::Reload&&!_simulation.chambered&&!_simulation.feedCycleActive())
         for(const auto& visual:_magazineVisuals)if(!visual.empty&&visual.track>=0&&visual.track!=_simulationRig->magazine)
             targets.insert(_reloadTrackNodes[visual.track],_reloadRecipe->tracks[visual.track].poses.front());
-    if(isM1AConfiguration()&&_simulation.action!=SimulationAction::Reload&&_simulation.action!=SimulationAction::Fire) {
+    if(sampledMagazinePayload()&&_simulation.action!=SimulationAction::Reload&&_simulation.action!=SimulationAction::Fire) {
         const auto& rig=*_simulationRig;const auto& root=_reloadRecipe->tracks[rig.magazine];
         // The last reload frame has already fed a round into the chamber.
         // A detached magazine needs its pre-feed round stack at magazine-in.
@@ -354,7 +355,7 @@ bool ReloadMakerController::applySimulationPose() {
         }
         for(int track:_simulationRig->magazineTracks) {
             const int node=_reloadTrackNodes[track];
-            const auto pose=isM1AConfiguration()&&targets.contains(node)?targets[node]:_reloadRecipe->tracks[track].poses.front();
+            const auto pose=sampledMagazinePayload()&&targets.contains(node)?targets[node]:_reloadRecipe->tracks[track].poses.front();
             targets.insert(node,composed(delta,pose));fixedMagazine.insert(node);
         }
     }

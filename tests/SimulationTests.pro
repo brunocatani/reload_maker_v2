@@ -9,3 +9,4 @@ SOURCES += ../src/MagazineInteraction.cpp
 SOURCES += ../src/BoltCycle.cpp
 SOURCES += ../src/OperatingSetup.cpp
 SOURCES += ../src/MagazineGuide.cpp
+SOURCES += ../src/MagazineSetup.cpp

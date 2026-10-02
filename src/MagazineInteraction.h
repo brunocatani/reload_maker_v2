@@ -38,7 +38,7 @@ namespace reloadmaker {
     };
     bool buildMagazineRail(const ReloadRecipe& recipe,int magazineTrack,const QString& connectionName,
         const Transformf& connection,const QVector<QVector3D>& magazineVertices,
-        const QVector<QVector3D>& weaponVertices,MagazineRail& rail,QString& error,bool finalApproach=false);
+        const QVector<QVector3D>& weaponVertices,MagazineRail& rail,QString& error,bool finalApproach=false,int emptyTrack=-1);
     bool buildMagazineAnimation(const ReloadRecipe& recipe,float entrySeconds,const QVector<QVector3D>& body,MagazineRail& rail,QString& error);
     Transformf magazineAnimationDelta(const MagazineRail& rail,float distance);
     QVector3D magazineAnimationOffset(const MagazineRail& rail,float distance);
