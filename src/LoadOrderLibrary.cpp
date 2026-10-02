@@ -74,6 +74,23 @@ namespace reloadmaker {
         return hash.result();
     }
 
+    QStringList resolveGameArchives(const QString& dataPath,const QStringList& plugins,const QStringList& iniPaths,QString& error) {
+        error.clear();QStringList result;
+        try {
+            QHash<QString,QString> values;for(const auto& path:iniPaths){const auto ini=archiveSettings(path);for(auto it=ini.cbegin();it!=ini.cend();++it)values[it.key()]=it.value();}
+            if(values.isEmpty())throw std::runtime_error("Archive settings are missing from the selected source INIs");
+            const QDir data(dataPath);QSet<QString> added;
+            const auto add=[&](const QString& name){if(!leafName(name)||!name.endsWith(".ba2",Qt::CaseInsensitive))throw std::runtime_error("Invalid BA2 name in archive settings");
+                if(added.contains(name.toLower()))return;const auto path=data.filePath(name);if(!QFileInfo(path).isFile())throw std::runtime_error(("Required archive is not visible: "+name).toStdString());added.insert(name.toLower());result.append(path);};
+            for(const auto* key:{"sresourceindexfilelist","sresourcestartuparchivelist","sresourcearchivelist","sresourcearchivelist2"})for(auto name:values.value(key).split(',',Qt::SkipEmptyParts))add(name.trimmed());
+            const auto available=data.entryList({"*.ba2"},QDir::Files,QDir::Name|QDir::IgnoreCase);
+            // xEdit 4.1.5f wbHelpers.HasBSAs / xeMainForm resource loading uses
+            // partial prefix matching for FO4/VR, after ordered INI archives.
+            for(const auto& plugin:plugins){if(!leafName(plugin)||!QFileInfo(data.filePath(plugin)).isFile())throw std::runtime_error(("Source plugin is not visible in Data: "+plugin).toStdString());
+                const auto stem=QFileInfo(plugin).completeBaseName();for(const auto& archive:available)if(archive.startsWith(stem,Qt::CaseInsensitive))add(archive);}
+        }catch(const std::exception& e){error=e.what();result.clear();}
+        return result;
+    }
     LoadOrderSnapshot readLoadOrderSnapshot(const QString& instancePath, const QString& dataPath,const QString& requestedProfile) {
         LoadOrderSnapshot result;
         result.instancePath = QDir(instancePath).absolutePath();
@@ -118,35 +135,9 @@ namespace reloadmaker {
             for (const auto& name : result.plugins) { if (activeOrder.contains(name.toLower())) { orderedActive.append(name.toLower()); } }
             if (orderedActive != activeOrder) { throw std::runtime_error("plugins.txt and loadorder.txt disagree; refresh the MO2 profile before launching"); }
 
-            auto archiveValues = archiveSettings(QDir(result.profilePath).filePath("fallout4.ini"));
-            const auto custom = archiveSettings(QDir(result.profilePath).filePath("fallout4custom.ini"));
-            for (auto it = custom.cbegin(); it != custom.cend(); ++it) { archiveValues.insert(it.key(), it.value()); }
-            if (archiveValues.isEmpty()) { throw std::runtime_error("Profile-local Fallout 4 archive settings are missing"); }
-            const QDir data(result.dataPath);
-            QSet<QString> added;
-            const auto addArchive = [&](const QString& name) {
-                if (!leafName(name) || !name.endsWith(".ba2", Qt::CaseInsensitive)) { throw std::runtime_error("Invalid BA2 name in archive settings"); }
-                if (added.contains(name.toLower())) { return; }
-                const QString path = data.filePath(name);
-                if (!QFileInfo(path).isFile()) { throw std::runtime_error(QStringLiteral("Required archive is not visible: %1").arg(path).toStdString()); }
-                added.insert(name.toLower()); result.archives.append(path);
-            };
-            // Same separation as the installed xEdit loader (wbHelpers/xeMainForm):
-            // INI archives first, plugin-associated archives in plugin load order,
-            // then the virtual loose folder. Never glob every BA2 as active.
-            for (const auto* key : {"sresourceindexfilelist", "sresourcestartuparchivelist", "sresourcearchivelist", "sresourcearchivelist2"}) {
-                for (auto name : archiveValues.value(QLatin1String(key)).split(',', Qt::SkipEmptyParts)) { addArchive(name.trimmed()); }
-            }
-            const auto available = data.entryList({"*.ba2"}, QDir::Files, QDir::Name | QDir::IgnoreCase);
-            for (const auto& plugin : result.plugins) {
-                if (!QFileInfo(data.filePath(plugin)).isFile()) {
-                    throw std::runtime_error(QStringLiteral("Enabled plugin is not visible in Data: %1. Launch Reload Maker through this MO2 instance.").arg(plugin).toStdString());
-                }
-                const QString base = QFileInfo(plugin).completeBaseName();
-                for (const auto& archive : available) {
-                    if (archive.startsWith(base, Qt::CaseInsensitive)) { addArchive(archive); }
-                }
-            }
+            QString archiveError;
+            result.archives=resolveGameArchives(result.dataPath,result.plugins,{QDir(result.profilePath).filePath("fallout4.ini"),QDir(result.profilePath).filePath("fallout4custom.ini")},archiveError);
+            if(!archiveError.isEmpty())throw std::runtime_error(archiveError.toStdString());
             result.fingerprint = profileFingerprint(result.instancePath, result.profilePath);
             if (result.fingerprint != initialFingerprint) { throw std::runtime_error("MO2 profile changed while reading it; relaunch the viewer through MO2"); }
         } catch (const std::exception& exception) { result.error = QString::fromUtf8(exception.what()); }

@@ -255,7 +255,7 @@ namespace reloadmaker
     /* Source indexing is worker-owned; installation and every NifModel/GL call
        remain on the GUI thread. A failed or cancelled source never replaces the
        last usable catalog. */
-    void ReloadMakerController::startPackageLoad(const QString& path, const QString& dataPath)
+    void ReloadMakerController::startPackageLoad(const QString& path, const QString& dataPath,bool newDocument)
     {
         if (_loadThread) { return; }
         if (_pendingSession.isEmpty() && !saveSession()) { return; }
@@ -293,12 +293,14 @@ namespace reloadmaker
                     if (!result->package.ok()) { result->error = result->package.error; return; }
                     progress(QStringLiteral("Indexing package resources…"));
                     if(!result->package.plugins.isEmpty()) {
-                        auto roots=result->package.roots;if(!dataPath.isEmpty())roots.prepend(data);
-                        if(!result->resources.openPackages(roots,result->error))return;
+                        auto roots=result->package.roots;if(!dataPath.isEmpty()&&!roots.contains(data))roots.prepend(data);
+                        if(!result->package.resourceData.isEmpty()) {if(!result->resources.openLoadOrder(result->package.resourceData,result->package.archives,result->error,{},cancelled))return;}
+                        else if(!result->resources.openPackages(roots,result->error))return;
                         // Reuse the same canonical form-key merger as MO2;
                         // source packs are explicitly ordered, never guessed.
                         QVector<PluginContent> catalogs;
-                        if(!dataPath.isEmpty())catalogs.append(EspReader::read(QDir(data).filePath("Fallout4.esm"),cancelled,true));
+                        const bool containsBase=std::any_of(result->package.plugins.begin(),result->package.plugins.end(),[](const auto& file){return QFileInfo(file).fileName().compare("Fallout4.esm",Qt::CaseInsensitive)==0;});
+                        if(!dataPath.isEmpty()&&!containsBase)catalogs.append(EspReader::read(QDir(data).filePath("Fallout4.esm"),cancelled,true));
                         for(const auto& file:result->package.plugins)catalogs.append(EspReader::read(file,cancelled));
                         auto merged=mergeLoadOrder(catalogs,result->error);if(!result->error.isEmpty())return;
                         merged.fileName="Local source pack";result->plugins.append(std::move(merged));
@@ -327,13 +329,14 @@ namespace reloadmaker
             } catch (const std::exception& exception) { result->error = QString::fromUtf8(exception.what()); }
         });
         _loadThread->setParent(this);
-        connect(_loadThread, &QThread::finished, this, [this, result]() {
+        connect(_loadThread, &QThread::finished, this, [this, result,newDocument]() {
             result->cancelled |= _loadThread->isInterruptionRequested();
             _loadThread->deleteLater(); _loadThread = nullptr;
             if (_closing) { return; }
             setLoading(false);
             if (result->cancelled) { _pendingSession={}; setStatus(QStringLiteral("Loading cancelled; previous source retained.")); return; }
             if (!result->error.isEmpty()) { _pendingSession={}; setStatus(result->error, true); return; }
+            if(newDocument)_sessionPath.clear();
             setLibraryResources(nullptr);
             clearAssetCaches();
             _libraryMode = false;
@@ -389,7 +392,7 @@ namespace reloadmaker
                     _weaponSelections.size() - 1);
             }
         }
-        if (_libraryMode) { _weaponCombo->setCurrentIndex(-1); }
+        if (_libraryMode||!_package.resourceData.isEmpty()) { _weaponCombo->setCurrentIndex(-1); }
         refreshAttachments();
         refreshConfigurationChoices();
         if (_pendingSession.isEmpty() && _weaponCombo->currentIndex() >= 0 && !_gameData.isEmpty()) {
@@ -741,10 +744,10 @@ namespace reloadmaker
             return;
         }
         QStringList paths;
-        if (!_libraryMode && !_package.rootPath.isEmpty()) {
+        if (!_libraryMode && _package.resourceData.isEmpty() && !_package.rootPath.isEmpty()) {
             paths.append(_package.rootPath);
         }
-        if (!_libraryMode) { paths.append(_gameData); }
+        if (!_libraryMode&&_package.resourceData.isEmpty()) { paths.append(_gameData); }
         Game::GameManager::close_resources();
         Game::GameManager::update_folders(Game::FALLOUT_4, paths);
         Game::GameManager::update_status(Game::FALLOUT_4, true);
@@ -843,7 +846,7 @@ namespace reloadmaker
                 _animationReadHashes.insert(key,QString::fromLatin1(QCryptographicHash::hash(bytes,QCryptographicHash::Sha256).toHex()));
             return bytes;
         };
-        if (_libraryMode) { return read(_packageResources); }
+        if (_libraryMode||!_package.resourceData.isEmpty()) { return read(_packageResources); }
         if (_packageResources.contains(resourcePath)) {
             return read(_packageResources);
         }
@@ -874,7 +877,7 @@ namespace reloadmaker
             }
             const QString candidate = ResourceArchive::normalizeResourcePath(
                 QStringLiteral("%1/%2").arg(directory, fileName));
-            if (_packageResources.contains(candidate) || _gameAnimations.contains(candidate)) {
+            if (_packageResources.contains(candidate) || (!_libraryMode&&_package.resourceData.isEmpty()&&_gameAnimations.contains(candidate))) {
                 return candidate;
             }
         }

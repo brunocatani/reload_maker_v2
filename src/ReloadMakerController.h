@@ -254,6 +254,7 @@ namespace reloadmaker
         void showAuthoringRoadmap();
         QJsonObject homeState() const;
         QJsonObject chooseHomeRole(const QString&);
+        bool openBaseGame();
         QString roadmapKey() const;
         QJsonObject roadmapState() const;
         QJsonArray roadmapProgress() const;
@@ -558,7 +559,7 @@ namespace reloadmaker
         [[nodiscard]] QString poseRecordKey(std::uint32_t formId) const;
         void startLibraryLoad();
         void setLoading(bool loading, const QString& message = {});
-        void startPackageLoad(const QString& path, const QString& dataPath);
+        void startPackageLoad(const QString& path, const QString& dataPath,bool newDocument=false);
         [[nodiscard]] const ResourceArchive& referenceMeshes() const;
         void applyStyle();
         void setStatus(const QString& message, bool error = false);

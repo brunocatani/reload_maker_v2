@@ -40,6 +40,7 @@ namespace reloadmaker {
     [[nodiscard]] LoadOrderSnapshot readLoadOrderSnapshot(const QString& instancePath,
                                                          const QString& dataPath,const QString& requestedProfile = {});
     [[nodiscard]] QByteArray profileFingerprint(const QString& instancePath, const QString& profilePath);
+    [[nodiscard]] QStringList resolveGameArchives(const QString& dataPath,const QStringList& plugins,const QStringList& iniPaths,QString& error);
     // The merger owns stable internal IDs, never guessed runtime FormIDs. A
     // source FormID is resolved using THAT plugin's MAST table, including ESLs.
     [[nodiscard]] PluginContent mergeLoadOrder(const QVector<PluginContent>& plugins, QString& error);

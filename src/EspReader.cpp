@@ -294,15 +294,10 @@ namespace reloadmaker
             result.editorId = textSubrecord(record, QByteArrayLiteral("EDID"), false);
 
             AnimationSubgraphEntry pending;
-            bool insideSubgraphData = false;
             for (const Subrecord& subrecord : record.subrecords) {
-                if (subrecord.type == QByteArrayLiteral("SADD")) {
-                    insideSubgraphData = true;
-                    continue;
-                }
-                if (!insideSubgraphData) {
-                    continue;
-                }
+                // SADD is an optional additive-race FormID, not a table marker.
+                // Native HumanRaceSubGraphData has SGNM/SAPT/STKD/SRAF entries
+                // without SADD (xEdit wbDefinitionsFO4 RACE Subgraph Data).
                 if (subrecord.type == QByteArrayLiteral("STKD") && subrecord.data.size() == 4) {
                     appendUnique(pending.requiredKeywords,
                                  readLittle<std::uint32_t>(subrecord.data, 0));

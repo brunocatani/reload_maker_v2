@@ -127,6 +127,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     if(method=="state")return studioState();
     if(method=="installation")return installationState();
     if(method=="home")return p.contains("role")?chooseHomeRole(p["role"].toString()):homeState();
+    if(method=="base_game"){require(openBaseGame(),_lastError);return studioState();}
     if(method=="pack_coverage")return packCoverageState(p["refresh"].toBool());
     if(method=="inspect_sources")return auditSources(p["evidence"].toObject());
     if(method=="pack_job")return packCommand(p);

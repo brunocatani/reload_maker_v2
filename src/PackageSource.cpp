@@ -40,15 +40,13 @@ namespace reloadmaker
 
         [[nodiscard]] PreparedPackage packageError(QString sourcePath, QString error)
         {
-            return PreparedPackage{ {}, std::move(sourcePath), std::move(error), false };
+            PreparedPackage result;result.sourcePath=std::move(sourcePath);result.error=std::move(error);return result;
         }
 
         [[nodiscard]] PreparedPackage packageReady(QString rootPath, QString sourcePath,
                                                     const bool fromArchive = false)
         {
-            return PreparedPackage{
-                std::move(rootPath), std::move(sourcePath), {}, fromArchive
-            };
+            PreparedPackage result;result.rootPath=std::move(rootPath);result.sourcePath=std::move(sourcePath);result.fromArchive=fromArchive;return result;
         }
 
         [[nodiscard]] QString hashFile(const QString& path, QString& error)
@@ -239,6 +237,18 @@ namespace reloadmaker
             const auto doc=QJsonDocument::fromJson(file.readAll()).object();const auto inputs=doc["plugins"].toArray();
             if(doc["format"]!="reload-maker-source-pack"||doc["version"]!=1||inputs.isEmpty()||inputs.size()>16)return packageError(path,"Invalid source pack");
             auto result=packageReady(info.absolutePath(),info.canonicalFilePath());
+            result.displayName=doc["name"].toString().left(160);
+            if(doc.contains("archives")||doc.contains("resourceData")) {
+                const QFileInfo data(QDir(info.absolutePath()).absoluteFilePath(doc["resourceData"].toString()));
+                if(!doc["resourceData"].isString()||doc["resourceData"].toString().isEmpty()||!data.isDir()||!doc["archives"].isArray()||doc["archives"].toArray().size()>1024)return packageError(path,"Invalid explicit resource Data view");
+                result.resourceData=data.canonicalFilePath();
+                for(const auto& item:doc["archives"].toArray()) {
+                    const QFileInfo archive(QDir(info.absolutePath()).absoluteFilePath(item.toString()));
+                    const auto resolved=archive.canonicalFilePath();
+                    if(!item.isString()||!archive.isFile()||archive.suffix().compare("ba2",Qt::CaseInsensitive)!=0||resolved.isEmpty()||result.archives.contains(resolved,Qt::CaseInsensitive))return packageError(path,"An explicit source archive is missing, duplicated or invalid");
+                    result.archives.append(resolved);
+                }
+            }
             for(const auto& input:inputs) {
                 const QFileInfo plugin(QDir(info.absolutePath()).absoluteFilePath(input.toString()));
                 const auto resolved=plugin.canonicalFilePath();
@@ -487,7 +497,7 @@ namespace reloadmaker
     {
         const auto key = normalizeResourcePath(resourcePath);
         const auto loose = _looseFiles.constFind(key);
-        return loose != _looseFiles.cend() ? QStringLiteral("MO2 / loose: %1").arg(loose.value()) : _providers.value(key);
+        return loose != _looseFiles.cend() ? QStringLiteral("Loose file: %1").arg(loose.value()) : _providers.value(key);
     }
 
     void ResourceArchive::close()

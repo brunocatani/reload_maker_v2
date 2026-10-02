@@ -21,6 +21,8 @@ namespace reloadmaker
         bool fromArchive{ false };
         QStringList plugins; // Optional ordered source-pack inputs, masters first.
         QStringList roots;
+        QString displayName,resourceData;
+        QStringList archives; // Optional explicit Data view, low to high priority.
 
         [[nodiscard]] bool ok() const noexcept { return error.isEmpty(); }
     };

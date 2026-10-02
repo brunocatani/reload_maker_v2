@@ -4,6 +4,8 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QTemporaryDir>
 #include <QTextStream>
 #include <QtEndian>
@@ -103,6 +105,12 @@ namespace {
         write(path, record("TES4", 0) + record("WEAP", 0x62aa6, 0, field));
         plugin = EspReader::read(path);
         require(plugin.weapons.first().defaultObjectMods == QVector<std::uint32_t>({0x2c0d3, 0x2bf01, 0xece69, 0x2bf04}), "OBTS keyword array shifted include IDs");
+        const auto sub=[](const QByteArray& type,const QByteArray& data){QByteArray bytes=type;const auto size=qToLittleEndian(quint16(data.size()));bytes.append(reinterpret_cast<const char*>(&size),2);return bytes+data;};
+        const auto graph=sub("EDID","NativeSubgraphs\0")+sub("SGNM","Actors/Character/_1stPerson/Behaviors/Pistol.hkx\0")+
+            sub("SAPT","Actors/Character/_1stPerson/Animations/Pistol\0")+sub("STKD",QByteArray::fromHex("48000100"))+sub("SRAF",QByteArray::fromHex("01000100"));
+        write(path,record("TES4",0)+record("RACE",0x166729,0,graph));plugin=EspReader::read(path);
+        require(plugin.parsed&&plugin.animationSubgraphs.size()==1&&plugin.animationSubgraphs[0].entries.size()==1,"Native subgraphs incorrectly require optional SADD");
+        require(plugin.resolveFirstPersonSubgraph({0x10048})!=nullptr,"Native first-person weapon subgraph was not resolved");
     }
     void profileTests() {
         QTemporaryDir dir;
@@ -126,6 +134,16 @@ namespace {
         require(!readLoadOrderSnapshot(instance,data,"Different").valid(),"requested profile used another virtual view");
         require(snapshot.plugins.size() == 4, "implicit masters/enabled filter incorrect");
         require(snapshot.archives == QStringList({data + "/Startup.ba2", data + "/Replacement.ba2", data + "/Base - Main.ba2", data + "/Patch - Main.ba2"}), "INI override/active archive order incorrect");
+        QString archiveError;
+        const auto explicitArchives=resolveGameArchives(data,snapshot.plugins,{profile+"/fallout4.ini",profile+"/fallout4custom.ini"},archiveError);
+        require(archiveError.isEmpty()&&explicitArchives==snapshot.archives,"Explicit and profile archive planners differ");
+        QJsonArray files,archives;for(const auto& p:snapshot.plugins)files.append(data+'/'+p);for(const auto& a:snapshot.archives)archives.append(a);
+        const auto source=dir.filePath("base.reloadsources.json");
+        QJsonObject definition{{"format","reload-maker-source-pack"},{"version",1},{"name","Fixture base Data"},{"plugins",files},{"resourceData",data},{"archives",archives}};
+        write(source,QJsonDocument(definition).toJson());const auto package=PackageSource::prepare(source);
+        require(package.ok()&&package.resourceData==data&&package.archives==snapshot.archives&&package.displayName=="Fixture base Data","Explicit source view was not retained");
+        archives.append(archives[0]);definition["archives"]=archives;write(source,QJsonDocument(definition).toJson());
+        require(!PackageSource::prepare(source).ok(),"Duplicate explicit archive accepted");
         const auto firstFingerprint = snapshot.fingerprint;
         write(profile + "/modlist.txt", "+AnimationReplacer\n");
         require(profileFingerprint(instance, profile) != firstFingerprint, "MO2 mod change not detected");

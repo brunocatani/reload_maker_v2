@@ -118,7 +118,7 @@ namespace reloadmaker {
             _launchSnapshot = result->snapshot;
             _gameData = result->snapshot.dataPath;
             _gameDataText = _gameData;
-            _package = { _gameData, {}, {}, false };
+            _package = {};_package.rootPath=_gameData;
             _packageResources = std::move(result->resources);
             _gameMeshes.close(); _gameAnimations.close();_gameSounds.close();
             _plugins.clear(); _plugins.append(std::move(result->catalog));
@@ -142,6 +142,6 @@ namespace reloadmaker {
 
     const ResourceArchive& ReloadMakerController::referenceMeshes() const
     {
-        return _libraryMode ? _packageResources : _gameMeshes;
+        return _libraryMode||!_package.resourceData.isEmpty() ? _packageResources : _gameMeshes;
     }
 }

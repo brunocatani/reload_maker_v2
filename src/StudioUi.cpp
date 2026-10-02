@@ -412,6 +412,7 @@ void ReloadMakerController::createSourceBar(QToolBar* bar) {
     _sourceButton->setObjectName("SourceButton");
     _sourceButton->setPopupMode(QToolButton::InstantPopup);
     auto* menu = new QMenu(_sourceButton);
+    connect(menu->addAction("Open base game and loose Data"),&QAction::triggered,this,[this]{(void)openBaseGame();});
     connect(menu->addAction("Open mod folder…"), &QAction::triggered, this, &ReloadMakerController::browsePackage);
     connect(menu->addAction("Open mod ZIP…"), &QAction::triggered, this, [this] {
         const QString file = QFileDialog::getOpenFileName(_window, "Open mod ZIP", _packageText, "ZIP archives (*.zip)");
@@ -504,7 +505,7 @@ void ReloadMakerController::refreshSourceBar() {
             .arg(_plugins.isEmpty() ? 0 : _plugins.first().weapons.size()).arg(_libraryPlugins.size()).arg(_packageResources.files().size())
             .arg(QDir::toNativeSeparators(_gameData)));
     } else if (!_package.sourcePath.isEmpty()) {
-        _sourceLabel->setText(QFileInfo(_package.sourcePath).fileName());
+        _sourceLabel->setText(_package.displayName.isEmpty()?QFileInfo(_package.sourcePath).fileName():_package.displayName);
         _sourceLabel->setToolTip(QStringLiteral("%1\nGame Data: %2").arg(QDir::toNativeSeparators(_package.sourcePath), QDir::toNativeSeparators(_gameData)));
     } else {
         _sourceLabel->setText(QStringLiteral("No source"));

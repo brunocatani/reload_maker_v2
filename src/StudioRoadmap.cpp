@@ -85,16 +85,17 @@ QJsonObject ReloadMakerController::auditSources(const QJsonObject& evidence) con
         if(!insideMo2VirtualFilesystem()||profileFingerprint(_launchSnapshot.instancePath,_launchSnapshot.profilePath)!=_launchSnapshot.fingerprint)
             throw std::runtime_error("The active MO2 source snapshot changed; reconnect the selected profile");
         if(!current.openLoadOrder(_launchSnapshot.dataPath,_launchSnapshot.archives,error))throw std::runtime_error(error.toStdString());
-    }else if(!current.openPackages(_package.roots.isEmpty()?QStringList{_package.rootPath}:_package.roots,error))throw std::runtime_error(error.toStdString());
+    }else if(!_package.resourceData.isEmpty()){if(!current.openLoadOrder(_package.resourceData,_package.archives,error))throw std::runtime_error(error.toStdString());}
+    else if(!current.openPackages(_package.roots.isEmpty()?QStringList{_package.rootPath}:_package.roots,error))throw std::runtime_error(error.toStdString());
     auto result=inspectSourceEvidence(evidence,[&](const QString&,const QString& path){
         SourceBytes value;
-        if(!_libraryMode&&!current.contains(path)&&!game.isOpen()&&!game.open(_gameData,value.error))return value;
-        const auto& archive=(_libraryMode||current.contains(path))?current:game;
+        if(!_libraryMode&&_package.resourceData.isEmpty()&&!current.contains(path)&&!game.isOpen()&&!game.open(_gameData,value.error))return value;
+        const auto& archive=(_libraryMode||!_package.resourceData.isEmpty()||current.contains(path))?current:game;
         value.bytes=archive.read(path,value.error);value.provider=archive.provider(path);return value;
     });
     if(_libraryMode&&profileFingerprint(_launchSnapshot.instancePath,_launchSnapshot.profilePath)!=_launchSnapshot.fingerprint)
         throw std::runtime_error("MO2 profile changed during the source check; reconnect before continuing");
-    result["sourceMode"]=_libraryMode?"mo2-profile":"ordered-packages";
+    result["sourceMode"]=_libraryMode?"mo2-profile":!_package.resourceData.isEmpty()?"explicit-data":"ordered-packages";
     result["profile"]=_libraryMode?_launchSnapshot.profileName:QString();return result;
 }
 QJsonObject ReloadMakerController::roadmapState() const {

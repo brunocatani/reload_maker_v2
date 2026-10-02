@@ -5,6 +5,7 @@
 #include <QTextStream>
 #include <QtEndian>
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cmath>
@@ -64,14 +65,14 @@ namespace
     // no production parser or spline implementation constructs their values.
     struct PackfileFixture
     {
-        QByteArray data = QByteArray(0x120, '\0');
+        QByteArray data = QByteArray(0x150, '\0');
         QVector<std::array<std::uint32_t, 2>> localFixups;
         QString animationClass;
 
         explicit PackfileFixture(QString name) : animationClass(std::move(name))
         {
-            std::memcpy(data.data() + 0x110, "Root", 5);
-            localFixups.append({ 0xC0, 0x110 });
+            std::memcpy(data.data() + 0x140, "Root", 5);
+            localFixups.append({ 0xF0, 0x140 });
             f32(data, 0x14, 1.0f);
             u32(data, 0x18, 1);
         }
@@ -94,11 +95,11 @@ namespace
                 u32(data, data.size(), fixup[1]);
             }
             const std::uint32_t global = static_cast<std::uint32_t>(data.size());
-            for (const std::uint32_t value : { 0xC8U, 2U, 0U }) {
+            for (const std::uint32_t value : { 0xF8U, 2U, 0U }) {
                 u32(data, data.size(), value);
             }
             const std::uint32_t virtuals = static_cast<std::uint32_t>(data.size());
-            for (const std::uint32_t value : { 0U, 0U, 0U, 0xB0U, 0U,
+            for (const std::uint32_t value : { 0U, 0U, 0U, 0xE0U, 0U,
                                                static_cast<std::uint32_t>(firstClass.size()) }) {
                 u32(data, data.size(), value);
             }
@@ -203,6 +204,64 @@ namespace
         return pose.front();
     }
 
+    QByteArray lossless(int corruption = 0)
+    {
+        PackfileFixture file(QStringLiteral("hkaLosslessCompressedAnimation"));
+        u32(file.data, 0x18, 3);
+        u32(file.data, 0xD8, corruption == 5 ? 0xFFFFFFFFU : 3U);
+        QByteArray translations, rotations, scales;
+        for (int frame = 0; frame < 3; ++frame) {
+            f32(translations, translations.size(), float(frame) * 10);
+            f32(translations, translations.size(), float(frame) * -6);
+            quaternion(rotations, frame == 1 ? negate(axisZ(45)) : axisZ(float(frame) * 45));
+            f32(scales, scales.size(), 1 + float(frame) * 0.5f);
+        }
+        if (corruption == 3) { f32(translations, 0, std::numeric_limits<float>::quiet_NaN()); }
+        QByteArray fixedT, fixedR, fixedS;
+        f32(fixedT, 0, 7); quaternion(fixedR, axisZ(90)); f32(fixedS, 0, 2);
+        QByteArray tMaps(24, '\0'), rMaps(6, '\0'), sMaps(24, '\0');
+        // Track 0: dynamic X (index 0), constant Y; dynamic rotation and Z scale.
+        // Track 1: constant X, dynamic Y (index 1); constant rotation and X scale.
+        // Track 2: all identity. W padding in vector maps is not a component.
+        u32(tMaps, 0, 2U | (1U << 16)); u32(tMaps, 8, 1U | (6U << 16));
+        u32(rMaps, 0, 2U | (1U << 16));
+        u32(sMaps, 4, 2U); u32(sMaps, 8, 1U);
+        if (corruption == 1) { u32(tMaps, 0, 3); }
+        if (corruption == 2) { u32(tMaps, 0, 14); } // index 3 exceeds per-frame stride 2.
+        if (corruption == 4) { tMaps.chop(8); }
+        file.array(0x38, translations, 6); file.array(0x48, fixedT, 1);
+        file.array(0x58, tMaps, corruption == 4 ? 2 : 3);
+        file.array(0x68, rotations, 3); file.array(0x78, fixedR, 1); file.array(0x88, rMaps, 3);
+        file.array(0x98, scales, 3); file.array(0xA8, fixedS, 1); file.array(0xB8, sMaps, 3);
+        return file.finish();
+    }
+
+    void losslessChecks()
+    {
+        QString error;
+        const auto clip = HkxReader::readClip(lossless(), error);
+        require(clip.valid() && clip.frameCount == 3 && clip.transformTrackCount == 3,
+                qPrintable(QStringLiteral("Lossless decode failed: ") + error));
+        for (float t : { -1.0f, 0.0f, 0.25f, 0.5f, 0.75f, 1.0f, 2.0f }) {
+            QVector<Transformf> values; clip.sample(t, values);
+            const float time = std::clamp(t, 0.0f, 1.0f);
+            require(values.size() == 3 && std::abs(values[0].translation.x - time * 20) < 1e-5f &&
+                    values[0].translation.y == 7 && values[1].translation.x == 7 &&
+                    std::abs(values[1].translation.y + time * 12) < 1e-5f,
+                    "lossless frame-major translation or constant index failed");
+            expectRotation(values[0].rotation, axisZ(time * 90));
+            expectRotation(values[1].rotation, axisZ(90));
+            expectRotation(values[2].rotation, axisZ(0));
+            require(std::abs(values[0].scale.z - (1 + time)) < 1e-5f && values[1].scale.x == 2 &&
+                    values[2].translation.x == 0 && values[2].scale.z == 1,
+                    "lossless static/dynamic/identity scale failed");
+        }
+        for (int invalid = 1; invalid <= 5; ++invalid) {
+            require(!HkxReader::readClip(lossless(invalid), error).valid() && !error.isEmpty(),
+                    "invalid lossless animation accepted");
+        }
+    }
+
     void syntheticChecks()
     {
         const Quaternionf ninety = axisZ(90);
@@ -243,6 +302,20 @@ int main(int argc, char** argv)
     QTextStream out(stdout);
     try {
         syntheticChecks();
+        losslessChecks();
+        for (int i = 1; i < argc; ++i) {
+            QFile file(QString::fromLocal8Bit(argv[i])); require(file.open(QIODevice::ReadOnly), "fixture unreadable");
+            QString error; const auto clip = HkxReader::readClip(file.readAll(), error);
+            require(clip.valid(), qPrintable(error));
+            QVector<Transformf> pose;
+            for (unsigned frame = 0; frame < clip.frameCount; ++frame) {
+                clip.sample(clip.durationSeconds * frame / (clip.frameCount - 1U), pose);
+                require(pose.size() == clip.transformTrackCount, "real clip track count changed");
+            }
+            out << "PASS source fixture " << file.fileName() << " frames=" << clip.frameCount
+                << " tracks=" << clip.transformTrackCount << '\n';
+        }
+        out << "PASS lossless identity/static/dynamic channels, multitrack frame strides, interpolation and malformed inputs\n";
         out << "PASS analytic spline degrees 1-3, quaternion signs, static/dynamic equality, endpoints, block seam and interleaved sampling\n";
     } catch (const std::exception& error) {
         out << "FAIL " << error.what() << '\n';

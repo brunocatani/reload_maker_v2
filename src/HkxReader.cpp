@@ -815,6 +815,80 @@ namespace reloadmaker
             return transform;
         }
 
+        [[nodiscard]] QVector<Transformf> readLosslessTransforms(
+            const ByteReader& reader, const Packfile& packfile, const std::uint32_t animation,
+            const std::uint32_t frames, const std::uint32_t tracks)
+        {
+            // FO4VR 1.2.72 frame sampler 0x141F66DF0 and map readers 0x141F67120-180:
+            // each 16-bit channel is (index << 2) | identity/static/dynamic kind.
+            // Dynamic arrays are frame-major. Rotation uses the same shortest-path
+            // normalized linear interpolation as our interleaved sampling path.
+            const std::uint64_t total = static_cast<std::uint64_t>(frames) * tracks;
+            if (frames < 2 || total > kMaximumAnimationDataBytes / sizeof(Transformf)) {
+                throw std::runtime_error("HKX lossless frame count exceeds the supported limit");
+            }
+            const auto array = [&](std::uint32_t field, std::uint32_t stride) {
+                const auto value = arrayView(reader, packfile, animation, field,
+                                             kMaximumAnimationDataBytes / stride);
+                reader.require(packfile.data.dataStart + value.relativeOffset,
+                               static_cast<qsizetype>(value.count) * stride);
+                return value;
+            };
+            const std::array<ArrayView, 3> dynamic{ array(0x38, 4), array(0x68, 16), array(0x98, 4) };
+            const std::array<ArrayView, 3> fixed{ array(0x48, 4), array(0x78, 16), array(0xA8, 4) };
+            const std::array<ArrayView, 3> maps{ array(0x58, 8), array(0x88, 2), array(0xB8, 8) };
+            for (std::size_t channel = 0; channel < maps.size(); ++channel) {
+                if (maps[channel].count != tracks || dynamic[channel].count % frames != 0) {
+                    throw std::runtime_error("HKX lossless channel arrays are invalid");
+                }
+            }
+            const auto scalar = [&](qsizetype offset) {
+                const float value = reader.f32(offset);
+                if (!std::isfinite(value)) {
+                    throw std::runtime_error("HKX lossless transform is not finite");
+                }
+                return value;
+            };
+            const auto source = [&](std::size_t channel, std::uint32_t track,
+                                    std::uint32_t axis, std::uint32_t frame) -> std::optional<qsizetype> {
+                const bool rotation = channel == 1;
+                const auto code = reader.u16(packfile.data.dataStart + maps[channel].relativeOffset +
+                                             track * (rotation ? 2U : 8U) + axis * 2U);
+                const unsigned kind = code & 3U;
+                if (kind == 0) { return std::nullopt; }
+                if (kind == 3) { throw std::runtime_error("HKX lossless channel kind is invalid"); }
+                const auto& values = kind == 1 ? fixed[channel] : dynamic[channel];
+                const auto stride = kind == 1 ? values.count : values.count / frames;
+                const unsigned index = code >> 2U;
+                if (index >= stride) { throw std::runtime_error("HKX lossless channel index is invalid"); }
+                const auto element = index + (kind == 2 ? frame * stride : 0U);
+                return packfile.data.dataStart + values.relativeOffset +
+                       static_cast<qsizetype>(element) * (rotation ? 16 : 4);
+            };
+            QVector<Transformf> transforms;
+            transforms.reserve(static_cast<qsizetype>(total));
+            for (std::uint32_t frame = 0; frame < frames; ++frame) {
+                for (std::uint32_t track = 0; track < tracks; ++track) {
+                    Transformf value;
+                    std::array<float*, 3> translation{ &value.translation.x, &value.translation.y, &value.translation.z };
+                    std::array<float*, 3> scale{ &value.scale.x, &value.scale.y, &value.scale.z };
+                    for (std::uint32_t axis = 0; axis < 3; ++axis) {
+                        if (const auto p = source(0, track, axis, frame)) { *translation[axis] = scalar(*p); }
+                        if (const auto p = source(2, track, axis, frame)) { *scale[axis] = scalar(*p); }
+                    }
+                    if (const auto p = source(1, track, 0, frame)) {
+                        const Quaternionf q{ scalar(*p), scalar(*p + 4), scalar(*p + 8), scalar(*p + 12) };
+                        const double length = double(q.x) * q.x + double(q.y) * q.y +
+                                              double(q.z) * q.z + double(q.w) * q.w;
+                        if (length < 1.0e-12) { throw std::runtime_error("HKX lossless rotation is invalid"); }
+                        value.rotation = normalized(q);
+                    }
+                    transforms.append(value);
+                }
+            }
+            return transforms;
+        }
+
         [[nodiscard]] Transformf interpolateInterleavedTransform(
             const Transformf& first, const Transformf& second, const float alpha)
         {
@@ -1026,7 +1100,9 @@ namespace reloadmaker
                                           QStringLiteral("hkaSplineCompressedAnimation");
             const bool interleavedUncompressed = animationObject->className ==
                                                  QStringLiteral("hkaInterleavedUncompressedAnimation");
-            if (!splineCompressed && !interleavedUncompressed) {
+            const bool losslessCompressed = animationObject->className ==
+                                            QStringLiteral("hkaLosslessCompressedAnimation");
+            if (!splineCompressed && !interleavedUncompressed && !losslessCompressed) {
                 throw std::runtime_error("HKX animation encoding is not supported");
             }
             const std::uint32_t animation = animationObject->relativeOffset;
@@ -1101,6 +1177,13 @@ namespace reloadmaker
                 });
 
             clip._storage = QSharedPointer<HkxClip::Storage>::create();
+            if (losslessCompressed) {
+                clip.frameCount = reader.u32(animationAbsolute + 0xD8);
+                clip._storage->interleavedTransforms = readLosslessTransforms(
+                    reader, packfile, animation, clip.frameCount, clip.transformTrackCount);
+                clip._storage->encoding = HkxClip::Storage::Encoding::InterleavedUncompressed;
+                return clip;
+            }
             if (interleavedUncompressed) {
                 const ArrayView transforms = arrayView(
                     reader, packfile, animation, 0x38,

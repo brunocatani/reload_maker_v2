@@ -444,6 +444,16 @@ def home(role: str = '') -> dict:
     return command('home',dict(role=role) if role else {})
 
 @mcp.tool()
+def load_base_game(expected_revision: int) -> dict:
+    """Load base game plugins and a frozen explicit archive/loose Data view.
+    Requires a configured game folder and an ordinary, non-MO2 process. Inside
+    MO2 use the connected library's Fallout4.esm filter instead. Saves no game
+    files and makes no claim about a manual installation's enabled mod list.
+    Wait for get_state.busy to clear, then choose a weapon and explicit template.
+    """
+    return command('base_game',{},expected_revision)
+
+@mcp.tool()
 def get_pack_coverage(refresh: bool = False) -> dict:
     """Show authored pack projects by source weapon. Refresh starts a background
     inventory job; poll pack_job until complete, then read this again. Includes

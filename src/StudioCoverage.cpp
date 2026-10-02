@@ -48,7 +48,7 @@ QJsonObject ReloadMakerController::packCoverageState(bool refresh) {
         const auto record=selectionRecordKey(i);const auto winner=plugin.origins.value(weapon.formId).winner;
         loaded.append(QJsonObject{{"record",record},{"selection",i},{"name",weapon.name.isEmpty()?weapon.editorId:weapon.name},{"editorId",weapon.editorId},
             {"owner",record.section(':',0,0)},{"winner",winner.isEmpty()?plugin.fileName:winner},{"coverage",coverageLabel(record)}});}
-    result["loadedWeapons"]=loaded;result["sourceMode"]=_libraryMode?"mo2-profile":"ordered-packages";result["profile"]=_libraryMode?_launchSnapshot.profileName:QString();
+    result["loadedWeapons"]=loaded;result["sourceMode"]=_libraryMode?"mo2-profile":!_package.resourceData.isEmpty()?"explicit-data":"ordered-packages";result["profile"]=_libraryMode?_launchSnapshot.profileName:QString();
     return result;
 }
 void ReloadMakerController::showPackCoverage() {
