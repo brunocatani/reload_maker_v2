@@ -218,8 +218,6 @@ void ReloadMakerController::showPackBuilder() {
     auto* actions=new QHBoxLayout;layout->addLayout(actions);
     auto* validate=new QPushButton("Validate packs");auto* build=new QPushButton("Rebuild installation");auto* initialize=new QPushButton("Create new installation");auto* cancel=new QPushButton("Cancel job");
     for(auto* button:{validate,build,initialize,cancel})actions->addWidget(button);
-    auto* instructions=new QPushButton("Open installation and rollback instructions");layout->addWidget(instructions);instructions->setEnabled(false);
-    QString instructionsPath;
     const auto update=[&]{const auto state=packCommand({});const auto phase=state["phase"].toString();const bool running=phase=="running"||phase=="cancelling";
         validate->setEnabled(!running);build->setEnabled(!running);initialize->setEnabled(!running);cancel->setEnabled(running);
         QString text;
@@ -230,8 +228,7 @@ void ReloadMakerController::showPackBuilder() {
         else {
             const auto result=state["result"].toObject();
             if(state["operation"]=="build") {
-                instructionsPath=result["installation"].toObject()["instructions"].toString();instructions->setEnabled(QFileInfo::exists(instructionsPath));
-                text=QString("Build complete.\n%1 objects from the selected packs.\n\nInstall the authored packs and this generated companion folder:\n%2\n\nKeep its ESP and object bindings together. Open the installation instructions below for the selected packs, source dependencies, manual installation and verified rollback snapshot.\n\nThis build has not changed MO2 enablement.").arg(result["activeObjects"].toInt()).arg(QDir::toNativeSeparators(result["output"].toString()));
+                text=QString("Build complete.\n%1 objects from the selected packs.\n\nGenerated ESP and bindings:\n%2\n\nUse this folder alongside the authored packs. You control activation and load order in MO2.").arg(result["activeObjects"].toInt()).arg(QDir::toNativeSeparators(result["output"].toString()));
             }
             else if(state["operation"]=="validate")text=QString("Validated %1 pack(s). The content hashes and object definitions match their export.").arg(result["packs"].toArray().size());
             else text="Add the finished packs to include, then validate or build their local object ESP.";
@@ -246,7 +243,6 @@ void ReloadMakerController::showPackBuilder() {
     connect(build,&QPushButton::clicked,&dialog,[&]{run("build",false);});
     connect(initialize,&QPushButton::clicked,&dialog,[&]{run("build",true);});
     connect(cancel,&QPushButton::clicked,&dialog,[&]{try{packCommand({{"operation","cancel"}});}catch(const std::exception& e){report->setPlainText(e.what());}});
-    connect(instructions,&QPushButton::clicked,&dialog,[&]{QDesktopServices::openUrl(QUrl::fromLocalFile(instructionsPath));});
     update();dialog.exec();
 }
 }

@@ -12,7 +12,6 @@ import tempfile
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'tools'))
 from product_backend import Backends
 from product_packs import allocate, build, digest, load_pack, PLUGIN, read, write
-from product_installation import check_snapshot
 
 
 async def run(args):
@@ -30,14 +29,10 @@ async def run(args):
         install = root/'installation'
         first = await build(packs, install, backends, initialize=True)
         assert first['runtimeCatalog']['ok'] and first['runtimeCatalog']['objects']==first['activeObjects']
-        first_snapshot=Path(first['installation']['snapshot'])
-        assert first['installation']['previousSnapshot'] is None
-        assert Path(first['installation']['instructions']).is_file()
         pointer = read(install/'current.json')
         ledger = read(install/pointer['generation']/'ledger.json')
         ids = {k: v['localId'] for k, v in ledger['objects'].items()}
         second = await build(list(reversed(packs)), install, backends)
-        assert second['installation']['previousSnapshot']['verified']
         reordered = read(install/read(install/'current.json')['generation']/'ledger.json')
         assert ids == {k: v['localId'] for k, v in reordered['objects'].items()}
         assert first['generation']['pluginSha256'] == second['generation']['pluginSha256']
@@ -58,7 +53,6 @@ async def run(args):
         objects = packs[0]/loaded['manifest']['objects']
         original = objects.read_bytes()
         objects.write_bytes(b'[]')
-        assert check_snapshot(first_snapshot.parent)['verified'], 'Updating a source pack changed its prior snapshot'
         try:
             await build(packs, install, backends)
             raise AssertionError('Changed frozen input was accepted')
@@ -118,10 +112,6 @@ async def run(args):
             assert 'bindings' in str(exc),str(exc)
         assert (install/'current.json').read_bytes()==original_pointer
         bindings_path.write_bytes(saved_bindings)
-        snapshot_bindings=active_generation/'validation-Data/F4SE/Plugins/DIAMOND/Generated/objects.json'
-        saved_snapshot=snapshot_bindings.read_bytes();snapshot_bindings.write_bytes(b'{}')
-        assert not check_snapshot(active_generation)['verified'], 'Damaged snapshot was reported as usable'
-        snapshot_bindings.write_bytes(saved_snapshot)
         restored = await build(packs, install, backends)
         assert restored['activeObjects'] == len(ids)
         # Cancel after native catalog validation on the very first generation.
@@ -154,8 +144,7 @@ async def run(args):
             'stable reordered IDs and plugin bytes', 'removed packs emit no records or models', 'tamper failure preserves output',
             'corrupt ledger rejected', 'reinstall recovers existing IDs', 'runtime validates complete generated catalog',
             'semantic content failure preserves output', 'runtime object budget enforced', 'object-only pack rejected',
-            'independent rollback snapshot survives source update', 'damaged snapshot never reported as usable',
-            'last-good ESP and bindings verified together', 'installation instructions accompany successful builds',
+            'last-good ESP and bindings verified together',
             'late first-build cancellation can retry with its existing identity'])
         (workspace/'pack-builder-result.json').write_text(json.dumps(report, indent=2))
         print(json.dumps(report))

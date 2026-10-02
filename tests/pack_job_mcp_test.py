@@ -35,9 +35,7 @@ def run():
         job=command('pack_job',params,state['revision'])
         result=finish(job['id'])
         assert result['phase']=='complete',result
-        installation=result['result']['installation']
-        assert Path(installation['report']).is_file() and Path(installation['instructions']).is_file()
-        assert Path(installation['snapshot']).is_dir()
+        assert Path(result['result']['output'],'DIAMOND_Generated.esp').is_file()
         assert command('state')['project']==before
         pointer=Path(temporary)/'current.json'
         preserved=pointer.read_bytes()
