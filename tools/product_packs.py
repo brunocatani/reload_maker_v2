@@ -221,6 +221,8 @@ async def build(packs, installation, backends, initialize=False):
             ledger = read(old/'ledger.json')
             require(digest(old/'ledger.json') == pointer['ledgerSha256'], 'Installation ledger was modified or corrupted')
             require(digest(old/'output'/PLUGIN) == pointer['pluginSha256'], 'Last good generated plugin is missing or altered')
+            require(digest(old/'output/F4SE/Plugins/DIAMOND/Generated/objects.json') == pointer['bindingsSha256'],
+                    'Last good generated bindings are missing or altered')
         else:
             completed = any((folder/'receipt.json').exists() for folder in (installation/'generations').glob('*'))
             require(initialize and not completed, 'Use explicit initialization for a new installation; restore current.json for an existing one')
@@ -283,25 +285,23 @@ async def build(packs, installation, backends, initialize=False):
                                  for key, entry in ledger['objects'].items() if entry['active']})
         write(output/'F4SE/Plugins/DIAMOND/Generated/objects.json', bindings)
         # Validate the exact effective Data view with the runtime catalog loader.
-        # This view is build evidence only; the companion output stays free of
-        # authored assets so it cannot mask a later pack update in MO2.
+        # Keep independent copies as the exact install/rollback snapshot. A
+        # hardlink would mutate the snapshot when an authored pack is updated.
+        # The companion output remains free of authored assets.
         view = stage/'validation-Data'
-        def link(source, destination):
+        def snapshot_copy(source, destination):
             destination.parent.mkdir(parents=True, exist_ok=True)
             if destination.exists():
                 require(digest(source) == digest(destination), 'Selected packs conflict at '+str(destination))
                 return
-            try:
-                os.link(source, destination)
-            except OSError:
-                shutil.copy2(source, destination)
+            shutil.copy2(source, destination)
         for pack in loaded:
             cancellation()
             for name in pack['manifest']['files']:
-                link(within(pack['root'], name), within(view, name))
-            link(pack['manifestPath'], view/'F4SE/Plugins/DIAMOND/Packs'/pack['manifest']['id']/'manifest.json')
-        link(output/PLUGIN, view/PLUGIN)
-        link(output/'F4SE/Plugins/DIAMOND/Generated/objects.json', view/'F4SE/Plugins/DIAMOND/Generated/objects.json')
+                snapshot_copy(within(pack['root'], name), within(view, name))
+            snapshot_copy(pack['manifestPath'], view/'F4SE/Plugins/DIAMOND/Packs'/pack['manifest']['id']/'manifest.json')
+        snapshot_copy(output/PLUGIN, view/PLUGIN)
+        snapshot_copy(output/'F4SE/Plugins/DIAMOND/Generated/objects.json', view/'F4SE/Plugins/DIAMOND/Generated/objects.json')
         checked = backends.content_validation(view)
         checked['expectedObjects'] = sum(len(p['objects']) for p in loaded)
         write(stage/'catalog-validation.json', checked)
@@ -312,6 +312,8 @@ async def build(packs, installation, backends, initialize=False):
         receipt = dict(version=1, generation=generation, ledgerSha256=digest(stage/'ledger.json'), pluginSha256=plugin_hash,
                        bindingsSha256=digest(output/'F4SE/Plugins/DIAMOND/Generated/objects.json'))
         write(stage/'receipt.json', receipt)
+        from product_installation import installation_report
+        installation_info = installation_report(stage, loaded, receipt, old)
         for pack in loaded:
             require(digest(pack['manifestPath']) == pack['manifestSha256'], 'Pack changed during build')
             for name, expected in pack['manifest']['files'].items():
@@ -319,6 +321,6 @@ async def build(packs, installation, backends, initialize=False):
         cancellation()
         write(current, receipt)
         return dict(ok=True, output=str(output), generation=receipt, activeObjects=sum(e['active'] for e in ledger['objects'].values()),
-                    runtimeCatalog=checked)
+                    runtimeCatalog=checked, installation=installation_info)
     finally:
         lock.unlink()

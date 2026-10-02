@@ -509,6 +509,8 @@ def pack_job(operation: str = 'state', packs: list[str] | None = None,
     New installations require initialize=True; existing IDs are never reset.
     Poll operation=state until complete/failed. Inspect the returned job ID.
     Building stays local and does not enable or install MO2 mods.
+    Successful builds return installation instructions, an exact copied Data
+    snapshot and the verification status of the previous rollback snapshot.
     """
     if operation not in ('state', 'cancel') and expected_revision is None:
         raise ValueError('Read the current document revision before starting a pack job')
