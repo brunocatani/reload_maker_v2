@@ -59,6 +59,9 @@ QStringList ReloadMakerController::selectionPlugins(int index) const {
     if(origin!=plugin.origins.cend()&&!origin->contributors.isEmpty())return origin->contributors;
     return {plugin.fileName};
 }
+bool ReloadMakerController::allWeaponsSelected() const {
+    return _libraryMode&&_pluginFilter&&_pluginFilter->currentData().toString()==kAllWeaponsSource;
+}
 QStringList ReloadMakerController::sourcePluginOrder() const {
     if(_libraryMode)return _launchSnapshot.plugins;
     QStringList result;const auto add=[&](const QString& name){if(!result.contains(name,Qt::CaseInsensitive))result.append(name);};
@@ -93,7 +96,7 @@ void ReloadMakerController::createSourceBar(QToolBar* bar) {
     auto* panel=new QWidget(searchMenu);panel->setMinimumWidth(400);auto* layout=new QVBoxLayout(panel);
     auto* search=new QLineEdit(panel);search->setObjectName("PluginSearchText");search->setPlaceholderText("Search plugins…");search->setClearButtonEnabled(true);layout->addWidget(search);
     auto* matches=new QSortFilterProxyModel(panel);matches->setSourceModel(_pluginFilter->model());
-    matches->setFilterRole(Qt::UserRole);matches->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    matches->setFilterRole(Qt::DisplayRole);matches->setFilterCaseSensitivity(Qt::CaseInsensitive);
     auto* results=new QListView(panel);results->setObjectName("PluginSearchResults");results->setModel(matches);
     results->setMinimumHeight(250);layout->addWidget(results);
     auto* searchAction=new QWidgetAction(searchMenu);searchAction->setDefaultWidget(panel);searchMenu->addAction(searchAction);
@@ -119,11 +122,13 @@ void ReloadMakerController::refreshSourceBar() {
     if(!_pendingSession.isEmpty())chosen=_pendingSession.value("browserPlugin").toString(_pendingSession["weapon"].toString().section(':',0,0));
     const QSignalBlocker block(_pluginFilter);_pluginFilter->clear();
     QHash<QString,int> counts;for(int i=0;i<_weaponSelections.size();++i)for(const auto& name:selectionPlugins(i))++counts[name.toLower()];
+    if(_libraryMode)_pluginFilter->addItem("LOAD ALL WEAPONS",kAllWeaponsSource);
     for(const auto& name:sourcePluginOrder())_pluginFilter->addItem(name,name);
     _pluginFilter->setCurrentIndex(pluginIndex(_pluginFilter,chosen));
     _pluginFilter->setEnabled(!_loadThread&&_pluginFilter->count()>0);
     _pluginSearch->setEnabled(_pluginFilter->isEnabled());
     for(int i=0;i<_pluginFilter->count();++i){const auto name=_pluginFilter->itemData(i).toString();
+        if(name==kAllWeaponsSource){_pluginFilter->setItemData(i,QString("All %1 editable weapons in this MO2 profile. Each weapon shows its originating plugin; records still follow the winning load order.").arg(_weaponSelections.size()),Qt::ToolTipRole);continue;}
         _pluginFilter->setItemData(i,QString("%1\n%2 editable weapon record(s) in the loaded source.\nAmber: selected plugin · teal: required master.").arg(name).arg(counts.value(name.toLower())),Qt::ToolTipRole);}
     if(_pluginFilter->currentIndex()<0)alignPluginToWeapon();
     updatePluginColors();refreshWeaponPicker();
@@ -136,12 +141,13 @@ void ReloadMakerController::updatePluginColors() {
         const bool master=masters.contains(name,Qt::CaseInsensitive);QFont font=_pluginFilter->font();font.setBold(active);
         _pluginFilter->setItemData(i,QBrush(active?QColor("#e8c17c"):master?QColor("#80d2c7"):QColor("#dbe7e9")),Qt::ForegroundRole);
         _pluginFilter->setItemData(i,active?QVariant::fromValue(QBrush(QColor("#334946"))):QVariant(),Qt::BackgroundRole);
-        _pluginFilter->setItemData(i,font,Qt::FontRole);_pluginFilter->setItemText(i,name+(master?"  · master":QString()));
+        _pluginFilter->setItemData(i,font,Qt::FontRole);_pluginFilter->setItemText(i,name==kAllWeaponsSource?QStringLiteral("LOAD ALL WEAPONS"):name+(master?"  · master":QString()));
     }
 }
 
 void ReloadMakerController::alignPluginToWeapon() {
     if(!_pluginFilter)return;
+    if(allWeaponsSelected()){updatePluginColors();return;}
     const auto allowed=selectionPlugins(_weaponCombo->currentIndex());if(allowed.isEmpty())return;
     if(!allowed.contains(_pluginFilter->currentData().toString(),Qt::CaseInsensitive)){
         const auto origin=selectionRecordKey(_weaponCombo->currentIndex()).section(':',0,0);
@@ -154,10 +160,13 @@ void ReloadMakerController::refreshWeaponPicker() {
     if(!_weaponPicker)return;
     const QSignalBlocker blocker(_weaponPicker);_weaponPicker->clear();
     const auto filter=_pluginFilter->currentData().toString();
+    const bool all=allWeaponsSelected();
     if(!filter.isEmpty())for(int index=0;index<_weaponSelections.size();++index){
-        if(!selectionPlugins(index).contains(filter,Qt::CaseInsensitive))continue;
+        if(!all&&!selectionPlugins(index).contains(filter,Qt::CaseInsensitive))continue;
         const auto& selection=_weaponSelections[index];const auto& plugin=_plugins[selection.pluginIndex];const auto& weapon=plugin.weapons[selection.weaponIndex];
-        const auto covered=coverageLabel(selectionRecordKey(index));_weaponPicker->addItem((weapon.name.isEmpty()?weapon.editorId:weapon.name)+(covered.isEmpty()?QString():" · "+covered),index);
+        const auto covered=coverageLabel(selectionRecordKey(index));
+        const auto suffix=all?QString(" · %1").arg(selectionRecordKey(index).section(':',0,0)):QString();
+        _weaponPicker->addItem((weapon.name.isEmpty()?weapon.editorId:weapon.name)+suffix+(covered.isEmpty()?QString():" · "+covered),index);
         const auto origin=plugin.origins.value(weapon.formId);
         _weaponPicker->setItemData(_weaponPicker->count()-1,QString("%1\n%2\nWinning record: %3").arg(weapon.editorId,selectionRecordKey(index),origin.winner.isEmpty()?plugin.fileName:origin.winner),Qt::ToolTipRole);
     }
@@ -185,7 +194,7 @@ bool ReloadMakerController::selectSourcePlugin(const QString& name) {
         if(entry["plugin"].toString().compare(name,Qt::CaseInsensitive)==0&&QDir::cleanPath(entry["source"].toString()).compare(QDir::cleanPath(_package.sourcePath),Qt::CaseInsensitive)!=0){
             const bool started=selectTestbed(entry["id"].toString());if(started&&!_pendingSession.isEmpty())_pendingSession["browserPlugin"]=name;return started;
         }}
-    if(currentWeapon()&&!selectionPlugins(_weaponCombo->currentIndex()).contains(name,Qt::CaseInsensitive)) {
+    if(currentWeapon()&&!allWeaponsSelected()&&!selectionPlugins(_weaponCombo->currentIndex()).contains(name,Qt::CaseInsensitive)) {
         if(!saveSession()){alignPluginToWeapon();return false;}
         {const QSignalBlocker block(_weaponCombo);_weaponCombo->setCurrentIndex(-1);}
         clearAssetCaches();_sessionPath.clear();refreshAttachments();
@@ -195,7 +204,7 @@ bool ReloadMakerController::selectSourcePlugin(const QString& name) {
 
 bool ReloadMakerController::selectSourceWeapon(int index) {
     if(_loadThread||_reloadCapturing||_packProcess||index<0||index>=_weaponSelections.size()||
-       !selectionPlugins(index).contains(_pluginFilter->currentData().toString(),Qt::CaseInsensitive)){setStatus("Choose a weapon from the selected plugin.",true);return false;}
+       (!allWeaponsSelected()&&!selectionPlugins(index).contains(_pluginFilter->currentData().toString(),Qt::CaseInsensitive))){setStatus("Choose a weapon from the selected plugin.",true);return false;}
     if(!_libraryMode)for(const auto& value:_testbedSources){const auto entry=value.toObject();
         if(entry["plugin"].toString().compare(_pluginFilter->currentData().toString(),Qt::CaseInsensitive)==0&&entry["weapon"].toString().compare(selectionRecordKey(index),Qt::CaseInsensitive)==0)
             return selectTestbed(entry["id"].toString());
@@ -205,7 +214,7 @@ bool ReloadMakerController::selectSourceWeapon(int index) {
 
 QJsonObject ReloadMakerController::sourceBrowserState() const {
     QJsonArray plugins,weapons,menus;const auto selected=_pluginFilter->currentData().toString();const auto masters=sourcePluginMasters(selected);
-    for(int i=0;i<_pluginFilter->count();++i){const auto name=_pluginFilter->itemData(i).toString();plugins.append(QJsonObject{{"name",name},
+    for(int i=0;i<_pluginFilter->count();++i){const auto name=_pluginFilter->itemData(i).toString();plugins.append(QJsonObject{{"name",name},{"label",_pluginFilter->itemText(i)},
         {"role",name.compare(selected,Qt::CaseInsensitive)==0?"selected":masters.contains(name,Qt::CaseInsensitive)?"master":"available"},{"masters",QJsonArray::fromStringList(sourcePluginMasters(name))}});}
     for(int i=0;i<_weaponPicker->count();++i){const auto index=_weaponPicker->itemData(i).toInt();weapons.append(QJsonObject{{"index",index},{"name",_weaponPicker->itemText(i)},{"record",selectionRecordKey(index)}});}
     if(auto* menu=_window->findChild<QMenu*>("MainMenu"))for(auto* action:menu->actions())if(!action->isSeparator())menus.append(action->text());

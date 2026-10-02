@@ -306,6 +306,8 @@ namespace reloadmaker
         bool selectSourcePlugin(const QString& plugin);
         bool selectSourceWeapon(int index);
         bool selectSourceMode(const QString& mode);
+        static constexpr const char* kAllWeaponsSource = "*";
+        bool allWeaponsSelected() const;
         QStringList selectionPlugins(int index) const;
         QStringList sourcePluginOrder() const;
         QStringList sourcePluginMasters(const QString& plugin) const;

@@ -198,6 +198,10 @@ void ReloadMakerController::createUi() {
         _loadingLabel->setText("Cancelling; keeping the previous source…");
     });
     _packageDock->setWidget(packagePanel);
+    auto* loadoutToggle=new QPushButton("Loadout",header);loadoutToggle->setObjectName("LoadoutToggle");
+    loadoutToggle->setCheckable(true);loadoutToggle->setChecked(true);loadoutToggle->setToolTip("Show or hide the left loadout / reload phases panel");header->addWidget(loadoutToggle);
+    connect(loadoutToggle,&QPushButton::toggled,_packageDock,&QWidget::setVisible);
+    connect(_packageDock,&QDockWidget::visibilityChanged,loadoutToggle,[loadoutToggle](bool visible){const QSignalBlocker blocker(loadoutToggle);loadoutToggle->setChecked(visible);});
 
     _detailsDock = dock(_window, "DIAGNOSTICS", Qt::BottomDockWidgetArea);
     _details = new QPlainTextEdit(_detailsDock);

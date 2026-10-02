@@ -51,19 +51,21 @@ void LoadoutDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
     const bool installed = index.data(kInstalledRole).toBool();
     const bool enabled = index.flags() & Qt::ItemIsEnabled;
     const bool none = index.data(kFormIdRole).toUInt() == 0;
-    if (enabled && (hovered || installed)) {
-        painter->setPen(installed ? QPen(QColor("#4c928b"), 1.2) : Qt::NoPen);
-        painter->setBrush(installed ? QColor("#1b3336") : QColor("#1d2a31"));
+    if (enabled && (selected || hovered || installed)) {
+        painter->setPen(selected ? QPen(QColor("#e8c17c"), 1.5) : installed ? QPen(QColor("#4c928b"), 1.2) : Qt::NoPen);
+        painter->setBrush(selected ? QColor("#493c27") : installed ? QColor("#1b3336") : QColor("#1d2a31"));
         painter->drawRoundedRect(r, 5, 5);
     }
     QRect textRect = r.adjusted(12, 0, -10, 0);
-    if (installed) {
-        painter->setPen(QColor("#74c4b3"));
-        painter->drawText(textRect, Qt::AlignRight | Qt::AlignVCenter, QStringLiteral("✓"));
-        textRect.adjust(0, 0, -18, 0);
+    if (selected || installed) {
+        const QString badge=selected?(installed?QStringLiteral("Selected · Installed"):QStringLiteral("Selected")):QStringLiteral("Installed");
+        QFont label=option.font;label.setPointSizeF(label.pointSizeF()*.8);painter->setFont(label);
+        painter->setPen(QColor(selected?"#f6d89c":"#74c4b3"));
+        painter->drawText(textRect, Qt::AlignRight | Qt::AlignVCenter,badge);
+        textRect.adjust(0, 0, -(QFontMetrics(label).horizontalAdvance(badge)+16), 0);
     }
     QFont main = option.font;
-    main.setWeight(installed ? QFont::DemiBold : QFont::Normal);
+    main.setWeight(selected || installed ? QFont::DemiBold : QFont::Normal);
     main.setItalic(none);
     painter->setFont(main);
     painter->setPen(QColor(!enabled ? "#56646b" : installed ? "#f0ffff" : selected ? "#dce7e7" : none ? "#7f9699" : "#c4d2d3"));

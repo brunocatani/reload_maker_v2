@@ -33,15 +33,28 @@ def run():
         (work/'interaction.json').write_text(json.dumps(observations,indent=2),encoding='utf-8');return value
     try:
         initial=save('initial dynamic')
-        assert initial['mode']=='dynamic' and not initial['plugin'] and not initial['weapons'],initial
-        names=[p['name'] for p in initial['plugins']]
+        assert initial['mode']=='dynamic',initial['mode']
+        if not initial['plugin']:assert not initial['weapons'],'Unselected source exposed weapons'
+        names=[p['name'] for p in initial['plugins'] if p['name']!='*']
         install=command('installation');profile=Path(install['profilePath'])
         enabled={s[1:].strip().lower() for s in (profile/'plugins.txt').read_text(encoding='utf-8-sig').splitlines() if s.startswith('*')}
         enabled.update(('fallout4.esm','fallout4_vr.esm'))
         order=[s.strip() for s in (profile/'loadorder.txt').read_text(encoding='utf-8-sig').splitlines() if s.strip().lower() in enabled]
         assert [s.lower() for s in names]==[s.lower() for s in order],'Plugin list does not match MO2 load order'
+        everything=edit(operation='plugin',plugin='*')
+        assert len(everything['weapons'])==len(ready()['weapons']) and everything['weapons']
+        assert len({w['record'].split(':')[0].lower() for w in everything['weapons']})>1
+        assert all(w['record'].split(':')[0].lower() in w['name'].lower() for w in everything['weapons']),'All-weapons rows lost their source ESP'
+        weapon=next(w for w in everything['weapons'] if w['record'].lower()=='glock19x.esp:000f9b')
+        selected=edit(operation='weapon',index=weapon['index']);assert selected['plugin']=='*','Choosing a weapon left all-weapons mode'
+        fixture=work/'all-weapons.project.json'
+        command('save_project',{'path':str(fixture)},ready()['revision'])
+        command('open_project',{'path':str(fixture)},ready()['revision']);ready()
+        assert command('source_browser')['plugin']=='*' and ready()['weaponIndex']==weapon['index'],'Reopening lost the all-weapons selection'
+        save('all weapons across ESPs and project reopen')
         glock=edit(operation='plugin',plugin='Glock19x.esp')
         assert glock['weapons'] and all(w['record'].lower().startswith('glock19x.esp:') for w in glock['weapons'])
+        assert all('glock19x.esp' not in w['name'].lower() for w in glock['weapons']),'Scoped picker retained all-weapons ESP suffixes'
         assert next(p for p in glock['plugins'] if p['name'].lower()=='fallout4.esm')['role']=='master'
         base=edit(operation='plugin',plugin='MK18.esp')
         index=next(w['index'] for w in base['weapons'] if w['record'].lower()=='mk18.esp:000f9d')
@@ -51,6 +64,7 @@ def run():
         empty=edit(operation='plugin',plugin='DLCworkshop01.esm');assert not empty['weapons'],'Empty plugin exposed all weapons'
         dev=edit(operation='mode',mode='development');save('development Glock')
         assert dev['mode']=='development' and dev['plugin'].lower()=='glock19x.esp'
+        assert all(p['name']!='*' for p in dev['plugins']),'All-weapons option leaked into development mode'
         assert next(p for p in dev['plugins'] if p['name'].lower()=='fallout4.esm')['role']=='master'
         master=edit(operation='plugin',plugin='Fallout4.esm')
         assert master['weapons'] and all(w['record'].lower().startswith('fallout4.esm:') for w in master['weapons'])

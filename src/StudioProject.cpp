@@ -66,7 +66,9 @@ bool ReloadMakerController::beginWeaponProject(int selectedIndex) {
     }
     const auto next=suggestedSessionPath();_sessionPath.clear();
     if(QFileInfo(next).isFile()) {
+        const bool all=allWeaponsSelected();
         openSession(next);
+        if(all&&!_pendingSession.isEmpty())_pendingSession["browserPlugin"]=kAllWeaponsSource;
         if(!_loadThread&&_pendingSession.isEmpty()) {
             const QSignalBlocker blocker(_weaponCombo);_weaponCombo->setCurrentIndex(previousIndex);_sessionPath=oldPath;refreshWeaponPicker();
         }
@@ -90,7 +92,8 @@ bool ReloadMakerController::saveSession(const QString& requested) {
         {"selectedHandPose",selectedHandPose()?selectedHandPose()->id:QString()}};
     QJsonObject choices;
     const auto sourcePlugins=selectionPlugins(_weaponCombo->currentIndex());
-    if(!sourcePlugins.isEmpty())record["browserPlugin"]=sourcePlugins.contains(_pluginFilter->currentData().toString(),Qt::CaseInsensitive)?_pluginFilter->currentData().toString():sourcePlugins.first();
+    if(allWeaponsSelected())record["browserPlugin"]=kAllWeaponsSource;
+    else if(!sourcePlugins.isEmpty())record["browserPlugin"]=sourcePlugins.contains(_pluginFilter->currentData().toString(),Qt::CaseInsensitive)?_pluginFilter->currentData().toString():sourcePlugins.first();
     if (const auto* config = configuration()) for (const auto& slot : config->entries()) choices[QString::number(slot.key)] = QString::number(config->selected(slot.key));
     record["choices"] = choices;
     record["authoringRoadmaps"]=_authoringRoadmaps;
@@ -160,7 +163,7 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     const auto bytes = QJsonDocument(record).toJson();
     if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) { setStatus("Project save failed: "+file.errorString(),true); return false; }
     _sessionPath = absolute;
-    if(!currentTestbed().isEmpty())QSettings().setValue("testbeds/"+currentTestbed(),absolute);
+    if(!_libraryMode&&!currentTestbed().isEmpty())QSettings().setValue("testbeds/"+currentTestbed(),absolute);
     QSettings().setValue("projects/lastProject",absolute);
     setStatus("Project saved · "+QFileInfo(path).fileName());
     return true;
@@ -267,7 +270,7 @@ void ReloadMakerController::restoreSessionSelection() {
     for (int i = 0; i < _weaponSelections.size(); ++i) {
         const QSignalBlocker block(_weaponCombo); _weaponCombo->setCurrentIndex(i);
         if (currentWeapon() && poseRecordKey(currentWeapon()->formId) == record["weapon"].toString()&&
-            (record["browserPlugin"].toString().isEmpty()||selectionPlugins(i).contains(record["browserPlugin"].toString(),Qt::CaseInsensitive))) { selected = i; break; }
+            (record["browserPlugin"].toString().isEmpty()||(_libraryMode&&record["browserPlugin"]==kAllWeaponsSource)||selectionPlugins(i).contains(record["browserPlugin"].toString(),Qt::CaseInsensitive))) { selected = i; break; }
     }
     if (selected < 0) {
         {const QSignalBlocker block(_weaponCombo);_weaponCombo->setCurrentIndex(-1);}
