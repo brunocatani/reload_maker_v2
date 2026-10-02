@@ -1,5 +1,6 @@
 #include "viewport/PartPicker.h"
 
+#include "SlotOverlay.h"
 #include "glview.h"
 #include "gl/glscene.h"
 #include "gl/glshape.h"
@@ -11,8 +12,6 @@ namespace reloadmaker
 {
     namespace
     {
-        // The native viewport uses the same distance to tell a click from a drag.
-        constexpr int kClickThresholdPixels = 3;
         // Hover descriptions wait until the pointer rests; each pick renders the
         // part surfaces offscreen, which is too costly for every mouse move.
         constexpr int kHoverDelayMilliseconds = 250;
@@ -30,6 +29,7 @@ namespace reloadmaker
     {
         _active = active;
         _press.reset();
+        _pressDouble = false;
         _hoverTimer.stop();
         if (!active) {
             QToolTip::hideText();
@@ -70,6 +70,30 @@ namespace reloadmaker
         return found.value();
     }
 
+    void PartPicker::click(QPointF point)
+    {
+        if (!_active || !selected) {
+            return;
+        }
+        if (const auto slot = partAt(point)) {
+            selected(*slot);
+        }
+    }
+
+    // Called when the second click of a double click is released; the first
+    // click has already selected the part.
+    void PartPicker::doubleClick(QPointF point)
+    {
+        if (!_active || !activated) {
+            return;
+        }
+        if (const auto slot = partAt(point)) {
+            // Dialogs run a nested event loop. They open after the viewport has
+            // finished handling this event, so its button state is never latched.
+            QTimer::singleShot(0, this, [this, slot = *slot] { activated(slot); });
+        }
+    }
+
     // Never consumes events: the camera and the native viewport keep their own
     // handling of every press, drag and release.
     bool PartPicker::eventFilter(QObject* target, QEvent* event)
@@ -85,24 +109,30 @@ namespace reloadmaker
             if (mouse->button() == Qt::LeftButton || mouse->button() == Qt::RightButton) {
                 _press = mouse->position();
                 _pressButton = mouse->button();
+                _pressDouble = false;
             }
             break;
         }
         case QEvent::MouseButtonRelease: {
             const auto* mouse = static_cast<QMouseEvent*>(event);
-            const bool click = _press && mouse->button() == _pressButton &&
-                               (mouse->position() - *_press).manhattanLength() <= kClickThresholdPixels;
+            const bool completed = _press && mouse->button() == _pressButton &&
+                                   (mouse->position() - *_press).manhattanLength() <= kClickThresholdPixels;
+            const bool twice = _pressDouble;
             _press.reset();
-            if (!click) {
+            _pressDouble = false;
+            if (!completed) {
+                break;
+            }
+            if (mouse->button() == Qt::LeftButton) {
+                if (twice) {
+                    doubleClick(mouse->position());
+                } else {
+                    click(mouse->position());
+                }
                 break;
             }
             const auto slot = partAt(mouse->position());
-            if (!slot) {
-                break;
-            }
-            if (mouse->button() == Qt::LeftButton && selected) {
-                selected(*slot);
-            } else if (mouse->button() == Qt::RightButton && contextRequested) {
+            if (slot && contextRequested) {
                 // Menus and dialogs run a nested event loop. They open after the
                 // viewport has finished handling this release, so its button
                 // state never stays latched behind them.
@@ -112,13 +142,14 @@ namespace reloadmaker
             break;
         }
         case QEvent::MouseButtonDblClick: {
-            // Qt delivers the second press of a double click as this event, so
-            // the first click has already selected the part.
+            // A window receives the second press of a double click as a press
+            // followed by this event. It only marks the gesture: the action runs
+            // on release, after the viewport has seen the matching release.
             const auto* mouse = static_cast<QMouseEvent*>(event);
-            if (mouse->button() == Qt::LeftButton && activated) {
-                if (const auto slot = partAt(mouse->position())) {
-                    QTimer::singleShot(0, this, [this, slot = *slot] { activated(slot); });
-                }
+            if (mouse->button() == Qt::LeftButton) {
+                _press = mouse->position();
+                _pressButton = Qt::LeftButton;
+                _pressDouble = true;
             }
             break;
         }

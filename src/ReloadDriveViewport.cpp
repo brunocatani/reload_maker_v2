@@ -16,16 +16,22 @@ namespace reloadmaker {
         if(watched!=_view){return false;}
         const auto type=event->type();
         if(type==QEvent::Leave||type==QEvent::FocusOut||type==QEvent::WindowDeactivate){_markers.clear();if(hoverLeave)hoverLeave();_view->update();}
-        if(type==QEvent::FocusOut||type==QEvent::WindowDeactivate||type==QEvent::UngrabMouse){if(_dragging&&release)release(true);_dragging=false;(void)_gesture.consume(type,Qt::NoButton,Qt::NoButton);return false;}
+        if(type==QEvent::FocusOut||type==QEvent::WindowDeactivate||type==QEvent::UngrabMouse){if(_dragging&&release)release(true);_dragging=false;_surfacePress=false;(void)_gesture.consume(type,Qt::NoButton,Qt::NoButton);return false;}
         if(type==QEvent::Wheel&&_gesture.captured())return true;
         if(type==QEvent::KeyPress&&_dragging&&static_cast<QKeyEvent*>(event)->key()==Qt::Key_Escape){_dragging=false;if(release)release(true);return true;}
         if(type!=QEvent::MouseButtonPress&&type!=QEvent::MouseButtonDblClick&&type!=QEvent::MouseMove&&type!=QEvent::MouseButtonRelease)return false;
         auto* mouse=static_cast<QMouseEvent*>(event);bool hit=false;
         if(_active&&hover&&type==QEvent::MouseMove&&mouse->buttons()==Qt::NoButton){const auto point=hover(mouse->position());_markers=point?QVector<QVector3D>{*point}:QVector<QVector3D>{};_view->update();}
         const bool press=(type==QEvent::MouseButtonPress||type==QEvent::MouseButtonDblClick)&&mouse->button()==Qt::LeftButton&&!_gesture.captured();
+        if(press)_surfacePress=false;
+        // A window gets a double click's second press as a press, then this event.
+        if(type==QEvent::MouseButtonDblClick&&_surfacePress)_pressDouble=true;
         if(_active&&_canDrive&&press&&begin){
             ReloadDriveCurve curve;hit=begin(mouse->position(),curve);
             if(hit){_curve=std::move(curve);_dragging=_curve.points.size()>1&&_curve.times.size()==_curve.points.size();_projected.clear();
+                // A captured press that cannot drag still blocks orbit; if it is
+                // released in place it is reported as a click on that surface.
+                _surfacePress=!_dragging&&!_curve.onDrivenPart;_pressPoint=mouse->position();_pressDouble=type==QEvent::MouseButtonDblClick;
                 const auto camera=_view->reloadMakerWorldToClip();const QSizeF size(_view->width(),_view->height());
                 for(const auto& p:_curve.points){QPointF screen;if(!projectGripPoint(camera,size,p,screen))screen={std::numeric_limits<double>::quiet_NaN(),0};_projected.append(screen);}
             }
@@ -34,7 +40,9 @@ namespace reloadmaker {
         if(_dragging&&type==QEvent::MouseMove&&mouse->buttons().testFlag(Qt::LeftButton)){
             _curve.current=reloadCurveTime(_projected,_curve.times,mouse->position(),_curve.current,_curve.endpointSnapFraction);if(drive)drive(_curve.current);
         }
-        if(type==QEvent::MouseButtonRelease||mouse->buttons()==Qt::NoButton){if(_dragging&&release)release(false);_dragging=false;}
+        if(type==QEvent::MouseButtonRelease&&_surfacePress&&surfaceClicked&&
+           (mouse->position()-_pressPoint).manhattanLength()<=kClickThresholdPixels)surfaceClicked(mouse->position(),_pressDouble);
+        if(type==QEvent::MouseButtonRelease||mouse->buttons()==Qt::NoButton){if(_dragging&&release)release(false);_dragging=false;_surfacePress=false;}
         return true;
     }
     void ReloadDriveViewport::paint(){

@@ -28,7 +28,9 @@ namespace reloadmaker
     // A press that moves further than the native click threshold stays a camera
     // drag. Presses consumed by tools installed later (operating-part drags,
     // grip handles, slot labels) never reach this filter, so those tools keep
-    // priority. Picking renders every visible shape offscreen through the native
+    // priority. The Operate drive captures every weapon-surface press so a drag
+    // there does not orbit; it hands back clicks on parts it does not move
+    // through click() and doubleClick(). Picking renders every visible shape offscreen through the native
     // renderer and resolves only part surfaces, so the hit is what is drawn:
     // a part behind the hands is not picked through them.
     class PartPicker final : public QObject
@@ -39,6 +41,10 @@ namespace reloadmaker
         void setActive(bool active);
         void setParts(QVector<PartSurfaces> parts);
         [[nodiscard]] std::optional<SlotKey> partAt(QPointF point) const;
+        // A completed click at a viewport point. Also called by tools that
+        // capture weapon-surface presses to block orbit but do not use them.
+        void click(QPointF point);
+        void doubleClick(QPointF point);
 
         // Left click selects, double-click opens the slot's choices and a right
         // click asks for the part's context menu at a global screen position.
@@ -58,6 +64,7 @@ namespace reloadmaker
         QHash<int, SlotKey> _slotByBlock;
         std::optional<QPointF> _press;
         Qt::MouseButton _pressButton{ Qt::NoButton };
+        bool _pressDouble{ false };
         QPointF _hoverPoint;
         QTimer _hoverTimer;
         bool _active{ false };

@@ -3,6 +3,7 @@
 #include "StudioPaths.h"
 #include "MagazineViewport.h"
 #include "ReloadBundle.h"
+#include "viewport/PartPicker.h"
 #include "glview.h"
 #include "gl/glscene.h"
 #include "model/nifmodel.h"
@@ -149,6 +150,8 @@ void ReloadMakerController::createSimulationViewport() {
     _simulationDrive->begin=[this](QPointF point,ReloadDriveCurve& curve){return beginSimulationGrab(point,curve);};
     _simulationDrive->drive=[this](float progress){dragSimulation(progress);};
     _simulationDrive->release=[this](bool cancel){releaseSimulation(cancel);};
+    // Clicks on weapon parts the drive does not move still select them.
+    _simulationDrive->surfaceClicked=[this](QPointF point,bool twice){if(twice)_partPicker->doubleClick(point);else _partPicker->click(point);};
     _magazineViewport=new MagazineViewport(_window->getGLView(),this);
     _magazineViewport->rail=[this]{return _magazineRail;};
     _magazineViewport->state=[this]{return _simulation.magazine;};
@@ -428,6 +431,7 @@ bool ReloadMakerController::beginSimulationGrab(QPointF point,ReloadDriveCurve& 
     if(!pickWeaponPart(point,automatic,hit,surface,candidates,error))return false;
     const auto& rig=*_simulationRig;const auto& track=_reloadRecipe->tracks[rig.slide];
     const bool slide=std::any_of(candidates.cbegin(),candidates.cend(),[&](int i){return sameGripAnchor(_handPoseAnchors[i].description,track.anchor);});
+    curve.onDrivenPart=slide;
     if(!operatingGrabAvailable())return true;
     if(!slide||!_simulation.grab())return true;
     _simulationTimer->stop();

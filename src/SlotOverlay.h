@@ -11,6 +11,10 @@ class GLView;
 
 namespace reloadmaker
 {
+    // Pointer travel (logical pixels, Manhattan) below which a press and release
+    // count as a click rather than a drag; GLView uses the same distance.
+    inline constexpr int kClickThresholdPixels = 3;
+
     // A label owns the complete pointer sequence, not just its press/release.
     // Otherwise GLView's lost-press recovery sees a held-button move and latches
     // orbit, while the intercepted release never clears its button state.
