@@ -12,6 +12,7 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import struct
+import shutil
 import uuid
 import yaml
 
@@ -93,6 +94,9 @@ def load_pack(root):
     require(isinstance(manifest.get('revision'), int) and manifest['revision'] > 0, 'Missing pack revision')
     required = manifest.get('templates')
     require(isinstance(required, list) and required and all(t in TEMPLATES for t in required), f'Unsupported template in {pack}')
+    weapons = manifest.get('weapons')
+    require(isinstance(weapons, list) and weapons and all(isinstance(w,dict) for w in weapons),
+            'A finished reload pack needs weapon behavior, hand fits, sounds and grab policies; object-only packs are incomplete')
     files = manifest.get('files')
     require(isinstance(files, dict) and 0 < len(files) <= 10000, 'Missing pack content digests')
     normalized = set()
@@ -226,8 +230,11 @@ async def build(packs, installation, backends, initialize=False):
             ledger = read(seed)
             require(ledger.get('nextId') == 0x800 and ledger.get('objects') == {}, 'Invalid new installation identity')
         loaded = [load_pack(Path(p)) for p in packs]
-        require(loaded and len(loaded) <= 256, 'Select between one and 256 finished packs')
+        limits = backends.content_validation()['limits']
+        require(loaded and len(loaded) <= limits['packs'], f"Select between one and {limits['packs']} finished packs")
         require(len({p['manifest']['id'] for p in loaded}) == len(loaded), 'Duplicate pack ID')
+        require(sum(len(p['objects']) for p in loaded) <= limits['worldObjects'],
+                f"Selected packs exceed DIAMOND's capacity of {limits['worldObjects']} full/empty world objects; reduce the selection")
         ledger = allocate(ledger, loaded)
         generation = 'generations/'+uuid.uuid4().hex
         stage = installation/generation
@@ -275,6 +282,32 @@ async def build(packs, installation, backends, initialize=False):
                                            modelSha256=entry['assetSha256'], active=entry['active'])
                                  for key, entry in ledger['objects'].items() if entry['active']})
         write(output/'F4SE/Plugins/DIAMOND/Generated/objects.json', bindings)
+        # Validate the exact effective Data view with the runtime catalog loader.
+        # This view is build evidence only; the companion output stays free of
+        # authored assets so it cannot mask a later pack update in MO2.
+        view = stage/'validation-Data'
+        def link(source, destination):
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if destination.exists():
+                require(digest(source) == digest(destination), 'Selected packs conflict at '+str(destination))
+                return
+            try:
+                os.link(source, destination)
+            except OSError:
+                shutil.copy2(source, destination)
+        for pack in loaded:
+            cancellation()
+            for name in pack['manifest']['files']:
+                link(within(pack['root'], name), within(view, name))
+            link(pack['manifestPath'], view/'F4SE/Plugins/DIAMOND/Packs'/pack['manifest']['id']/'manifest.json')
+        link(output/PLUGIN, view/PLUGIN)
+        link(output/'F4SE/Plugins/DIAMOND/Generated/objects.json', view/'F4SE/Plugins/DIAMOND/Generated/objects.json')
+        checked = backends.content_validation(view)
+        checked['expectedObjects'] = sum(len(p['objects']) for p in loaded)
+        write(stage/'catalog-validation.json', checked)
+        require(checked.get('ok') and checked.get('objects') == sum(len(p['objects']) for p in loaded),
+                'DIAMOND rejected the complete generated catalog: '+json.dumps(checked)+
+                f'. Review {stage / "catalog-validation.json"}')
         write(stage/'ledger.json', ledger)
         receipt = dict(version=1, generation=generation, ledgerSha256=digest(stage/'ledger.json'), pluginSha256=plugin_hash,
                        bindingsSha256=digest(output/'F4SE/Plugins/DIAMOND/Generated/objects.json'))
@@ -285,6 +318,7 @@ async def build(packs, installation, backends, initialize=False):
                 require(digest(within(pack['root'], name)) == expected, 'Pack content changed during build')
         cancellation()
         write(current, receipt)
-        return dict(ok=True, output=str(output), generation=receipt, activeObjects=sum(e['active'] for e in ledger['objects'].values()))
+        return dict(ok=True, output=str(output), generation=receipt, activeObjects=sum(e['active'] for e in ledger['objects'].values()),
+                    runtimeCatalog=checked)
     finally:
         lock.unlink()

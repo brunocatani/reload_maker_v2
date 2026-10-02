@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 
 
@@ -72,4 +73,23 @@ class Backends:
         result = {name: dict(available=path.is_file(), path=str(path)) for name, path in paths.items()}
         result['plugin']['available'] &= (self.application/'runtime/dotnet/dotnet.exe').is_file() and (self.application/'runtime/dotnet/sdk').is_dir()
         result['plugin']['available'] &= (self.application/'backends/plugin/Translations/Spriggit.Yaml.Fallout4/0.40/Spriggit.Yaml.Fallout4.exe').is_file()
+        return result
+
+    def content_validation(self, data=None):
+        validator = self.application/'backends/diamond/DiamondProfileCheck.exe'
+        if not validator.is_file():
+            raise ValueError('The bundled DIAMOND content validator is missing')
+        arguments = ['--capabilities'] if data is None else ['--catalog', str(data.resolve())]
+        if data is not None and os.name == 'nt':
+            arguments[-1] = '\\\\?\\'+arguments[-1]
+        checked = subprocess.run([str(validator), *arguments], capture_output=True, text=True, timeout=120,
+                                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+        try:
+            result = json.loads(checked.stdout)
+        except (ValueError, TypeError) as error:
+            raise ValueError('The bundled content validator did not return a valid result: '+checked.stderr[:2000]) from error
+        if data is None and (checked.returncode or result.get('format') != 'diamond-content-validator' or result.get('version') != 1 or not result.get('catalog')):
+            raise ValueError('The installed DIAMOND validator does not support complete generated catalogs')
+        if data is not None:
+            result['ok'] = result.get('ok') is True and checked.returncode == 0
         return result

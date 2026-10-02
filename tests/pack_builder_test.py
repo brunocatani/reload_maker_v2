@@ -10,7 +10,7 @@ import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'tools'))
 from product_backend import Backends
-from product_packs import allocate, build, digest, load_pack, PLUGIN, read
+from product_packs import allocate, build, digest, load_pack, PLUGIN, read, write
 
 
 async def run(args):
@@ -27,6 +27,7 @@ async def run(args):
         assert len(packs) >= 2, 'Supply two independent finished pack fixtures'
         install = root/'installation'
         first = await build(packs, install, backends, initialize=True)
+        assert first['runtimeCatalog']['ok'] and first['runtimeCatalog']['objects']==first['activeObjects']
         pointer = read(install/'current.json')
         ledger = read(install/pointer['generation']/'ledger.json')
         ids = {k: v['localId'] for k, v in ledger['objects'].items()}
@@ -47,7 +48,8 @@ async def run(args):
             assert not (output/ledger['objects'][key]['definition']['model']).exists()
             assert 'definition' not in retained['objects'][key]
         original_pointer = (install/'current.json').read_bytes()
-        objects = packs[0]/read(packs[0]/'manifest.json')['objects']
+        loaded=load_pack(packs[0]);manifest_path=loaded['manifestPath']
+        objects = packs[0]/loaded['manifest']['objects']
         original = objects.read_bytes()
         objects.write_bytes(b'[]')
         try:
@@ -57,6 +59,32 @@ async def run(args):
             assert 'changed after export' in str(exc), str(exc)
         assert (install/'current.json').read_bytes() == original_pointer
         objects.write_bytes(original)
+        manifest_bytes=manifest_path.read_bytes()
+        malformed=copy.deepcopy(loaded['manifest']);malformed['weapons'][0]['template']='unsupported.behavior'
+        write(manifest_path,malformed)
+        try:
+            await build(packs[:1],install,backends)
+            raise AssertionError('Semantically invalid content reached the active generation')
+        except ValueError as exc:
+            assert 'complete generated catalog' in str(exc),str(exc)
+        assert (install/'current.json').read_bytes()==original_pointer
+        manifest_path.write_bytes(manifest_bytes)
+        budget=backends.content_validation()['limits']['worldObjects']
+        oversized=[dict(loaded['objects'][0],id=loaded['manifest']['id']+'/test-'+str(i)) for i in range(budget)]
+        write(objects,oversized);manifest=copy.deepcopy(loaded['manifest']);manifest['files'][manifest['objects']]=digest(objects);write(manifest_path,manifest)
+        try:
+            await build(packs,install,backends)
+            raise AssertionError('An aggregate object catalog above runtime capacity was accepted')
+        except ValueError as exc:
+            assert 'capacity' in str(exc),str(exc)
+        assert (install/'current.json').read_bytes()==original_pointer
+        objects.write_bytes(original);manifest_path.write_bytes(manifest_bytes)
+        incomplete=copy.deepcopy(loaded['manifest']);incomplete.pop('weapons');write(manifest_path,incomplete)
+        try:
+            load_pack(packs[0]);raise AssertionError('Object-only pack was accepted as a physical reload')
+        except ValueError as exc:
+            assert 'object-only' in str(exc),str(exc)
+        manifest_path.write_bytes(manifest_bytes)
         bad = copy.deepcopy(retained)
         bad['nextId'] = 0x800
         try:
@@ -78,7 +106,8 @@ async def run(args):
         assert restored['activeObjects'] == len(ids)
         report = dict(ok=True, objects=len(ids), checks=['native cooked NIF validation', 'ESP independent readback',
             'stable reordered IDs and plugin bytes', 'removed packs emit no records or models', 'tamper failure preserves output',
-            'corrupt ledger rejected', 'reinstall recovers existing IDs'])
+            'corrupt ledger rejected', 'reinstall recovers existing IDs', 'runtime validates complete generated catalog',
+            'semantic content failure preserves output', 'runtime object budget enforced', 'object-only pack rejected'])
         (workspace/'pack-builder-result.json').write_text(json.dumps(report, indent=2))
         print(json.dumps(report))
 

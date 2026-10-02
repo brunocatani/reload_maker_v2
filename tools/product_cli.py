@@ -76,7 +76,9 @@ def main():
             result=inventory(settings.workspace,args.project)
         elif args.action == 'validate':
             loaded = [load_pack(Path(p)) for p in args.pack]
-            result = dict(ok=True, packs=[dict(id=p['manifest']['id'], objects=len(p['objects'])) for p in loaded])
+            result = dict(ok=True, packs=[dict(id=p['manifest']['id'], objects=len(p['objects'])) for p in loaded],
+                          runtimeCatalogValidated=False,
+                          message='Pack inputs checked. Building the generated ESP also validates the complete DIAMOND catalog.')
         elif args.action == 'build':
             result = asyncio.run(build_packs(args.pack, Path(args.installation), backends, args.initialize))
         elif args.action == 'inspect-project':
