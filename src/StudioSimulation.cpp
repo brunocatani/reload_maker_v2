@@ -114,6 +114,9 @@ void ReloadMakerController::createSimulationUi() {
     auto* authorGrips=new QPushButton("AUTHOR RELOAD GRIPS",panel);layout->addWidget(authorGrips);
     authorGrips->setToolTip("Pause at this reload moment and open the hand editor with the weapon fixed and the magazine selected.");
     connect(authorGrips,&QPushButton::clicked,this,[this]{(void)authorReloadGrips();});
+    auto* worldModels=new QHBoxLayout;layout->addLayout(worldModels);
+    for(bool empty:{false,true}){auto* model=new QPushButton(empty?"EMPTY WORLD MODEL":"FULL WORLD MODEL",panel);worldModels->addWidget(model);
+        connect(model,&QPushButton::clicked,this,[this,empty]{try{captureMagazineWorld(empty);}catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}});}
     _simulationSource=hint({},panel);layout->addWidget(_simulationSource);
     _simulationParts=hint({},panel);layout->addWidget(_simulationParts);
     layout->addStretch(1);
@@ -558,7 +561,7 @@ QJsonObject ReloadMakerController::simulationState() const {
     result["magazineShapes"]=visuals;return result;
 }
 QJsonObject ReloadMakerController::exportSlideProfile() const {
-    if(!isGlockConfiguration()||!_simulationRig||!_reloadRecipe||_weaponBoneIndex<0)return {};
+    if(simulationMechanism()!=WeaponMechanism::PistolSlide||!_simulationRig||!_reloadRecipe||_weaponBoneIndex<0)return {};
     const auto& rig=*_simulationRig;const auto& recipe=*_reloadRecipe;
     QString error;const auto encoded=encodeReloadRecipe(recipe,error);if(!error.isEmpty())return {};
     const auto original=QJsonDocument::fromJson(encoded).object()["tracks"].toArray();

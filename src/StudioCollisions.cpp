@@ -20,6 +20,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QFileDialog>
+#include <QDateTime>
 #include <QUuid>
 #include <stdexcept>
 
@@ -63,7 +64,7 @@ void ReloadMakerController::createCollisionsUi(){
     _collisions=new CollisionPanel;auto* scroll=new QScrollArea;scroll->setWidgetResizable(true);scroll->setWidget(_collisions);_collisionsDock->setWidget(scroll);_window->addDockWidget(Qt::RightDockWidgetArea,_collisionsDock);_collisionsDock->hide();
     _collisions->snapshot=[this](int index,bool reference){return collisionSnapshot(index,reference);};
     _collisions->cook=[this]{showCollisionCooker();};
-    _collisions->prepare=[this]{const auto output=QFileDialog::getSaveFileName(_window,"Capture visible part in the selected root frame",studioDataPath("exports/objects/PreparedMagazine.nif"),"Prepared world model (*.nif)");if(!output.isEmpty())capturePreparedPart(output);};
+    _collisions->prepare=[this]{const auto state=_collisions->profile().referencePose["presentation"].toString("part");const auto suggested=studioDataPath("exports/objects/"+QDateTime::currentDateTimeUtc().toString("yyyyMMdd-HHmmss-zzz")+"/"+state+".nif");const auto output=QFileDialog::getSaveFileName(_window,"Capture visible part in the selected root frame",suggested,"Prepared world model (*.nif)");if(!output.isEmpty())capturePreparedPart(output);};
     connect(this,&ReloadMakerController::packJobChanged,this,[this]{if(_packJob["operation"]!="prepare")return;
         if(_packJob["phase"]=="complete"){const auto result=_packJob["result"].toObject();_preparedPart=result;setStatus("Prepared visible part saved · "+result["output"].toString());}
         else if(_packJob["phase"]=="failed")setStatus(_packJob["error"].toString(),true);
@@ -71,11 +72,12 @@ void ReloadMakerController::createCollisionsUi(){
     _collisions->changed=[this]{++_revision;_window->getGLView()->update();};
     connect(_window->getGLView(),&GLView::paintUpdate,this,[this]{paintCollisions();});
 }
-void ReloadMakerController::refreshCollisions(){if(!_collisions)return;QStringList names;_collisionTargets.clear();for(int i=0;i<_handPoseAnchor->count();++i)if(i==0||_handPoseAnchors[i].description.anchorKind=="installed-part"||_handPoseAnchors[i].description.anchorName=="WeaponMagazine"){names<<_handPoseAnchor->itemText(i);_collisionTargets.append(i);}_collisions->setTargets(names);}
-void ReloadMakerController::invalidateCollisions(){_preparedPart={};if(_collisions)_collisions->invalidate();}
+void ReloadMakerController::refreshCollisions(){if(!_collisions)return;QStringList names;_collisionTargets.clear();for(int i=0;i<_handPoseAnchor->count();++i)if(i==0||_handPoseAnchors[i].description.anchorKind=="installed-part"||_handPoseAnchors[i].description.anchorName=="WeaponMagazine"){names<<_handPoseAnchor->itemText(i);_collisionTargets.append(i);}if(_magazineWorldSnapshot){names<<(_magazineWorldSnapshot->referencePose["presentation"].toString()+" magazine world object");_collisionTargets.append(-1);}_collisions->setTargets(names);}
+void ReloadMakerController::invalidateCollisions(){_preparedPart={};_magazineWorldSnapshot.reset();_magazineWorldPreview=false;if(_collisions)_collisions->invalidate();}
 CollisionProfile ReloadMakerController::collisionSnapshot(int target,bool referenceOnly,bool captureRender){
     require(_workspace==CollisionsWorkspace,"Open the Collisions tab first");require(!_loadThread&&!_reloadCapturing&&!_rebuildTimer->isActive(),"Wait for assembly and reload capture");
     const auto* weapon=currentWeapon();auto* model=activeModel();auto* view=_window->getGLView();require(weapon&&model&&view->getScene(),"Load a weapon first");require(target>=0&&target<_collisionTargets.size(),"Select a collision target");target=_collisionTargets[target];
+    if(target<0){require(_magazineWorldSnapshot.has_value()&&!referenceOnly,"Recapture the magazine in Operate");return *_magazineWorldSnapshot;}
     require(!_playing&&!_reloadPlaying,"Pause playback before creating a collision snapshot");
     const auto anchor=_handPoseAnchors[target];require(!referenceOnly||(target>0&&anchor.description.anchorKind=="installed-part"),"For DIAMOND input, select the installed magazine model, not an animated bone or whole weapon");
     require(!view->studioCaptureFrame().isNull(),"Wait for the native scene to finish rebuilding before capturing geometry");

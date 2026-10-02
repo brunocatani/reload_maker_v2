@@ -230,7 +230,7 @@ def open_project(path: str, expected_revision: int) -> dict:
 
 @mcp.tool()
 def export_authored_record(kind: str, expected_revision: int) -> dict:
-    """Export hand/grip/mechanism/reload/simulation, slide, sounds or reload_bundle to the local exports folder. sounds exports the selected weapon/reload set's saved physical cues and original descriptor identities. slide retains every closing-stroke sample and the native rig paths for DIAMOND. reload_bundle embeds the native recipe, assigned grips, their part definitions and magazine-grab bindings; unresolved references reject export. Never deploys."""
+    """Export hand/grip/mechanism/reload/simulation, slide, sounds, grab_locations, scope, runtime_configuration or reload_bundle locally. runtime_configuration captures the complete selected runtime motion, magazine fits, fingers, cues, grab policy and source evidence for pack authoring. sounds retains original descriptors. slide retains every closing-stroke sample/native rig path. reload_bundle embeds the recipe and assigned grips; unresolved references reject export. Never deploys."""
     return command('export',{'kind':kind},expected_revision)
 
 @mcp.tool()
@@ -328,6 +328,27 @@ def cook_world_object(job: str, output: str, expected_revision: int) -> dict:
     pack_job(state) for completion and its validated output/receipt.
     """
     return command('pack_job', dict(operation='cook',job=job,output=output), expected_revision)
+
+@mcp.tool()
+def save_configured_reload(project: str, expected_revision: int, expected_project_sha256: str = '',
+                           pack_id: str = '', full_model: str = '', empty_model: str = '') -> dict:
+    """Replace/save the selected Operate configuration in a pack project.
+    Existing projects require their current SHA256; a new project needs a pack ID
+    and both carrier-space cooked models with receipts. Existing model assignments
+    can be kept by omitting both paths. Other configurations and source rules are
+    preserved. Poll pack_job until complete/failed. No game installation occurs.
+    """
+    return command('save_configured_reload',dict(project=project,expected=expected_project_sha256,
+                   id=pack_id,full=full_model,empty=empty_model),expected_revision)
+
+@mcp.tool()
+def capture_magazine_world(empty: bool, expected_revision: int) -> dict:
+    """Capture the current full/empty loose-magazine presentation from Operate.
+    Uses its actual carrier frame, pre-feed payload and native visibility; excludes
+    hands, receiver and parked spares. Opens Collisions and starts bounded hull
+    generation. Review pieces, then capture_prepared_part and cook_world_object.
+    """
+    return command('capture_magazine_world', dict(empty=empty), expected_revision)
 
 @mcp.tool()
 def authoring_roadmap(operation: str = 'state', index: int | None = None,

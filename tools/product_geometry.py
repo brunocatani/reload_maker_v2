@@ -101,9 +101,15 @@ def prepare_world_object(snapshot_path, output, backends):
         require(digest(snapshot_path)==source_hash,'Visible snapshot changed during preparation')
         cancellation()
         receipt=output.with_suffix('.prepared.json');require(not receipt.exists(),'Prepared receipt already exists')
+        points=[[sum(source['localToRoot'][r*4+c]*v[c] for c in range(3))+source['localToRoot'][r*4+3]
+                 for r in range(3)] for source in shapes for v in source['positions']]
+        bounds=[math.floor(min(p[i] for p in points)) for i in range(3)]+[math.ceil(max(p[i] for p in points)) for i in range(3)]
+        require(all(-32768<=v<=32767 for v in bounds),'World object exceeds native object-bound range')
+        capture={key:snapshot[key] for key in ('weapon','target','configuration','referencePose')}
+        capture['pieces']=[source['source'] for source in shapes]
         write(stage/'receipt.json',dict(format='reload-maker-prepared-object',version=1,snapshotSha256=source_hash,
               modelSha256=digest(prepared),weapon=snapshot['weapon'],target=snapshot['target'],referencePose=snapshot['referencePose'],
-              shapes=len(shapes),vertices=vertices,triangles=triangles,materials=expected,engineCooked=False))
+              capture=capture,bounds=bounds,shapes=len(shapes),vertices=vertices,triangles=triangles,materials=expected,engineCooked=False))
         os.replace(stage/'receipt.json',receipt)
         try:os.replace(prepared,output)
         except Exception:

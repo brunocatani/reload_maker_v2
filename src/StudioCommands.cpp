@@ -129,6 +129,8 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     if(method=="pack_job")return packCommand(p);
     if(method=="roadmap")return roadmapCommand(p);
     if(method=="capture_prepared_part")return capturePreparedPart(p["output"].toString());
+    if(method=="capture_magazine_world"){require(p["empty"].isBool(),"Choose the full or empty presentation");return captureMagazineWorld(p["empty"].toBool());}
+    if(method=="save_configured_reload")return saveConfiguredReload(p);
     if(method=="simulation_state")return simulationState();
     if(method=="sound_state")return soundState();
     if(method=="scope_state")return scopeState();
@@ -392,16 +394,17 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     else if(method=="export") {
         if(p["kind"]=="scope")return exportScopeProfile();
         QString error;QByteArray bytes;const QString kind=p["kind"].toString();QString id;
-        if(kind=="slide"){const auto record=exportSlideProfile();require(!record.isEmpty(),"Prepare a Glock simulation with native rig bindings before exporting");bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
+        if(kind=="slide"){const auto record=exportSlideProfile();require(!record.isEmpty(),"Prepare a pistol simulation with native rig bindings before exporting");bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
         else if(kind=="grab_locations"){const auto record=exportGrabLocations();require(!record.isEmpty(),"Configure grab locations first");bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
         else if(kind=="sounds"){const auto record=exportSounds();require(!record.isEmpty(),"Prepare a weapon in Operate before exporting sounds");bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
         else if(kind=="simulation"){const auto record=exportSimulation();require(!record.isEmpty(),"Prepare a simulation before exporting");bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
+        else if(kind=="runtime_configuration"){const auto record=exportRuntimeConfiguration();bytes=QJsonDocument(record).toJson();id=_reloadRecipe->id;}
         else if(kind=="reload_bundle"){require(_reloadRecipe.has_value(),"Learn the configured reload first");bytes=encodeReloadBundle(*_reloadRecipe,_partGrips,_mechanisms,_magazineGrabGrips,error,_magazineGrabDefaults);if(!bytes.isEmpty()){auto bundle=QJsonDocument::fromJson(bytes).object();const auto interactions=exportInteractionGrips();require(!interactions.isEmpty(),"Operating grip assignments could not be resolved for export");if(!interactions["operatingGroups"].toArray().isEmpty()||interactions.contains("grabLocations")){bundle["version"]=2;bundle["authoredInteractions"]=interactions;}bytes=QJsonDocument(bundle).toJson();}id=_reloadRecipe->id;}
         else if(kind=="reload"){require(_reloadRecipe.has_value(),"No reload recipe");bytes=encodeReloadRecipe(*_reloadRecipe,error);id=_reloadRecipe->id;}
         else if(kind=="grip"){require(_partGripDraft.has_value(),"No grip draft");bytes=encodePartGrip(*_partGripDraft,error);id=_partGripDraft->pose.id;}
         else if(kind=="mechanism"){require(_mechanismDraft.has_value(),"No mechanism draft");bytes=encodeMechanism(*_mechanismDraft,error);id=_mechanismDraft->id;}
         else if(kind=="hand"){const auto* pose=selectedHandPose();require(pose,"Choose a saved hand pose");bytes=encodeHandPose(*pose,error);id=pose->id;}
-        else require(false,"Export kind must be hand, grip, mechanism, reload, reload_bundle, simulation, slide, sounds or grab_locations");
+        else require(false,"Export kind must be hand, grip, mechanism, reload, reload_bundle, simulation, slide, sounds, grab_locations, scope or runtime_configuration");
         require(error.isEmpty()&&!bytes.isEmpty(),error);const QString path=studioDataPath("exports/"+kind+"-"+id+".json");write(path,bytes);return {{"path",path},{"kind",kind},{"deployed",false}};
     } else require(false,"Unknown studio command: "+method);
     require(_lastError.isEmpty(),_lastError);++_revision;return studioState();

@@ -39,6 +39,6 @@ private:
     QFutureWatcher<CollisionResult> _worker;
     std::shared_ptr<std::atomic<bool>> _cancel;
     QString _lastError,_lastPath;
-    bool _dirty{false},_refreshing{false};
+    bool _dirty{false},_refreshing{false},_generating{false};
 };
 }

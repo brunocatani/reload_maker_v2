@@ -58,7 +58,7 @@ CollisionPanel::CollisionPanel(QWidget* parent):QWidget(parent){
     for(auto* check:{_overlay,_compare,_isolate})connect(check,&QCheckBox::toggled,this,[this]{if(changed)changed();});
     for(auto* s:{_mass,_radius})connect(s,qOverload<double>(&QDoubleSpinBox::valueChanged),this,[this]{if(_refreshing||!_profile.valid())return;_profile.settings.mass=_mass->value();_profile.settings.radius=_radius->value();_dirty=true;refresh();});
     connect(&_worker,&QFutureWatcher<CollisionResult>::finished,this,[this]{
-        const auto result=_worker.result();if(_cancel&&_cancel->load()){refresh();return;}
+        const auto result=_worker.result();_generating=false;if(_cancel&&_cancel->load()){refresh();return;}
         if(!result.error.isEmpty()){showError(result.error);return;}_baseline=_profile;_profile=result.profile;_dirty=true;_lastError.clear();refresh();
     });
 }
@@ -73,16 +73,16 @@ void CollisionPanel::refresh(){
     _hulls->setCurrentRow(_hulls->count()?std::clamp(row,0,_hulls->count()-1):-1);
     _pieces->clear();for(const auto& source:_profile.sources){auto* item=new QListWidgetItem(source.name+"\n"+QFileInfo(source.material).fileName(),_pieces);item->setToolTip(source.path+"\n"+source.material);item->setFlags(item->flags()|Qt::ItemIsUserCheckable);item->setCheckState(source.worldIncluded?Qt::Checked:Qt::Unchecked);}
     if(_profile.valid()){_mass->setValue(_profile.settings.mass);_radius->setValue(_profile.settings.radius);}
-    QString text=_worker.isRunning()?"Generating on a cancellable worker…":_profile.valid()?QString("%1 hulls · %2 source triangles\n%3\n%4").arg(_profile.hulls.size()).arg(_profile.inputTriangles).arg(_dirty?"Unsaved changes":"Saved profile").arg(_lastPath):"No collision snapshot yet.";
+    QString text=_generating?"Generating on a cancellable worker…":_profile.valid()?QString("%1 hulls · %2 source triangles\n%3\n%4").arg(_profile.hulls.size()).arg(_profile.inputTriangles).arg(_dirty?"Unsaved changes":"Saved profile").arg(_lastPath):"No collision snapshot yet.";
     if(!_profile.warnings.isEmpty())text+="\n"+_profile.warnings.join('\n');
     if(!_lastError.isEmpty())text+="\n"+_lastError;
     _status->setText(text);_refreshing=false;if(changed)changed();
 }
 CollisionProfile CollisionPanel::context(bool referenceOnly){require(bool(snapshot),"No scene provider");auto p=snapshot(_target->currentIndex(),referenceOnly);if(p.weapon==_profile.weapon&&p.configuration==_profile.configuration&&p.target==_profile.target)for(auto& source:p.sources)for(const auto& old:_profile.sources)if(source.key==old.key&&source.geometryHash==old.geometryHash)source.worldIncluded=old.worldIncluded;p.settings.gap=_gap->value();p.settings.error=_error->value();p.settings.targetPoints=int(_points->value());p.settings.mass=_mass->value();p.settings.radius=_radius->value();return p;}
 QString CollisionPanel::savePath()const{QString name=_profile.weapon+"_"+_target->currentText();name.replace(QRegularExpression("[^A-Za-z0-9_-]+"),"_");name=name.left(80);const auto key=(_profile.weapon+"|"+_profile.configuration+"|"+_profile.target).toUtf8();return studioDataPath("collisions/"+name+"_"+QString::fromLatin1(QCryptographicHash::hash(key,QCryptographicHash::Sha256).toHex())+".json");}
-QJsonObject CollisionPanel::state()const{auto out=collisionSummary(_profile);QJsonArray targets;for(int i=0;i<_target->count();++i)targets.append(QJsonObject{{"index",i},{"name",_target->itemText(i)}});out["targets"]=targets;out["targetIndex"]=_target->currentIndex();out["busy"]=_worker.isRunning();out["dirty"]=_dirty;out["error"]=_lastError;out["path"]=_lastPath;out["selectedHull"]=selected();out["overlay"]=overlay();out["compare"]=compare();out["isolated"]=isolated();return out;}
+QJsonObject CollisionPanel::state()const{auto out=collisionSummary(_profile);QJsonArray targets;for(int i=0;i<_target->count();++i)targets.append(QJsonObject{{"index",i},{"name",_target->itemText(i)}});out["targets"]=targets;out["targetIndex"]=_target->currentIndex();out["busy"]=_generating;out["dirty"]=_dirty;out["error"]=_lastError;out["path"]=_lastPath;out["selectedHull"]=selected();out["overlay"]=overlay();out["compare"]=compare();out["isolated"]=isolated();return out;}
 QJsonObject CollisionPanel::command(const QJsonObject& args){
-    const auto op=args["operation"].toString();if(op=="cancel"){cancel();return state();}require(!_worker.isRunning(),"Collision generation is still running; wait or cancel");
+    const auto op=args["operation"].toString();if(op=="cancel"){cancel();return state();}require(!_generating,"Collision generation is still running; wait or cancel");
     if(args.contains("target")){const auto index=args["target"].toInt(-1);require(index>=0&&index<_target->count(),"Unknown collision target");if(index!=_target->currentIndex()){invalidate();_target->setCurrentIndex(index);}}
     _lastError.clear();
     if(op=="select"){}
@@ -91,7 +91,7 @@ QJsonObject CollisionPanel::command(const QJsonObject& args){
     else if(op=="defaults"||op=="generate"){
         if(op=="defaults"){_gap->setValue(1);_error->setValue(.5);_points->setValue(96);_radius->setValue(.01);}
         for(auto pair:{std::pair{"gapGame",_gap},std::pair{"supportErrorGame",_error},std::pair{"targetPoints",_points}})if(args.contains(pair.first)){const auto v=args[pair.first];require(v.isDouble()&&std::isfinite(v.toDouble())&&v.toDouble()>=pair.second->minimum()&&v.toDouble()<=pair.second->maximum(),"Invalid generation setting");pair.second->setValue(v.toDouble());}
-        auto p=context(false);_cancel=std::make_shared<std::atomic<bool>>(false);auto stop=_cancel;_worker.setFuture(QtConcurrent::run([p=std::move(p),stop]()mutable{return bakeCollision(std::move(p),stop);}));
+        auto p=context(false);_cancel=std::make_shared<std::atomic<bool>>(false);auto stop=_cancel;_generating=true;_worker.setFuture(QtConcurrent::run([p=std::move(p),stop]()mutable{return bakeCollision(std::move(p),stop);}));
     }else if(op=="import"||op=="open"||op=="browse_input"||op=="browse_profile"){
         QString path=args["path"].toString();const bool legacy=op=="import"||op=="browse_input";
         if(op.startsWith("browse"))path=QFileDialog::getOpenFileName(this,legacy?"Choose pre-Elric hull JSON and verify its reference part":"Open collision profile",legacy?"F:/fo4dev/PROJECT_ROCK_V2/main_projects/DIAMOND/assets/collision":studioDataPath("collisions"),"Collision JSON (*.json)");

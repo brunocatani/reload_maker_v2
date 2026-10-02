@@ -32,7 +32,8 @@ void ReloadMakerController::showCollisionCooker() {
     auto* browse=new QPushButton("Prepared render NIF…");row->addWidget(browse);
     connect(browse,&QPushButton::clicked,&dialog,[&]{const auto path=QFileDialog::getOpenFileName(&dialog,"Prepared magazine render model",studioDataPath("exports"),"Fallout 4 model (*.nif)");if(!path.isEmpty())source->setText(path);});
     layout->addWidget(new QLabel("New finished world model"));
-    auto* output=new QLineEdit(studioDataPath("exports/objects/"+QDateTime::currentDateTimeUtc().toString("yyyyMMdd-HHmmss")+"/Magazine.nif"));layout->addWidget(output);
+    const auto destination=source->text().isEmpty()?studioDataPath("exports/objects/"+QDateTime::currentDateTimeUtc().toString("yyyyMMdd-HHmmss-zzz")+"/Magazine.nif"):QFileInfo(source->text()).absolutePath()+"/cooked/"+QFileInfo(source->text()).fileName();
+    auto* output=new QLineEdit(destination);layout->addWidget(output);
     auto* report=new QPlainTextEdit;report->setReadOnly(true);layout->addWidget(report,1);
     auto* buttons=new QHBoxLayout;layout->addLayout(buttons);auto* cook=new QPushButton("Cook and validate model");auto* cancel=new QPushButton("Cancel job");buttons->addWidget(cook);buttons->addWidget(cancel);
     const auto update=[&]{const auto state=packCommand({});const auto phase=state["phase"].toString();const bool running=phase=="running"||phase=="cancelling";cook->setEnabled(!running);cancel->setEnabled(running);

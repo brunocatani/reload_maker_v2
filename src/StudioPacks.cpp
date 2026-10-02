@@ -2,6 +2,7 @@
 #include "StudioWindow.h"
 #include "StudioPaths.h"
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDialog>
 #include <QDir>
 #include <QDateTime>
@@ -18,6 +19,7 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QSettings>
+#include <QSaveFile>
 #include <QUuid>
 #include <QVBoxLayout>
 #include <QUrl>
@@ -37,7 +39,8 @@ QJsonObject ReloadMakerController::packCommand(const QJsonObject& request) {
         return _packJob;
     }
     if(_packProcess)throw std::runtime_error("A pack job is already running");
-    const bool authoring=operation=="export"||operation=="inspect-project",cooking=operation=="cook"||operation=="prepare";
+    const bool saving=operation=="save-configuration";
+    const bool authoring=operation=="export"||operation=="inspect-project"||saving,cooking=operation=="cook"||operation=="prepare";
     if(operation!="build"&&operation!="validate"&&!authoring&&!cooking)throw std::runtime_error("Unknown pack operation");
     const auto packs=request["packs"].toArray();
     if(!authoring&&!cooking&&(packs.isEmpty()||packs.size()>256))throw std::runtime_error("Select between one and 256 finished pack folders");
@@ -54,8 +57,9 @@ QJsonObject ReloadMakerController::packCommand(const QJsonObject& request) {
     } else arguments<<"packs"<<operation;
     if(authoring) {
         const auto project=request["project"].toString();
-        if(!QFileInfo(project).isFile())throw std::runtime_error("Select an authored pack project");
+        if(project.isEmpty()||(!saving&&!QFileInfo(project).isFile()))throw std::runtime_error("Select an authored pack project");
         arguments<<"--project"<<project;
+        if(saving)for(const auto* key:{"capture","expected","id","full","empty"}){const auto value=request[key].toString();if(!value.isEmpty())arguments<<("--"+QString(key))<<value;}
         if(operation=="export") {
             const auto output=request["output"].toString();
             if(output.isEmpty())throw std::runtime_error("Choose a new local export folder");
@@ -85,6 +89,44 @@ QJsonObject ReloadMakerController::packCommand(const QJsonObject& request) {
         QFile::remove(_packCancelFile);_packProcess=nullptr;process->deleteLater();emit packJobChanged();
     });
     process->start();emit packJobChanged();return _packJob;
+}
+
+QJsonObject ReloadMakerController::saveConfiguredReload(const QJsonObject& request) {
+    if(_packProcess)throw std::runtime_error("Wait for the current asset or pack job");
+    const auto capture=exportRuntimeConfiguration();
+    const auto folder=studioDataPath("local/authoring-captures/"+QUuid::createUuid().toString(QUuid::WithoutBraces));QDir().mkpath(folder);
+    const auto path=folder+"/configuration.json";QSaveFile file(path);const auto bytes=QJsonDocument(capture).toJson();
+    if(!file.open(QIODevice::WriteOnly)||file.write(bytes)!=bytes.size()||!file.commit())throw std::runtime_error("Cannot freeze the configured reload");
+    auto args=request;args["operation"]="save-configuration";args["capture"]=path;return packCommand(args);
+}
+
+void ReloadMakerController::showConfigurationSaver() {
+    QDialog dialog(_window);dialog.setWindowTitle("Save configured reload to pack");dialog.resize(840,600);auto* layout=new QVBoxLayout(&dialog);
+    auto* intro=new QLabel("Save replaces this receiver / magazine / operating-part configuration. Other configurations stay intact. Magazine hand fits and models are shared by every configuration using that magazine record.");intro->setWordWrap(true);layout->addWidget(intro);
+    QSettings settings;
+    auto field=[&](const QString& title,const QString& value,bool output){layout->addWidget(new QLabel(title));auto* row=new QHBoxLayout;layout->addLayout(row);auto* edit=new QLineEdit(value);row->addWidget(edit,1);auto* browse=new QPushButton("Choose…");row->addWidget(browse);
+        connect(browse,&QPushButton::clicked,&dialog,[&,edit,output]{const auto path=output?QFileDialog::getSaveFileName(&dialog,"New or existing pack project",studioDataPath("workspace/packs"),"Pack project (*.json)",nullptr,QFileDialog::DontConfirmOverwrite):QFileDialog::getOpenFileName(&dialog,"Finished magazine model with cook receipt",studioDataPath("exports/objects"),"Cooked magazine (*.nif)");if(!path.isEmpty())edit->setText(path);});return edit;};
+    const auto weaponKey=currentWeapon()?poseRecordKey(currentWeapon()->formId).toLower():QString("unassigned");
+    const auto plugin=weaponKey.section(':',0,0);const auto setting="packAuthoring/"+weaponKey+"/project";
+    auto* project=field("Pack project",settings.value(setting,studioDataPath("workspace/packs/"+plugin+"/pack.project.json")).toString(),true);
+    layout->addWidget(new QLabel("Namespace for a new pack"));auto* id=new QLineEdit;layout->addWidget(id);
+    if(currentWeapon())id->setText("reload."+QFileInfo(plugin).completeBaseName());
+    auto* full=field("Full model · leave both blank to keep the existing assignment",{},false);
+    auto* empty=field("Empty model",{},false);
+    auto* report=new QPlainTextEdit;report->setReadOnly(true);layout->addWidget(report,1);
+    QString expected,ownedJob;const auto inspect=[&]{QFile file(project->text());expected.clear();ownedJob.clear();if(file.exists()){if(file.open(QIODevice::ReadOnly))expected=QString::fromLatin1(QCryptographicHash::hash(file.readAll(),QCryptographicHash::Sha256).toHex());id->setEnabled(false);}else id->setEnabled(true);};
+    connect(project,&QLineEdit::textChanged,&dialog,inspect);inspect();
+    auto* actions=new QHBoxLayout;layout->addLayout(actions);auto* save=new QPushButton("Save selected configuration");auto* cancel=new QPushButton("Cancel job");actions->addWidget(save);actions->addWidget(cancel);
+    const auto update=[&]{const auto state=packCommand({});const bool running=state["phase"]=="running"||state["phase"]=="cancelling";save->setEnabled(!running);cancel->setEnabled(running);
+        if(state["operation"]!="save-configuration"||state["id"].toString()!=ownedJob)return;
+        if(running)report->setPlainText("Validating live motion, both hand fits, source identities and finished magazine models…");
+        else if(state["phase"]=="failed")report->setPlainText(state["error"].toString());
+        else{const auto result=state["result"].toObject();expected=result["sha256"].toString();report->setPlainText(QString("Saved revision %1.\n%2 configurations · %3 magazines\n\n%4\n\nUse Export complete reload pack to publish this project.").arg(result["revision"].toInt()).arg(result["variants"].toInt()).arg(result["magazines"].toInt()).arg(result["project"].toString()));}
+    };
+    connect(this,&ReloadMakerController::packJobChanged,&dialog,update);
+    connect(save,&QPushButton::clicked,&dialog,[&]{try{settings.setValue(setting,project->text());settings.setValue("packExporter/project",project->text());ownedJob=saveConfiguredReload({{"project",project->text()},{"expected",expected},{"id",id->text()},{"full",full->text()},{"empty",empty->text()}})["id"].toString();update();}catch(const std::exception& e){report->setPlainText(e.what());}});
+    connect(cancel,&QPushButton::clicked,&dialog,[&]{packCommand({{"operation","cancel"}});});
+    update();dialog.exec();
 }
 
 void ReloadMakerController::showPackExporter() {

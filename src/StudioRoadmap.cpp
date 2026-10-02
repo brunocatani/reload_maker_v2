@@ -132,7 +132,7 @@ void ReloadMakerController::showAuthoringRoadmap() {
     connect(record,&QPushButton::clicked,&dialog,[&]{sourceAction("record-sources");});connect(check,&QPushButton::clicked,&dialog,[&]{sourceAction("check-sources");});
     connect(save,&QPushButton::clicked,&dialog,[&]{if(saveSession())detail->appendPlainText("Draft saved.");});
     connect(open,&QPushButton::clicked,&dialog,[&]{const int step=list->currentRow();dialog.accept();
-        QTimer::singleShot(0,this,[this,step]{if(step==0){showSetup();return;}if(step==11){setWorkspace(OperateWorkspace);showPackExporter();return;}
+        QTimer::singleShot(0,this,[this,step]{if(step==0){showSetup();return;}if(step==11){setWorkspace(OperateWorkspace);showConfigurationSaver();return;}
             if(step==9){setWorkspace(SoundsWorkspace);return;}if(step==10){setWorkspace(CollisionsWorkspace);return;}
             if(step==7||step==8){setWorkspace(GripsWorkspace);if(step==8)(void)openGrabLocations();return;}
             if(step==1||step==2){setWorkspace(OperateWorkspace);return;}setWorkspace(PhasesWorkspace);});

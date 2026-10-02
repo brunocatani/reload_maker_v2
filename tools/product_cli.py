@@ -39,6 +39,13 @@ def main():
     export = packs.add_parser('export')
     export.add_argument('--project', required=True)
     export.add_argument('--output', required=True)
+    save = packs.add_parser('save-configuration')
+    save.add_argument('--project', required=True)
+    save.add_argument('--capture', required=True)
+    save.add_argument('--expected', default='')
+    save.add_argument('--id', default='')
+    save.add_argument('--full', default='')
+    save.add_argument('--empty', default='')
     args = parser.parse_args(remaining)
     backends = Backends(Path(settings.application), Path(settings.workspace))
     if settings.cancel_file:
@@ -69,9 +76,14 @@ def main():
             result = asyncio.run(build_packs(args.pack, Path(args.installation), backends, args.initialize))
         elif args.action == 'inspect-project':
             from product_export import inspect_project
-            project, weapons = inspect_project(Path(args.project).resolve())
+            from product_packs import digest
+            project_path=Path(args.project).resolve()
+            project, weapons = inspect_project(project_path)
             result = dict(ok=True, id=project['id'], name=project.get('name', project['id']),
-                          revision=project['revision'], weapons=weapons, objects=len(project['objects']))
+                          sha256=digest(project_path),revision=project['revision'], weapons=weapons, objects=len(project['objects']))
+        elif args.action == 'save-configuration':
+            from product_authoring import save_configuration
+            result=save_configuration(args.project,args.capture,backends,args.expected,args.id,args.full,args.empty)
         else:
             from product_export import export_pack
             result = export_pack(args.project, args.output, backends)

@@ -104,8 +104,13 @@ void ReloadMakerController::createUi() {
     exportRecords->setText("Export");
     exportRecords->setPopupMode(QToolButton::InstantPopup);
     auto* exportMenu = new QMenu(exportRecords);
+    connect(exportMenu->addAction("Save selected configuration to pack…"),&QAction::triggered,this,&ReloadMakerController::showConfigurationSaver);
     connect(exportMenu->addAction("Complete DIAMOND reload pack…"),&QAction::triggered,this,&ReloadMakerController::showPackExporter);
     exportMenu->addSeparator();
+    connect(exportMenu->addAction("Current configured reload for DIAMOND"),&QAction::triggered,this,[this]{
+        try{const auto result=executeCommand({{"method","export"},{"params",QJsonObject{{"kind","runtime_configuration"}}}});setStatus("Captured configured reload · "+result["path"].toString());}
+        catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}
+    });
     for(const auto& pair : {std::pair{"Saved hand pose","hand"},std::pair{"Current part grip","grip"},std::pair{"Current mechanism","mechanism"},std::pair{"Current reload recipe","reload"},std::pair{"Reload + grips (self-contained)","reload_bundle"},std::pair{"Simulation setup","simulation"},std::pair{"Current slide for DIAMOND","slide"},std::pair{"Operating grab locations","grab_locations"}}) {
         connect(exportMenu->addAction(pair.first),&QAction::triggered,this,[this,kind=QString(pair.second)] {
             try {const auto result=executeCommand({{"method","export"},{"params",QJsonObject{{"kind",kind}}}});setStatus("Exported · "+result["path"].toString());}
@@ -551,11 +556,12 @@ bool ReloadMakerController::mechanismPageActive() const {
 
 void ReloadMakerController::setWorkspace(int workspace) {
     if (!validWorkspace(workspace) || _loadThread) return;
+    if(_workspace==CollisionsWorkspace&&workspace!=CollisionsWorkspace&&_magazineWorldPreview){stopSimulation();_magazineWorldPreview=false;}
     if(_magazineFitPreview&&workspace!=GripsWorkspace){rememberMagazineGrip();stopSimulation();}
     // Operate replaces clips and poses freely; an in-progress authoring grip is
     // parked while it is open and returned when leaving (as Reload phases does).
     if (simulationWorkspace(_workspace) && !simulationWorkspace(workspace)) {
-        if(_magazineFitPreview&&workspace==GripsWorkspace) {
+        if((_magazineFitPreview&&workspace==GripsWorkspace)||(workspace==CollisionsWorkspace&&_magazineWorldPreview)) {
             _simulationTimer->stop();_magazineViewport->setActive(false);
             _simulationDrive->setActive(false,false);
         } else stopSimulation();

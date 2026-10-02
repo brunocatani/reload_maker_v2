@@ -43,6 +43,14 @@ def cook_world_object(job_path, output, backends):
     require(source.suffix.lower() == '.nif', 'Choose a prepared rigid magazine NIF')
     require(not output.exists() and output.suffix.lower() == '.nif', 'Choose a new finished NIF output')
     collision = read(hulls)
+    capture=collision.get('capture',{})
+    prepared_report=None;prepared_hash=None
+    if capture.get('referencePose',{}).get('space')=='magazine-carrier':
+        receipt=source.with_suffix('.prepared.json');require(receipt.is_file(),'Carrier-space geometry needs its preparation receipt')
+        prepared_report=read(receipt);prepared_hash=digest(receipt)
+        require(prepared_report.get('format')=='reload-maker-prepared-object' and prepared_report.get('modelSha256')==digest(source),
+                'Prepared model no longer matches its capture receipt')
+        require(prepared_report.get('capture')==capture,'Render and collision differ in magazine, presentation, frame or selected pieces')
     require(isinstance(collision.get('hulls'), list) and 0 < len(collision['hulls']) <= 1024, 'Missing bounded convex hull input')
     count = 0
     for hull in collision['hulls']:
@@ -82,11 +90,13 @@ def cook_world_object(job_path, output, backends):
         require(equivalent(before, after), 'Cooking changed render geometry, transforms or material bindings')
         require(project_source(job_path, job['geometry']) == source and project_source(job_path, job['collision']) == hulls and read(job_path) == job,
                 'Asset inputs changed while cooking')
+        if prepared_report:require(digest(source.with_suffix('.prepared.json'))==prepared_hash,'Preparation receipt changed while cooking')
         report = dict(format='reload-maker-world-object-receipt', version=1,
             sourceSha256=job['geometry']['sha256'], collisionSha256=job['collision']['sha256'],
             outputSha256=digest(cooked), hulls=len(collision['hulls']), supportPoints=count,
             massKg=collision['mass'], radiusHavok=collision['radius'], render=after,
             engineCooked=True, gameTested=False)
+        if prepared_report:report.update(capture=capture,bounds=prepared_report['bounds'])
         cancellation()
         # Both are immutable outputs; a cancelled cook never replaces a model
         # already referenced by an authored pack project.

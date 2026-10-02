@@ -100,8 +100,10 @@ QJsonObject collisionCookInput(const CollisionProfile& p,QString& error){
         hulls.append(QJsonObject{{"points",points}});
     }
     if(hulls.isEmpty()){error="Enable at least one magazine hull";return {};}
+    QJsonArray pieces;for(const auto& source:p.sources)if(source.worldIncluded)pieces.append(source.key);
     return {{"hulls",hulls},{"havokScale",p.settings.scale},{"precision",.0001},{"radius",p.settings.radius},
-        {"layer",int(p.settings.layer)},{"material",double(p.settings.material)},{"mass",p.settings.mass}};
+        {"layer",int(p.settings.layer)},{"material",double(p.settings.material)},{"mass",p.settings.mass},
+        {"capture",QJsonObject{{"weapon",p.weapon},{"target",p.target},{"configuration",p.configuration},{"referencePose",p.referencePose},{"pieces",pieces}}}};
 }
 QJsonObject collisionJson(const CollisionProfile& p){
     QJsonArray sources,hulls,warnings;for(const auto& s:p.sources){QJsonArray frame;for(int r=0;r<4;++r)for(int c=0;c<4;++c)frame.append(s.frame(r,c));sources.append(QJsonObject{{"key",s.key},{"name",s.name},{"model",s.model},{"record",s.record},{"path",s.path},{"geometrySha256",s.geometryHash},{"material",s.material},{"worldIncluded",s.worldIncluded},{"sourceToWorld",frame}});}

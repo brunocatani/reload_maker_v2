@@ -31,7 +31,7 @@ if(RELOADMAKER_BACKEND_BUNDLE)
       COMMAND "${CMAKE_COMMAND}" -E make_directory "${DIST}/backends/diamond"
       COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${RELOADMAKER_CONTENT_VALIDATOR}" "${DIST}/backends/diamond/DiamondProfileCheck.exe" VERBATIM)
   endif()
-  file(GLOB product_tools "${CMAKE_SOURCE_DIR}/tools/product_*.py")
+  file(GLOB product_tools CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/tools/product_*.py")
   add_custom_command(TARGET ReloadMakerV2 POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${product_tools} "${DIST}/tools/"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/RefreshDependencyManifest.py" "${DIST}" VERBATIM)

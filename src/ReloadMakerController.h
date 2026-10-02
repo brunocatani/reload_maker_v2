@@ -245,6 +245,9 @@ namespace reloadmaker
         void showPackExporter();
         void showCollisionCooker();
         QJsonObject capturePreparedPart(const QString& output);
+        QJsonObject captureMagazineWorld(bool empty);
+        std::optional<CollisionProfile> _magazineWorldSnapshot;
+        bool _magazineWorldPreview{false};
         QJsonObject _preparedPart;
         void showAuthoringRoadmap();
         QString roadmapKey() const;
@@ -321,6 +324,9 @@ namespace reloadmaker
         void releaseSimulation(bool cancel);
         QJsonObject simulationState() const;
         QJsonObject exportSimulation() const;
+        QJsonObject exportRuntimeConfiguration() const;
+        QJsonObject saveConfiguredReload(const QJsonObject& request);
+        void showConfigurationSaver();
         QJsonObject exportSlideProfile() const;
         void prepareMagazineInteraction();
         void moveFreeMagazine(QVector3D offset);
