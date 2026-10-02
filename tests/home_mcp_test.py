@@ -4,9 +4,9 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'mcp'))
 import server
 
-def run(pack):
+def run(pack,application=None):
     work=ROOT/'local/home-tests'/uuid.uuid4().hex;workspace=work/'player';(workspace/'local/tmp').mkdir(parents=True)
-    app=ROOT/'build-fast/dist/ReloadMakerV2/ReloadMakerV2.exe'
+    app=(application or ROOT/'build-fast/dist/ReloadMakerV2')/'ReloadMakerV2.exe'
     env=os.environ.copy();env['TEMP']=env['TMP']=str(workspace/'local/tmp');env.pop('ELRIC_EXE',None)
     server.ROOT=workspace;server._session=None;process=None
     def start():
@@ -52,4 +52,5 @@ def run(pack):
             process.terminate();process.wait(timeout=20)
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--pack',type=Path,required=True);run(parser.parse_args().pack.resolve())
+    parser=argparse.ArgumentParser();parser.add_argument('--pack',type=Path,required=True);parser.add_argument('--application',type=Path)
+    args=parser.parse_args();run(args.pack.resolve(),args.application.resolve() if args.application else None)

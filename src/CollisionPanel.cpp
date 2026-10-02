@@ -94,7 +94,7 @@ QJsonObject CollisionPanel::command(const QJsonObject& args){
         auto p=context(false);_cancel=std::make_shared<std::atomic<bool>>(false);auto stop=_cancel;_generating=true;_worker.setFuture(QtConcurrent::run([p=std::move(p),stop]()mutable{return bakeCollision(std::move(p),stop);}));
     }else if(op=="import"||op=="open"||op=="browse_input"||op=="browse_profile"){
         QString path=args["path"].toString();const bool legacy=op=="import"||op=="browse_input";
-        if(op.startsWith("browse"))path=QFileDialog::getOpenFileName(this,legacy?"Choose pre-Elric hull JSON and verify its reference part":"Open collision profile",legacy?"F:/fo4dev/PROJECT_ROCK_V2/main_projects/DIAMOND/assets/collision":studioDataPath("collisions"),"Collision JSON (*.json)");
+        if(op.startsWith("browse"))path=QFileDialog::getOpenFileName(this,legacy?"Choose hull JSON and verify its reference part":"Open collision profile",studioDataPath("collisions"),"Collision JSON (*.json)");
         if(path.isEmpty())return state();
         QFile file(path);require(file.size()<=32*1024*1024&&file.open(QIODevice::ReadOnly),"Cannot read collision JSON (maximum 32 MB)");const auto bytes=file.readAll();QJsonParseError parse;const auto doc=QJsonDocument::fromJson(bytes,&parse);require(parse.error==QJsonParseError::NoError&&doc.isObject(),"Invalid collision JSON");CollisionProfile next;QString error;
         if(legacy){auto result=importCollisionHullInput(doc.object(),context(true));require(result.error.isEmpty(),result.error);next=std::move(result.profile);next.sourceHash=QString::fromLatin1(QCryptographicHash::hash(bytes,QCryptographicHash::Sha256).toHex());}

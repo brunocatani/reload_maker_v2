@@ -136,7 +136,17 @@ QJsonObject ReloadMakerController::roadmapCommand(const QJsonObject& request) {
 void ReloadMakerController::showAuthoringRoadmap() {
     QDialog dialog(_window);dialog.setWindowTitle("Reload authoring roadmap");dialog.resize(940,670);
     auto* layout=new QVBoxLayout(&dialog);auto* heading=new QLabel;heading->setWordWrap(true);layout->addWidget(heading);
-    auto* templateRow=new QHBoxLayout;layout->addLayout(templateRow);auto* templates=new QComboBox;for(const auto& item:reloadTemplates)templates->addItem(item.label,item.id);templates->setCurrentIndex(templates->findData(roadmapState()["template"].toString()));templateRow->addWidget(templates,1);auto* assign=new QPushButton("Use this template");templateRow->addWidget(assign);
+    auto* templateRow=new QHBoxLayout;layout->addLayout(templateRow);
+    auto* family=new QComboBox;family->addItems({"Rifle","Shotgun","Pistol","Revolver","Sniper"});family->setToolTip("Filter behavior templates by weapon family");templateRow->addWidget(family);
+    auto* templates=new QComboBox;templateRow->addWidget(templates,1);auto* assign=new QPushButton("Use this template");templateRow->addWidget(assign);
+    auto* familyInfo=new QLabel;familyInfo->setWordWrap(true);layout->addWidget(familyInfo);
+    const auto currentTemplate=roadmapState()["template"].toString();
+    for(const auto& item:reloadTemplates)if(currentTemplate==item.id){family->setCurrentText(QString(item.category).section(" / ",0,0));break;}
+    const auto filterTemplates=[&]{templates->clear();for(const auto& item:reloadTemplates)if(QString(item.category).split(" / ").contains(family->currentText()))templates->addItem(item.label,item.id);
+        const int active=templates->findData(currentTemplate);if(active>=0)templates->setCurrentIndex(active);
+        assign->setEnabled(currentWeapon()&&templates->count()>0);
+        familyInfo->setText(templates->count()>0?"Choose the mechanism that matches the source weapon.":"This family has no implemented template yet. It requires a new behavior before it can be authored and exported.");};
+    connect(family,qOverload<int>(&QComboBox::currentIndexChanged),&dialog,[&](int){filterTemplates();});filterTemplates();
     auto* body=new QHBoxLayout;layout->addLayout(body,1);auto* list=new QListWidget;list->setMinimumWidth(320);body->addWidget(list);
     for(int i=0;i<titles.size();++i)list->addItem(QString("%1  %2").arg(i+1,2,10,QChar('0')).arg(titles[i]));
     auto* detail=new QPlainTextEdit;detail->setReadOnly(true);body->addWidget(detail,1);
