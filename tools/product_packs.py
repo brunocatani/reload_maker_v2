@@ -311,7 +311,6 @@ async def build(packs, installation, backends, initialize=False):
         write(stage/'ledger.json', ledger)
         receipt = dict(version=1, generation=generation, ledgerSha256=digest(stage/'ledger.json'), pluginSha256=plugin_hash,
                        bindingsSha256=digest(output/'F4SE/Plugins/DIAMOND/Generated/objects.json'))
-        write(stage/'receipt.json', receipt)
         from product_installation import installation_report
         installation_info = installation_report(stage, loaded, receipt, old)
         for pack in loaded:
@@ -319,6 +318,10 @@ async def build(packs, installation, backends, initialize=False):
             for name, expected in pack['manifest']['files'].items():
                 require(digest(within(pack['root'], name)) == expected, 'Pack content changed during build')
         cancellation()
+        # Only mark a generation complete after input rechecks/cancellation.
+        # Otherwise a cancelled first build would forbid initialize retry even
+        # though there has never been a current.json to restore.
+        write(stage/'receipt.json', receipt)
         write(current, receipt)
         return dict(ok=True, output=str(output), generation=receipt, activeObjects=sum(e['active'] for e in ledger['objects'].values()),
                     runtimeCatalog=checked, installation=installation_info)

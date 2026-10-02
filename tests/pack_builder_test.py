@@ -3,6 +3,7 @@ import argparse
 import asyncio
 import copy
 import json
+import os
 from pathlib import Path
 import shutil
 import sys
@@ -123,12 +124,39 @@ async def run(args):
         snapshot_bindings.write_bytes(saved_snapshot)
         restored = await build(packs, install, backends)
         assert restored['activeObjects'] == len(ids)
+        # Cancel after native catalog validation on the very first generation.
+        # A retry must reuse its seed and must not demand a nonexistent pointer.
+        fresh=root/'cancelled-initial-installation';marker=root/'late-cancel'
+        original_validation=backends.content_validation
+        def cancel_after_catalog(data=None):
+            checked=original_validation(data)
+            if data is not None:marker.write_text('cancel',encoding='utf-8')
+            return checked
+        backends.content_validation=cancel_after_catalog
+        old_marker=os.environ.get('RELOAD_MAKER_CANCEL_FILE')
+        os.environ['RELOAD_MAKER_CANCEL_FILE']=str(marker)
+        try:
+            try:
+                await build(packs[:1],fresh,backends,initialize=True)
+                raise AssertionError('Late first-build cancellation promoted an output')
+            except RuntimeError as exc:
+                assert 'cancelled' in str(exc),str(exc)
+            assert not (fresh/'current.json').exists()
+            assert not list((fresh/'generations').glob('*/receipt.json'))
+            seed=(fresh/'identity.json').read_bytes()
+        finally:
+            backends.content_validation=original_validation
+            if old_marker is None:os.environ.pop('RELOAD_MAKER_CANCEL_FILE',None)
+            else:os.environ['RELOAD_MAKER_CANCEL_FILE']=old_marker
+        retry=await build(packs[:1],fresh,backends,initialize=True)
+        assert retry['ok'] and (fresh/'identity.json').read_bytes()==seed
         report = dict(ok=True, objects=len(ids), checks=['native cooked NIF validation', 'ESP independent readback',
             'stable reordered IDs and plugin bytes', 'removed packs emit no records or models', 'tamper failure preserves output',
             'corrupt ledger rejected', 'reinstall recovers existing IDs', 'runtime validates complete generated catalog',
             'semantic content failure preserves output', 'runtime object budget enforced', 'object-only pack rejected',
             'independent rollback snapshot survives source update', 'damaged snapshot never reported as usable',
-            'last-good ESP and bindings verified together', 'installation instructions accompany successful builds'])
+            'last-good ESP and bindings verified together', 'installation instructions accompany successful builds',
+            'late first-build cancellation can retry with its existing identity'])
         (workspace/'pack-builder-result.json').write_text(json.dumps(report, indent=2))
         print(json.dumps(report))
 

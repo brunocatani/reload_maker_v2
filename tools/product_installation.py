@@ -4,11 +4,12 @@ from product_packs import PLUGIN, digest, read, require, within, write
 BINDINGS = 'F4SE/Plugins/DIAMOND/Generated/objects.json'
 
 
-def check_snapshot(stage):
+def check_snapshot(stage, receipt=None):
     """A previous output is usable only with the exact complete authored content."""
     view = stage/'validation-Data'
     try:
-        receipt = read(stage/'receipt.json')
+        if receipt is None:
+            receipt = read(stage/'receipt.json')
         require(digest(view/PLUGIN) == receipt['pluginSha256'], 'Snapshot plugin changed')
         require(digest(view/BINDINGS) == receipt['bindingsSha256'], 'Snapshot bindings changed')
         bindings = read(view/BINDINGS)
@@ -24,7 +25,7 @@ def check_snapshot(stage):
 
 
 def installation_report(stage, packs, receipt, previous):
-    snapshot = check_snapshot(stage)
+    snapshot = check_snapshot(stage, receipt)
     require(snapshot['verified'], 'Installation snapshot is incomplete: '+snapshot.get('reason', ''))
     selected = []
     for pack in sorted(packs, key=lambda p: p['manifest']['id']):
