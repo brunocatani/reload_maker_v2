@@ -87,6 +87,15 @@ int main(int argc, char** argv)
         require(QFile::remove(QDir(patch).filePath(path)),"Cannot remove winning test resource");
         require(resources.read(path,error).isEmpty()&&!error.isEmpty(),"Broken winning package silently fell back");
         resources.close();require(!resources.isOpen()&&resources.files().isEmpty(),"Layered index survived close");
+        require(resources.openPackages({base,patch},error),"Cannot index pre-override source view");
+        const auto oldWinner=resources.read(path,error);require(oldWinner=="base","Wrong original winner");
+        write(QDir(patch).filePath(path),"new loose override without an ESP");
+        ResourceArchive refreshed;require(refreshed.openPackages({base,patch},error),"Cannot refresh effective source view");
+        require(refreshed.read(path,error)=="new loose override without an ESP","A newly added winning file was missed by source refresh");
+        const QJsonObject oldView{{"version",1},{"resources",QJsonArray{QJsonObject{{"path",path.toLower()},{"kind","animation"},
+            {"sha256",QString::fromLatin1(QCryptographicHash::hash(oldWinner,QCryptographicHash::Sha256).toHex())}}}}};
+        require(inspectSourceEvidence(oldView,[&](const QString&,const QString& key){SourceBytes r;r.bytes=refreshed.read(key,r.error);return r;})["changed"].toInt()==1,"Added animation override was not reported as a source change");
+        resources.close();refreshed.close();
         out << "PASS loose HKX indexing, bytes, normalized paths, missing-input failure and index lifetime\n";
 
         const QStringList args = app.arguments();

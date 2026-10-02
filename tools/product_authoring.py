@@ -4,6 +4,7 @@ GUI, MCP and command-line callers use this operation. Existing configurations
 are replaced by their native selector identities; other authored work is retained.
 """
 import copy
+import hashlib
 import os
 from pathlib import Path
 import shutil
@@ -89,7 +90,10 @@ def save_configuration(project_path,capture_path,backends,expected='',pack_id=''
     asset_inputs=[]
     if full:
         if assignment is None:
-            logical=project['id']+'/magazine/'+magazine.replace(':','/')
+            # Two weapons may use the same source OMOD but need different hand
+            # fits/carrier frames. Their runtime MISC identities stay distinct;
+            # the publisher can still deduplicate identical finished NIF bytes.
+            logical=project['id']+'/magazine/'+hashlib.sha256((record+'|'+magazine).encode()).hexdigest()[:24]
             assignment=dict(record=magazine,full=logical+'/full',empty=logical+'/empty');weapon['magazineObjects'].append(assignment)
         current_resources={r['path'].replace('\\','/').lower():r['sha256'] for r in snapshot['sources']['resources']}
         for presentation,model in (('full',full),('empty',empty)):
@@ -108,7 +112,9 @@ def save_configuration(project_path,capture_path,backends,expected='',pack_id=''
                       bounds=meta['bounds'],weight=meta['massKg'],value=0,source=dict(path=str(model),sha256=meta['outputSha256']))
             replace_record(project['objects'],item,lambda p:p['id'])
     capture_records=weapon.setdefault('captures',[])
-    replace_record(capture_records,dict(selection=snapshot['selection'],sources=snapshot['sources']),lambda p:selector(p['selection']))
+    require(isinstance(snapshot.get('runtimeSources'),list) and snapshot['runtimeSources'],'Recapture this configuration with its runtime source requirements')
+    runtime_sources=dict(version=1,weapon=snapshot['weapon'],resources=snapshot['runtimeSources'])
+    replace_record(capture_records,dict(selection=snapshot['selection'],sources=runtime_sources),lambda p:selector(p['selection']))
     path.parent.mkdir(parents=True,exist_ok=True)
     stage=path.parent/('.authoring-'+uuid.uuid4().hex);stage.mkdir()
     final=path.parent/'authoring'/uuid.uuid4().hex

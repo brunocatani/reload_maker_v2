@@ -330,6 +330,17 @@ def cook_world_object(job: str, output: str, expected_revision: int) -> dict:
     return command('pack_job', dict(operation='cook',job=job,output=output), expected_revision)
 
 @mcp.tool()
+def inspect_sources(evidence: dict) -> dict:
+    """Compare expected animation/model bytes with a fresh current source view.
+    evidence has version=1 and resources[{kind: animation|model, path, sha256}].
+    Inspect-project returns per-configuration resource requirements; add kind from
+    .hkx/.nif and check the selected configuration. The result states package vs
+    verified MO2 profile context. New loose overrides are re-indexed; no authoring
+    data or expected hash is changed. Loading or changed MO2 profiles reject.
+    """
+    return command('inspect_sources',dict(evidence=evidence))
+
+@mcp.tool()
 def save_configured_reload(project: str, expected_revision: int, expected_project_sha256: str = '',
                            pack_id: str = '', full_model: str = '', empty_model: str = '') -> dict:
     """Replace/save the selected Operate configuration in a pack project.

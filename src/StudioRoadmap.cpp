@@ -74,11 +74,24 @@ QJsonObject ReloadMakerController::sourceEvidence() const {
     return {{"version",1},{"weapon",poseRecordKey(currentWeapon()->formId)},{"resources",array}};
 }
 QJsonObject ReloadMakerController::auditSources(const QJsonObject& evidence) const {
-    auto result=inspectSourceEvidence(evidence,[this](const QString& kind,const QString& path){
+    if(_loadThread||_closing)throw std::runtime_error("Wait for the current source view to finish loading");
+    // A loaded BA2 index or loose-file census can predate an added override.
+    // Reopen the effective view for this explicit authoring check; never use
+    // the renderer's cached archive mapping as proof of unchanged input bytes.
+    ResourceArchive current,game;QString error;
+    if(_libraryMode){
+        if(!insideMo2VirtualFilesystem()||profileFingerprint(_launchSnapshot.instancePath,_launchSnapshot.profilePath)!=_launchSnapshot.fingerprint)
+            throw std::runtime_error("The active MO2 source snapshot changed; reconnect the selected profile");
+        if(!current.openLoadOrder(_launchSnapshot.dataPath,_launchSnapshot.archives,error))throw std::runtime_error(error.toStdString());
+    }else if(!current.openPackages(_package.roots.isEmpty()?QStringList{_package.rootPath}:_package.roots,error))throw std::runtime_error(error.toStdString());
+    auto result=inspectSourceEvidence(evidence,[&](const QString&,const QString& path){
         SourceBytes value;
-        const auto& archive=(_libraryMode||_packageResources.contains(path))?_packageResources:kind=="model"?_gameMeshes:_gameAnimations;
+        if(!_libraryMode&&!current.contains(path)&&!game.isOpen()&&!game.open(_gameData,value.error))return value;
+        const auto& archive=(_libraryMode||current.contains(path))?current:game;
         value.bytes=archive.read(path,value.error);value.provider=archive.provider(path);return value;
     });
+    if(_libraryMode&&profileFingerprint(_launchSnapshot.instancePath,_launchSnapshot.profilePath)!=_launchSnapshot.fingerprint)
+        throw std::runtime_error("MO2 profile changed during the source check; reconnect before continuing");
     result["sourceMode"]=_libraryMode?"mo2-profile":"ordered-packages";
     result["profile"]=_libraryMode?_launchSnapshot.profileName:QString();return result;
 }

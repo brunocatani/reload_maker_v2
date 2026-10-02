@@ -15,6 +15,8 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMap>
+#include <QSet>
 #include <QPlainTextEdit>
 #include <QProcess>
 #include <QPushButton>
@@ -143,21 +145,37 @@ void ReloadMakerController::showPackExporter() {
     auto* output=new QLineEdit(studioDataPath("exports/packs/export-"+QDateTime::currentDateTimeUtc().toString("yyyyMMdd-HHmmss")));layout->addWidget(output);
     auto* report=new QPlainTextEdit;report->setReadOnly(true);layout->addWidget(report,1);
     auto* actions=new QHBoxLayout;layout->addLayout(actions);
-    auto* inspect=new QPushButton("Check project");auto* publish=new QPushButton("Export complete pack");
+    auto* inspect=new QPushButton("Check project");auto* sourceCheck=new QPushButton("Check loaded configuration sources");auto* publish=new QPushButton("Export complete pack");
     auto* cancel=new QPushButton("Cancel job");auto* open=new QPushButton("Open exported folder");
-    for(auto* button:{inspect,publish,cancel,open})actions->addWidget(button);
-    QString exported;
+    for(auto* button:{inspect,sourceCheck,publish,cancel,open})actions->addWidget(button);
+    QString exported,sourceJob;
     const auto update=[&]{
         const auto state=packCommand({});const auto phase=state["phase"].toString();
         const bool running=phase=="running"||phase=="cancelling";
-        inspect->setEnabled(!running);publish->setEnabled(!running);cancel->setEnabled(running);open->setEnabled(!exported.isEmpty());
+        inspect->setEnabled(!running);sourceCheck->setEnabled(!running&&currentWeapon());publish->setEnabled(!running);cancel->setEnabled(running);open->setEnabled(!exported.isEmpty());
         if(phase=="idle")report->setPlainText("Prepared pack projects are organized by source ESP and weapon under workspace/packs. Each export contains full/empty objects and all included configurations. Original weapon plugins remain dependencies.");
         else if(running)report->setPlainText(phase=="cancelling"?"Cancellation requested. Waiting for the native tool to finish…":"Checking frozen authoring inputs and finished models…");
         else if(phase=="failed")report->setPlainText(state["error"].toString());
         else if(state["operation"]=="inspect-project") {
             const auto result=state["result"].toObject();QString text=result["name"].toString()+"\n";
             for(const auto& value:result["weapons"].toArray()) {const auto weapon=value.toObject();text+=QString("\n%1 · %2\n%3 configurations · %4 magazines\n%5\n").arg(weapon["name"].toString(),weapon["record"].toString()).arg(weapon["variants"].toInt()).arg(weapon["magazines"].toInt()).arg(weapon["template"].toString());}
-            report->setPlainText(text+"\nReady to validate native collision and publish.");
+            if(!result["sourceConflicts"].toArray().isEmpty())text+="\nSome configurations were captured from different source versions. Review those inputs before publishing.";
+            else text+="\nReady to validate native collision and publish.";
+            if(state["id"].toString()==sourceJob)try{
+                if(!currentWeapon()||!configuration())throw std::runtime_error("Load the weapon and configuration to check");
+                const auto weapon=poseRecordKey(currentWeapon()->formId).toLower();QSet<QString> forms{weapon};for(const auto* mod:configuredObjectMods())forms.insert(poseRecordKey(mod->formId).toLower());
+                QMap<QString,QJsonObject> selected;int matches=0;
+                for(const auto& row:result["sourceRequirements"].toArray()){const auto entry=row.toObject();if(entry["weapon"].toString().toLower()!=weapon)continue;
+                    for(const auto& value:entry["configurations"].toArray()){const auto config=value.toObject();if(!forms.contains(config["receiver"].toString().toLower())||!forms.contains(config["magazine"].toString().toLower())||(config.contains("operatingPart")&&!forms.contains(config["operatingPart"].toString().toLower())))continue;
+                        ++matches;for(const auto& item:config["resources"].toArray()){auto resource=item.toObject();const auto path=resource["path"].toString();resource["kind"]=path.endsWith(".hkx")?"animation":"model";selected[path]=resource;}}}
+                if(matches!=1)throw std::runtime_error("Select one configuration included in this pack project");
+                QJsonArray resources;for(const auto& resource:selected)resources.append(resource);
+                const auto audit=auditSources({{"version",1},{"resources",resources}});
+                text+="\n\nSource view: "+audit["sourceMode"].toString()+" "+audit["profile"].toString();
+                text+=audit["compatible"].toBool()?"\nSelected configuration source bytes match.":"\nSelected configuration needs source review.";
+                for(const auto& value:audit["resources"].toArray()){const auto item=value.toObject();if(item["status"]!="unchanged")text+="\n"+item["status"].toString()+" · "+item["path"].toString()+"\n"+item["provider"].toString();}
+            }catch(const std::exception& e){text+="\n\n"+QString::fromUtf8(e.what());}
+            report->setPlainText(text);
         } else if(state["operation"]=="export") {
             const auto result=state["result"].toObject();exported=result["output"].toString();open->setEnabled(!exported.isEmpty());
             report->setPlainText(QString("Export complete: %1 configurations, %2 magazine variations, %3 full/empty objects.\n\n%4\n\nThis folder is the shareable pack. Install it with its source mods, then use Build installed reload packs to generate the local object ESP. No game files or MO2 settings were changed.").arg(result["variants"].toInt()).arg(result["magazines"].toInt()).arg(result["objects"].toInt()).arg(QDir::toNativeSeparators(exported)));
@@ -166,6 +184,7 @@ void ReloadMakerController::showPackExporter() {
     connect(this,&ReloadMakerController::packJobChanged,&dialog,update);
     const auto run=[&](const QString& operation){settings.setValue("packExporter/project",project->text());try{packCommand({{"operation",operation},{"project",project->text()},{"output",output->text()}});update();}catch(const std::exception& e){report->setPlainText(e.what());}};
     connect(inspect,&QPushButton::clicked,&dialog,[&]{run("inspect-project");});
+    connect(sourceCheck,&QPushButton::clicked,&dialog,[&]{try{sourceJob=packCommand({{"operation","inspect-project"},{"project",project->text()}})["id"].toString();update();}catch(const std::exception& e){report->setPlainText(e.what());}});
     connect(publish,&QPushButton::clicked,&dialog,[&]{run("export");});
     connect(cancel,&QPushButton::clicked,&dialog,[&]{try{packCommand({{"operation","cancel"}});}catch(const std::exception& e){report->setPlainText(e.what());}});
     connect(open,&QPushButton::clicked,&dialog,[&]{QDesktopServices::openUrl(QUrl::fromLocalFile(exported));});

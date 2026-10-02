@@ -5,6 +5,7 @@
 #include <QCheckBox>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QSet>
 #include <algorithm>
 #include <stdexcept>
 
@@ -124,6 +125,12 @@ QJsonObject ReloadMakerController::exportRuntimeConfiguration() const {
     else if(isMk18Configuration())magazine["parkedMagazinePath"]="Weapon/WeaponExtra3";
     const auto grabs=exportGrabLocations();requireCapture(type==WeaponMechanism::PistolSlide||!grabs.isEmpty(),"Configure the operating surface grab points before capture");
     const auto sources=sourceEvidence();requireCapture(auditSources(sources)["compatible"].toBool(),"Source resources changed; reload and review the configuration before export");
+    QSet<QString> criticalModels{normalizeNifPath(currentWeapon()->baseModelPath),normalizeNifPath(anchor.ownerModel)};
+    auto criticalTracks=rig.slideTracks;for(int track:rig.magazineTracks)if(!criticalTracks.contains(track))criticalTracks.append(track);
+    if(rig.bolt>=0&&!criticalTracks.contains(rig.bolt))criticalTracks.append(rig.bolt);
+    for(int track:criticalTracks)criticalModels.insert(normalizeNifPath(recipe.tracks[track].anchor.ownerModel));
+    QJsonArray runtimeSources;for(const auto& value:sources["resources"].toArray()){const auto source=value.toObject();
+        if(source["kind"]=="animation"||criticalModels.contains(source["path"].toString()))runtimeSources.append(source);}
     QJsonObject header{{"format",type==WeaponMechanism::PistolSlide?"diamond-pistol-pack":"diamond-weapon-pack"},{"version",1},{"weapon",weapon}};
     QJsonArray catalogSlots;
     if(type==WeaponMechanism::PistolSlide) {
@@ -148,6 +155,6 @@ QJsonObject ReloadMakerController::exportRuntimeConfiguration() const {
     return {{"format","reload-maker-runtime-configuration"},{"version",1},{"weapon",weapon},{"template",templateIdentity(type)},
         {"name",currentWeapon()->name},{"profileHeader",header},
         {"selection",selection},{"profile",profile},{"magazine",magazine},{"grabs",grabs},
-        {"sounds",exportSounds()},{"sources",sources},{"worldModelSpace","magazine-carrier"}};
+        {"sounds",exportSounds()},{"sources",sources},{"runtimeSources",runtimeSources},{"worldModelSpace","magazine-carrier"}};
 }
 }

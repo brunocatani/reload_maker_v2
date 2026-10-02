@@ -31,6 +31,41 @@ def project_source(project, entry):
     return path
 
 
+def source_requirements(weapon,profiles):
+    """Requirements belong to each configuration, not every optional variant."""
+    result=[]
+    def selector(value):
+        return tuple(form_key(value.get(key,profiles.get('standardReceiver'))) if key in value or key=='receiver' else ''
+                     for key in ('receiver','magazine','operatingPart'))
+    for variant in profiles['profiles']:
+        sources={}
+        def add(path,sha):
+            path=relative(path).lower()
+            require(path.startswith('meshes/') and path.endswith(('.hkx','.nif')),'Invalid runtime source resource')
+            require(isinstance(sha,str) and re.fullmatch('[0-9a-f]{64}',sha),'Missing runtime source digest')
+            require(path not in sources or sources[path]==sha,'A capture disagrees with its authored motion source: '+path)
+            sources[path]=sha
+        source=variant.get('source',variant);add(source['animation'],source['animationSha256'])
+        if source.get('baseline'):add(source['baseline'],source['baselineSha256'])
+        matching=[capture for capture in weapon.get('captures',[]) if selector(capture['selection'])==selector(variant)]
+        require(len(matching)<=1,'Duplicate source capture for one configuration')
+        if matching:
+            for source in matching[0]['sources']['resources']:add(source['path'],source['sha256'])
+        require(0<len(sources)<=512,'Runtime source requirements exceed their configuration budget')
+        receiver,magazine,operating=selector(variant)
+        item=dict(receiver=receiver,magazine=magazine,resources=[dict(path=path,sha256=sha) for path,sha in sorted(sources.items())])
+        if operating:item['operatingPart']=operating
+        result.append(item)
+    return result
+
+
+def source_conflicts(requirements):
+    versions={}
+    for item in requirements:
+        for source in item['resources']:versions.setdefault(source['path'],set()).add(source['sha256'])
+    return sorted(path for path,hashes in versions.items() if len(hashes)>1)
+
+
 def inspect_project(path):
     project = read(path)
     require(project.get('format') == 'reload-maker-pack-project' and project.get('version') == 1,
@@ -51,6 +86,7 @@ def inspect_project(path):
         require(weapon.get('template') in TEMPLATES, 'Unsupported reload template')
         documents = {kind: read(project_source(path, weapon[kind])) for kind in ('profiles', 'magazines', 'grabs', 'sounds')}
         profile, magazines = documents['profiles'], documents['magazines']
+        source_requirements(weapon,profile)
         require(form_key(profile['weapon']) == key and form_key(magazines['weapon']) == key,
                 'Prepared behavior belongs to a different weapon')
         require(magazines['version'] == 3, 'Magazine export must use logical object bindings, without local world forms')
@@ -63,6 +99,8 @@ def inspect_project(path):
                 'Every authored magazine needs one full and one empty object')
         for assignment in assignments:
             require(assignment['full'] != assignment['empty'], 'Full and empty need independent object identities')
+            require(assignment['full'] not in identifiers and assignment['empty'] not in identifiers,
+                    'Different weapon/magazine fits need distinct logical object identities')
             identifiers.update((assignment['full'], assignment['empty']))
         summary.append(dict(record=key, name=weapon.get('name', key), template=weapon['template'],
                             variants=len(profile['profiles']), magazines=len(records)))
@@ -97,6 +135,9 @@ def export_pack(path, destination, backends):
             folder = prefix+f'weapons/{plugin}/{local}/'
             item = dict(record=key, name=weapon.get('name', key), template=weapon['template'],
                         magazineObjects=copy.deepcopy(weapon['magazineObjects']))
+            item['sourceRequirements']=source_requirements(weapon,read(project_source(path,weapon['profiles'])))
+            conflicts=source_conflicts(item['sourceRequirements'])
+            require(not conflicts,'Review configurations captured from different versions before publishing: '+', '.join(conflicts))
             for kind in ('profiles', 'magazines', 'sounds', 'grabs'):
                 source = project_source(path, weapon[kind])
                 target = folder+kind+'.json'

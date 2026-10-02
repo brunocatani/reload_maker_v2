@@ -75,12 +75,14 @@ def main():
         elif args.action == 'build':
             result = asyncio.run(build_packs(args.pack, Path(args.installation), backends, args.initialize))
         elif args.action == 'inspect-project':
-            from product_export import inspect_project
-            from product_packs import digest
+            from product_export import inspect_project,project_source,source_requirements,source_conflicts
+            from product_packs import digest,read
             project_path=Path(args.project).resolve()
             project, weapons = inspect_project(project_path)
             result = dict(ok=True, id=project['id'], name=project.get('name', project['id']),
                           sha256=digest(project_path),revision=project['revision'], weapons=weapons, objects=len(project['objects']))
+            result['sourceRequirements']=[dict(weapon=w['record'],configurations=source_requirements(w,read(project_source(project_path,w['profiles'])))) for w in project['weapons']]
+            result['sourceConflicts']=[dict(weapon=w['weapon'],paths=source_conflicts(w['configurations'])) for w in result['sourceRequirements'] if source_conflicts(w['configurations'])]
         elif args.action == 'save-configuration':
             from product_authoring import save_configuration
             result=save_configuration(args.project,args.capture,backends,args.expected,args.id,args.full,args.empty)
