@@ -238,6 +238,11 @@ namespace reloadmaker
         bool saveSession(const QString& path = {});
         QString suggestedSessionPath() const;
         bool beginWeaponProject(int selectedIndex);
+        QString sourcePolicyKey() const;
+        QJsonObject sourcePolicyState() const;
+        QJsonObject configureSourcePolicy(const QJsonObject&);
+        void showSourcePolicy();
+        QJsonObject _sourcePolicies;
         void openSession(const QString& path);
         void restoreSessionSelection();
         void startCommandServer();

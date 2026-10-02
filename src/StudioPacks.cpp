@@ -20,6 +20,7 @@
 #include <QPlainTextEdit>
 #include <QProcess>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QSaveFile>
 #include <QUuid>
@@ -115,10 +116,11 @@ void ReloadMakerController::showConfigurationSaver() {
     auto field=[&](const QString& title,const QString& value,bool output){layout->addWidget(new QLabel(title));auto* row=new QHBoxLayout;layout->addLayout(row);auto* edit=new QLineEdit(value);row->addWidget(edit,1);auto* browse=new QPushButton("Choose…");row->addWidget(browse);
         connect(browse,&QPushButton::clicked,&dialog,[&,edit,output]{const auto path=output?QFileDialog::getSaveFileName(&dialog,"New or existing pack project",studioDataPath("workspace/packs"),"Pack project (*.json)",nullptr,QFileDialog::DontConfirmOverwrite):QFileDialog::getOpenFileName(&dialog,"Finished magazine model with cook receipt",studioDataPath("exports/objects"),"Cooked magazine (*.nif)");if(!path.isEmpty())edit->setText(path);});return edit;};
     const auto weaponKey=currentWeapon()?poseRecordKey(currentWeapon()->formId).toLower():QString("unassigned");
-    const auto plugin=weaponKey.section(':',0,0);const auto setting="packAuthoring/"+weaponKey+"/project";
-    auto* project=field("Pack project",settings.value(setting,studioDataPath("workspace/packs/"+plugin+"/pack.project.json")).toString(),true);
+    const auto plugin=weaponKey.section(':',0,0),context=QFileInfo(suggestedSessionPath()).dir().dirName();const auto setting="packAuthoring/"+weaponKey+"/"+context+"/project";
+    const auto destination=studioDataPath("workspace/packs/"+plugin+"/"+weaponKey.section(':',1,1)+"/"+context+"/pack.project.json");
+    auto* project=field("Pack project",settings.value(setting,destination).toString(),true);
     layout->addWidget(new QLabel("Namespace for a new pack"));auto* id=new QLineEdit;layout->addWidget(id);
-    if(currentWeapon())id->setText("reload."+QFileInfo(plugin).completeBaseName());
+    if(currentWeapon()){auto slug=QFileInfo(plugin).completeBaseName();slug.replace(QRegularExpression("[^a-z0-9_-]+",QRegularExpression::CaseInsensitiveOption),"-");id->setText("reload."+slug.left(48)+"."+weaponKey.section(':',1,1)+"."+context.left(8));}
     auto* full=field("Full model · leave both blank to keep the existing assignment",{},false);
     auto* empty=field("Empty model",{},false);
     auto* report=new QPlainTextEdit;report->setReadOnly(true);layout->addWidget(report,1);

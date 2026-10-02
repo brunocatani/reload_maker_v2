@@ -30,6 +30,7 @@ QJsonArray ReloadMakerController::roadmapProgress() const {
     const bool captured=loaded&&_reloadRecipe.has_value(),rig=captured&&_simulationRig.has_value()&&_simulationRig->recipeId==_reloadRecipe->id,magazine=rig&&_magazineRail.has_value()&&_magazineError.isEmpty();
     QJsonObject sources;QString sourceError;
     if(captured)try{sources=sourceEvidence();}catch(const std::exception& e){sourceError=e.what();}
+    QJsonObject compatibility;QString compatibilityError;if(loaded)try{compatibility=sourcePolicyState()["policy"].toObject();}catch(const std::exception& e){compatibilityError=e.what();}
     steps[0]={true,captured&&!sources.isEmpty()&&saved["sources"]==sources,
         !sourceError.isEmpty()?sourceError:captured?"Record and review the resolved source inputs. Check source changes again before exporting.":"Connect a source and load the weapon.",sources};
     steps[1]={loaded,captured,captured?"Native assembly and reload capture are available.":"Complete the assembly and wait for its native capture.",
@@ -66,8 +67,9 @@ QJsonArray ReloadMakerController::roadmapProgress() const {
     const auto drafts=saved.value("collisionDrafts").toObject();const auto policy=collisionDraftPolicy(captured?_reloadRecipe->id:QString(),sources,saved.value("magazineSetup").toObject());
     const bool collisionReady=magazine&&drafts["full"].toObject()["usable"].toBool()&&drafts["empty"].toObject()["usable"].toBool()&&drafts["full"].toObject()["policy"]==policy&&drafts["empty"].toObject()["policy"]==policy;
     steps[10]={magazine,collisionReady,collisionReady?"Review both collision drafts. Finished NIFs and cook receipts are still validated independently when saving/exporting the pack.":"Generate or import full and empty magazine collision drafts for this source and presentation.",drafts};
-    const bool exportable=rig&&magazine&&fitted&&fingers&&steps[0].ready&&steps[2].ready&&steps[4].ready&&steps[8].ready&&steps[9].ready&&collisionReady;
-    steps[11]={rig,exportable,exportable?"Test Operate, save the selected configuration, then export the complete pack. Author review does not bypass validation.":"Resolve the preceding source, motion, hand, point or sound requirements before export.",{{"ready",exportable}}};
+    const bool exportable=compatibilityError.isEmpty()&&rig&&magazine&&fitted&&fingers&&steps[0].ready&&steps[2].ready&&steps[4].ready&&steps[8].ready&&steps[9].ready&&collisionReady;
+    QJsonObject publication{{"ready",exportable}};if(!compatibility.isEmpty())publication["sourcePolicy"]=compatibility;
+    steps[11]={rig,exportable,!compatibilityError.isEmpty()?compatibilityError:exportable?"Test Operate, review source compatibility, save the selected configuration, then export the complete pack.":"Resolve the preceding source, motion, hand, point or sound requirements before export.",publication};
     return authoringProgress(steps,saved.value("reviews").toObject());
 }
 }

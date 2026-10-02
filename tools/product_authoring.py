@@ -33,6 +33,22 @@ def replace_record(items,value,key):
     if matches:items[matches[0]]=copy.deepcopy(value)
     else:items.append(copy.deepcopy(value))
 
+def policy_identity(policy):
+    require(isinstance(policy,dict) and set(policy)<= {'sourceOverride','blockedMods','magazineCollections'},'Invalid source compatibility rules')
+    marker=None
+    if 'sourceOverride' in policy:
+        value=policy['sourceOverride']
+        require(isinstance(value,dict) and set(value)=={'marker','present'} and type(value['present']) is bool,'Invalid add-on marker condition')
+        marker=(form_key(value['marker']),value['present'])
+    groups=[];seen=set()
+    for field in ('blockedMods','magazineCollections'):
+        values=policy.get(field,[])
+        require(isinstance(values,list) and len(values)<=32,'Too many source compatibility records')
+        records=[form_key(value) for value in values]
+        require(len(set(records))==len(records) and not seen.intersection(records),'One source record has duplicate or conflicting compatibility roles')
+        seen.update(records);groups.append(tuple(sorted(records)))
+    return marker,*groups
+
 
 def save_configuration(project_path,capture_path,backends,expected='',pack_id='',full='',empty=''):
     path,capture_path=Path(project_path).resolve(),Path(capture_path).resolve()
@@ -62,9 +78,19 @@ def save_configuration(project_path,capture_path,backends,expected='',pack_id=''
                        magazines=dict(format='diamond-magazine-profiles',version=3,weapon=record,magazines=[]),
                        sounds=dict(format='diamond-sound-pack',version=1,profiles=[]),
                        grabs=dict(format='diamond-grab-locations',version=1,locations=[]))
-    # Existing source override, collection, blocked-conversion and attachment
-    # rules remain authoritative. Capturing one configuration cannot erase them.
+    # Defaults must not silently mix two source editions. An explicit editor
+    # compatibility edit updates the shared weapon policy; source snapshots and
+    # the complete native parser still validate every remaining configuration.
     profiles=documents['profiles'];default=profiles.get('standardReceiver','')
+    if 'sourcePolicy' in snapshot:
+        policy=snapshot['sourcePolicy'];fields=('sourceOverride','blockedMods','magazineCollections')
+        incoming_policy=policy_identity(policy)
+        existing_policy={key:profiles[key] for key in fields if key in profiles}
+        if snapshot.get('sourcePolicyEdited') is True:
+            for key in fields:profiles.pop(key,None)
+            profiles.update(copy.deepcopy(policy))
+        else:
+            require(policy_identity(existing_policy)==incoming_policy,'The pack uses another source compatibility policy. Choose its source-context pack or explicitly review and save the weapon-wide compatibility rules.')
     selector=lambda p:tuple(form_key(p.get(k,default) or default) if (p.get(k) or (k=='receiver' and default)) else ''
                             for k in ('receiver','magazine','operatingPart'))
     replace_record(profiles['profiles'],snapshot['profile'],selector)

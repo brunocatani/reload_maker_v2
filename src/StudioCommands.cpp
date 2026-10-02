@@ -122,7 +122,7 @@ QJsonObject ReloadMakerController::studioState() const {
 QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     const QString method=request["method"].toString();const auto p=request["params"].toObject();
     if(request.contains("expectedSession"))require(request["expectedSession"].toString()==QCoreApplication::instance()->property("commandSession").toString(),"Editor session changed; read state before editing");
-    const bool reading=method=="state"||method=="installation"||method=="pose"||method=="render"||method=="reload"||method=="diagnostics"||method=="simulation_state"||method=="sound_state"||method=="grab_locations_state"||method=="collision_state"||method=="scope_state"||method=="inspect_sources"||method=="operating_setup_state"||method=="magazine_guide_state"||method=="magazine_setup_state"||method=="magazine_reference_state";
+    const bool reading=method=="state"||method=="installation"||method=="pose"||method=="render"||method=="reload"||method=="diagnostics"||method=="simulation_state"||method=="sound_state"||method=="grab_locations_state"||method=="collision_state"||method=="scope_state"||method=="inspect_sources"||method=="operating_setup_state"||method=="magazine_guide_state"||method=="magazine_setup_state"||method=="magazine_reference_state"||method=="source_policy_state";
     if(!reading&&request.contains("expectedRevision"))require(request["expectedRevision"].toDouble()==double(_revision),"Stale document revision; read state again");
     if(method=="state")return studioState();
     if(method=="installation")return installationState();
@@ -135,6 +135,8 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     if(method=="magazine_guide_state")return magazineGuideState();
     if(method=="magazine_reference_state")return magazineReferenceState();
     if(method=="magazine_reference")return configureMagazineReference(p);
+    if(method=="source_policy_state")return sourcePolicyState();
+    if(method=="source_policy")return configureSourcePolicy(p);
     if(method=="magazine_setup_state")return magazineSetupState();
     if(method=="magazine_setup")return configureMagazineSetup(p);
     if(method=="magazine_guide")return configureMagazineGuide(p);

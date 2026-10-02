@@ -189,7 +189,10 @@ QJsonObject ReloadMakerController::exportRuntimeConfiguration() const {
         if(isSrepEmbeddedMagazine())header["embeddedMagazineReceivers"]=QJsonArray{receiverKey};
     }
     header["slots"]=catalogSlots;
+    const auto compatibility=sourcePolicyState();const auto policy=compatibility["policy"].toObject();
+    for(auto it=policy.begin();it!=policy.end();++it)header[it.key()]=it.value();
     return {{"format","reload-maker-runtime-configuration"},{"version",1},{"weapon",weapon},{"template",templateIdentity(type)},
+        {"sourcePolicy",policy},{"sourcePolicyEdited",compatibility["saved"]},
         {"name",currentWeapon()->name},{"profileHeader",header},
         {"selection",selection},{"profile",profile},{"magazine",magazine},{"grabs",grabs},
         {"sounds",exportSounds()},{"sources",sources},{"runtimeSources",runtimeSources},{"worldModelSpace","magazine-carrier"}};

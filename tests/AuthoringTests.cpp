@@ -1,5 +1,6 @@
 #include "AuthoringProgress.h"
 #include "AuthoringPaths.h"
+#include "SourcePolicy.h"
 #include <QCoreApplication>
 #include <QSet>
 #include <QTextStream>
@@ -9,6 +10,11 @@ void check(bool value,const char* message){if(!value)throw std::runtime_error(me
 int main(int argc,char** argv) {
     QCoreApplication application(argc,argv);
     try {
+        QString policyError;
+        const QJsonObject sourceRules{{"sourceOverride",QJsonObject{{"marker","Addon.esp:000800"},{"present",false}}},{"blockedMods",QJsonArray{"Example.esp:000801"}},{"magazineCollections",QJsonArray{"Example.esp:000802"}}};
+        check(validSourcePolicy(sourceRules,policyError),"Valid add-on/blocked/group rules rejected");
+        auto conflicting=sourceRules;conflicting["magazineCollections"]=QJsonArray{"example.ESP:000801"};check(!validSourcePolicy(conflicting,policyError),"One record accepted with incompatible roles");
+        conflicting=sourceRules;conflicting["sourceOverride"]=QJsonObject{{"marker","Addon.esp:000000"},{"present",true}};check(!validSourcePolicy(conflicting,policyError),"Zero dependency record accepted");
         const QJsonObject source{{"mode","mo2-profile"},{"profile","game test"}};
         const auto path=authoringProjectPath("Example Weapon.esp:000AbC",source);
         check(path.startsWith("workspace/projects/example weapon.esp/000abc/")&&path.endsWith("/authoring.project.json"),"Authoring path lost originating plugin/weapon grouping");
@@ -21,6 +27,8 @@ int main(int argc,char** argv) {
         check(validAuthoringReviews(reviews),"Cannot read valid reviews");for(const auto& item:authoringProgress(inputs,reviews))check(item.toObject()["status"]=="reviewed","Unchanged data lost its review");
         auto changed=inputs;changed[6].evidence["travel"]=7;const auto guide=authoringProgress(changed,reviews);
         for(int i=0;i<12;++i)check(guide[i].toObject()["status"]==(QSet<int>{6,9,11}.contains(i)?"needs-review":"reviewed"),"Guide invalidated unrelated hand/part reviews or retained dependent review");
+        changed=inputs;changed[11].evidence["sourcePolicy"]=sourceRules;const auto compatibility=authoringProgress(changed,reviews);
+        for(int i=0;i<12;++i)check(compatibility[i].toObject()["status"]==(i==11?"needs-review":"reviewed"),"Compatibility-only edit invalidated geometry or hand work");
         changed=inputs;changed[10].evidence["hullEdit"]=1;const auto collision=authoringProgress(changed,reviews);
         for(int i=0;i<12;++i)check(collision[i].toObject()["status"]==(i>=10?"needs-review":"reviewed"),"Collision invalidation escaped its dependent steps");
         changed=inputs;changed[4].evidence["stroke"]=2;const auto motion=authoringProgress(changed,reviews);

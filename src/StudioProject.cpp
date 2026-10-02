@@ -3,6 +3,7 @@
 #include "MagazineReference.h"
 #include "AuthoringProgress.h"
 #include "AuthoringPaths.h"
+#include "SourcePolicy.h"
 #include "StudioPaths.h"
 #include "SourceEvidence.h"
 #include "ReloadTemplates.h"
@@ -95,6 +96,7 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     record["choices"] = choices;
     record["authoringRoadmaps"]=_authoringRoadmaps;
     record["reloadTemplates"]=_reloadTemplateAssignments;
+    record["sourcePolicies"]=_sourcePolicies;
     if(const auto* config=configuration())record["recordChoices"]=config->savedChoices(*currentPlugin());
     record["simulationSpringReturn"] = _simulationSpring->isChecked();
     record["camera"] = _window->getGLView()->studioCameraState();
@@ -181,6 +183,11 @@ void ReloadMakerController::openSession(const QString& path) {
         const auto templates=record["reloadTemplates"].toObject();
         if(!record["reloadTemplates"].isObject()||templates.size()>512){setStatus("Invalid reload template assignments.",true);return;}
         for(auto it=templates.begin();it!=templates.end();++it)if(it.key().isEmpty()||it.key().size()>512||!templateMechanism(it.value().toString())){setStatus("Unsupported reload template assignment.",true);return;}
+    }
+    if(record.contains("sourcePolicies")) {
+        const auto policies=record["sourcePolicies"].toObject();
+        if(!record["sourcePolicies"].isObject()||policies.size()>512){setStatus("Invalid saved source policies.",true);return;}
+        for(auto it=policies.begin();it!=policies.end();++it)if(it.key().isEmpty()||it.key().size()>1024||!it.value().isObject()||!validSourcePolicy(it.value().toObject(),error)){setStatus("Invalid saved source policy: "+error,true);return;}
     }
     if(record.contains("authoringRoadmaps")) {
         const auto plans=record["authoringRoadmaps"].toObject();
@@ -291,6 +298,7 @@ void ReloadMakerController::restoreSessionSelection() {
     _glockNoExtender=record["glockReloadNoExtender"].toBool(false);
     _authoringRoadmaps=record["authoringRoadmaps"].toObject();
     _reloadTemplateAssignments=record["reloadTemplates"].toObject();
+    _sourcePolicies=record["sourcePolicies"].toObject();
     _savedSounds.clear();const auto sounds=record["soundProfiles"].toObject();for(auto it=sounds.begin();it!=sounds.end();++it){SoundProfile profile;QString error;if(readSoundProfile(it.value().toObject(),profile,error))_savedSounds.insert(it.key(),profile);}
     _scopeProfiles.clear();const auto optics=record["scopeProfiles"].toObject();for(auto it=optics.begin();it!=optics.end();++it){ScopeProfile p;QString error;if(readScopeProfile(it.value().toObject(),p,error))_scopeProfiles.insert(it.key(),p);}
     _interactionHand=record["interactionHand"].toString(isM1AConfiguration()?"right":"left")=="right"&&!isGlockConfiguration()?PoseHand::Right:PoseHand::Left;

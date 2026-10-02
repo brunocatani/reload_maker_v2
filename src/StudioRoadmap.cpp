@@ -142,6 +142,7 @@ void ReloadMakerController::showAuthoringRoadmap() {
     auto* detail=new QPlainTextEdit;detail->setReadOnly(true);body->addWidget(detail,1);
     auto* actions=new QHBoxLayout;layout->addLayout(actions);auto* open=new QPushButton("Open this step");auto* record=new QPushButton("Record source inputs");auto* check=new QPushButton("Check for source changes");auto* save=new QPushButton("Save draft");
     for(auto* button:{open,record,check,save})actions->addWidget(button);
+    auto* compatibility=new QPushButton("Compatibility rules…");actions->addWidget(compatibility);connect(compatibility,&QPushButton::clicked,&dialog,[&]{dialog.accept();showSourcePolicy();});
     auto* reviewActions=new QHBoxLayout;layout->addLayout(reviewActions);auto* back=new QPushButton("Previous step");auto* reviewed=new QPushButton("Mark this step reviewed");auto* draft=new QPushButton("Return to draft");auto* next=new QPushButton("Next step");for(auto* button:{back,reviewed,draft,next})reviewActions->addWidget(button);
     const auto refresh=[&]{const auto state=roadmapState();int done=0;
         for(const auto& value:state["steps"].toArray()){const auto step=value.toObject();const int i=step["index"].toInt();const auto status=step["status"].toString();done+=status=="reviewed";list->item(i)->setText(QString("%1  %2\n       %3").arg(i+1,2,10,QChar('0')).arg(titles[i],status));}

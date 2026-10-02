@@ -346,6 +346,23 @@ def get_magazine_reference() -> dict:
 
 
 @mcp.tool()
+def get_source_compatibility() -> dict:
+    """Read this weapon/source context's add-on, blocked-mod and magazine-group rules."""
+    return command('source_policy_state')
+
+
+@mcp.tool()
+def configure_source_compatibility(operation: str, key: str, expected_revision: int, policy: dict | None = None) -> dict:
+    """Save/reset explicit rules; use key from get_source_compatibility.
+
+    Rules are sourceOverride {marker: plugin:local-id, present: bool}, blockedMods
+    and magazineCollections lists. Explicit edits apply to every configuration
+    of this weapon when saved to its pack. Reset restores source defaults.
+    """
+    return command('source_policy',dict(operation=operation,key=key,policy=policy or {}),expected_revision)
+
+
+@mcp.tool()
 def configure_magazine_reference(operation: str, expected_revision: int, settings: dict | None = None) -> dict:
     """Save/reset the selected assembly's hand reference and seated connection.
 
