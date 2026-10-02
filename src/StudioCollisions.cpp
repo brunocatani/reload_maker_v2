@@ -132,7 +132,7 @@ void ReloadMakerController::paintCollisions(){
     const auto camera=view->reloadMakerWorldToClip();
     auto draw=[&](const CollisionProfile& profile,bool baseline){QHash<QString,QMatrix4x4> frames;for(const auto& s:profile.sources)frames.insert(s.key,camera*s.frame);
         for(int i=0;i<profile.hulls.size();++i){const auto& h=profile.hulls[i];if(!h.enabled||(!baseline&&_collisions->isolated()&&i!=_collisions->selected()))continue;const auto transform=frames.value(h.source);
-            QColor color=baseline?QColor(93,145,239):i==_collisions->selected()?QColor(255,211,113):profile.origin=="diamond-pre-elric-input"?QColor(244,154,96):QColor(81,210,183);
+            QColor color=baseline?QColor(93,145,239):i==_collisions->selected()?QColor(255,211,113):QColor(81,210,183);
             auto project=[&](quint32 index,QPointF& out){const auto clip=transform*QVector4D(h.points[int(index)],1);if(clip.w()<=.001||clip.z()<-clip.w())return false;out={(clip.x()/clip.w()+1)*size.width()/2,(1-clip.y()/clip.w())*size.height()/2};return true;};
             if(!baseline){auto fill=color;fill.setAlpha(12);painter.setPen(Qt::NoPen);painter.setBrush(fill);for(auto face:h.faces){QPolygonF polygon;for(auto index:face){QPointF point;if(!project(index,point)){polygon.clear();break;}polygon<<point;}if(polygon.size()==3)painter.drawPolygon(polygon);}}
             painter.setBrush(Qt::NoBrush);color.setAlpha(baseline?140:220);painter.setPen(QPen(color,baseline?.8:1.1));for(auto edge:h.edges){QPointF a,b;if(project(edge[0],a)&&project(edge[1],b))painter.drawLine(a,b);}

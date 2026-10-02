@@ -38,7 +38,6 @@ CollisionPanel::CollisionPanel(QWidget* parent):QWidget(parent){
     _gap=spin("Gap to preserve · game units",.01,100,1,2);_error=spin("Maximum support error",0,10,.5,3);_points=spin("Target points per hull",4,252,96,0);
     _mass=spin("Mass · kg",.001,100,2,3);_radius=spin("Convex radius · Havok",0,.1,.01,5);layout->addLayout(form);
     button("REGENERATE WITH THESE SETTINGS","generate");
-    auto* import=button("LOAD DIAMOND HULL INPUT…","browse_input");import->setToolTip("Pre-Elric JSON from DIAMOND/assets/collision. Choose the installed magazine model as the reference.");
     _overlay=new QCheckBox("Show hulls · x-ray");_overlay->setChecked(true);layout->addWidget(_overlay);
     _compare=new QCheckBox("Compare previous result · blue wireframe");layout->addWidget(_compare);
     _isolate=new QCheckBox("Show selected hull only");layout->addWidget(_isolate);
@@ -46,7 +45,7 @@ CollisionPanel::CollisionPanel(QWidget* parent):QWidget(parent){
     label("WORLD MODEL PIECES")->setObjectName("Section");
     label("Unchecked pieces are excluded from the prepared model and collision. Use separate captures for full and empty presentations. Regenerate hulls after re-including a piece.")->setObjectName("Hint");
     _pieces=new QListWidget;_pieces->setMinimumHeight(160);layout->addWidget(_pieces);
-    label("Yellow: selected · teal: ROCK · orange: imported. Uncheck a hull to exclude it from export. Save before changing the source, target or animation.")->setObjectName("Hint");
+    label("Yellow: selected · teal: ROCK. Uncheck a hull to exclude it from export. Save before changing the source, target or animation.")->setObjectName("Hint");
     button("SAVE / REPLACE THIS PROFILE","save");button("OPEN SAVED PROFILE…","browse_profile");button("EXPORT COLLISION JSON…","browse_export");button("CANCEL GENERATION","cancel");
     button("CAPTURE VISIBLE PART MODEL…","prepare");button("COOK PREPARED MAGAZINE…","cook");
     _status=label("No collision snapshot yet.");_status->setTextInteractionFlags(Qt::TextSelectableByMouse);
@@ -92,14 +91,13 @@ QJsonObject CollisionPanel::command(const QJsonObject& args){
         if(op=="defaults"){_gap->setValue(1);_error->setValue(.5);_points->setValue(96);_radius->setValue(.01);}
         for(auto pair:{std::pair{"gapGame",_gap},std::pair{"supportErrorGame",_error},std::pair{"targetPoints",_points}})if(args.contains(pair.first)){const auto v=args[pair.first];require(v.isDouble()&&std::isfinite(v.toDouble())&&v.toDouble()>=pair.second->minimum()&&v.toDouble()<=pair.second->maximum(),"Invalid generation setting");pair.second->setValue(v.toDouble());}
         auto p=context(false);_cancel=std::make_shared<std::atomic<bool>>(false);auto stop=_cancel;_generating=true;_worker.setFuture(QtConcurrent::run([p=std::move(p),stop]()mutable{return bakeCollision(std::move(p),stop);}));
-    }else if(op=="import"||op=="open"||op=="browse_input"||op=="browse_profile"){
-        QString path=args["path"].toString();const bool legacy=op=="import"||op=="browse_input";
-        if(op.startsWith("browse"))path=QFileDialog::getOpenFileName(this,legacy?"Choose hull JSON and verify its reference part":"Open collision profile",studioDataPath("collisions"),"Collision JSON (*.json)");
+    }else if(op=="open"||op=="browse_profile"){
+        QString path=args["path"].toString();
+        if(op=="browse_profile")path=QFileDialog::getOpenFileName(this,"Open collision profile",studioDataPath("collisions"),"Collision JSON (*.json)");
         if(path.isEmpty())return state();
         QFile file(path);require(file.size()<=32*1024*1024&&file.open(QIODevice::ReadOnly),"Cannot read collision JSON (maximum 32 MB)");const auto bytes=file.readAll();QJsonParseError parse;const auto doc=QJsonDocument::fromJson(bytes,&parse);require(parse.error==QJsonParseError::NoError&&doc.isObject(),"Invalid collision JSON");CollisionProfile next;QString error;
-        if(legacy){auto result=importCollisionHullInput(doc.object(),context(true));require(result.error.isEmpty(),result.error);next=std::move(result.profile);next.sourceHash=QString::fromLatin1(QCryptographicHash::hash(bytes,QCryptographicHash::Sha256).toHex());}
-        else{require(readCollisionJson(doc.object(),next,error),error);const auto current=context(next.origin=="diamond-pre-elric-input");require(next.weapon==current.weapon&&next.configuration==current.configuration&&next.target==current.target,"Profile belongs to a different weapon, loadout or target");for(auto& source:next.sources){auto it=std::find_if(current.sources.begin(),current.sources.end(),[&](const auto& s){return s.key==source.key&&s.geometryHash==source.geometryHash;});require(it!=current.sources.end(),"Source geometry/pose changed; regenerate or import against its explicit reference");source.frame=it->frame;source.material=it->material;}next.referencePose["rootToWorld"]=current.referencePose["rootToWorld"];}
-        _baseline=_profile;_profile=std::move(next);_dirty=legacy;_lastPath=path;authored=true;
+        require(readCollisionJson(doc.object(),next,error),error);const auto current=context(false);require(next.weapon==current.weapon&&next.configuration==current.configuration&&next.target==current.target,"Profile belongs to a different weapon, loadout or target");for(auto& source:next.sources){auto it=std::find_if(current.sources.begin(),current.sources.end(),[&](const auto& s){return s.key==source.key&&s.geometryHash==source.geometryHash;});require(it!=current.sources.end(),"Source geometry/pose changed; regenerate this profile");source.frame=it->frame;source.material=it->material;}next.referencePose["rootToWorld"]=current.referencePose["rootToWorld"];
+        _baseline=_profile;_profile=std::move(next);_dirty=false;_lastPath=path;authored=true;
     }else if(op=="save"||op=="export"||op=="browse_export"||op=="export-hulls"){
         require(_profile.valid(),"Generate or load a profile first");require(std::any_of(_profile.hulls.begin(),_profile.hulls.end(),[](const auto& h){return h.enabled;}),"Enable at least one hull");QString path=op=="save"?savePath():args["path"].toString();
         if(op=="browse_export")path=QFileDialog::getSaveFileName(this,"Export collision points",studioDataPath("exports/collision.json"),"Collision JSON (*.json)");

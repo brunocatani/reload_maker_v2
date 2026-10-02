@@ -43,7 +43,6 @@ struct CollisionResult {CollisionProfile profile;QString error;};
 bool collisionSettingsValid(const CollisionSettings& settings,QString& error);
 bool collisionHullFaces(CollisionHull& hull,QString& error);
 CollisionResult bakeCollision(CollisionProfile input,const std::shared_ptr<std::atomic<bool>>& cancelled={});
-CollisionResult importCollisionHullInput(const QJsonObject& input,const CollisionProfile& context);
 QJsonObject collisionJson(const CollisionProfile& profile);
 QJsonObject collisionCookInput(const CollisionProfile& profile,QString& error);
 bool readCollisionJson(const QJsonObject& json,CollisionProfile& profile,QString& error);

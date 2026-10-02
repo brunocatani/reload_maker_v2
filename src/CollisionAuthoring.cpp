@@ -123,20 +123,5 @@ bool readCollisionJson(const QJsonObject& o,CollisionProfile& output,QString& er
     for(auto w:o["warnings"].toArray())if(w.isString())p.warnings.append(w.toString());
     output=std::move(p);return true;
 }
-CollisionResult importCollisionHullInput(const QJsonObject& o,const CollisionProfile& context){
-    CollisionResult result;result.profile=context;auto& p=result.profile;p.hulls.clear();p.warnings.clear();p.origin="diamond-pre-elric-input";
-    if(p.sources.size()!=1){result.error="Choose one reference part for the imported hull coordinates";return result;}
-    const auto rows=o["hulls"].toArray();if(rows.isEmpty()||rows.size()>1024){result.error="Expected a bounded hull-point JSON file";return result;}
-    auto settings=settingsJson(p.settings);settings["radiusHavok"]=.0005;settings["massKg"]=1;
-    for(auto pair:{std::pair{"havokScale","havokScale"},std::pair{"radius","radiusHavok"},std::pair{"mass","massKg"},std::pair{"material","material"},std::pair{"layer","layer"}})if(o.contains(pair.first))settings[pair.second]=o[pair.first];
-    if(!readSettings(settings,p.settings,result.error))return result;
-    qsizetype count=0;for(auto row:rows){CollisionHull h;h.source=p.sources[0].key;h.name=QString("Imported hull %1").arg(p.hulls.size()+1);const auto points=row.toObject()["points"].toArray();count+=points.size();if(points.size()<4||points.size()>4096||count>262144){result.error="Imported point budget exceeded";return result;}for(auto q:points){QVector3D point;if(!readPoint(q,point)){result.error="Invalid imported point";return result;}h.points.append(point);}if(!collisionHullFaces(h,result.error))return result;if(h.points.size()>252)p.warnings<<h.name+": over 252 points; native cooking may simplify it";p.hulls.append(std::move(h));}
-    if(!p.sources[0].vertices.isEmpty()){
-        auto low=p.sources[0].vertices[0],high=low;for(auto point:p.sources[0].vertices)for(int axis=0;axis<3;++axis){low[axis]=std::min(low[axis],point[axis]);high[axis]=std::max(high[axis],point[axis]);}
-        bool outside=false;for(const auto& h:p.hulls)for(auto point:h.points)for(int axis=0;axis<3;++axis)outside|=point[axis]<low[axis]-1||point[axis]>high[axis]+1;
-        if(outside)p.warnings<<"Imported bounds extend beyond the selected visible model. Check the magazine variant and coordinate frame.";
-    }
-    p.warnings<<"These are pre-Elric hull inputs, not decoded final Havok geometry. Verify the selected reference frame.";return result;
-}
 QJsonObject collisionSummary(const CollisionProfile& p){QJsonArray sources;for(int i=0;i<p.sources.size();++i){const auto& s=p.sources[i];sources.append(QJsonObject{{"index",i},{"key",s.key},{"name",s.name},{"material",s.material},{"path",s.path},{"included",s.worldIncluded}});}QJsonArray hulls;qsizetype points=0,enabled=0;for(int i=0;i<p.hulls.size();++i){const auto& h=p.hulls[i];points+=h.points.size();enabled+=h.enabled;hulls.append(QJsonObject{{"index",i},{"name",h.name},{"source",h.source},{"points",int(h.points.size())},{"faces",int(h.faces.size())},{"enabled",h.enabled}});}return {{"sources",sources},{"valid",p.valid()},{"weapon",p.weapon},{"configuration",p.configuration},{"target",p.target},{"origin",p.origin},{"sourceCount",int(p.sources.size())},{"hullCount",int(p.hulls.size())},{"enabledCount",double(enabled)},{"points",double(points)},{"inputTriangles",double(p.inputTriangles)},{"hulls",hulls},{"warnings",QJsonArray::fromStringList(p.warnings)},{"settings",settingsJson(p.settings)},{"engineCooked",false}};}
 }

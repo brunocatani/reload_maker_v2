@@ -70,7 +70,7 @@ def get_collision_state() -> dict:
 
 @mcp.tool()
 def configure_collisions(changes: dict, expected_revision: int) -> dict:
-    """Workspace 7: select target index; defaults/generate (gapGame, supportErrorGame, targetPoints); import pre-Elric JSON path against installed model; open saved profile; hull index/enabled; piece index/included controls prepared-world geometry and associated collision; view overlay/compare/isolated; save replaces this weapon/loadout/target profile; export to a local path; export-hulls converts enabled points into the selected magazine root for cooking; cancel worker. Saved profiles use source-local game units, not cooked Havok shapes."""
+    """Workspace 7: select target index; defaults/generate (gapGame, supportErrorGame, targetPoints); open saved profile; hull index/enabled; piece index/included controls prepared-world geometry and associated collision; view overlay/compare/isolated; save replaces this weapon/loadout/target profile; export to a local path; export-hulls converts enabled points into the selected magazine root for cooking; cancel worker. Saved profiles use source-local game units, not cooked Havok shapes."""
     return command('collisions', changes, expected_revision)
 
 @mcp.tool()
@@ -290,12 +290,6 @@ def mirror_magazine_grip(expected_revision: int) -> dict:
 def cancel_operation() -> dict:
     """Cancel the current source load or reload capture."""
     return command('cancel')
-
-@mcp.tool()
-def export_glock_runtime_slides() -> dict:
-    """Capture every available Glock 19X receiver/magazine pair into a native-rig slide pack for DIAMOND. Takes several minutes, restores the current project, and writes only to the local exports folder. Keep the editor idle during capture. Includes the complete sampled slide/barrel/follower stroke; no game deployment."""
-    from glock_slide_pack import export_glock_slide_pack
-    return export_glock_slide_pack(command)
 
 @mcp.tool()
 def import_authored_records(paths: list[str], expected_revision: int) -> dict:

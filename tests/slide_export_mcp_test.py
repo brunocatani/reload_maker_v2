@@ -22,8 +22,6 @@ async def run():
                 assert not result.isError, result
                 return json.loads(next(c.text for c in result.content if c.type == 'text'))
 
-            tools = await session.list_tools()
-            assert 'export_glock_runtime_slides' in {t.name for t in tools.tools}
             before = await call('get_state')
             assert not before['busy'] and not before['lastError']
             simulation = await call('export_authored_record', kind='simulation', expected_revision=before['revision'])

@@ -14,7 +14,6 @@ from server import command
 
 OUT = ROOT / 'local/collision-research'
 OUT.mkdir(parents=True, exist_ok=True)
-DIAMOND = ROOT.parents[1] / 'PROJECT_ROCK_V2/main_projects/DIAMOND'
 
 
 def edit(method, **params):
@@ -81,49 +80,32 @@ try:
 
     state = command('state')
     slot = next(s for s in state['slots'] if s['name'] == 'Magazine')
-    selected = next(c for c in slot['choices'] if c['id'] == slot['selected'])
-    variants = json.loads((DIAMOND / 'data/GlockMagazines.json').read_text(encoding='utf-8'))['magazines']
-    variant = next(v for v in variants if v['record'].lower() == selected['record'].lower())
-    source = DIAMOND / f"assets/collision/{variant['capacity']}-full.json"
-    imported = collision('import', path=str(source))
-    assert imported['origin'] == 'diamond-pre-elric-input' and imported['hullCount'] > 0
-    imported_path = OUT / 'glock-imported-magazine.json'
-    collision('export', path=str(imported_path))
-    exported = json.loads(imported_path.read_text(encoding='utf-8'))
-    legacy = json.loads(source.read_text(encoding='utf-8'))
-    assert exported['settings']['massKg'] == legacy['mass']
-    for a, b in zip(exported['hulls'], legacy['hulls']):
-        assert len(a['points']) == len(b['points'])
-        for p, q in zip(a['points'], b['points']):
-            assert max(abs(x-y) for x, y in zip(p, q)) < .00002, 'Source units/coordinates changed'
-    cook_path=OUT/'glock-root-hulls.json'
-    collision('export-hulls',path=str(cook_path))
-    native_hulls=json.loads(cook_path.read_text())
-    assert native_hulls['mass']==legacy['mass'] and len(native_hulls['hulls'])==len(legacy['hulls'])
-    for a,b in zip(native_hulls['hulls'],legacy['hulls']):
-        for p,q in zip(a['points'],b['points']):
-            assert max(abs(x-y) for x,y in zip(p,q))<.0001,'Cook input is not in the selected magazine frame'
-    collision('open', path=str(imported_path))
+    cook_path = OUT / 'glock-root-hulls.json'
+    collision('export-hulls', path=str(cook_path))
+    native_hulls = json.loads(cook_path.read_text(encoding='utf-8'))
+    assert len(native_hulls['hulls']) == sum(h['enabled'] for h in command('collision_state')['hulls'])
+    # An invalid saved profile leaves the current collision untouched.
     before = command('collision_state')
-    bad = dict(legacy, mass=-1)
+    bad = json.loads(path.read_text(encoding='utf-8'))
+    bad['hulls'][0]['source'] = 'missing'
     bad_path = OUT / 'invalid-collision.json'
     bad_path.write_text(json.dumps(bad), encoding='utf-8')
     try:
-        collision('import', path=str(bad_path))
+        collision('open', path=str(bad_path))
         raise AssertionError('Invalid collision accepted')
     except RuntimeError:
         assert command('collision_state')['hulls'] == before['hulls']
 
     collision('view', compare=True)
     images = [command('render', {'view': view, 'fit': True, 'preserveCamera': True})['path'] for view in ('side', 'iso')]
-    results['magazine'] = {k: imported[k] for k in ('hullCount', 'sourceCount', 'points', 'warnings')}
+    results['magazine'] = {k: magazine[k] for k in ('hullCount', 'sourceCount', 'points', 'warnings')}
     results['images'] = images
     other = next(c for c in slot['choices'] if c['id'] != slot['selected'])
     edit('configure', slot=slot['key'], mod=other['id'])
     ready()
     assert not command('collision_state')['valid'], 'Loadout rebuild retained stale collisions'
     try:
-        collision('open', path=str(imported_path))
+        collision('open', path=str(path))
         raise AssertionError('Mismatched magazine profile accepted')
     except RuntimeError:
         pass
@@ -140,4 +122,4 @@ finally:
 
 (OUT / 'native-results.json').write_text(json.dumps(results, indent=2), encoding='utf-8')
 print(json.dumps(results, indent=2))
-print('PASS native generation, pose isolation, magazine import, save/reload, invalid input, source change and rendering')
+print('PASS native generation, pose isolation, save/reload, cook input, invalid input, source change and rendering')
