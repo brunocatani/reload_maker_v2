@@ -130,6 +130,14 @@ class EditorRun:
             self.restored = restore(self.protected)
         return False
 
+    def relaunch_if_exited(self):
+        """Start a new editor if the current one has exited; return its exit code, or None if it still runs."""
+        code = self.process.poll()
+        if code is None:
+            return None
+        self.process = launch_editor()
+        return code
+
     def report(self):
         return {'restoredSessionFiles': self.restored,
                 'otherWorkspaceFilesWritten': files_written_since(ROOT / 'workspace', self.started)}
