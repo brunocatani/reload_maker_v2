@@ -8,6 +8,10 @@ set(DIST "${CMAKE_BINARY_DIR}/dist/ReloadMakerV2")
 set(RELOADMAKER_BACKEND_BUNDLE "" CACHE PATH "Locally staged portable native/Python backend bundle")
 set(RELOADMAKER_CONTENT_VALIDATOR "" CACHE FILEPATH "Validated DIAMOND content checker for portable export")
 file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/local/tmp")
+# The staged qmake project lists every application source, so adding or removing a
+# source file, or changing the staging script, must re-run this configure step.
+file(GLOB_RECURSE staged_application_files CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/*.cpp" "${CMAKE_SOURCE_DIR}/src/*.h")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/tools/prepare_build.py")
 execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/prepare_build.py" "${NIFSKOPE_SOURCE_DIR}" "${STAGED}" "${CMAKE_SOURCE_DIR}" COMMAND_ERROR_IS_FATAL ANY)
 add_custom_target(ReloadMakerV2 ALL
   COMMAND "${CMAKE_COMMAND}" -E env "PATH=${QT_BIN}\;C:/msys64/usr/bin\;$ENV{PATH}" "TEMP=${CMAKE_SOURCE_DIR}/local/tmp" "TMP=${CMAKE_SOURCE_DIR}/local/tmp" "${QT_BIN}/qmake6.exe" "${STAGED}/NifSkope.pro" "CONFIG+=release"
