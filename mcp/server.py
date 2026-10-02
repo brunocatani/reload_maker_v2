@@ -435,6 +435,15 @@ def get_installation() -> dict:
     return command('installation')
 
 @mcp.tool()
+def home(role: str = '') -> dict:
+    """Inspect first-run capabilities and the recent project. An optional creator
+    or player role saves the workspace's launch preference without opening a
+    window or changing its scene. Player pack building does not require CK or
+    source-scene setup. New collision cooking still requires the configured CK.
+    """
+    return command('home',dict(role=role) if role else {})
+
+@mcp.tool()
 def get_pack_coverage(refresh: bool = False) -> dict:
     """Show authored pack projects by source weapon. Refresh starts a background
     inventory job; poll pack_job until complete, then read this again. Includes

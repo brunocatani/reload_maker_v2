@@ -1,6 +1,7 @@
 #include "ReloadMakerController.h"
 #include "StudioWindow.h"
 #include "StudioPaths.h"
+#include "InstallationSetup.h"
 #include "SlotOverlay.h"
 #include "glview.h"
 #include "LoadoutView.h"
@@ -86,6 +87,7 @@ void ReloadMakerController::createUi() {
     auto* openProject = new QPushButton("Open project", header);
     auto* setupTools = new QPushButton("Setup && tools", header);header->addWidget(setupTools);
     connect(setupTools,&QPushButton::clicked,this,&ReloadMakerController::showSetup);
+    auto* home=new QPushButton("Home",header);header->addWidget(home);connect(home,&QPushButton::clicked,this,&ReloadMakerController::showHome);
     auto* roadmap=new QPushButton("Author reload",header);header->addWidget(roadmap);
     connect(roadmap,&QPushButton::clicked,this,&ReloadMakerController::showAuthoringRoadmap);
     auto* coverage=new QPushButton("Reload library",header);header->addWidget(coverage);connect(coverage,&QPushButton::clicked,this,&ReloadMakerController::showPackCoverage);
@@ -416,22 +418,16 @@ void ReloadMakerController::createSourceBar(QToolBar* bar) {
         if (!file.isEmpty()) { _packageText = file; openPackage(file); }
     });
     menu->addSeparator();
-    auto* library = menu->addAction("Load MO2 profile (all mods)");
-    connect(library, &QAction::triggered, this, &ReloadMakerController::startLibraryLoad);
-    connect(menu->addAction("Choose MO2 instance…"), &QAction::triggered, this, [this] {
-        const auto folder = QFileDialog::getExistingDirectory(_window, "Select MO2 instance", _mo2Instance);
-        if (folder.isEmpty()) return;
-        _mo2Instance = folder;
-        QSettings().setValue("paths/mo2Instance", folder);
-        startLibraryLoad();
-    });
+    auto* library = menu->addAction("Connect configured MO2 profile");
+    connect(library,&QAction::triggered,this,[this]{const auto check=checkInstallation(loadInstallationSetup());if(!check.gameReady||!check.profileReady)showSetup();else(void)connectInstalledProfile();});
+    connect(menu->addAction("Choose MO2 instance and profile…"),&QAction::triggered,this,&ReloadMakerController::showSetup);
     menu->addSeparator();
-    connect(menu->addAction("Game Data folder…"), &QAction::triggered, this, &ReloadMakerController::browseGameData);
+    connect(menu->addAction("Game and Creation Kit folders…"),&QAction::triggered,this,&ReloadMakerController::showSetup);
     connect(menu->addAction("Reload source files"), &QAction::triggered, this, [this] {
         if (_libraryMode) startLibraryLoad(); else openPackage(_packageText);
     });
     connect(menu, &QMenu::aboutToShow, this, [this, library] {
-        library->setText(QStringLiteral("Load MO2 profile (all mods) · %1").arg(QDir::toNativeSeparators(_mo2Instance)));
+        const auto setup=loadInstallationSetup();library->setText(QStringLiteral("Connect MO2 · %1").arg(setup.profile.isEmpty()?"choose a profile":setup.profile));
     });
     _sourceButton->setMenu(menu);
     bar->addWidget(_sourceButton);

@@ -222,7 +222,7 @@ namespace reloadmaker
             startPackageLoad(package, game);
         } else if (!game.isEmpty()) {
             startPackageLoad({}, game);
-        }else showSetup();
+        }else showHome();
     }
 
     void ReloadMakerController::browsePackage()
@@ -233,17 +233,6 @@ namespace reloadmaker
         if (!folder.isEmpty()) {
             _packageText = folder;
             openPackage(folder);
-        }
-    }
-
-    void ReloadMakerController::browseGameData()
-    {
-        const QString folder = QFileDialog::getExistingDirectory(
-            _window, QStringLiteral("Select Fallout 4 VR Data folder"),
-            _gameDataText, QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
-        if (!folder.isEmpty()) {
-            _gameDataText = folder;
-            setGameData(folder);
         }
     }
 

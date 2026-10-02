@@ -96,6 +96,7 @@ int main(int argc, char* argv[]) {
     qputenv("TMP", QDir(root).filePath("local/tmp").toUtf8());
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, QDir(root).filePath("local/settings"));
+    QSettings::setPath(QSettings::IniFormat, QSettings::SystemScope, QDir(root).filePath("local/system-settings"));
     const auto setup=reloadmaker::loadInstallationSetup();
     const auto installation=reloadmaker::checkInstallation(setup);
     app.setProperty("launchMo2Instance",parser.isSet("mo2-instance")?parser.value("mo2-instance"):setup.mo2Instance);
@@ -116,6 +117,7 @@ int main(int argc, char* argv[]) {
     }
     window->show();
     QTimer::singleShot(0, controller, [controller, &parser, root] {
+        if(parser.positionalArguments().isEmpty()&&!parser.isSet("library")&&QSettings().value("home/role").toString()=="player") {controller->showHome();return;}
         const QString project=QSettings().value("projects/lastProject",QDir(root).filePath("workspace/current.project.json")).toString();
         if (!parser.isSet("no-restore") && parser.positionalArguments().isEmpty() && !parser.isSet("library") && QFileInfo::exists(project)) {
             try { controller->executeCommand({{"method","open_project"},{"params",QJsonObject{{"path",project}}}}); }

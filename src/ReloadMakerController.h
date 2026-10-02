@@ -74,6 +74,7 @@ namespace reloadmaker
     public:
         explicit ReloadMakerController(StudioWindow* window);
         ~ReloadMakerController() override;
+        void showHome();
 
         void openInitialPaths(const QString& packagePath, const QString& gameDataPath,
                               const QString& mo2Instance = {}, bool library = false);
@@ -84,7 +85,6 @@ namespace reloadmaker
 
     private slots:
         void browsePackage();
-        void browseGameData();
         void rebuildWeapon();
         void selectAnimation(QListWidgetItem* item);
         void togglePlayback();
@@ -252,6 +252,8 @@ namespace reloadmaker
         bool _magazineWorldPreview{false};
         QJsonObject _preparedPart;
         void showAuthoringRoadmap();
+        QJsonObject homeState() const;
+        QJsonObject chooseHomeRole(const QString&);
         QString roadmapKey() const;
         QJsonObject roadmapState() const;
         QJsonArray roadmapProgress() const;

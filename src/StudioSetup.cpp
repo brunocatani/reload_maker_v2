@@ -47,7 +47,7 @@ void ReloadMakerController::showSetup() {
     };
     auto* game=browse("Game folder",current.gameRoot);
     auto* same=new QCheckBox("Creation Kit is in the game folder",&dialog);same->setChecked(current.sameToolsRoot);form->addRow(QString(),same);
-    auto* kit=browse("Creation Kit folder",current.creationKitRoot);kit->setEnabled(!same->isChecked());
+    auto* kit=browse("Creation Kit folder",current.creationKitRoot);kit->parentWidget()->setEnabled(!same->isChecked());
     auto* mo2=browse("MO2 instance folder",current.mo2Instance);
     auto* profiles=new QComboBox(&dialog);form->addRow("MO2 profile",profiles);
     auto* workspace=new QLabel(QDir::toNativeSeparators(studioRoot()),&dialog);workspace->setTextInteractionFlags(Qt::TextSelectableByMouse);form->addRow("Workspace",workspace);
@@ -65,7 +65,7 @@ void ReloadMakerController::showSetup() {
     const auto refreshProfiles=[&]{const auto previous=profiles->currentText().isEmpty()?current.profile:profiles->currentText();const QSignalBlocker block(profiles);profiles->clear();profiles->addItems(mo2Profiles(mo2->text()));const auto index=profiles->findText(previous);if(index>=0)profiles->setCurrentIndex(index);refresh();};
     connect(game,&QLineEdit::editingFinished,&dialog,refresh);connect(kit,&QLineEdit::editingFinished,&dialog,refresh);
     connect(mo2,&QLineEdit::editingFinished,&dialog,refreshProfiles);connect(profiles,qOverload<int>(&QComboBox::currentIndexChanged),&dialog,[&]{refresh();});
-    connect(same,&QCheckBox::toggled,&dialog,[&](bool enabled){kit->setEnabled(!enabled);refresh();});
+    connect(same,&QCheckBox::toggled,&dialog,[&](bool enabled){kit->parentWidget()->setEnabled(!enabled);refresh();});
     auto* buttons=new QDialogButtonBox(QDialogButtonBox::Save|QDialogButtonBox::Cancel,&dialog);layout->addWidget(buttons);
     auto* connectSource=buttons->addButton("Save and connect MO2",QDialogButtonBox::ActionRole);
     auto* packs=buttons->addButton("Build installed packs…",QDialogButtonBox::ActionRole);
@@ -79,7 +79,8 @@ void ReloadMakerController::showSetup() {
 bool ReloadMakerController::connectInstalledProfile() {
     const auto s=loadInstallationSetup();const auto c=checkInstallation(s);
     if(!c.gameReady||!c.profileReady){setStatus(c.errors.join('\n'),true);return false;}
-    if(!insideMo2VirtualFilesystem()||!_launchSnapshot.valid()||_launchSnapshot.profileName!=s.profile||QDir::cleanPath(_launchSnapshot.instancePath).compare(QDir::cleanPath(s.mo2Instance),Qt::CaseInsensitive)!=0){
+    if(!insideMo2VirtualFilesystem()||!_launchSnapshot.valid()||_launchSnapshot.profileName!=s.profile||QDir::cleanPath(_launchSnapshot.instancePath).compare(QDir::cleanPath(s.mo2Instance),Qt::CaseInsensitive)!=0||
+       QDir::cleanPath(_launchSnapshot.dataPath).compare(QDir::cleanPath(c.dataPath),Qt::CaseInsensitive)!=0||_launchSnapshot.fingerprint!=profileFingerprint(s.mo2Instance,c.profilePath)){
         if(!_profileHandoff.isEmpty()){setStatus("An MO2 connection is already starting.",true);return false;}
         if(_loadThread||_reloadCapturing||!saveSession()){setStatus("Finish the current load/capture and save the project before connecting.",true);return false;}
         const auto executable=QDir(s.mo2Instance).filePath("ModOrganizer.exe");
