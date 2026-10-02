@@ -193,7 +193,8 @@ namespace reloadmaker {
                     return id;
                 };
                 const auto remap = [&](QVector<std::uint32_t>& values) { for (auto& id : values) { id = resolve(id); } };
-                const auto winner = [&](std::uint32_t id) { result.origins[id].winner = plugin.fileName; };
+                const auto winner = [&](std::uint32_t id) { auto& origin=result.origins[id];origin.winner = plugin.fileName;
+                    if(!origin.contributors.contains(plugin.fileName,Qt::CaseInsensitive))origin.contributors.append(plugin.fileName); };
                 for (const auto raw : plugin.deletedRecords) {
                     const auto id = resolve(raw);
                     weapons.remove(id); sounds.remove(id);mods.remove(id); graphs.remove(id); result.keywordNames.remove(id);result.nodeRemaps.remove(id);result.ammoNames.remove(id); winner(id);
@@ -225,6 +226,8 @@ namespace reloadmaker {
                 for(auto sound:plugin.sounds){sound.formId=resolve(sound.formId);winner(sound.formId);sounds.insert(sound.formId,std::move(sound));}
                 for(auto it=plugin.ammoNames.cbegin();it!=plugin.ammoNames.cend();++it){const auto id=resolve(it.key());winner(id);result.ammoNames.insert(id,it.value());}
                 loaded.insert(plugin.fileName.toLower());
+                result.sourcePlugins.append(plugin.fileName);
+                result.sourceMasters.insert(plugin.fileName.toLower(),plugin.masters);
                 for (const auto& diagnostic : plugin.diagnostics) {
                     result.diagnostics.append(QStringLiteral("%1: %2").arg(plugin.fileName, diagnostic));
                 }
@@ -241,6 +244,45 @@ namespace reloadmaker {
             result.parsed = true;
         } catch (const std::exception& exception) { error = QString::fromUtf8(exception.what()); }
         return result;
+    }
+
+    QVector<PluginContent> includePackageMasters(const QVector<PluginContent>& plugins,const QString& dataPath,
+        const LibraryCancelled& cancelled,QString& error) {
+        QVector<PluginContent> result;QHash<QString,PluginContent> available;QSet<QString> done,visiting;error.clear();
+        for(const auto& plugin:plugins)available.insert(plugin.fileName.toLower(),plugin);
+        std::function<void(const QString&,const QString&)> add=[&](const QString& name,const QString& parentFolder){
+            if(cancelled&&cancelled())throw std::runtime_error("Cancelled");
+            const auto key=name.toLower();if(done.contains(key))return;
+            if(!leafName(name)||visiting.contains(key)||visiting.size()>64||result.size()>=256)throw std::runtime_error("Invalid or cyclic source master dependencies");
+            visiting.insert(key);auto plugin=available.value(key);
+            if(!available.contains(key)) {
+                const auto sibling=QDir(parentFolder).filePath(name);
+                plugin=EspReader::read(QFileInfo::exists(sibling)?sibling:QDir(dataPath).filePath(name),cancelled);
+            }
+            if(!plugin.parsed)throw std::runtime_error(("Required source master is unavailable: "+name+". "+plugin.diagnostics.join(';')).toStdString());
+            for(const auto& master:plugin.masters)add(master,QFileInfo(plugin.filePath).absolutePath());
+            visiting.remove(key);done.insert(key);result.append(std::move(plugin));
+        };
+        try{for(const auto& plugin:plugins)add(plugin.fileName,QFileInfo(plugin.filePath).absolutePath());}catch(const std::exception& e){error=e.what();result.clear();}
+        return result;
+    }
+
+    QStringList packageResourceLayers(const QVector<PluginContent>& plugins,const QStringList& roots) {
+        QStringList layers;
+        // A saved development source inherits only its masters' archives. Scanning
+        // the whole virtual Data directory would silently import unrelated MO2
+        // skeleton/animation replacements into the saved testbed.
+        for(const auto& plugin:plugins) {
+            const QFileInfo file(plugin.filePath);const auto stem=file.completeBaseName();
+            const QDir folder=file.absoluteDir();
+            for(const auto& archive:folder.entryList({"*.ba2"},QDir::Files,QDir::Name)) {
+                const auto name=QFileInfo(archive).completeBaseName();
+                if(name.compare(stem,Qt::CaseInsensitive)!=0&&!name.startsWith(stem+" - ",Qt::CaseInsensitive))continue;
+                const auto path=folder.filePath(archive);if(!layers.contains(path,Qt::CaseInsensitive))layers.append(path);
+            }
+        }
+        for(const auto& root:roots)if(!layers.contains(root,Qt::CaseInsensitive))layers.append(root);
+        return layers;
     }
 
     LoadOrderLibrary loadOrderLibrary(const LoadOrderSnapshot& snapshot,

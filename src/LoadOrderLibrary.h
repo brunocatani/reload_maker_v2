@@ -46,6 +46,9 @@ namespace reloadmaker {
     // The merger owns stable internal IDs, never guessed runtime FormIDs. A
     // source FormID is resolved using THAT plugin's MAST table, including ESLs.
     [[nodiscard]] PluginContent mergeLoadOrder(const QVector<PluginContent>& plugins, QString& error);
+    [[nodiscard]] QVector<PluginContent> includePackageMasters(const QVector<PluginContent>& plugins,
+        const QString& dataPath, const LibraryCancelled& cancelled, QString& error);
+    [[nodiscard]] QStringList packageResourceLayers(const QVector<PluginContent>& plugins,const QStringList& roots);
     [[nodiscard]] LoadOrderLibrary loadOrderLibrary(const LoadOrderSnapshot& snapshot,
         const LibraryProgress& progress, const LibraryCancelled& cancelled);
 }

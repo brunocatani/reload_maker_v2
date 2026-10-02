@@ -207,17 +207,18 @@ bool ReloadMakerController::selectTestbed(const QString& name) {
     if(name!="glock"&&name!="ru556"&&name!="m1a"&&name!="timberwolf"&&name!="l118a2"&&name!="thanatos"&&name!="mk18"&&name!="mk18-empire"&&
        name!="srep-service"&&name!="srep-honeybadger"&&name!="srep-ar10"&&name!="srep-xm16e1"){setStatus("Unknown weapon testbed.",true);return false;}
     const auto current=currentTestbed();
-    if(current==name){setWorkspace(OperateWorkspace);return true;}
-    if(!current.isEmpty()) {
-        const auto path=_sessionPath.isEmpty()?testbedProject(current):_sessionPath;
-        if(!saveSession(path))return false;
-        QSettings().setValue("testbeds/"+current,path);
-    }
     const auto defaultProject=testbedProject(name);
     const auto project=QSettings().value("testbeds/"+name,defaultProject).toString();
     if(!QFileInfo::exists(project)){setStatus("Open and save the "+name+" project before selecting this testbed.",true);return false;}
+    if(current==name&&!_libraryMode&&QFileInfo(_sessionPath).absoluteFilePath()==QFileInfo(project).absoluteFilePath()){setWorkspace(OperateWorkspace);alignPluginToWeapon();refreshWeaponPicker();return true;}
+    if(!saveSession())return false;
+    if(!current.isEmpty()&&!_libraryMode)QSettings().setValue("testbeds/"+current,_sessionPath);
     openSession(project);
-    if(!_pendingSession.isEmpty())_pendingSession["workspace"]=OperateWorkspace;
+    if(!_pendingSession.isEmpty()) {
+        _pendingSession["workspace"]=OperateWorkspace;
+        if(!_testbedSourcesLoaded)refreshDevelopmentSources();
+        for(const auto& value:_testbedSources){const auto entry=value.toObject();if(entry["id"]==name){_pendingSession["browserPlugin"]=entry["plugin"];break;}}
+    }
     return _lastError.isEmpty();
 }
 }

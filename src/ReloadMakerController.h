@@ -26,6 +26,7 @@
 #include "ScopeProfile.h"
 
 #include <QHash>
+#include <QJsonArray>
 #include <QCache>
 #include <QSharedPointer>
 #include <QElapsedTimer>
@@ -58,6 +59,7 @@ class QButtonGroup;
 class QToolButton;
 class QToolBar;
 class QAction;
+class QMenu;
 class QProcess;
 
 namespace reloadmaker
@@ -314,7 +316,19 @@ namespace reloadmaker
         void advanceSimulation(float delta);
         void setSimulationTrigger(bool pressed);
         bool selectTestbed(const QString& name);
-        QComboBox* _testbedPicker{nullptr};
+        QJsonArray _testbedSources;
+        bool _testbedSourcesLoaded{false};
+        void refreshDevelopmentSources();
+        bool selectSourcePlugin(const QString& plugin);
+        bool selectSourceWeapon(int index);
+        bool selectSourceMode(const QString& mode);
+        QStringList selectionPlugins(int index) const;
+        QStringList sourcePluginOrder() const;
+        QStringList sourcePluginMasters(const QString& plugin) const;
+        void updatePluginColors();
+        void alignPluginToWeapon();
+        QJsonObject sourceBrowserState() const;
+        QString _browserSourceKey;
         QVector<Transformf> _rifleBoltCycle;
         int _rifleBoltOpen{0};
         float _rifleBoltDuration{0},_rifleFireInterval{0},_rifleSingleDuration{0};
@@ -795,11 +809,8 @@ namespace reloadmaker
         QString _mo2Instance;
         QString _requestedMo2Profile;
         QString _profileHandoff;
-        QToolButton* _sourceButton{nullptr};
+        QMenu* _sourceMenu{nullptr};
         QLabel* _sourceLabel{nullptr};
-        QLabel* _pluginLabel{nullptr};
-        QAction* _pluginAction{nullptr};
-        QAction* _pluginFilterAction{nullptr};
         QComboBox* _weaponPicker{nullptr};
         QComboBox* _clipCombo{nullptr};
         QLabel* _loadoutTitle{nullptr};

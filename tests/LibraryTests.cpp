@@ -153,6 +153,31 @@ namespace {
         write(dir.filePath("fallout4custom.ini"),"[General]\nsLanguage=de\n");
         require(sourceLanguage({dir.filePath("fallout4.ini"),dir.filePath("fallout4custom.ini")})=="de","source profile language precedence ignored");
     }
+    void dependencyBrowserTests() {
+        QTemporaryDir dir;
+        const auto masterField=[](const char* name){QByteArray data(name);data.append('\0');QByteArray sub("MAST");const auto size=qToLittleEndian(quint16(data.size()));sub.append(reinterpret_cast<const char*>(&size),2);return sub+data;};
+        write(dir.filePath("Base.esm"),record("TES4",0)+record("WEAP",0x123));
+        write(dir.filePath("Addon.esm"),record("TES4",0,0,masterField("Base.esm"))+record("WEAP",0x123));
+        write(dir.filePath("Patch.esl"),record("TES4",0,0,masterField("Base.esm")+masterField("Addon.esm"))+record("WEAP",0x123));
+        QString error;const auto root=EspReader::read(dir.filePath("Patch.esl"));
+        const auto loaded=includePackageMasters({root},dir.filePath("unused Data"),{},error);
+        require(error.isEmpty()&&loaded.size()==3,"sibling/transitive masters were not auto-loaded");
+        require(loaded[0].fileName=="Base.esm"&&loaded[1].fileName=="Addon.esm"&&loaded[2].fileName=="Patch.esl","master order is not dependency-first");
+        const auto catalog=mergeLoadOrder(loaded,error);
+        require(error.isEmpty()&&catalog.weapons.size()==1,"winning override duplicated its base weapon");
+        const auto origin=catalog.origins.value(catalog.weapons[0].formId);
+        require(origin.winner=="Patch.esl"&&origin.contributors==QStringList({"Base.esm","Addon.esm","Patch.esl"}),"intermediate ESP membership or winning order lost");
+        require(catalog.sourcePlugins==origin.contributors&&catalog.sourceMasters.value("patch.esl")==QStringList({"Base.esm","Addon.esm"}),"browser source/master metadata lost");
+        for(const auto* archive:{"Base - Main.ba2","Addon - Main.ba2","Unrelated - Animations.ba2"})write(dir.filePath(archive),{});
+        const QStringList roots{dir.filePath("explicit source")};const auto layers=packageResourceLayers(loaded,roots);
+        require(layers==QStringList({dir.filePath("Base - Main.ba2"),dir.filePath("Addon - Main.ba2"),roots[0]}),"development source inherited unrelated Data assets or lost master priority");
+        auto missing=root;missing.masters={"Absent.esm"};
+        require(includePackageMasters({missing},dir.path(),{},error).isEmpty()&&error.contains("Absent.esm"),"missing master was silently skipped");
+        auto cycle=root;cycle.masters={cycle.fileName};
+        require(includePackageMasters({cycle},dir.path(),{},error).isEmpty()&&error.contains("cyclic"),"cyclic masters accepted");
+        const auto package=PackageSource::prepare(dir.filePath("Patch.esl"));
+        require(package.ok()&&package.plugins==QStringList({QFileInfo(root.filePath).canonicalFilePath()}),"single-plugin source cannot be opened");
+    }
     void profileTests() {
         QTemporaryDir dir;
         const auto instance = dir.filePath("MO2");
@@ -241,7 +266,7 @@ namespace {
 int main(int argc, char** argv) {
     QCoreApplication app(argc, argv);
     try {
-        mergeTests(); readerTests(); profileTests(); weaponNamesAndAdmission(); resourceTests();
+        mergeTests(); readerTests(); profileTests(); weaponNamesAndAdmission(); dependencyBrowserTests(); resourceTests();
         if (app.arguments().value(1) == "--archive") { realArchiveTest(app.arguments()); return 0; }
         QVector<PluginContent> parsed;
         const bool merge = app.arguments().contains("--merge");

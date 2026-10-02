@@ -92,6 +92,8 @@ bool ReloadMakerController::saveSession(const QString& requested) {
         {"hand",_handPoseSide->currentData().toInt()},{"fingerJoint",_fingerJoint->currentIndex()},
         {"selectedHandPose",selectedHandPose()?selectedHandPose()->id:QString()}};
     QJsonObject choices;
+    const auto sourcePlugins=selectionPlugins(_weaponCombo->currentIndex());
+    if(!sourcePlugins.isEmpty())record["browserPlugin"]=sourcePlugins.contains(_pluginFilter->currentData().toString(),Qt::CaseInsensitive)?_pluginFilter->currentData().toString():sourcePlugins.first();
     if (const auto* config = configuration()) for (const auto& slot : config->entries()) choices[QString::number(slot.key)] = QString::number(config->selected(slot.key));
     record["choices"] = choices;
     record["authoringRoadmaps"]=_authoringRoadmaps;
@@ -269,14 +271,15 @@ void ReloadMakerController::restoreSessionSelection() {
     int selected = -1;
     for (int i = 0; i < _weaponSelections.size(); ++i) {
         const QSignalBlocker block(_weaponCombo); _weaponCombo->setCurrentIndex(i);
-        if (currentWeapon() && poseRecordKey(currentWeapon()->formId) == record["weapon"].toString()) { selected = i; break; }
+        if (currentWeapon() && poseRecordKey(currentWeapon()->formId) == record["weapon"].toString()&&
+            (record["browserPlugin"].toString().isEmpty()||selectionPlugins(i).contains(record["browserPlugin"].toString(),Qt::CaseInsensitive))) { selected = i; break; }
     }
     if (selected < 0) {
         {const QSignalBlocker block(_weaponCombo);_weaponCombo->setCurrentIndex(-1);}
         refreshWeaponPicker();
         setStatus("The project weapon is absent or excluded from this source's player-weapon library. See Diagnostics for exclusion reasons.",true);return;
     }
-    refreshWeaponPicker();
+    alignPluginToWeapon();refreshWeaponPicker();
     { const QSignalBlocker block(_bodyCombo); _bodyCombo->setCurrentIndex(std::max(0,_bodyCombo->findData(record["body"].toString()))); }
     refreshAttachments(); refreshConfigurationChoices();
     if (auto* config = configuration()) {

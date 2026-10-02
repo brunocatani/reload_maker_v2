@@ -471,12 +471,8 @@ void ReloadMakerController::releaseSimulation(bool cancel) {
     updateSimulationControls();++_revision;
 }
 void ReloadMakerController::updateSimulationControls() {
-    if(_testbedPicker) {
-        const QSignalBlocker block(_testbedPicker);
-        _testbedPicker->setCurrentIndex(std::max(0,_testbedPicker->findData(currentTestbed())));
-        _testbedPicker->setEnabled(!_loadThread&&!_reloadCapturing&&!_rebuildTimer->isActive());
-    }
     if(!_simulationStatus)return;
+    _simulationDock->widget()->setEnabled(currentWeapon()!=nullptr);
     updateInteractionGripUi();
     const bool native=_simulation.action==SimulationAction::Fire||_simulation.action==SimulationAction::Reload;
     const bool busy=native||_simulation.magazine.busy();
@@ -508,7 +504,7 @@ void ReloadMakerController::updateSimulationControls() {
     _magazineGrab->setEnabled(magazineReady&&_simulation.ammoKnown()&&!_simulation.magazine.seated());
     _simulationReset->setEnabled(_simulationActive);
     if(!_simulationActive) {
-        const QString idle=_reloadCapturing?"Learning the native reload…":_clip.valid()&&simulationWorkspace(_workspace)&&_reloadRecipe?"Press any action to operate the weapon.":"Preparing native part motion…";
+        const QString idle=!currentWeapon()?"Choose a plugin, then a weapon above.":_reloadCapturing?"Learning the native reload…":_clip.valid()&&simulationWorkspace(_workspace)&&_reloadRecipe?"Press any action to operate the weapon.":"Preparing native part motion…";
         _simulationStatus->setText(_simulationError.isEmpty()?idle:_simulationError);_simulationParts->clear();return;
     }
     // Compact state card: the numbers the user acts on, then the phase text.

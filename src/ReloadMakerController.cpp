@@ -292,33 +292,31 @@ namespace reloadmaker
                     result->package = PackageSource::prepare(path);
                     if (!result->package.ok()) { result->error = result->package.error; return; }
                     progress(QStringLiteral("Indexing package resources…"));
+                    QVector<PluginContent> catalogs;
                     if(!result->package.plugins.isEmpty()) {
-                        auto roots=result->package.roots;if(!dataPath.isEmpty()&&!roots.contains(data))roots.prepend(data);
-                        if(!result->package.resourceData.isEmpty()) {if(!result->resources.openLoadOrder(result->package.resourceData,result->package.archives,result->error,{},cancelled))return;}
-                        else if(!result->resources.openPackages(roots,result->error))return;
-                        // Reuse the same canonical form-key merger as MO2;
-                        // source packs are explicitly ordered, never guessed.
-                        QVector<PluginContent> catalogs;
-                        const bool containsBase=std::any_of(result->package.plugins.begin(),result->package.plugins.end(),[](const auto& file){return QFileInfo(file).fileName().compare("Fallout4.esm",Qt::CaseInsensitive)==0;});
-                        if(!dataPath.isEmpty()&&!containsBase)catalogs.append(EspReader::read(QDir(data).filePath("Fallout4.esm"),cancelled,true));
                         for(const auto& file:result->package.plugins)catalogs.append(EspReader::read(file,cancelled));
-                        const QDir game(QFileInfo(data).absolutePath());
-                        const auto language=sourceLanguage({game.filePath("Fallout4_Default.ini"),game.filePath("Fallout4.ini")});
-                        for(auto& plugin:catalogs)EspReader::resolveNames(plugin,language,[&](const QString& p,QString& error){return result->resources.read(p,error);});
-                        auto merged=mergeLoadOrder(catalogs,result->error);if(!result->error.isEmpty())return;
-                        merged.fileName="Local source pack";result->plugins.append(std::move(merged));
                     } else {
-                    if (!result->resources.open(result->package.rootPath, result->error)) { return; }
-                    QDirIterator iterator(result->package.rootPath, {"*.esp", "*.esm", "*.esl"}, QDir::Files, QDirIterator::Subdirectories);
-                    while (iterator.hasNext() && !cancelled()) {
-                        const auto pluginPath = iterator.next();
-                        progress(QStringLiteral("Reading %1").arg(QFileInfo(pluginPath).fileName()));
-                        result->plugins.append(EspReader::read(pluginPath, cancelled));
+                        QDirIterator iterator(result->package.rootPath, {"*.esp", "*.esm", "*.esl"}, QDir::Files, QDirIterator::Subdirectories);
+                        while (iterator.hasNext() && !cancelled()) {
+                            const auto pluginPath = iterator.next();
+                            progress(QStringLiteral("Reading %1").arg(QFileInfo(pluginPath).fileName()));
+                            catalogs.append(EspReader::read(pluginPath, cancelled));
+                        }
+                    }
+                    catalogs=includePackageMasters(catalogs,data,cancelled,result->error);if(!result->error.isEmpty())return;
+                    if(!result->package.resourceData.isEmpty()) {
+                        if(!result->resources.openLoadOrder(result->package.resourceData,result->package.archives,result->error,{},cancelled))return;
+                    } else {
+                        const auto roots=result->package.roots.isEmpty()?QStringList{result->package.rootPath}:result->package.roots;
+                        if(!result->resources.openPackages(packageResourceLayers(catalogs,roots),result->error))return;
                     }
                     const QDir game(QFileInfo(data).absolutePath());
                     const auto language=sourceLanguage({game.filePath("Fallout4_Default.ini"),game.filePath("Fallout4.ini")});
-                    for(auto& plugin:result->plugins)EspReader::resolveNames(plugin,language,[&](const QString& p,QString& error){return result->resources.read(p,error);});
-                    }
+                    for(auto& plugin:catalogs)EspReader::resolveNames(plugin,language,[&](const QString& p,QString& error){return result->resources.read(p,error);});
+                    if(!result->package.plugins.isEmpty()) {
+                        auto merged=mergeLoadOrder(catalogs,result->error);if(!result->error.isEmpty())return;
+                        merged.fileName="Local source pack";result->plugins.append(std::move(merged));
+                    } else result->plugins=std::move(catalogs);
                     QSet<QString> readCatalogs;
                     for(const auto& plugin:result->plugins)for(const auto& master:plugin.masters) {
                         if(readCatalogs.contains(master.toLower())||cancelled())continue;
@@ -413,9 +411,10 @@ namespace reloadmaker
         QStringList counts;for(auto it=reasons.begin();it!=reasons.end();++it)counts.append(it.key()+"="+QString::number(it.value().toInt()));
         appendDiagnostic(QString("WEAPON LIBRARY: %1 shown / %2 records; %3 excluded. %4. Playable melee retained.")
             .arg(_weaponSelections.size()).arg(total).arg(hidden).arg(counts.join("; ")));
-        if (_libraryMode||!_package.resourceData.isEmpty()) { _weaponCombo->setCurrentIndex(-1); }
+        _weaponCombo->setCurrentIndex(-1); // Source -> plugin -> weapon; never select an unrelated first record.
         refreshAttachments();
         refreshConfigurationChoices();
+        updateSimulationControls();
         if (_pendingSession.isEmpty() && _weaponCombo->currentIndex() >= 0 && !_gameData.isEmpty()) {
             _rebuildTimer->start();
         }
@@ -1190,6 +1189,7 @@ namespace reloadmaker
         refreshPartGripChoices();
         refreshPartGripList();
         updateHandPoseControls();
+        updateSimulationControls();
     }
 
     QByteArray ReloadMakerController::nifBytes(const ResourceArchive& archive,

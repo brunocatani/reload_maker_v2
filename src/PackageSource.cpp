@@ -228,6 +228,10 @@ namespace reloadmaker
             }
             return packageReady(canonical, canonical);
         }
+        if(info.isFile()&&(info.suffix().compare("esp",Qt::CaseInsensitive)==0||info.suffix().compare("esm",Qt::CaseInsensitive)==0||info.suffix().compare("esl",Qt::CaseInsensitive)==0)) {
+            auto result=packageReady(info.canonicalPath(),info.canonicalFilePath());
+            result.plugins={info.canonicalFilePath()};result.roots={info.canonicalPath()};result.displayName=info.fileName();return result;
+        }
         if (info.isFile() && info.suffix().compare(QStringLiteral("zip"), Qt::CaseInsensitive) == 0) {
             return prepareZip(info.canonicalFilePath());
         }
@@ -258,7 +262,7 @@ namespace reloadmaker
             }
             return result;
         }
-        return packageError(path, QStringLiteral("Select a mod folder, ZIP or .reloadsources.json source pack"));
+        return packageError(path, QStringLiteral("Select a plugin, mod folder, ZIP or .reloadsources.json source pack"));
     }
 
     PreparedPackage PackageSource::prepareZip(const QString& path)
@@ -409,7 +413,7 @@ namespace reloadmaker
 
     bool ResourceArchive::openPackages(const QStringList& roots,QString& error) {
         close();error.clear();
-        if(roots.isEmpty()||roots.size()>17){error="Invalid package layer count";return false;}
+        if(roots.isEmpty()||roots.size()>1024){error="Invalid package layer count";return false;}
         for(const auto& root:roots) {
             auto layer=std::make_unique<ResourceArchive>();
             if(!layer->open(root,error)){close();return false;}

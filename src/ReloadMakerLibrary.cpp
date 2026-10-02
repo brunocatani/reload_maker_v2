@@ -1,4 +1,5 @@
 #include "ReloadMakerController.h"
+#include <QMenu>
 #include "LibraryResources.h"
 #include "StudioWindow.h"
 #include "model/nifmodel.h"
@@ -42,7 +43,7 @@ namespace reloadmaker {
             _playing = false; _playbackTimer->stop(); _rebuildTimer->stop();
             _playButton->setText(QStringLiteral("PLAY"));
         }
-        if (_sourceButton) _sourceButton->setEnabled(!loading);
+        if (_sourceMenu) _sourceMenu->setEnabled(!loading);
         if (_weaponPicker) _weaponPicker->setEnabled(!loading && _weaponPicker->count() > 0);
         if (_pluginFilter) _pluginFilter->setEnabled(!loading);
         _pages->setTabEnabled(kLoadoutPage, !loading);

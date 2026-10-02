@@ -67,9 +67,23 @@ void ReloadMakerController::createUi() {
     header->setMovable(false);
     header->setObjectName("WorkflowHeader");
     _window->addToolBar(Qt::TopToolBarArea, header);
-    auto* brand = new QLabel("RELOAD <span style='color:#7f9699'>/ V2</span>", header);
-    brand->setObjectName("Brand");
-    header->addWidget(brand);
+    auto* menuButton = new QToolButton(header);
+    menuButton->setText("MENU");menuButton->setObjectName("MainMenuButton");menuButton->setPopupMode(QToolButton::InstantPopup);
+    auto* mainMenu=new QMenu(menuButton);mainMenu->setObjectName("MainMenu");menuButton->setMenu(mainMenu);header->addWidget(menuButton);
+    _sourceMenu=mainMenu->addMenu("Source");_sourceMenu->setObjectName("SourceMenu");
+    auto* dynamicSource=_sourceMenu->addAction("Dynamic source · MO2");dynamicSource->setCheckable(true);
+    auto* developmentSource=_sourceMenu->addAction("Development source · Testbeds");developmentSource->setCheckable(true);
+    connect(dynamicSource,&QAction::triggered,this,[this]{(void)selectSourceMode("dynamic");});
+    connect(developmentSource,&QAction::triggered,this,[this]{(void)selectSourceMode("development");});
+    _sourceMenu->addSeparator();
+    connect(_sourceMenu->addAction("Open ESP / ESL / ESM…"),&QAction::triggered,this,[this]{const auto path=QFileDialog::getOpenFileName(_window,"Open source plugin",_packageText,"Bethesda plugins (*.esp *.esl *.esm)");if(!path.isEmpty())openPackage(path);});
+    connect(_sourceMenu->addAction("Open mod folder…"),&QAction::triggered,this,&ReloadMakerController::browsePackage);
+    connect(_sourceMenu->addAction("Open mod ZIP…"),&QAction::triggered,this,[this]{const auto path=QFileDialog::getOpenFileName(_window,"Open mod ZIP",_packageText,"ZIP archives (*.zip)");if(!path.isEmpty())openPackage(path);});
+    connect(_sourceMenu->addAction("Open ordered source set…"),&QAction::triggered,this,[this]{const auto path=QFileDialog::getOpenFileName(_window,"Open ordered source set",studioDataPath("workspace"),"Source set (*.reloadsources.json)");if(!path.isEmpty())openPackage(path);});
+    connect(_sourceMenu->addAction("Open base game and loose Data"),&QAction::triggered,this,[this]{(void)openBaseGame();});
+    _sourceMenu->addSeparator();
+    connect(_sourceMenu->addAction("Reload source files"),&QAction::triggered,this,[this]{if(_libraryMode)startLibraryLoad();else openPackage(_packageText);});
+    connect(_sourceMenu,&QMenu::aboutToShow,this,[this,dynamicSource,developmentSource]{dynamicSource->setChecked(_libraryMode);developmentSource->setChecked(!_libraryMode&&!_package.sourcePath.isEmpty());});
     _workspaceButtons = new QButtonGroup(this);
     // Stable workspace ids are persisted in projects and used by MCP clients;
     // display order is independent of the id.
@@ -85,29 +99,22 @@ void ReloadMakerController::createUi() {
     auto* spacer = new QWidget(header);
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     header->addWidget(spacer);
-    auto* openProject = new QPushButton("Open project", header);
-    auto* setupTools = new QPushButton("Setup && tools", header);header->addWidget(setupTools);
-    connect(setupTools,&QPushButton::clicked,this,&ReloadMakerController::showSetup);
-    auto* home=new QPushButton("Home",header);header->addWidget(home);connect(home,&QPushButton::clicked,this,&ReloadMakerController::showHome);
-    auto* roadmap=new QPushButton("Author reload",header);header->addWidget(roadmap);
-    connect(roadmap,&QPushButton::clicked,this,&ReloadMakerController::showAuthoringRoadmap);
-    auto* coverage=new QPushButton("Reload library",header);header->addWidget(coverage);connect(coverage,&QPushButton::clicked,this,&ReloadMakerController::showPackCoverage);
-    auto* saveProject = new QToolButton(header);
-    saveProject->setText("Save project");
-    saveProject->setPopupMode(QToolButton::MenuButtonPopup);
-    auto* saveMenu = new QMenu(saveProject);
-    auto* saveAs = saveMenu->addAction("Save project as…");
+    mainMenu->addSeparator();
+    connect(mainMenu->addAction("Setup && tools…"),&QAction::triggered,this,&ReloadMakerController::showSetup);
+    connect(mainMenu->addAction("Home"),&QAction::triggered,this,&ReloadMakerController::showHome);
+    connect(mainMenu->addAction("Author reload…"),&QAction::triggered,this,&ReloadMakerController::showAuthoringRoadmap);
+    connect(mainMenu->addAction("Reload library…"),&QAction::triggered,this,&ReloadMakerController::showPackCoverage);
+    mainMenu->addSeparator();
+    auto* openProject=mainMenu->addAction("Open project…");
+    auto* saveProject=mainMenu->addAction("Save project");
+    auto* saveAs = mainMenu->addAction("Save project as…");
     saveAs->setShortcut(QKeySequence::SaveAs);
-    saveProject->setMenu(saveMenu);
     connect(saveAs,&QAction::triggered,this,[this] {
         const auto path=QFileDialog::getSaveFileName(_window,"Save Reload Maker project",suggestedSessionPath(),"Reload Maker project (*.json)");
         if(!path.isEmpty())saveSession(path);
     });
-    auto* importRecords = new QPushButton("Import", header);
-    auto* exportRecords = new QToolButton(header);
-    exportRecords->setText("Export");
-    exportRecords->setPopupMode(QToolButton::InstantPopup);
-    auto* exportMenu = new QMenu(exportRecords);
+    auto* importRecords = mainMenu->addAction("Import…");
+    auto* exportMenu = mainMenu->addMenu("Export");
     connect(exportMenu->addAction("Save selected configuration to pack…"),&QAction::triggered,this,&ReloadMakerController::showConfigurationSaver);
     connect(exportMenu->addAction("Complete DIAMOND reload pack…"),&QAction::triggered,this,&ReloadMakerController::showPackExporter);
     exportMenu->addSeparator();
@@ -121,7 +128,6 @@ void ReloadMakerController::createUi() {
             catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}
         });
     }
-    exportRecords->setMenu(exportMenu);
     connect(exportMenu->addAction("True Scopes profile"),&QAction::triggered,this,[this]{
         try{(void)exportScopeProfile();}catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}
     });
@@ -129,11 +135,10 @@ void ReloadMakerController::createUi() {
         try{const auto result=executeCommand({{"method","export"},{"params",QJsonObject{{"kind","sounds"}}}});setStatus("Exported · "+result["path"].toString());}
         catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}
     });
-    auto* diagnostics = new QPushButton("Diagnostics", header);
+    mainMenu->addSeparator();
+    auto* diagnostics = mainMenu->addAction("Diagnostics");
     diagnostics->setCheckable(true);
-    for (QWidget* b : std::initializer_list<QWidget*>{openProject, saveProject, importRecords, diagnostics}) header->addWidget(b);
-    header->addWidget(exportRecords);
-    connect(importRecords,&QPushButton::clicked,this,[this] {
+    connect(importRecords,&QAction::triggered,this,[this] {
         const auto paths=QFileDialog::getOpenFileNames(_window,"Import existing poses, grips, mechanisms or reload recipes",studioDataPath("workspace"),"Authoring records (*.json)");
         if(paths.isEmpty())return;
         QJsonArray files;for(const auto& path:paths)files.append(path);
@@ -262,6 +267,7 @@ void ReloadMakerController::createUi() {
 
         connect(_weaponCombo, qOverload<int>(&QComboBox::currentIndexChanged),
                 this, [this](int selectedIndex) {
+                    alignPluginToWeapon();
                     if(beginWeaponProject(selectedIndex))return;
                     refreshWeaponPicker();
                     refreshAttachments();
@@ -391,9 +397,10 @@ void ReloadMakerController::createUi() {
         _showPartLabels=show;if(_slotOverlay)_slotOverlay->setActive(show&&_pages->currentIndex()==kLoadoutPage);
     });
     connect(_workspaceButtons, &QButtonGroup::idClicked, this, &ReloadMakerController::setWorkspace);
-    connect(diagnostics, &QPushButton::toggled, _detailsDock, &QWidget::setVisible);
-    connect(saveProject, &QToolButton::clicked, this, [this] { saveSession(); });
-    connect(openProject, &QPushButton::clicked, this, [this] {
+    connect(diagnostics, &QAction::toggled, _detailsDock, &QWidget::setVisible);
+    connect(_detailsDock,&QDockWidget::visibilityChanged,diagnostics,&QAction::setChecked);
+    connect(saveProject, &QAction::triggered, this, [this] { saveSession(); });
+    connect(openProject, &QAction::triggered, this, [this] {
         const QString path = QFileDialog::getOpenFileName(_window, "Open Reload Maker project", studioDataPath("workspace"), "Reload Maker project (*.json)");
         if (!path.isEmpty()) openSession(path);
     });
@@ -405,152 +412,6 @@ void ReloadMakerController::createUi() {
         auto* shortcut = new QShortcut(QKeySequence(QString("Ctrl+%1").arg(i+1)), _window);
         connect(shortcut, &QShortcut::activated, this, [this, id = workspaces[i].second] { setWorkspace(id); });
     }
-}
-
-void ReloadMakerController::createSourceBar(QToolBar* bar) {
-    _mo2Instance = QSettings().value("paths/mo2Instance").toString();
-    _sourceButton = new QToolButton(bar);
-    _sourceButton->setText("SOURCE");
-    _sourceButton->setObjectName("SourceButton");
-    _sourceButton->setPopupMode(QToolButton::InstantPopup);
-    auto* menu = new QMenu(_sourceButton);
-    connect(menu->addAction("Open base game and loose Data"),&QAction::triggered,this,[this]{(void)openBaseGame();});
-    connect(menu->addAction("Open mod folder…"), &QAction::triggered, this, &ReloadMakerController::browsePackage);
-    connect(menu->addAction("Open mod ZIP…"), &QAction::triggered, this, [this] {
-        const QString file = QFileDialog::getOpenFileName(_window, "Open mod ZIP", _packageText, "ZIP archives (*.zip)");
-        if (!file.isEmpty()) { _packageText = file; openPackage(file); }
-    });
-    menu->addSeparator();
-    auto* library = menu->addAction("Connect configured MO2 profile");
-    connect(library,&QAction::triggered,this,[this]{const auto check=checkInstallation(loadInstallationSetup());if(!check.gameReady||!check.profileReady)showSetup();else(void)connectInstalledProfile();});
-    connect(menu->addAction("Choose MO2 instance and profile…"),&QAction::triggered,this,&ReloadMakerController::showSetup);
-    menu->addSeparator();
-    connect(menu->addAction("Game and Creation Kit folders…"),&QAction::triggered,this,&ReloadMakerController::showSetup);
-    connect(menu->addAction("Reload source files"), &QAction::triggered, this, [this] {
-        if (_libraryMode) startLibraryLoad(); else openPackage(_packageText);
-    });
-    connect(menu, &QMenu::aboutToShow, this, [this, library] {
-        const auto setup=loadInstallationSetup();library->setText(QStringLiteral("Connect MO2 · %1").arg(setup.profile.isEmpty()?"choose a profile":setup.profile));
-    });
-    _sourceButton->setMenu(menu);
-    bar->addWidget(_sourceButton);
-    bar->addWidget(new QLabel("  Testbed",bar));
-    _testbedPicker=new QComboBox(bar);
-    _testbedPicker->addItem("Current source",QString());
-    _testbedPicker->addItem("Glock · pistol",QString("glock"));
-    _testbedPicker->addItem("RU556 · AR-15",QString("ru556"));
-    _testbedPicker->addItem("Springfield M1A",QString("m1a"));
-    _testbedPicker->addItem("C14 Timberwolf · bolt action",QString("timberwolf"));
-    _testbedPicker->addItem("L118A2 · bolt action",QString("l118a2"));
-    _testbedPicker->addItem("Thanatos · Barrett",QString("thanatos"));
-    _testbedPicker->addItem("MK18 CQBR",QString("mk18"));
-    _testbedPicker->addItem("MK18 · 1000 Year Empire",QString("mk18-empire"));
-    _testbedPicker->addItem("SREP · Service Rifle",QString("srep-service"));
-    _testbedPicker->addItem("SREP · Honey Badger",QString("srep-honeybadger"));
-    _testbedPicker->addItem("SREP · AR10",QString("srep-ar10"));
-    _testbedPicker->addItem("SREP · XM16E1",QString("srep-xm16e1"));
-    _testbedPicker->setToolTip("Switch saved testbeds. Each keeps its own equipped parts and authored hand fits.");
-    bar->addWidget(_testbedPicker);
-    connect(_testbedPicker,qOverload<int>(&QComboBox::activated),this,[this](int i){
-        const auto name=_testbedPicker->itemData(i).toString();if(!name.isEmpty())(void)selectTestbed(name);
-        refreshSourceBar();
-    });
-    _sourceLabel = new QLabel("No source", bar);
-    _sourceLabel->setObjectName("SourceLabel");
-    bar->addWidget(_sourceLabel);
-    _pluginLabel = new QLabel("  Plugin", bar);
-    _pluginAction = bar->addWidget(_pluginLabel);
-    _pluginFilter = new QComboBox(bar);
-    _pluginFilter->setMinimumContentsLength(22);
-    _pluginFilter->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-    _pluginFilter->setMaxVisibleItems(30);
-    _pluginFilter->setEditable(true);
-    _pluginFilter->setInsertPolicy(QComboBox::NoInsert);
-    _pluginFilter->completer()->setFilterMode(Qt::MatchContains);
-    _pluginFilter->completer()->setCompletionMode(QCompleter::PopupCompletion);
-    _pluginFilterAction = bar->addWidget(_pluginFilter);
-    _pluginAction->setVisible(false); _pluginFilterAction->setVisible(false);
-    bar->addWidget(new QLabel("  Weapon", bar));
-    _weaponPicker = new QComboBox(bar);
-    _weaponPicker->setMinimumContentsLength(22);
-    _weaponPicker->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-    _weaponPicker->setMaxVisibleItems(30);
-    _weaponPicker->setPlaceholderText("Select a weapon…");
-    bar->addWidget(_weaponPicker);
-    connect(_pluginFilter, qOverload<int>(&QComboBox::activated), this, [this](int) {
-        refreshWeaponPicker();
-        // One weapon in the plugin selects itself; several open the picker.
-        if (_weaponPicker->count() == 1) {
-            const int selection = _weaponPicker->itemData(0).toInt();
-            if (selection != _weaponCombo->currentIndex()) _weaponCombo->setCurrentIndex(selection);
-        } else if (_weaponPicker->count() > 1 && _weaponPicker->currentIndex() < 0) {
-            _weaponPicker->showPopup();
-        }
-    });
-    connect(_weaponPicker, qOverload<int>(&QComboBox::activated), this, [this](int row) {
-        const int selection = _weaponPicker->itemData(row).toInt();
-        if (selection >= 0 && selection != _weaponCombo->currentIndex() && !_loadThread) _weaponCombo->setCurrentIndex(selection);
-    });
-}
-
-void ReloadMakerController::refreshSourceBar() {
-    if(_testbedPicker) {
-        const QSignalBlocker block(_testbedPicker);
-        _testbedPicker->setCurrentIndex(std::max(0,_testbedPicker->findData(currentTestbed())));
-        _testbedPicker->setEnabled(!_loadThread&&!_reloadCapturing);
-    }
-    if (!_sourceLabel) return;
-    if (_libraryMode && _launchSnapshot.valid()) {
-        _sourceLabel->setText(QStringLiteral("MO2 · %1").arg(_launchSnapshot.profileName));
-        _sourceLabel->setToolTip(QStringLiteral("%1 / %2\n%3 weapons · %4 plugins · %5 winning resources\nGame Data: %6")
-            .arg(QDir::toNativeSeparators(_launchSnapshot.instancePath), _launchSnapshot.profileName)
-            .arg(_weaponSelections.size()).arg(_libraryPlugins.size()).arg(_packageResources.files().size())
-            .arg(QDir::toNativeSeparators(_gameData)));
-    } else if (!_package.sourcePath.isEmpty()) {
-        _sourceLabel->setText(_package.displayName.isEmpty()?QFileInfo(_package.sourcePath).fileName():_package.displayName);
-        _sourceLabel->setToolTip(QStringLiteral("%1\nGame Data: %2").arg(QDir::toNativeSeparators(_package.sourcePath), QDir::toNativeSeparators(_gameData)));
-    } else {
-        _sourceLabel->setText(QStringLiteral("No source"));
-        _sourceLabel->setToolTip(QStringLiteral("Open a mod folder or ZIP, or load the MO2 profile from SOURCE."));
-    }
-    _pluginAction->setVisible(_libraryMode);
-    _pluginFilterAction->setVisible(_libraryMode);
-    if (_libraryMode) {
-        const QSignalBlocker blocker(_pluginFilter);
-        const QString previous = _pluginFilter->currentData().toString();
-        _pluginFilter->clear();
-        _pluginFilter->addItem(QStringLiteral("All plugins"), QString());
-        QHash<QString,int> counts;
-        for(const auto& selection:_weaponSelections){const auto& catalog=_plugins[selection.pluginIndex];const auto& w=catalog.weapons[selection.weaponIndex];
-            const auto origin=catalog.origins.value(w.formId);++counts[origin.plugin.toLower()];
-            if(origin.winner.compare(origin.plugin,Qt::CaseInsensitive)!=0)++counts[origin.winner.toLower()];}
-        for (const auto& plugin : _libraryPlugins)
-            if (counts.value(plugin.name.toLower()) > 0) _pluginFilter->addItem(QStringLiteral("%1  ·  %2").arg(plugin.name).arg(counts.value(plugin.name.toLower())), plugin.name);
-        _pluginFilter->setCurrentIndex(std::max(0, _pluginFilter->findData(previous)));
-    }
-    refreshWeaponPicker();
-}
-
-void ReloadMakerController::refreshWeaponPicker() {
-    if (!_weaponPicker) return;
-    const QSignalBlocker blocker(_weaponPicker);
-    _weaponPicker->clear();
-    const QString filter = _libraryMode ? _pluginFilter->currentData().toString() : QString();
-    for (int index = 0; index < _weaponSelections.size(); ++index) {
-        const auto& selection = _weaponSelections[index];
-        const auto& plugin = _plugins[selection.pluginIndex];
-        const auto& weapon = plugin.weapons[selection.weaponIndex];
-        const QString origin = _libraryMode ? plugin.origins.value(weapon.formId).plugin : plugin.fileName;
-        if (!filter.isEmpty() && origin.compare(filter, Qt::CaseInsensitive) != 0 &&
-            plugin.origins.value(weapon.formId).winner.compare(filter, Qt::CaseInsensitive) != 0) continue;
-        const auto covered=coverageLabel(selectionRecordKey(index));
-        _weaponPicker->addItem((weapon.name.isEmpty()?weapon.editorId:weapon.name)+(covered.isEmpty()?QString():" · "+covered),index);
-        const auto winner=plugin.origins.value(weapon.formId).winner;
-        _weaponPicker->setItemData(_weaponPicker->count()-1,QStringLiteral("%1\nOrigin: %2\nWinning weapon record: %3\n%4").arg(weapon.editorId,origin,winner.isEmpty()?plugin.fileName:winner,covered.isEmpty()?"Workspace coverage has not been scanned":covered+" · check the selected configuration's sources before export"),Qt::ToolTipRole);
-    }
-    _weaponPicker->model()->sort(0);
-    _weaponPicker->setCurrentIndex(_weaponPicker->findData(_weaponCombo->currentIndex()));
-    _weaponPicker->setEnabled(_weaponPicker->count() > 0 && !_loadThread);
 }
 
 bool ReloadMakerController::validWorkspace(int workspace) {

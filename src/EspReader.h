@@ -95,8 +95,10 @@ namespace reloadmaker
         // File-local IDs until LoadOrderLibrary maps them through MAST. Includes
         // deleted and empty overrides so an earlier definition cannot reappear.
         QVector<std::uint32_t> deletedRecords;
-        struct Origin { QString plugin; QString winner; std::uint32_t objectId{0}; };
+        struct Origin { QString plugin; QString winner; std::uint32_t objectId{0}; QStringList contributors; };
         QHash<std::uint32_t, Origin> origins;
+        QStringList sourcePlugins; // Actual input files, in dependency/load order.
+        QHash<QString,QStringList> sourceMasters;
         bool parsed{false};
 
         [[nodiscard]] const ObjectModRecord* findObjectMod(std::uint32_t formId) const noexcept;

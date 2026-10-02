@@ -492,6 +492,19 @@ def get_pack_coverage(refresh: bool = False) -> dict:
     return command('pack_coverage',dict(refresh=refresh))
 
 @mcp.tool()
+def source_browser(operation: str = 'state', plugin: str = '', mode: str = '',
+                   index: int = -1, expected_revision: int | None = None) -> dict:
+    """Read the actual Plugin -> Weapon pickers, or choose mode/plugin/weapon.
+    Modes are dynamic (configured MO2 view) and development (saved testbeds).
+    Plugin order follows the current source; master roles identify dependencies.
+    There is no all-weapons selection: choose a plugin before a weapon index.
+    Development plugin selection may load its saved source asynchronously.
+    """
+    if operation != 'state' and expected_revision is None:
+        raise ValueError('Read the document revision before changing source selection')
+    return command('source_browser',dict(operation=operation,plugin=plugin,mode=mode,index=index),expected_revision)
+
+@mcp.tool()
 def pack_job(operation: str = 'state', packs: list[str] | None = None,
              installation: str = '', initialize: bool = False,
              project: str = '', output: str = '',

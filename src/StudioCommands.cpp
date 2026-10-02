@@ -125,6 +125,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
     const bool reading=method=="state"||method=="installation"||method=="pose"||method=="render"||method=="reload"||method=="diagnostics"||method=="simulation_state"||method=="sound_state"||method=="grab_locations_state"||method=="collision_state"||method=="scope_state"||method=="inspect_sources"||method=="operating_setup_state"||method=="magazine_guide_state"||method=="magazine_setup_state"||method=="magazine_reference_state"||method=="source_policy_state";
     if(!reading&&request.contains("expectedRevision"))require(request["expectedRevision"].toDouble()==double(_revision),"Stale document revision; read state again");
     if(method=="state")return studioState();
+    if(method=="source_browser"&&p.value("operation").toString("state")=="state")return sourceBrowserState();
     if(method=="installation")return installationState();
     if(method=="home")return p.contains("role")?chooseHomeRole(p["role"].toString()):homeState();
     if(method=="base_game"){require(openBaseGame(),_lastError);return studioState();}
@@ -194,6 +195,15 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
         startLibraryLoad();
     } else if(method=="workspace") {const int index=p["index"].toInt(-1);require(validWorkspace(index),"Unknown workspace");setWorkspace(index);}
     else if(method=="author_reload_grips") {require(authorReloadGrips(),_lastError);}
+    else if(method=="source_browser") {
+        const auto operation=p["operation"].toString("state");
+        if(operation=="plugin")require(selectSourcePlugin(p["plugin"].toString()),_lastError);
+        else if(operation=="weapon")require(selectSourceWeapon(p["index"].toInt(-1)),_lastError);
+        else if(operation=="mode")require(selectSourceMode(p["mode"].toString()),_lastError);
+        else require(operation=="state","Unknown source browser operation");
+        if(operation!="state")++_revision;
+        return sourceBrowserState();
+    }
     else if(method=="testbed") {require(selectTestbed(p["name"].toString()),_lastError);}
     else if(method=="interaction_hand") {const auto hand=p["hand"].toString();require(hand=="left"||hand=="right","Specify left or right");require(setInteractionHand(hand=="left"?PoseHand::Left:PoseHand::Right),_lastError);}
     else if(method=="mirror_magazine_grip") {require(mirrorMagazineGrip(),_lastError);}
