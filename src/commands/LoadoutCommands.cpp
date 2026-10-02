@@ -2,6 +2,7 @@
 #include "StudioWindow.h"
 #include "StudioPaths.h"
 #include "commands/CommandSupport.h"
+#include "viewport/PartPicker.h"
 #include "glview.h"
 
 #include <QCheckBox>
@@ -59,6 +60,24 @@ namespace reloadmaker
         _commands.add({ "render", CommandAccess::Read, CommandGate::WhenIdle,
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
                             return renderView(params);
+                        } });
+
+        // Which installed part a click at this viewport point would select.
+        _commands.add({ "part_at", CommandAccess::Read, CommandGate::WhenIdle,
+                        [this](const QJsonObject& params) -> std::optional<QJsonObject> {
+                            return partAtPoint(params);
+                        } });
+
+        // The same focus change as clicking a part on the model or its label.
+        _commands.add({ "focus_slot", CommandAccess::Edit, CommandGate::WhenIdle,
+                        [this](const QJsonObject& params) -> std::optional<QJsonObject> {
+                            bool slotOk = false;
+                            const auto slot = params["slot"].toString().toULongLong(&slotOk);
+                            const auto* config = configuration();
+                            require(slotOk && params["slot"].isString() && config && config->slot(slot),
+                                    "Slot must be a decimal-string key from the current state");
+                            focusSlot(slot);
+                            return std::nullopt;
                         } });
     }
 
@@ -184,5 +203,28 @@ namespace reloadmaker
         const auto image = viewport->studioCaptureFrame();
         require(!image.isNull() && image.save(path), "Cannot capture current native frame");
         return { { "path", path }, { "seconds", _playbackTime }, { "width", image.width() }, { "height", image.height() } };
+    }
+
+    // Points are logical viewport pixels, the same space as mouse events.
+    QJsonObject ReloadMakerController::partAtPoint(const QJsonObject& params)
+    {
+        const auto* viewport = _window->getGLView();
+        require(params["x"].isDouble() && params["y"].isDouble(), "x and y viewport pixels are required");
+        const float x = number(params["x"]);
+        const float y = number(params["y"]);
+        require(x >= 0 && y >= 0 && x < viewport->width() && y < viewport->height(), "Point is outside the viewport");
+        QJsonObject result{ { "slot", QJsonValue::Null }, { "width", viewport->width() }, { "height", viewport->height() } };
+        const auto* config = configuration();
+        const auto slot = _partPicker->partAt(QPointF(x, y));
+        const auto* entry = slot && config ? config->slot(*slot) : nullptr;
+        if (!entry) {
+            return result;
+        }
+        const auto* mod = config->mod(config->selected(*slot));
+        result["slot"] = QString::number(*slot);
+        result["label"] = entry->label;
+        result["part"] = mod ? (mod->name.isEmpty() ? mod->editorId : mod->name) : QString();
+        result["editorId"] = mod ? mod->editorId : QString();
+        return result;
     }
 }

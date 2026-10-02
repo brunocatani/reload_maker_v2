@@ -229,6 +229,7 @@ namespace reloadmaker
                  { "weaponIndex", _weaponCombo->currentIndex() },
                  { "weapons", weapons },
                  { "slots", configurationSlots },
+                 { "focusedSlot", QString::number(_focusedSlot) },
                  { "body", _bodyCombo->currentData().toString() },
                  { "animationSource", animationSourceIdentity() },
                  { "actions", actions },

@@ -1,5 +1,6 @@
 #include "ReloadMakerController.h"
 #include "GripViewport.h"
+#include "viewport/PartPicker.h"
 #include "StudioWindow.h"
 #include "glview.h"
 #include "gl/glshape.h"
@@ -73,6 +74,8 @@ namespace reloadmaker {
             if(_mechanismTeaching)_gripViewport->setRotationTool(_teachingRotation);
         }else {_gripViewport->setSimulation(false);_gripViewport->setTeaching(false);}
         if(_slotOverlay) _slotOverlay->setActive(_pages->currentIndex()==kLoadoutPage && _showPartLabels && !active);
+        // Clicking the model selects parts on the loadout page, unless the grip tools own the viewport.
+        if(_partPicker) _partPicker->setActive(_pages->currentIndex()==kLoadoutPage && !active);
         if(points){
             const auto g=currentGrabLocations();const int i=_grabLocationList?_grabLocationList->currentRow():-1,a=operatingAnchor();
             Transformf reference;QString error;

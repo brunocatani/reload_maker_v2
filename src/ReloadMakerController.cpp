@@ -3,6 +3,7 @@
 #include "ReloadTemplates.h"
 #include "PoseEvaluator.h"
 #include "SlotOverlay.h"
+#include "viewport/PartPicker.h"
 #include "LibraryResources.h"
 #include "LoadoutView.h"
 
@@ -32,6 +33,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMenu>
 #include <QMimeData>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -116,13 +118,16 @@ namespace reloadmaker
         _rebuildTimer->setInterval(60);
         connect(_rebuildTimer, &QTimer::timeout, this, &ReloadMakerController::rebuildWeapon);
         createUi();
+        // Qt runs the most recently installed event filter first. The picker is
+        // installed before the slot labels so a click on a label stays the
+        // label's; the picker only sees clicks that reach the model.
+        _partPicker = new PartPicker(_window->getGLView(), this);
+        _partPicker->selected = [this](SlotKey slot) { focusSlot(slot); };
+        _partPicker->activated = [this](SlotKey slot) { showLoadoutChoices(slot); };
+        _partPicker->contextRequested = [this](SlotKey slot, QPoint position) { showPartMenu(slot, position); };
+        _partPicker->describe = [this](SlotKey slot) { return describePart(slot); };
         _slotOverlay = new SlotOverlay(_window->getGLView(), this);
-        _slotOverlay->selected = [this](SlotKey slot) {
-            _focusedSlot = slot;
-            _partSearch->clear();
-            refreshAttachments();
-            scrollToFocusedSlot();
-        };
+        _slotOverlay->selected = [this](SlotKey slot) { focusSlot(slot); };
         createGripViewport();
         createReloadViewport();
         createSimulationViewport();
@@ -503,6 +508,47 @@ namespace reloadmaker
         if(current->select(key,id)){refreshAttachments();scheduleRebuild();++_revision;}
     }
 
+    // Shared by the slot labels, clicks on the model and the focus_slot command.
+    void ReloadMakerController::focusSlot(SlotKey key)
+    {
+        _focusedSlot = key;
+        _partSearch->clear();
+        refreshAttachments();
+        scrollToFocusedSlot();
+    }
+
+    void ReloadMakerController::showPartMenu(SlotKey key, QPoint globalPosition)
+    {
+        const auto* config = configuration();
+        const auto* slot = config ? config->slot(key) : nullptr;
+        if (!slot) {
+            return;
+        }
+        focusSlot(key);
+        QMenu menu(_window);
+        auto* title = menu.addAction(describePart(key).section('\n', 0, 0));
+        title->setEnabled(false);
+        menu.addSeparator();
+        auto* change = menu.addAction(QStringLiteral("Change %1…").arg(slot->label.toLower()));
+        // Same rule as showLoadoutChoices: no loadout edits while the scene is rebuilding.
+        change->setEnabled(!_loadThread && !_reloadCapturing && !_rebuildTimer->isActive());
+        if (menu.exec(globalPosition) == change) {
+            showLoadoutChoices(key);
+        }
+    }
+
+    QString ReloadMakerController::describePart(SlotKey key) const
+    {
+        const auto* config = configuration();
+        const auto* slot = config ? config->slot(key) : nullptr;
+        if (!slot) {
+            return {};
+        }
+        const auto* mod = config->mod(config->selected(key));
+        const QString part = mod ? cleanPartName(mod->name.isEmpty() ? mod->editorId : mod->name) : QStringLiteral("Empty");
+        return QStringLiteral("%1: %2\nDouble-click to change").arg(slot->label, part);
+    }
+
     void ReloadMakerController::scrollToFocusedSlot()
     {
         for (int row = 0; row < _partList->count(); ++row) {
@@ -558,6 +604,23 @@ namespace reloadmaker
             }
         }
         _partSurfaces.insert(slot, std::move(surfaces));
+    }
+
+    // The renderer identifies each shape by its NIF block number.
+    void ReloadMakerController::refreshPartPicking()
+    {
+        auto* model = activeModel();
+        QVector<PartSurfaces> parts;
+        for (auto it = _partSurfaces.cbegin(); model && it != _partSurfaces.cend(); ++it) {
+            PartSurfaces part{ it.key(), {} };
+            for (const auto& surface : it.value()) {
+                if (surface.isValid() && surface.model() == model) {
+                    part.blocks.append(model->getBlockNumber(surface));
+                }
+            }
+            parts.append(std::move(part));
+        }
+        _partPicker->setParts(std::move(parts));
     }
 
     bool ReloadMakerController::remapAttachmentNodes(const ObjectModRecord& mod,int firstBlock,int lastBlock,QString& error,bool completeAssembly)
@@ -1062,6 +1125,7 @@ namespace reloadmaker
         _attachmentConnections.clear();
         _remappedAttachments.clear();
         if (_slotOverlay) { _slotOverlay->setCallouts({}); }
+        if (_partPicker) { _partPicker->setParts({}); }
         if (auto* model = activeModel()) { model->clear(); }
         _window->getGLView()->flush();
         refreshPartGripChoices();
@@ -1729,6 +1793,7 @@ namespace reloadmaker
             _attachmentConnections.clear();
             _remappedAttachments.clear();
             _slotOverlay->setCallouts({});
+            _partPicker->setParts({});
             _nodeBindings.clear();
             _weaponRoot = QPersistentModelIndex{};
             _bodyRoot = QPersistentModelIndex{};
@@ -2063,6 +2128,7 @@ namespace reloadmaker
         }
         setArmsVisible(_showArmsCheck->isChecked());
         refreshSlotCallouts();
+        refreshPartPicking();
         _window->getGLView()->updateScene();
         refreshAnimations();
         QListWidgetItem* initialAnimation = _animationList->count() > 0

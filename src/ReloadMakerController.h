@@ -68,6 +68,7 @@ namespace reloadmaker
 {
     class ReloadGraph;
     class SlotOverlay;
+    class PartPicker;
     class GripViewport;
     class MagazineViewport;
     class CollisionPanel;
@@ -622,8 +623,13 @@ namespace reloadmaker
         void refreshWeapons();
         void refreshAttachments();
         void showLoadoutChoices(SlotKey key);
+        void focusSlot(SlotKey key);
+        void showPartMenu(SlotKey key, QPoint globalPosition);
+        [[nodiscard]] QString describePart(SlotKey key) const;
         void scrollToFocusedSlot();
         void refreshSlotCallouts();
+        void refreshPartPicking();
+        [[nodiscard]] QJsonObject partAtPoint(const QJsonObject& params);
         void recordPartSurfaces(SlotKey slot, int firstBlock, int lastBlock);
         bool remapAttachmentNodes(const ObjectModRecord& mod, int firstBlock, int lastBlock, QString& error,bool completeAssembly=false);
         struct RemappedAttachment {QPersistentModelIndex node, parent;QString keyword, point;SlotKey slot{0};};
@@ -861,6 +867,7 @@ namespace reloadmaker
         QLabel* _configurationSummary{ nullptr };
         QTimer* _rebuildTimer{ nullptr };
         SlotOverlay* _slotOverlay{ nullptr };
+        PartPicker* _partPicker{ nullptr };
         QHash<SlotKey, QPersistentModelIndex> _partRoots;
         QHash<SlotKey, QVector<QPersistentModelIndex>> _partSurfaces;
         // Append-only assembly block IDs, discarded on source/config rebuild.

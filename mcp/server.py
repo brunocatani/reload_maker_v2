@@ -109,6 +109,16 @@ def configure_weapon(changes: dict, expected_revision: int) -> dict:
     return command('configure',changes,expected_revision)
 
 @mcp.tool()
+def part_at(x: float, y: float) -> dict:
+    """Which installed part a click at viewport pixel (x, y) would select: slot key, slot label and part name, or slot null. Also returns the viewport width and height in the same logical pixels."""
+    return command('part_at',{'x':x,'y':y})
+
+@mcp.tool()
+def focus_slot(slot: str, expected_revision: int) -> dict:
+    """Focus a loadout slot by its decimal-string key from get_state, as clicking its part on the model does. The state reports it as focusedSlot."""
+    return command('focus_slot',{'slot':slot},expected_revision)
+
+@mcp.tool()
 def select_action(index: int, expected_revision: int) -> dict:
     """Select a configured animation action from get_state."""
     return command('action',{'index':index},expected_revision)
