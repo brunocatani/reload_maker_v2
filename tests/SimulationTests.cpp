@@ -83,6 +83,10 @@ void fixture(const QString& path) {
     check(!buildSimulationRig(bad,rig,error),"Static slide must reject simulation");
     bad=r;bad.tracks[4].anchor.ownerRecord=bad.tracks[0].anchor.ownerRecord;bad.tracks[4].anchor.ownerModel=bad.tracks[0].anchor.ownerModel;
     check(!buildSimulationRig(bad,rig,error),"Shared receiver owner must not be hidden as magazine");
+    check(buildSimulationRig(bad,rig,error,WeaponMechanism::PistolSlide,false,{},&roles),error);
+    check(rig.magazineBranchOnly&&rig.magazineTracks==QVector<int>({4,5,6,7,8,9}),"Explicit shared magazine must exclude the receiver and sibling parts");
+    auto nested=bad;nested.tracks[roles.operating].parent=roles.magazine;
+    check(!buildSimulationRig(nested,rig,error,WeaponMechanism::PistolSlide,false,{},&roles),"Magazine carrier containing the operating part was accepted");
     check(buildSimulationRig(bad,rig,error,WeaponMechanism::ReciprocatingBolt),error);
     check(rig.slideTracks==QVector<int>({0})&&rig.magazineTracks==QVector<int>({4,5,6,7,8,9}),"Reciprocating rifle must separate the bolt from magazine descendants despite their shared receiver");
     QVector<QVector3D> body,frame;

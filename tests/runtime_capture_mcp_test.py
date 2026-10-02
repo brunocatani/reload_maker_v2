@@ -19,14 +19,16 @@ NAMES={'glock':'Glock','ru556':'RU556','m1a':'M1A','timberwolf':'Timberwolf','l1
 def read(path):return json.loads(path.read_text(encoding='utf-8'))
 def write(path,value):path.write_text(json.dumps(value,indent=2),encoding='utf-8')
 
-def main(names):
+def main(names,editor_project=None):
+    if editor_project:assert len(names)==1,'Use one testbed when selecting an explicit preserved editor project'
     work=ROOT/'local/runtime-capture-tests'/uuid.uuid4().hex;work.mkdir(parents=True)
     entries=read(ROOT/'workspace/packs/verified-b5bf9bf910a249da8f180b951aa17ae1/projects.json')
     originals={row['name']:Path(row['path']) for row in entries}
     original=ready()['project'];original_bytes=Path(original).read_bytes();results=[];errors=[]
     try:
         for name in names:
-            edit('testbed',{'name':name});ready();project=Path(ready()['project']);saved=project.read_bytes()
+            edit('open_project',{'path':editor_project}) if editor_project else edit('testbed',{'name':name})
+            ready();project=Path(ready()['project']);saved=project.read_bytes()
             folder=work/name;folder.mkdir()
             try:
                 reference=originals[NAMES[name]];owner=read(reference)['weapons'][0]
@@ -87,4 +89,5 @@ def main(names):
         edit('save_project',{'path':original});Path(original).write_bytes(original_bytes)
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--testbed',action='append');main(parser.parse_args().testbed or list(NAMES))
+    parser=argparse.ArgumentParser();parser.add_argument('--testbed',action='append');parser.add_argument('--editor-project')
+    args=parser.parse_args();main(args.testbed or list(NAMES),args.editor_project)

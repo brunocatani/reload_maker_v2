@@ -182,7 +182,7 @@ void ReloadMakerController::prepareSimulation() {
     _simulationMagazineSlot=0;
     const bool installedMagazine=isRifleConfiguration()&&!isMk18Configuration()&&!isSrepEmbeddedMagazine();
     const int magazineAnchor=installedMagazine?currentMagazineAnchor():-1;
-    if(isSrepEmbeddedMagazine()&&model) {
+    if((rig.magazineBranchOnly||isSrepEmbeddedMagazine())&&model) {
         const auto node=_sceneNodes[_reloadTrackNodes[rig.magazine]];
         _simulationVisibility.append({node,model->get<int>(node,"Flags")});
     } else if(config&&model)for(auto it=_partRoots.cbegin();it!=_partRoots.cend();++it) {

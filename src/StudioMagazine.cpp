@@ -47,8 +47,8 @@ void ReloadMakerController::prepareMagazineInteraction() {
         Transformf carrier;if(!sceneNodeWorld(_sceneNodes[_reloadTrackNodes[rig.magazine]],carrier,_magazineError))return;
         connectionName="Authored magazine connection";
         connection=composed(carrier,reference.connectionMode=="custom"?reference.connectionInCarrier:Transformf{});
-    } else if(isSrepEmbeddedMagazine()) {
-        connectionName="P-Mag";
+    } else if(rig.magazineBranchOnly||isSrepEmbeddedMagazine()) {
+        connectionName=rig.magazineBranchOnly?"Magazine carrier":"P-Mag";
         if(!sceneNodeWorld(_sceneNodes[_reloadTrackNodes[rig.magazine]],connection,_magazineError))return;
     } else {
         auto source=sourceNif(_packageResources,anchor.ownerModel,_magazineError);if(!source)return;

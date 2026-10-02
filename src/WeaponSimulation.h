@@ -24,6 +24,7 @@ namespace reloadmaker {
         QJsonObject mechanicalSource;
         QHash<int,QVector<Transformf>> authoredCurves;
         bool customSetup{false},manualCycle{false},fireFromStroke{false},presetFire{true};
+        bool magazineBranchOnly{false}; // Explicit carrier inside a shared receiver model.
         float motionDuration{0},manualEjectSeconds{-1};
         QJsonObject authoring;
     };

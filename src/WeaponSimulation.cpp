@@ -33,7 +33,11 @@ bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& err
     }
     if(rig.slide<0||rig.magazine<0){error="Direct simulation currently requires a resolved slide and magazine.";return false;}
     if(profile==WeaponMechanism::PistolSlide&&sameOwner(r.tracks[rig.slide],r.tracks[rig.magazine])) {
-        error="This weapon shares one mesh owner for slide and magazine; separate magazine visibility is required.";return false;
+        if(!selected){error="Slide and magazine share a source model. Select their separate native branches in Operating parts.";return false;}
+        if(descendant(r,rig.slide,rig.magazine)||descendant(r,rig.magazine,rig.slide)) {
+            error="The magazine carrier and operating part must be independent native branches.";return false;
+        }
+        rig.magazineBranchOnly=true;
     }
     if(profile!=WeaponMechanism::PistolSlide&&rig.bolt<0){error="The rifle bolt track is missing.";return false;}
     if(selected){
@@ -79,7 +83,7 @@ bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& err
             if(i==rig.slide||(profile==WeaponMechanism::M1A&&i==rig.bolt))rig.slideTracks.append(i);
             continue;
         }
-        if(sameOwner(t,r.tracks[rig.magazine]))rig.magazineTracks.append(i);
+        if(rig.magazineBranchOnly?descendant(r,i,rig.magazine):sameOwner(t,r.tracks[rig.magazine]))rig.magazineTracks.append(i);
         // Receiver followers (barrel/catch) and independently animated magazine
         // descendants (feed cartridge) keep their own sampled trajectories.
         // A sibling spent-magazine copy is deliberately not a slide follower.
