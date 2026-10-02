@@ -54,6 +54,7 @@ namespace reloadmaker
         int ammoCapacity{0};
         bool ammoDataKnown{false};
         bool automatic{false};
+        std::uint32_t recordFlags{0}, dataFlags{0};
     };
 
     struct AnimationSubgraphEntry
@@ -89,6 +90,7 @@ namespace reloadmaker
         QHash<std::uint32_t, QString> keywordNames;
         QHash<std::uint32_t, NodeRemap> nodeRemaps;
         QHash<std::uint32_t, QString> ammoNames;
+        QHash<std::uint32_t, std::uint32_t> localizedNameIds; // FULL IDs, before MAST remapping.
         QStringList diagnostics;
         // File-local IDs until LoadOrderLibrary maps them through MAST. Includes
         // deleted and empty overrides so an earlier definition cannot reappear.
@@ -107,6 +109,9 @@ namespace reloadmaker
     public:
         [[nodiscard]] static PluginContent read(const QString& path,
                                                 const std::function<bool()>& cancelled = {}, bool referenceCatalogOnly = false);
+        static void resolveNames(PluginContent& plugin, const QString& language,
+            const std::function<QByteArray(const QString&, QString&)>& readResource);
     };
     [[nodiscard]] QString recordIdentity(const PluginContent& plugin,std::uint32_t formId);
+    [[nodiscard]] QString weaponAuthoringExclusion(const WeaponRecord& weapon);
 }

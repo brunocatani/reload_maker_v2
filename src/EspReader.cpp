@@ -214,10 +214,7 @@ namespace reloadmaker
             if (!subrecord) {
                 return {};
             }
-            if (localized && type == QByteArrayLiteral("FULL") && subrecord->data.size() == 4) {
-                return QStringLiteral("String %1")
-                    .arg(readLittle<std::uint32_t>(subrecord->data, 0), 8, 16, QLatin1Char('0'));
-            }
+            if (localized && type == QByteArrayLiteral("FULL")) return {}; // Resolved from the effective STRINGS table.
             return decodeText(subrecord->data);
         }
 
@@ -419,6 +416,9 @@ namespace reloadmaker
                     content.deletedRecords.append(record.formId);
                     continue;
                 }
+                if(localized&&(record.type=="WEAP"||record.type=="OMOD"||record.type=="AMMO"||record.type=="KYWD"))
+                    if(const auto* full=firstSubrecord(record,"FULL");full&&full->data.size()==4)
+                        content.localizedNameIds.insert(record.formId,readLittle<std::uint32_t>(full->data,0));
                 if (record.type == QByteArrayLiteral("OMOD")) {
                     const Subrecord* dataSubrecord = firstSubrecord(
                         record, QByteArrayLiteral("DATA"));
@@ -438,6 +438,7 @@ namespace reloadmaker
                 } else if (record.type == QByteArrayLiteral("WEAP")) {
                     PendingWeapon pending;
                     pending.weapon.formId = record.formId;
+                    pending.weapon.recordFlags = record.flags;
                     pending.weapon.editorId = textSubrecord(record, QByteArrayLiteral("EDID"), false);
                     pending.weapon.name = textSubrecord(record, QByteArrayLiteral("FULL"), localized);
                     pending.weapon.baseModelPath = textSubrecord(record, QByteArrayLiteral("MODL"), false);
@@ -446,7 +447,8 @@ namespace reloadmaker
                     if(const auto* d=firstSubrecord(record,"DNAM");d&&d->data.size()>=55) {
                         pending.weapon.ammo=readLittle<std::uint32_t>(d->data,0);
                         pending.weapon.ammoCapacity=readLittle<std::uint16_t>(d->data,52);
-                        pending.weapon.automatic=(readLittle<std::uint32_t>(d->data,48)&0x8000u)!=0;
+                        pending.weapon.dataFlags=readLittle<std::uint32_t>(d->data,48);
+                        pending.weapon.automatic=(pending.weapon.dataFlags&0x8000u)!=0;
                         // FO4 DNAM is packed: animation type and damage leave
                         // the attack-fail SNDR unaligned at byte 85 (xEdit).
                         if(d->data.size()>=89)pending.weapon.attackFailSound=readLittle<std::uint32_t>(d->data,85);
@@ -530,7 +532,56 @@ namespace reloadmaker
             content.nodeRemaps.clear();
             content.ammoNames.clear();
             content.deletedRecords.clear();
+            content.localizedNameIds.clear();
         }
         return content;
+    }
+
+    QString weaponAuthoringExclusion(const WeaponRecord& weapon) {
+        // Local xEdit wbDefinitionsFO4 WEAP header bit 2 and DNAM flags bit 20.
+        // Keep the raw winning record in the catalog; filter only selection.
+        if((weapon.recordFlags&0x4u)||(weapon.dataFlags&0x100000u))return "Non-playable weapon";
+        if(!weapon.ammoDataKnown)return "Missing weapon data";
+        if(weapon.baseModelPath.trimmed().isEmpty())return "No weapon model";
+        return {}; // No ammo/capacity/category requirement: melee remains editable.
+    }
+
+    void EspReader::resolveNames(PluginContent& plugin,const QString& language,
+        const std::function<QByteArray(const QString&,QString&)>& readResource) {
+        if(!plugin.parsed||plugin.localizedNameIds.isEmpty())return;
+        const auto path="strings/"+QFileInfo(plugin.fileName).completeBaseName().toLower()+"_"+language+".strings";
+        QString error;const auto bytes=readResource(path,error);QHash<std::uint32_t,QString> names;
+        try {
+            if(!error.isEmpty())throw std::runtime_error(error.toStdString());
+            if(bytes.size()<8||bytes.size()>64*1024*1024)throw std::runtime_error("Missing or oversized STRINGS table");
+            // xEdit wbLocalization.ReadDirectory: ID/offset pairs, followed by
+            // zero-terminated strings; offsets are relative to the data area.
+            const auto count=readLittle<std::uint32_t>(bytes,0),size=readLittle<std::uint32_t>(bytes,4);
+            const quint64 start=8ull+8ull*count;
+            if(count>1'000'000||start+size!=quint64(bytes.size()))throw std::runtime_error("Invalid STRINGS directory/data size");
+            for(quint32 i=0;i<count;++i) {
+                const auto id=readLittle<std::uint32_t>(bytes,8+8*qsizetype(i)),offset=readLittle<std::uint32_t>(bytes,12+8*qsizetype(i));
+                if(offset>=size||names.contains(id))throw std::runtime_error("Invalid or duplicate STRINGS entry");
+                const auto begin=qsizetype(start+offset),end=bytes.indexOf('\0',begin);
+                if(end<begin||end-begin>65536)throw std::runtime_error("Unterminated or oversized localized name");
+                names.insert(id,decodeText(bytes.mid(begin,end-begin)));
+            }
+        }catch(const std::exception& e){
+            plugin.diagnostics.append("LOCALIZATION "+path+": "+QString::fromUtf8(e.what())+"; displaying editor IDs where needed");return;
+        }
+        int resolved=0,missing=0;QStringList missingIds;
+        const auto resolve=[&](quint32 id,QString& label,const QString& editorId){
+            const auto found=plugin.localizedNameIds.constFind(id);if(found==plugin.localizedNameIds.cend()||found.value()==0)return;
+            const auto text=names.constFind(found.value());
+            if(text!=names.cend()&&!text->isEmpty()){label=*text;++resolved;}
+            else{label=editorId;++missing;if(missingIds.size()<8)missingIds.append(QString::number(found.value(),16));}
+        };
+        for(auto& weapon:plugin.weapons)resolve(weapon.formId,weapon.name,weapon.editorId);
+        for(auto& mod:plugin.objectMods)resolve(mod.formId,mod.name,mod.editorId);
+        for(auto it=plugin.ammoNames.begin();it!=plugin.ammoNames.end();++it)resolve(it.key(),it.value(),it.value());
+        // KYWD editor identifiers remain stable because code uses them as role
+        // labels. Only user-facing weapon, attachment and ammo names are resolved.
+        plugin.diagnostics.append(QString("LOCALIZATION %1: %2 names resolved, %3 unresolved%4").arg(path).arg(resolved).arg(missing)
+            .arg(missing?" (IDs "+missingIds.join(", ")+"); displaying editor IDs":QString()));
     }
 }

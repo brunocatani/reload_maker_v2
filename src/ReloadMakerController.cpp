@@ -302,6 +302,9 @@ namespace reloadmaker
                         const bool containsBase=std::any_of(result->package.plugins.begin(),result->package.plugins.end(),[](const auto& file){return QFileInfo(file).fileName().compare("Fallout4.esm",Qt::CaseInsensitive)==0;});
                         if(!dataPath.isEmpty()&&!containsBase)catalogs.append(EspReader::read(QDir(data).filePath("Fallout4.esm"),cancelled,true));
                         for(const auto& file:result->package.plugins)catalogs.append(EspReader::read(file,cancelled));
+                        const QDir game(QFileInfo(data).absolutePath());
+                        const auto language=sourceLanguage({game.filePath("Fallout4_Default.ini"),game.filePath("Fallout4.ini")});
+                        for(auto& plugin:catalogs)EspReader::resolveNames(plugin,language,[&](const QString& p,QString& error){return result->resources.read(p,error);});
                         auto merged=mergeLoadOrder(catalogs,result->error);if(!result->error.isEmpty())return;
                         merged.fileName="Local source pack";result->plugins.append(std::move(merged));
                     } else {
@@ -312,6 +315,9 @@ namespace reloadmaker
                         progress(QStringLiteral("Reading %1").arg(QFileInfo(pluginPath).fileName()));
                         result->plugins.append(EspReader::read(pluginPath, cancelled));
                     }
+                    const QDir game(QFileInfo(data).absolutePath());
+                    const auto language=sourceLanguage({game.filePath("Fallout4_Default.ini"),game.filePath("Fallout4.ini")});
+                    for(auto& plugin:result->plugins)EspReader::resolveNames(plugin,language,[&](const QString& p,QString& error){return result->resources.read(p,error);});
                     }
                     QSet<QString> readCatalogs;
                     for(const auto& plugin:result->plugins)for(const auto& master:plugin.masters) {
@@ -381,10 +387,20 @@ namespace reloadmaker
         _weaponCombo->clear();
         _weaponSelections.clear();
         _configurations.clear();
+        QJsonArray excluded;QJsonObject reasons;int total=0,hidden=0;
         for (int pluginIndex = 0; pluginIndex < _plugins.size(); ++pluginIndex) {
             const PluginContent& plugin = _plugins.at(pluginIndex);
             for (int weaponIndex = 0; weaponIndex < plugin.weapons.size(); ++weaponIndex) {
                 const WeaponRecord& weapon = plugin.weapons.at(weaponIndex);
+                ++total;auto reason=weaponAuthoringExclusion(weapon);
+                const auto model=normalizeNifPath(weapon.baseModelPath);
+                if(reason.isEmpty()&&!_packageResources.contains(model)&&!_gameMeshes.contains(model))reason="Model not available in this source";
+                if(!reason.isEmpty()) {
+                    ++hidden;reasons[reason]=reasons[reason].toInt()+1;
+                    if(excluded.size()<512)excluded.append(QJsonObject{{"record",recordIdentity(plugin,weapon.formId)},{"editorId",weapon.editorId},
+                        {"name",weapon.name},{"reason",reason},{"model",model}});
+                    continue;
+                }
                 _weaponSelections.append(WeaponSelection{ pluginIndex, weaponIndex });
                 _weaponCombo->addItem(
                     QStringLiteral("%1  ·  %2  ·  %3")
@@ -392,6 +408,11 @@ namespace reloadmaker
                     _weaponSelections.size() - 1);
             }
         }
+        _weaponLibraryReport={{"total",total},{"shown",_weaponSelections.size()},{"hidden",hidden},{"reasons",reasons},
+            {"excluded",excluded},{"excludedTruncated",hidden>excluded.size()}};
+        QStringList counts;for(auto it=reasons.begin();it!=reasons.end();++it)counts.append(it.key()+"="+QString::number(it.value().toInt()));
+        appendDiagnostic(QString("WEAPON LIBRARY: %1 shown / %2 records; %3 excluded. %4. Playable melee retained.")
+            .arg(_weaponSelections.size()).arg(total).arg(hidden).arg(counts.join("; ")));
         if (_libraryMode||!_package.resourceData.isEmpty()) { _weaponCombo->setCurrentIndex(-1); }
         refreshAttachments();
         refreshConfigurationChoices();

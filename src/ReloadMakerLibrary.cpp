@@ -124,9 +124,9 @@ namespace reloadmaker {
             _gameMeshes.close(); _gameAnimations.close();_gameSounds.close();
             _plugins.clear(); _plugins.append(std::move(result->catalog));
             _libraryPlugins = result->plugins;
+            _details->clear();
             configureResourcePaths();
             refreshWeapons(); refreshAnimations();
-            _details->clear();
             appendDiagnostic(QStringLiteral("LIBRARY %1 profile=%2 · loose VFS wins; archive priority follows enabled plugin load order")
                 .arg(_launchSnapshot.instancePath, _launchSnapshot.profileName));
             for (const auto& diagnostic : _plugins.first().diagnostics) { appendDiagnostic(diagnostic); }

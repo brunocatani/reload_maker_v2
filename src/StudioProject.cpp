@@ -271,7 +271,11 @@ void ReloadMakerController::restoreSessionSelection() {
         const QSignalBlocker block(_weaponCombo); _weaponCombo->setCurrentIndex(i);
         if (currentWeapon() && poseRecordKey(currentWeapon()->formId) == record["weapon"].toString()) { selected = i; break; }
     }
-    if (selected < 0) { setStatus("The project weapon is absent from this source.",true); return; }
+    if (selected < 0) {
+        {const QSignalBlocker block(_weaponCombo);_weaponCombo->setCurrentIndex(-1);}
+        refreshWeaponPicker();
+        setStatus("The project weapon is absent or excluded from this source's player-weapon library. See Diagnostics for exclusion reasons.",true);return;
+    }
     refreshWeaponPicker();
     { const QSignalBlocker block(_bodyCombo); _bodyCombo->setCurrentIndex(std::max(0,_bodyCombo->findData(record["body"].toString()))); }
     refreshAttachments(); refreshConfigurationChoices();

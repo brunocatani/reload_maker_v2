@@ -359,6 +359,7 @@ namespace reloadmaker
         QString coverageLabel(const QString& record) const;
         void updatePackCoverage(const QJsonObject&);
         QJsonObject _packCoverage;
+        QJsonObject _weaponLibraryReport;
         QHash<QString,QString> _coverageLabels;
         QString magazinePiecePath(const QModelIndex&) const;
         bool sampledMagazinePayload() const;

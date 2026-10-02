@@ -112,6 +112,47 @@ namespace {
         require(plugin.parsed&&plugin.animationSubgraphs.size()==1&&plugin.animationSubgraphs[0].entries.size()==1,"Native subgraphs incorrectly require optional SADD");
         require(plugin.resolveFirstPersonSubgraph({0x10048})!=nullptr,"Native first-person weapon subgraph was not resolved");
     }
+    void weaponNamesAndAdmission() {
+        QTemporaryDir dir;
+        const auto sub=[](const QByteArray& type,const QByteArray& data){QByteArray bytes=type;const auto size=qToLittleEndian(quint16(data.size()));bytes.append(reinterpret_cast<const char*>(&size),2);return bytes+data;};
+        const auto word=[](quint32 value){QByteArray data(4,'\0');qToLittleEndian(value,reinterpret_cast<uchar*>(data.data()));return data;};
+        QByteArray dnam(132,'\0'); // Zero ammo/capacity is a valid melee weapon.
+        const auto fields=sub("EDID","PlayerKnife\0")+sub("FULL",word(17))+sub("MODL","Weapons/Knife.nif\0");
+        const auto path=dir.filePath("Localized.esm");
+        write(path,record("TES4",0,0x80)+record("WEAP",0x123,0,fields+sub("DNAM",dnam)));
+        auto player=EspReader::read(path);require(player.parsed&&player.weapons.size()==1,"localized player record missing");
+        require(player.weapons[0].name=="PlayerKnife"&&player.localizedNameIds.value(0x123)==17,"unresolved names must use editor IDs, not String hex placeholders");
+        require(weaponAuthoringExclusion(player.weapons[0]).isEmpty(),"zero-ammo melee weapon was filtered out");
+        const QByteArray label=QString::fromUtf8("Café knife").toUtf8()+'\0';
+        const QByteArray table=word(1)+word(quint32(label.size()))+word(17)+word(0)+label;
+        auto named=player;
+        EspReader::resolveNames(named,"en",[&](const QString& resource,QString&){require(resource=="strings/localized_en.strings","wrong plugin/language string table");return table;});
+        require(named.weapons[0].name==QString::fromUtf8("Café knife"),"localized UTF-8 name did not resolve");
+        auto missing=player;EspReader::resolveNames(missing,"de",[](const QString&,QString& error){error="table unavailable";return QByteArray();});
+        require(missing.weapons[0].name=="PlayerKnife"&&!missing.diagnostics.isEmpty(),"missing table hid a player weapon or lost its diagnostic");
+        auto invalid=player;auto broken=table;broken[12]=char(127);
+        EspReader::resolveNames(invalid,"en",[&](const QString&,QString&){return broken;});
+        require(invalid.weapons[0].name=="PlayerKnife"&&invalid.diagnostics.join(' ').contains("Invalid"),"invalid string offset was accepted");
+        auto unknown=player;unknown.localizedNameIds[0x123]=18;
+        EspReader::resolveNames(unknown,"en",[&](const QString&,QString&){return table;});
+        require(unknown.weapons[0].name=="PlayerKnife"&&unknown.diagnostics.join(' ').contains("1 unresolved"),"missing ID lost its fallback/diagnostic");
+        write(path,record("TES4",0)+record("WEAP",0x123,4,fields+sub("DNAM",dnam)));
+        const auto hidden=EspReader::read(path);require(weaponAuthoringExclusion(hidden.weapons[0])=="Non-playable weapon","record Non-Playable flag ignored");
+        qToLittleEndian(quint32(0x100000),reinterpret_cast<uchar*>(dnam.data()+48));
+        write(path,record("TES4",0)+record("WEAP",0x123,0,fields+sub("DNAM",dnam)));
+        require(weaponAuthoringExclusion(EspReader::read(path).weapons[0])=="Non-playable weapon","DNAM Not Playable flag ignored");
+        auto noModel=player.weapons[0];noModel.baseModelPath.clear();require(!weaponAuthoringExclusion(noModel).isEmpty(),"model-less internal weapon accepted");
+        PluginContent patch;patch.fileName="Patch.esp";patch.masters={player.fileName};patch.parsed=true;
+        auto replacement=hidden.weapons[0];replacement.formId=0x123;patch.weapons={replacement};QString error;
+        const auto merged=mergeLoadOrder({player,patch},error);
+        require(error.isEmpty()&&merged.weapons.size()==1&&!weaponAuthoringExclusion(merged.weapons[0]).isEmpty(),"filter resurrected the playable losing record");
+        replacement.recordFlags=0;patch.weapons={replacement};
+        const auto enabled=mergeLoadOrder({hidden,patch},error);
+        require(error.isEmpty()&&weaponAuthoringExclusion(enabled.weapons[0]).isEmpty(),"playable winning override stayed hidden");
+        write(dir.filePath("fallout4.ini"),"[General]\nsLanguage=en\n");
+        write(dir.filePath("fallout4custom.ini"),"[General]\nsLanguage=de\n");
+        require(sourceLanguage({dir.filePath("fallout4.ini"),dir.filePath("fallout4custom.ini")})=="de","source profile language precedence ignored");
+    }
     void profileTests() {
         QTemporaryDir dir;
         const auto instance = dir.filePath("MO2");
@@ -200,7 +241,7 @@ namespace {
 int main(int argc, char** argv) {
     QCoreApplication app(argc, argv);
     try {
-        mergeTests(); readerTests(); profileTests(); resourceTests();
+        mergeTests(); readerTests(); profileTests(); weaponNamesAndAdmission(); resourceTests();
         if (app.arguments().value(1) == "--archive") { realArchiveTest(app.arguments()); return 0; }
         QVector<PluginContent> parsed;
         const bool merge = app.arguments().contains("--merge");

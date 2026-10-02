@@ -168,7 +168,7 @@ QJsonObject ReloadMakerController::executeCommand(const QJsonObject& request) {
             remaps.append(QJsonObject{{"keyword",r.keyword},{"point",r.point},{"slot",QString::number(r.slot)},
                 {"world",frame(world)},{"parentWorld",frame(parent)},{"attachmentWorld",frame(root)}});
         }
-        return {{"text",_details->toPlainText()},{"viewport",_window->getGLView()->studioDiagnostics()},{"attachmentRemaps",remaps}};
+        return {{"text",_details->toPlainText()},{"viewport",_window->getGLView()->studioDiagnostics()},{"attachmentRemaps",remaps},{"weaponLibrary",_weaponLibraryReport}};
     }
     if(method=="pose") {
         QJsonArray bones;

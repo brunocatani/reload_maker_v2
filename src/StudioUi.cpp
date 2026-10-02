@@ -7,6 +7,7 @@
 #include "LoadoutView.h"
 #include "MagazineViewport.h"
 #include <QCompleter>
+#include <QAbstractItemModel>
 #include <QDir>
 #include <QFileInfo>
 #include <QSettings>
@@ -503,7 +504,7 @@ void ReloadMakerController::refreshSourceBar() {
         _sourceLabel->setText(QStringLiteral("MO2 · %1").arg(_launchSnapshot.profileName));
         _sourceLabel->setToolTip(QStringLiteral("%1 / %2\n%3 weapons · %4 plugins · %5 winning resources\nGame Data: %6")
             .arg(QDir::toNativeSeparators(_launchSnapshot.instancePath), _launchSnapshot.profileName)
-            .arg(_plugins.isEmpty() ? 0 : _plugins.first().weapons.size()).arg(_libraryPlugins.size()).arg(_packageResources.files().size())
+            .arg(_weaponSelections.size()).arg(_libraryPlugins.size()).arg(_packageResources.files().size())
             .arg(QDir::toNativeSeparators(_gameData)));
     } else if (!_package.sourcePath.isEmpty()) {
         _sourceLabel->setText(_package.displayName.isEmpty()?QFileInfo(_package.sourcePath).fileName():_package.displayName);
@@ -519,8 +520,12 @@ void ReloadMakerController::refreshSourceBar() {
         const QString previous = _pluginFilter->currentData().toString();
         _pluginFilter->clear();
         _pluginFilter->addItem(QStringLiteral("All plugins"), QString());
+        QHash<QString,int> counts;
+        for(const auto& selection:_weaponSelections){const auto& catalog=_plugins[selection.pluginIndex];const auto& w=catalog.weapons[selection.weaponIndex];
+            const auto origin=catalog.origins.value(w.formId);++counts[origin.plugin.toLower()];
+            if(origin.winner.compare(origin.plugin,Qt::CaseInsensitive)!=0)++counts[origin.winner.toLower()];}
         for (const auto& plugin : _libraryPlugins)
-            if (plugin.weapons > 0) _pluginFilter->addItem(QStringLiteral("%1  ·  %2").arg(plugin.name).arg(plugin.weapons), plugin.name);
+            if (counts.value(plugin.name.toLower()) > 0) _pluginFilter->addItem(QStringLiteral("%1  ·  %2").arg(plugin.name).arg(counts.value(plugin.name.toLower())), plugin.name);
         _pluginFilter->setCurrentIndex(std::max(0, _pluginFilter->findData(previous)));
     }
     refreshWeaponPicker();
@@ -543,6 +548,7 @@ void ReloadMakerController::refreshWeaponPicker() {
         const auto winner=plugin.origins.value(weapon.formId).winner;
         _weaponPicker->setItemData(_weaponPicker->count()-1,QStringLiteral("%1\nOrigin: %2\nWinning weapon record: %3\n%4").arg(weapon.editorId,origin,winner.isEmpty()?plugin.fileName:winner,covered.isEmpty()?"Workspace coverage has not been scanned":covered+" · check the selected configuration's sources before export"),Qt::ToolTipRole);
     }
+    _weaponPicker->model()->sort(0);
     _weaponPicker->setCurrentIndex(_weaponPicker->findData(_weaponCombo->currentIndex()));
     _weaponPicker->setEnabled(_weaponPicker->count() > 0 && !_loadThread);
 }

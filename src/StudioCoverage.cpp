@@ -50,13 +50,13 @@ QJsonObject ReloadMakerController::packCoverageState(bool refresh) {
         const auto record=selectionRecordKey(i);const auto winner=plugin.origins.value(weapon.formId).winner;
         loaded.append(QJsonObject{{"record",record},{"selection",i},{"name",weapon.name.isEmpty()?weapon.editorId:weapon.name},{"editorId",weapon.editorId},
             {"owner",record.section(':',0,0)},{"winner",winner.isEmpty()?plugin.fileName:winner},{"coverage",coverageLabel(record)}});}
-    result["loadedWeapons"]=loaded;result["sourceMode"]=_libraryMode?"mo2-profile":!_package.resourceData.isEmpty()?"explicit-data":"ordered-packages";result["profile"]=_libraryMode?_launchSnapshot.profileName:QString();
+    result["loadedWeapons"]=loaded;result["weaponFilter"]=_weaponLibraryReport;result["sourceMode"]=_libraryMode?"mo2-profile":!_package.resourceData.isEmpty()?"explicit-data":"ordered-packages";result["profile"]=_libraryMode?_launchSnapshot.profileName:QString();
     return result;
 }
 void ReloadMakerController::showPackCoverage() {
     if(auto* existing=_window->findChild<QDialog*>("PackCoverageDialog")){existing->show();existing->raise();return;}
     auto* dialog=new QDialog(_window);dialog->setObjectName("PackCoverageDialog");dialog->setAttribute(Qt::WA_DeleteOnClose);dialog->setWindowTitle("Reload library");dialog->resize(1040,780);
-    auto* layout=new QVBoxLayout(dialog);auto* intro=new QLabel("Browse weapons by their originating ESP and inspect saved pack coverage. Counts describe authored configurations. Check current source compatibility before export; this view does not change game enablement.");intro->setWordWrap(true);layout->addWidget(intro);
+    auto* layout=new QVBoxLayout(dialog);auto* intro=new QLabel("Browse player weapons, including melee, by their originating ESP. Internal/non-playable records and unavailable models are excluded. Saved coverage does not establish current source compatibility or game enablement.");intro->setWordWrap(true);layout->addWidget(intro);
     auto* search=new QLineEdit;search->setPlaceholderText("Filter weapon, ESP, winning record or pack name…");layout->addWidget(search);
     auto* tree=new QTreeWidget;tree->setColumnCount(3);tree->setHeaderLabels({"ESP / weapon / authored pack","Coverage","Winning weapon record"});tree->setColumnWidth(0,410);tree->setColumnWidth(1,265);layout->addWidget(tree,3);
     auto* detail=new QPlainTextEdit;detail->setReadOnly(true);layout->addWidget(detail,1);

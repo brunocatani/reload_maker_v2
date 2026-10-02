@@ -60,6 +60,18 @@ namespace reloadmaker {
 #endif
     }
 
+    QString sourceLanguage(const QStringList& iniPaths) {
+        QString language="en";
+        for(const auto& path:iniPaths){if(!QFileInfo::exists(path))continue;bool general=false;
+            for(auto line:lines(path)){
+                if(line.startsWith('[')){general=line.compare("[General]",Qt::CaseInsensitive)==0;continue;}
+                const auto equal=line.indexOf('=');if(general&&equal>0&&line.left(equal).trimmed().compare("sLanguage",Qt::CaseInsensitive)==0)language=line.mid(equal+1).trimmed().toLower();
+            }}
+        if(language.isEmpty()||language.size()>32||!std::all_of(language.begin(),language.end(),[](QChar c){return c.isLetter()&&c.unicode()<128;}))
+            throw std::runtime_error("Invalid sLanguage in the selected source INIs");
+        return language;
+    }
+
     QByteArray profileFingerprint(const QString& instancePath, const QString& profilePath) {
         QCryptographicHash hash(QCryptographicHash::Sha256);
         // Only selected profile/game paths, not window geometry changed by MO2.
@@ -138,6 +150,7 @@ namespace reloadmaker {
             QString archiveError;
             result.archives=resolveGameArchives(result.dataPath,result.plugins,{QDir(result.profilePath).filePath("fallout4.ini"),QDir(result.profilePath).filePath("fallout4custom.ini")},archiveError);
             if(!archiveError.isEmpty())throw std::runtime_error(archiveError.toStdString());
+            result.language=sourceLanguage({QDir(result.profilePath).filePath("fallout4.ini"),QDir(result.profilePath).filePath("fallout4custom.ini")});
             result.fingerprint = profileFingerprint(result.instancePath, result.profilePath);
             if (result.fingerprint != initialFingerprint) { throw std::runtime_error("MO2 profile changed while reading it; relaunch the viewer through MO2"); }
         } catch (const std::exception& exception) { result.error = QString::fromUtf8(exception.what()); }
@@ -258,13 +271,15 @@ namespace reloadmaker {
             result.error = QStringLiteral("Library not installed: %1 plugin errors. See Diagnostics. Ignoring an invalid patch could resurrect overridden records.").arg(diagnostics.size());
             return result;
         }
+        if (!result.resources.openLoadOrder(snapshot.dataPath, snapshot.archives, result.error, progress, cancelled)) {
+            result.cancelled = stopped(); return result;
+        }
+        for(auto& plugin:contents){if(stopped()){result.cancelled=true;return result;}
+            EspReader::resolveNames(plugin,snapshot.language,[&](const QString& path,QString& error){return result.resources.read(path,error);});}
         if (progress) { progress(QStringLiteral("Resolving winning records and cross-plugin references"), 0, 0); }
         result.catalog = mergeLoadOrder(contents, result.error);
         result.catalog.diagnostics.append(diagnostics);
         if (!result.error.isEmpty()) { return result; }
-        if (!result.resources.openLoadOrder(snapshot.dataPath, snapshot.archives, result.error, progress, cancelled)) {
-            result.cancelled = stopped(); return result;
-        }
         if (profileFingerprint(snapshot.instancePath, snapshot.profilePath) != snapshot.fingerprint) {
             result.error = QStringLiteral("MO2 profile changed during indexing. Relaunch Reload Maker through MO2.");
         }
