@@ -1,5 +1,6 @@
 // Preview and Operate settings saved with the project: slide spring return,
-// weapon-fixed motion, approximate clip transitions and arms shown. They are
+// weapon-fixed motion, approximate clip transitions, arms shown and the
+// QuickHands NoExtender reload. They are
 // document fields; their controls only show them and report user changes.
 // Each setter does what the control's change used to trigger, and only when
 // the value changes.
@@ -80,6 +81,17 @@ namespace reloadmaker
         showChecked(_showArmsCheck, shown);
         setArmsVisible(shown);
         noteDocumentChange("arms shown");
+    }
+
+    // The caller reassembles the weapon, which picks the reload clip.
+    void ReloadMakerController::setGlockNoExtender(bool enabled)
+    {
+        if (enabled == _glockNoExtender) {
+            return;
+        }
+        _glockNoExtender = enabled;
+        showChecked(_simulationNoExtender, enabled);
+        noteDocumentChange("NoExtender reload");
     }
 
     // Re-poses the current clip after a motion or transition change.

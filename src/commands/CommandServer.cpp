@@ -4,13 +4,8 @@
 #include "commands/CommandSupport.h"
 #include "glview.h"
 
-#include <QCheckBox>
-#include <QComboBox>
 #include <QCoreApplication>
-#include <QDoubleSpinBox>
 #include <QJsonDocument>
-#include <QLineEdit>
-#include <QListWidget>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QScopedValueRollback>
@@ -70,30 +65,13 @@ namespace reloadmaker
                 acceptCommandClient(server->nextPendingConnection());
             }
         });
-        // UI edits and command edits share the same generation; clients must read
-        // current state instead of reusing selections from an earlier scene.
-        // Timer-driven view refreshes (for example the highlighted sound cue
-        // during playback) are not edits.
-        const auto widgetChanged = [this](const QObject* widget) {
-            noteDocumentChange(QStringLiteral("%1 \"%2\"").arg(widget->metaObject()->className(), widget->objectName()));
-        };
-        for (auto* widget : _window->findChildren<QComboBox*>()) {
-            connect(widget, qOverload<int>(&QComboBox::currentIndexChanged), this, [widgetChanged, widget] { widgetChanged(widget); });
-        }
-        for (auto* widget : _window->findChildren<QDoubleSpinBox*>()) {
-            connect(widget, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [widgetChanged, widget] { widgetChanged(widget); });
-        }
-        for (auto* widget : _window->findChildren<QLineEdit*>()) {
-            connect(widget, &QLineEdit::textEdited, this, [widgetChanged, widget] { widgetChanged(widget); });
-        }
-        for (auto* widget : _window->findChildren<QCheckBox*>()) {
-            connect(widget, &QCheckBox::toggled, this, [widgetChanged, widget] { widgetChanged(widget); });
-        }
-        for (auto* widget : _window->findChildren<QListWidget*>()) {
-            connect(widget, &QListWidget::currentRowChanged, this, [widgetChanged, widget] { widgetChanged(widget); });
-        }
     }
 
+    // UI edits and command edits share one generation, so clients read current
+    // state instead of reusing selections from an earlier scene. Commands and
+    // the setters behind UI edits advance it; showing a value does not, and
+    // neither do timer-driven view refreshes (for example the highlighted
+    // sound cue during playback).
     void ReloadMakerController::noteDocumentChange(const QString& source)
     {
         if (_viewRefresh) {

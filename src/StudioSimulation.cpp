@@ -87,7 +87,7 @@ void ReloadMakerController::createSimulationUi() {
             setStatus("This weapon has a default hand fit. Configure the selected magazine to change it.");resolveMagazineGrabGrip();return;
         }
         if(id.isEmpty())_magazineGrabGrips.remove(key);else _magazineGrabGrips[key]=id;
-        _magazineGripDrafts.remove(key);resolveMagazineGrabGrip();(void)applyPose(_simulation.seconds);updateSimulationControls();(void)saveSession();
+        _magazineGripDrafts.remove(key);noteDocumentChange("magazine grip");resolveMagazineGrabGrip();(void)applyPose(_simulation.seconds);updateSimulationControls();(void)saveSession();
     });
     auto* optionsTitle=new QLabel("BEHAVIOUR",panel);optionsTitle->setObjectName("Section");layout->addWidget(optionsTitle);
     _operatingGripStatus=hint({},panel);layout->addWidget(_operatingGripStatus);
@@ -102,7 +102,7 @@ void ReloadMakerController::createSimulationUi() {
     connect(_simulationSpring,&QCheckBox::toggled,this,[this](bool enabled){setSlideSpringReturn(enabled);});
     _simulationNoExtender=new QCheckBox("QuickHands: standard magazine grip",panel);layout->addWidget(_simulationNoExtender);
     _simulationNoExtender->setToolTip("Use the package's optional NoExtender reload with the unextended standard magazine and a QuickHands animation set.");
-    connect(_simulationNoExtender,&QCheckBox::toggled,this,[this](bool enabled){_glockNoExtender=enabled;rebuildWeapon();});
+    connect(_simulationNoExtender,&QCheckBox::toggled,this,[this](bool enabled){setGlockNoExtender(enabled);rebuildWeapon();});
     auto* authorGrips=new QPushButton("AUTHOR RELOAD GRIPS",panel);layout->addWidget(authorGrips);
     authorGrips->setToolTip("Pause at this reload moment and open the hand editor with the weapon fixed and the magazine selected.");
     connect(authorGrips,&QPushButton::clicked,this,[this]{(void)authorReloadGrips();});

@@ -140,6 +140,7 @@ namespace reloadmaker
         }
         rememberMagazineGrip();
         _interactionHand = hand;
+        noteDocumentChange("interaction hand");
         resolveMagazineGrabGrip();
         resolveOperatingFingers();
         if (_workspace == GripsWorkspace && _editingMagazine) {
@@ -150,7 +151,6 @@ namespace reloadmaker
             (void)applyPose(_playbackTime);
         }
         updateInteractionGripUi();
-        ++_revision;
         return true;
     }
 

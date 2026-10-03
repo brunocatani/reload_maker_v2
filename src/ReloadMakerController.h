@@ -274,8 +274,10 @@ namespace reloadmaker
         void showWeaponFixedMotion();
         void setApproximateTransitions(bool enabled);
         void setArmsShown(bool shown);
+        void setGlockNoExtender(bool enabled);
         void refreshPoseMode();
         [[nodiscard]] static bool isArmsBody(const QString& body);
+        void setArmsBody(const QString& body);
         void showArmsBody();
         QString sourcePolicyKey() const;
         [[nodiscard]] bool sourcePluginLoaded(const QString& plugin) const;

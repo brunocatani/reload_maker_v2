@@ -38,6 +38,7 @@ namespace reloadmaker
         if (_partGripDraft && !sameMechanismPart(_partGripDraft->pose.placement, anchor.description)) {
             _partGripDraft.reset();
         }
+        noteDocumentChange("workshop part");
         if (!applyPose(_playbackTime)) {
             return;
         }

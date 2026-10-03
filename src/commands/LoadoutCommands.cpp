@@ -102,12 +102,11 @@ namespace reloadmaker
             require(!params.contains("slot"), "Select parts before choosing the optional reload clip");
             require(!params["reloadNoExtender"].toBool() || !glockNoExtenderPath().isEmpty(),
                     "NoExtender requires the standard Glock magazine and a QuickHands set");
-            _glockNoExtender = params["reloadNoExtender"].toBool();
+            setGlockNoExtender(params["reloadNoExtender"].toBool());
         }
         // The rebuild below assembles the new body.
         if (params.contains("body")) {
-            _armsBody = params["body"].toString();
-            showArmsBody();
+            setArmsBody(params["body"].toString());
         }
         if (params.contains("slot")) {
             auto* config = configuration();

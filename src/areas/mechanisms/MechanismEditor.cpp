@@ -137,6 +137,7 @@ namespace reloadmaker
             s.release = ReleaseRule(form.release);
             s.pivot = form.pivot;
         }
+        noteDocumentChange("mechanism definition");
         QString error;
         const int master = resolveMechanismAnchor(p.anchor, error);
         Transformf world;

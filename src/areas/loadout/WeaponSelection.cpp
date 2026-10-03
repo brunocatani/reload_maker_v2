@@ -39,6 +39,17 @@ namespace reloadmaker
         return body == QLatin1String("male") || body == QLatin1String("female");
     }
 
+    // The caller reassembles the weapon with the new arms.
+    void ReloadMakerController::setArmsBody(const QString& body)
+    {
+        if (body == _armsBody) {
+            return;
+        }
+        _armsBody = body;
+        showArmsBody();
+        noteDocumentChange("arms body");
+    }
+
     void ReloadMakerController::showArmsBody()
     {
         if (!_bodyCombo) {

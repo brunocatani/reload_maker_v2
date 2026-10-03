@@ -254,7 +254,7 @@ void ReloadMakerController::createUi() {
     _bodyCombo->addItem("Male arms", "male");_bodyCombo->addItem("Female arms", "female");
 
         connect(_bodyCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int) {
-            _armsBody = _bodyCombo->currentData().toString();
+            setArmsBody(_bodyCombo->currentData().toString());
             rebuildWeapon();
         });
         connect(_partSearch, &QLineEdit::textChanged, this, [this]() { refreshAttachments(); });
