@@ -47,6 +47,8 @@ namespace reloadmaker {
         float reloadRackAt{-1}, reloadFeedAt{-1};
         bool ammoKnown()const{return capacity>0;}
         bool canFire()const{return ammoKnown()&&chambered&&!slideLocked&&action==SimulationAction::Idle&&slide<=.001f&&handle<=.001f&&!magazine.busy();}
+        // Empty chamber with the action closed and at rest: the trigger only clicks.
+        bool canDryFire()const{return !chambered&&action==SimulationAction::Idle&&inputProgress()<=.001f&&slide<=.001f&&!magazine.busy();}
         bool willLockAfterShot()const{return action==SimulationAction::Fire&&pistolLock&&magazine.seated()&&magazineRounds==0&&!chambered;}
         bool feedCycleActive()const{return _cycleArmed;}
         void configureAmmunition(int magazineCapacity,bool lockPistol,WeaponMechanism profile=WeaponMechanism::PistolSlide);

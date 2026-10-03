@@ -34,6 +34,7 @@
 #include <QSharedPointer>
 #include <QElapsedTimer>
 #include <QPersistentModelIndex>
+#include <QSet>
 #include <QVector>
 
 #include <cstdint>
@@ -476,6 +477,36 @@ namespace reloadmaker
         QString _magazineError;
         struct MagazineVisual {QPersistentModelIndex node;int flags{0};bool empty{false};int track{-1};bool cartridge{false};bool nativeOnly{false};};
         QVector<MagazineVisual> _magazineVisuals;
+        // Steps of the Operate simulation (src/areas/operate/).
+        bool buildSrepSimulationRig(SimulationRig& rig, QString& error);
+        bool buildMk18SimulationRig(SimulationRig& rig, QString& error);
+        bool measureRifleFireInterval(const HkxClip& single, const AnimationAction* automatic, QString& error);
+        bool sampleRifleFireBolt(const HkxClip& base, const HkxClip& clip, QString& error);
+        bool useReloadBoltStroke(const HkxClip& singleFire);
+        bool resolveBoltCycleTracks();
+        bool resolveSimulationMagazineRoots();
+        bool prepareMechanismMotion();
+        bool runMagazineAction(const QString& action);
+        bool startNativeAction(bool fire);
+        [[nodiscard]] QString simulationRejection(const QString& action) const;
+        void startSimulationClock();
+        void setBoltDriveCurve(const Vec3f& hit, ReloadDriveCurve& curve) const;
+        bool setStrokeDriveCurve(const Vec3f& hit, ReloadDriveCurve& curve, QString& error);
+        void addSlideTargets(QHash<int, Transformf>& targets, bool holdOpen) const;
+        void addAr15Targets(QHash<int, Transformf>& targets, bool holdOpen) const;
+        [[nodiscard]] Transformf ar15BoltPose(bool holdOpen) const;
+        void addM1ATargets(QHash<int, Transformf>& targets, bool holdOpen) const;
+        bool addMagazineRoundTargets(QHash<int, Transformf>& targets);
+        void addDetachedMagazineTargets(QHash<int, Transformf>& targets, QSet<int>& sceneTargets) const;
+        bool poseSimulationTargets(const QHash<int, Transformf>& targets, const QSet<int>& sceneTargets,
+                                   QVector<Transformf>& local, QVector<Transformf>& world);
+        [[nodiscard]] bool magazineVisualHidden(const MagazineVisual& visual) const;
+        [[nodiscard]] bool reloadTrackCulled(int track) const;
+        [[nodiscard]] QJsonObject glockReloadProfile() const;
+        [[nodiscard]] QJsonArray simulationPartsJson() const;
+        [[nodiscard]] QJsonArray magazineRootsJson() const;
+        [[nodiscard]] QJsonArray magazineShapesJson() const;
+        bool addRifleExport(QJsonObject& result) const;
         std::optional<MagazineSetup> _magazineSetup;
         MagazineViewport* _magazineViewport{nullptr};
         QPushButton* _magazineOut{nullptr};
