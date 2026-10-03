@@ -128,6 +128,22 @@ namespace reloadmaker
             int totalBones{ 0 };
         };
 
+        // Steps of rebuildWeapon (areas/loadout/WeaponAssembly.cpp). Each
+        // returns false with the user-facing status in `error`.
+        [[nodiscard]] QString assemblyGeometrySignature(const PluginContent& plugin, const WeaponRecord& weapon) const;
+        void resetAssemblyState(bool reuseGeometry);
+        bool loadFirstPersonSkeleton(QString& error);
+        bool assembleScene(NifModel& destination, const WeaponRecord& weapon, const QString& geometrySignature, QString& error);
+        bool attachFirstPersonArms(NifModel& destination, QString& error);
+        bool attachArmsModel(NifModel& destination, const QString& path, const QString& name, QPersistentModelIndex& root,
+                             int& flags, QString& error);
+        bool attachWeaponModels(NifModel& destination, const WeaponRecord& weapon, QString& error);
+        bool attachReceiver(NifModel& destination, const ObjectModRecord& receiver, int baseNodesReplaced, QString& error);
+        bool attachObjectMods(NifModel& destination, bool& complete, QString& error);
+        bool placeAttachment(NifModel& destination, const ObjectModRecord& record, NifModel& attachment,
+                             const ConnectTarget& target, const QString& point, QString& error);
+        bool showReadyPose(bool sameWeapon, const QString& previousAction, QString& error);
+
         struct AnimationAction
         {
             QString label;
