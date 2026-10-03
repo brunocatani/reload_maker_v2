@@ -229,6 +229,17 @@ namespace reloadmaker
         bool saveSession(const QString& path = {});
         QString suggestedSessionPath() const;
         bool beginWeaponProject(int selectedIndex);
+        // Selected weapon: an index into _weaponSelections, -1 when none.
+        // selectWeapon() is the user-facing change: it may switch projects and
+        // reassembles. Restores assign the field directly.
+        int _selectedWeapon{ -1 };
+        void selectWeapon(int index);
+        // `index` when it names a weapon selection, otherwise -1.
+        [[nodiscard]] int validWeaponIndex(int index) const;
+        // First-person arms body, "male" or "female". The arms picker shows it.
+        QString _armsBody{ "male" };
+        [[nodiscard]] static bool isArmsBody(const QString& body);
+        void showArmsBody();
         QString sourcePolicyKey() const;
         [[nodiscard]] bool sourcePluginLoaded(const QString& plugin) const;
         QJsonObject sourcePolicyState() const;
@@ -481,6 +492,9 @@ namespace reloadmaker
         quint64 _revisionAfterCommand{0};
         QString _revisionChangedOutside;
         [[nodiscard]] QString staleRevisionMessage() const;
+        // Advances the revision for a document change that is not a view
+        // refresh, remembering `source` when it happened outside a command.
+        void noteDocumentChange(const QString& source);
         QJsonObject _pendingSession;
         QJsonObject _pendingReloadDraft;
         QString _sessionPath;
@@ -877,7 +891,6 @@ namespace reloadmaker
         QComboBox* _weaponPicker{nullptr};
         QComboBox* _clipCombo{nullptr};
         QLabel* _loadoutTitle{nullptr};
-        QComboBox* _weaponCombo{ nullptr };
         QComboBox* _bodyCombo{ nullptr };
         QTabWidget* _pages{ nullptr };
         QComboBox* _pluginFilter{nullptr};

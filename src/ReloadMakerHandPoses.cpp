@@ -170,7 +170,7 @@ namespace reloadmaker {
     {
         if (!_handPoseDock) { return; }
         const bool frame = !_loadThread && !_rebuildTimer->isActive() && _clip.valid() &&
-            _renderedWeapon == _weaponCombo->currentIndex() && _renderedWeapon >= 0 &&
+            _renderedWeapon == _selectedWeapon && _renderedWeapon >= 0 &&
             !_geometrySignature.isEmpty() &&
             _globalPose.size() == _skeleton.bones.size();
         const auto* selected = selectedHandPose();
@@ -352,7 +352,7 @@ namespace reloadmaker {
         return {{"weaponName",weapon->name},{"weaponEditorId",weapon->editorId},{"weaponRecord",poseRecordKey(weapon->formId)},
             {"modifications",mods},{"action",_activeAction},{"animation",_activeAnimationPath},{"baselineAnimation",_stateBaselineAnimationPath},
             {"timeSeconds",_playbackTime},{"clipTimeSeconds",std::min(_playbackTime,_clip.durationSeconds)},
-            {"body",_bodyCombo->currentData().toString()},{"viewMode",_motionMode->currentText()},
+            {"body",_armsBody},{"viewMode",_motionMode->currentText()},
             {"approximateTransitions",_transitionCheck->isChecked()},
             {"resourceProvider",_libraryMode ? _packageResources.provider(_activeAnimationPath) : _package.sourcePath}};
     }

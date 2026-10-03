@@ -158,8 +158,8 @@ namespace reloadmaker
 
     void ReloadMakerController::refreshWeapons()
     {
-        const QSignalBlocker blocker(_weaponCombo);
-        _weaponCombo->clear();
+        // Source -> plugin -> weapon: a new list never selects an unrelated first record.
+        _selectedWeapon = -1;
         _weaponSelections.clear();
         _configurations.clear();
         QJsonArray excluded;QJsonObject reasons;int total=0,hidden=0;
@@ -177,10 +177,6 @@ namespace reloadmaker
                     continue;
                 }
                 _weaponSelections.append(WeaponSelection{ pluginIndex, weaponIndex });
-                _weaponCombo->addItem(
-                    QStringLiteral("%1  ·  %2  ·  %3")
-                        .arg(weapon.name, weapon.editorId, _libraryMode ? plugin.origins.value(weapon.formId).plugin : plugin.fileName),
-                    _weaponSelections.size() - 1);
             }
         }
         _weaponLibraryReport={{"total",total},{"shown",_weaponSelections.size()},{"hidden",hidden},{"reasons",reasons},
@@ -188,13 +184,9 @@ namespace reloadmaker
         QStringList counts;for(auto it=reasons.begin();it!=reasons.end();++it)counts.append(it.key()+"="+QString::number(it.value().toInt()));
         appendDiagnostic(QString("WEAPON LIBRARY: %1 shown / %2 records; %3 excluded. %4. Playable melee retained.")
             .arg(_weaponSelections.size()).arg(total).arg(hidden).arg(counts.join("; ")));
-        _weaponCombo->setCurrentIndex(-1); // Source -> plugin -> weapon; never select an unrelated first record.
         refreshAttachments();
 
         updateSimulationControls();
-        if (_pendingSession.isEmpty() && _weaponCombo->currentIndex() >= 0 && !_gameData.isEmpty()) {
-            _rebuildTimer->start();
-        }
     }
 
     WeaponConfiguration* ReloadMakerController::configuration()
@@ -204,7 +196,7 @@ namespace reloadmaker
 
     const WeaponConfiguration* ReloadMakerController::configuration() const
     {
-        const int index = _weaponCombo->currentIndex();
+        const int index = _selectedWeapon;
         if (index < 0) { return nullptr; }
         auto found = _configurations.find(index);
         if (found == _configurations.end()) {
@@ -289,7 +281,7 @@ namespace reloadmaker
         if(_loadThread||_reloadCapturing||_rebuildTimer->isActive())return;
         const auto* config=configuration();const auto* slot=config?config->slot(key):nullptr;
         if(!slot||!config->availableSlots().contains(key))return;
-        const auto weapon=selectionRecordKey(_weaponCombo->currentIndex());const auto source=_browserSourceKey;
+        const auto weapon=selectionRecordKey(_selectedWeapon);const auto source=_browserSourceKey;
         _focusedSlot=key;if(_slotOverlay)_slotOverlay->setSelected(key);
         QDialog dialog(_window);dialog.setObjectName("LoadoutChoices");dialog.setWindowTitle("Choose "+slot->label);dialog.resize(560,520);
         auto* layout=new QVBoxLayout(&dialog);auto* title=new QLabel(slot->label,&dialog);title->setObjectName("Section");layout->addWidget(title);
@@ -312,7 +304,7 @@ namespace reloadmaker
         connect(choices,&QListWidget::itemDoubleClicked,&dialog,&QDialog::accept);
         if(dialog.exec()!=QDialog::Accepted||!choices->currentItem()||choices->currentItem()->isHidden())return;
         auto* current=configuration();
-        if(source!=_browserSourceKey||weapon!=selectionRecordKey(_weaponCombo->currentIndex())||!current||!current->availableSlots().contains(key))return;
+        if(source!=_browserSourceKey||weapon!=selectionRecordKey(_selectedWeapon)||!current||!current->availableSlots().contains(key))return;
         const auto id=choices->currentItem()->data(kFormIdRole).toUInt();
         if(current->selected(key)==id)return;
         if(current->select(key,id)){refreshAttachments();scheduleRebuild();++_revision;}
@@ -566,9 +558,8 @@ namespace reloadmaker
 
     ReloadMakerController::WeaponSelection ReloadMakerController::currentWeaponSelection() const
     {
-        const int selectionIndex = _weaponCombo->currentIndex() < 0 ? -1 : _weaponCombo->currentData().toInt();
-        return selectionIndex >= 0 && selectionIndex < _weaponSelections.size()
-            ? _weaponSelections.at(selectionIndex)
+        return _selectedWeapon >= 0 && _selectedWeapon < _weaponSelections.size()
+            ? _weaponSelections.at(_selectedWeapon)
             : WeaponSelection{};
     }
 
@@ -1545,7 +1536,7 @@ namespace reloadmaker
         _sourceMisses = 0;
         _copyMilliseconds = _pasteMilliseconds = _decodeMilliseconds = 0;
         const QString previousAction = _activeAction;
-        const bool sameWeapon = _renderedWeapon == _weaponCombo->currentIndex();
+        const bool sameWeapon = _renderedWeapon == _selectedWeapon;
         const PluginContent* plugin = currentPlugin();
         const WeaponRecord* weapon = currentWeapon();
         if (!plugin || !weapon || !_packageResources.isOpen()) {
@@ -1555,8 +1546,8 @@ namespace reloadmaker
             setStatus(QStringLiteral("Select the Fallout 4 VR Data folder before building the weapon."), true);
             return;
         }
-        QStringList geometryParts{QString::number(_weaponCombo->currentIndex()),
-                                  _bodyCombo->currentData().toString(), normalizeNifPath(weapon->baseModelPath)};
+        QStringList geometryParts{QString::number(_selectedWeapon),
+                                  _armsBody, normalizeNifPath(weapon->baseModelPath)};
         for (const auto* mod : configuredObjectMods()) {
             if (!mod->modelPath.isEmpty()) {
                 geometryParts.append(QString::number(configurationSlotKey(*mod)) + QLatin1Char(':') + normalizeNifPath(mod->modelPath));
@@ -1662,7 +1653,7 @@ namespace reloadmaker
                 return;
             }
 
-            const QString bodyPath = _bodyCombo->currentData().toString() == QStringLiteral("female")
+            const QString bodyPath = _armsBody == QStringLiteral("female")
                 ? QStringLiteral("meshes/actors/character/characterassets/1stpersonfemalebody.nif")
                 : QStringLiteral("meshes/actors/character/characterassets/1stpersonmalebody.nif");
             const auto body = sourceNif(referenceMeshes(), bodyPath, error);
@@ -1691,7 +1682,7 @@ namespace reloadmaker
                 return;
             }
 
-            const QString handsPath = _bodyCombo->currentData().toString() == QStringLiteral("female")
+            const QString handsPath = _armsBody == QStringLiteral("female")
                 ? QStringLiteral("meshes/actors/character/characterassets/1stpersonfemalehands.nif")
                 : QStringLiteral("meshes/actors/character/characterassets/1stpersonmalehands.nif");
             const auto hands = sourceNif(referenceMeshes(), handsPath, error);
@@ -1934,7 +1925,7 @@ namespace reloadmaker
                 return;
             }
             if (assemblyComplete) { _geometrySignature = geometrySignature; }
-            _renderedWeapon = _weaponCombo->currentIndex();
+            _renderedWeapon = _selectedWeapon;
         }
         setArmsVisible(_showArmsCheck->isChecked());
         refreshSlotCallouts();

@@ -154,10 +154,6 @@ void ReloadMakerController::createUi() {
     auto* packageLayout = new QVBoxLayout(packagePanel);
     packageLayout->setContentsMargins(12, 12, 12, 12);
     packageLayout->setSpacing(8);
-    // Hidden selection authority: index into _weaponSelections. The visible
-    // header pickers filter and drive it.
-    _weaponCombo = new QComboBox(_window);
-    _weaponCombo->hide();
     _pages = new QTabWidget(packagePanel);
     _pages->tabBar()->hide();
     packageLayout->addWidget(_pages, 1);
@@ -256,17 +252,10 @@ void ReloadMakerController::createUi() {
     _bodyCombo = new QComboBox(_window);_bodyCombo->setObjectName("ArmsBodyPicker");_bodyCombo->setAccessibleName("Hand model");
     _bodyCombo->addItem("Male arms", "male");_bodyCombo->addItem("Female arms", "female");
 
-        connect(_weaponCombo, qOverload<int>(&QComboBox::currentIndexChanged),
-                this, [this](int selectedIndex) {
-                    alignPluginToWeapon();
-                    if(beginWeaponProject(selectedIndex))return;
-                    refreshWeaponPicker();
-                    refreshAttachments();
-
-                    scheduleRebuild();
-                });
-        connect(_bodyCombo, qOverload<int>(&QComboBox::currentIndexChanged),
-                this, [this](int) { rebuildWeapon(); });
+        connect(_bodyCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int) {
+            _armsBody = _bodyCombo->currentData().toString();
+            rebuildWeapon();
+        });
         connect(_partSearch, &QLineEdit::textChanged, this, [this]() { refreshAttachments(); });
         const auto choosePart = [this](QListWidgetItem* item) {
             if(item&&item->data(kSectionRole).toInt()==kSlotHeader&&(item->flags()&Qt::ItemIsEnabled))

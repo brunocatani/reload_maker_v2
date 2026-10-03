@@ -59,7 +59,7 @@ QJsonArray ReloadMakerController::roadmapProgress() const {
     }
     auto operating=rig?exportInteractionGrips():QJsonObject{};operating.remove("grabLocations");
     const bool fingers=rig&&_operatingFingerError.isEmpty()&&(simulationMechanism()==WeaponMechanism::PistolSlide||operating["operatingFingers"].toArray().size()==2);
-    steps[7]={captured,fitted&&fingers,!handError.isEmpty()?handError:!fingers?(_operatingFingerError.isEmpty()?QString("Assign operating fingers for both hands."):_operatingFingerError):QString("Inspect required magazine hands and live-wrist operating fingers."),{{"magazineHands",hands},{"operating",operating},{"handMesh",_bodyCombo?_bodyCombo->currentData().toString():QString()}}};
+    steps[7]={captured,fitted&&fingers,!handError.isEmpty()?handError:!fingers?(_operatingFingerError.isEmpty()?QString("Assign operating fingers for both hands."):_operatingFingerError):QString("Inspect required magazine hands and live-wrist operating fingers."),{{"magazineHands",hands},{"operating",operating},{"handMesh",_armsBody}}};
     const auto locations=rig?exportGrabLocations():QJsonObject{};
     steps[8]={rig,rig&&(simulationMechanism()==WeaponMechanism::PistolSlide||!locations.isEmpty()),locations.isEmpty()?"No picked policy. Pistol templates may retain default part acquisition; other templates need surface points.":"Verify picked points on the actual part while closed, partly open and fully open.",locations};
     const auto sounds=rig?exportSounds():QJsonObject{};

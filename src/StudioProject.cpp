@@ -58,19 +58,19 @@ bool ReloadMakerController::beginWeaponProject(int selectedIndex) {
     const int previousIndex=_renderedWeapon;
     if(_loadThread||!_pendingSession.isEmpty()||previousIndex<0||selectedIndex<0||previousIndex==selectedIndex)return false;
     QString oldPath;
-    {const QSignalBlocker blocker(_weaponCombo);_weaponCombo->setCurrentIndex(previousIndex);
-        if(_reloadCapturing||_packProcess){setStatus("Finish the current capture or pack job before changing weapons.",true);return true;}
-        if(!saveSession())return true;
-        oldPath=_sessionPath;
-        _weaponCombo->setCurrentIndex(selectedIndex);
-    }
+    // The current project is saved under the previous weapon first.
+    _selectedWeapon=validWeaponIndex(previousIndex);
+    if(_reloadCapturing||_packProcess){setStatus("Finish the current capture or pack job before changing weapons.",true);return true;}
+    if(!saveSession())return true;
+    oldPath=_sessionPath;
+    _selectedWeapon=validWeaponIndex(selectedIndex);
     const auto next=suggestedSessionPath();_sessionPath.clear();
     if(QFileInfo(next).isFile()) {
         const bool all=allWeaponsSelected();
         openSession(next);
         if(all&&!_pendingSession.isEmpty())_pendingSession["browserPlugin"]=kAllWeaponsSource;
         if(!_loadThread&&_pendingSession.isEmpty()) {
-            const QSignalBlocker blocker(_weaponCombo);_weaponCombo->setCurrentIndex(previousIndex);_sessionPath=oldPath;refreshWeaponPicker();
+            _selectedWeapon=validWeaponIndex(previousIndex);_sessionPath=oldPath;refreshWeaponPicker();
         }
         return true;
     }
@@ -85,13 +85,13 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     QJsonObject record{{"format",1},{"kind","reload-maker-v2-project"},{"package",_package.sourcePath},{"gameData",_gameData},
         {"weaponName",currentWeapon()->name.isEmpty()?currentWeapon()->editorId:currentWeapon()->name},{"weaponEditorId",currentWeapon()->editorId},
         {"library",_libraryMode},{"mo2Instance",_mo2Instance},{"mo2Profile",_libraryMode?_launchSnapshot.profileName:QString()},{"weapon",poseRecordKey(currentWeapon()->formId)},
-        {"body",_bodyCombo->currentData().toString()},{"animationSource",animationSourceIdentity()},
+        {"body",_armsBody},{"animationSource",animationSourceIdentity()},
         {"animation",_activeAnimationPath},{"seconds",_playbackTime},{"motionMode",_motionMode->currentIndex()},
         {"transitions",_transitionCheck->isChecked()},{"showArms",_showArmsCheck->isChecked()},{"workspace",_workspace},
         {"hand",_handPoseSide->currentData().toInt()},{"fingerJoint",_fingerJoint->currentIndex()},
         {"selectedHandPose",selectedHandPose()?selectedHandPose()->id:QString()}};
     QJsonObject choices;
-    const auto sourcePlugins=selectionPlugins(_weaponCombo->currentIndex());
+    const auto sourcePlugins=selectionPlugins(_selectedWeapon);
     if(allWeaponsSelected())record["browserPlugin"]=kAllWeaponsSource;
     else if(!sourcePlugins.isEmpty())record["browserPlugin"]=sourcePlugins.contains(_browserPlugin,Qt::CaseInsensitive)?_browserPlugin:sourcePlugins.first();
     if (const auto* config = configuration()) for (const auto& slot : config->entries()) choices[QString::number(slot.key)] = QString::number(config->selected(slot.key));
@@ -268,17 +268,18 @@ void ReloadMakerController::restoreSessionSelection() {
     _pendingSession = {};
     int selected = -1;
     for (int i = 0; i < _weaponSelections.size(); ++i) {
-        const QSignalBlocker block(_weaponCombo); _weaponCombo->setCurrentIndex(i);
+        _selectedWeapon = i;
         if (currentWeapon() && poseRecordKey(currentWeapon()->formId) == record["weapon"].toString()&&
             (record["browserPlugin"].toString().isEmpty()||(_libraryMode&&record["browserPlugin"]==kAllWeaponsSource)||selectionPlugins(i).contains(record["browserPlugin"].toString(),Qt::CaseInsensitive))) { selected = i; break; }
     }
     if (selected < 0) {
-        {const QSignalBlocker block(_weaponCombo);_weaponCombo->setCurrentIndex(-1);}
+        _selectedWeapon = -1;
         refreshWeaponPicker();
         setStatus("The project weapon is absent or excluded from this source's player-weapon library. See Diagnostics for exclusion reasons.",true);return;
     }
     alignPluginToWeapon();refreshWeaponPicker();
-    { const QSignalBlocker block(_bodyCombo); _bodyCombo->setCurrentIndex(std::max(0,_bodyCombo->findData(record["body"].toString()))); }
+    _armsBody = isArmsBody(record["body"].toString()) ? record["body"].toString() : QStringLiteral("male");
+    showArmsBody();
     refreshAttachments();
     if (auto* config = configuration()) {
         if(record.contains("recordChoices")) {

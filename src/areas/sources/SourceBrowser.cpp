@@ -213,7 +213,7 @@ namespace reloadmaker
         if (allWeaponsSelected()) {
             return;
         }
-        const int selection = _weaponCombo->currentIndex();
+        const int selection = _selectedWeapon;
         const QStringList allowed = selectionPlugins(selection);
         if (allowed.isEmpty() || allowed.contains(_browserPlugin, Qt::CaseInsensitive)) {
             return;
@@ -295,16 +295,13 @@ namespace reloadmaker
         }
 
         // The open weapon does not come from the new plugin: save and close it.
-        const bool weaponOutsidePlugin = !selectionPlugins(_weaponCombo->currentIndex()).contains(name, Qt::CaseInsensitive);
+        const bool weaponOutsidePlugin = !selectionPlugins(_selectedWeapon).contains(name, Qt::CaseInsensitive);
         if (currentWeapon() && !allWeaponsSelected() && weaponOutsidePlugin) {
             if (!saveSession()) {
                 alignPluginToWeapon();
                 return false;
             }
-            {
-                const QSignalBlocker block(_weaponCombo);
-                _weaponCombo->setCurrentIndex(-1);
-            }
+            _selectedWeapon = -1;
             clearAssetCaches();
             _sessionPath.clear();
             refreshAttachments();
@@ -333,7 +330,7 @@ namespace reloadmaker
                 }
             }
         }
-        _weaponCombo->setCurrentIndex(index);
+        selectWeapon(index);
         return true;
     }
 

@@ -75,13 +75,7 @@ namespace reloadmaker
         // Timer-driven view refreshes (for example the highlighted sound cue
         // during playback) are not edits.
         const auto widgetChanged = [this](const QObject* widget) {
-            if (_viewRefresh) {
-                return;
-            }
-            ++_revision;
-            if (!_executingCommand) {
-                _revisionChangedOutside = QStringLiteral("%1 \"%2\"").arg(widget->metaObject()->className(), widget->objectName());
-            }
+            noteDocumentChange(QStringLiteral("%1 \"%2\"").arg(widget->metaObject()->className(), widget->objectName()));
         };
         for (auto* widget : _window->findChildren<QComboBox*>()) {
             connect(widget, qOverload<int>(&QComboBox::currentIndexChanged), this, [widgetChanged, widget] { widgetChanged(widget); });
@@ -97,6 +91,17 @@ namespace reloadmaker
         }
         for (auto* widget : _window->findChildren<QListWidget*>()) {
             connect(widget, &QListWidget::currentRowChanged, this, [widgetChanged, widget] { widgetChanged(widget); });
+        }
+    }
+
+    void ReloadMakerController::noteDocumentChange(const QString& source)
+    {
+        if (_viewRefresh) {
+            return;
+        }
+        ++_revision;
+        if (!_executingCommand) {
+            _revisionChangedOutside = source;
         }
     }
 
@@ -253,11 +258,11 @@ namespace reloadmaker
                  { "gameData", _gameData },
                  { "library", _libraryMode },
                  { "workspace", _workspace },
-                 { "weaponIndex", _weaponCombo->currentIndex() },
+                 { "weaponIndex", _selectedWeapon },
                  { "weapons", weapons },
                  { "slots", configurationSlots },
                  { "focusedSlot", QString::number(_focusedSlot) },
-                 { "body", _bodyCombo->currentData().toString() },
+                 { "body", _armsBody },
                  { "animationSource", animationSourceIdentity() },
                  { "actions", actions },
                  { "action", _activeAction },

@@ -22,9 +22,9 @@ namespace reloadmaker
         _commands.add({ "select_weapon", CommandAccess::Edit, CommandGate::WhenIdle,
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
                             const int index = params["index"].toInt(-1);
-                            require(index >= 0 && index < _weaponCombo->count(), "Unknown weapon index");
-                            _weaponCombo->setCurrentIndex(index);
-                            require(_weaponCombo->currentIndex() == index, "Weapon change failed: " + _lastError);
+                            require(index >= 0 && index < _weaponSelections.size(), "Unknown weapon index");
+                            selectWeapon(index);
+                            require(_selectedWeapon == index, "Weapon change failed: " + _lastError);
                             if (!_loadThread) {
                                 rebuildWeapon();
                             }
@@ -94,7 +94,7 @@ namespace reloadmaker
                     "Slot and modification IDs must be decimal strings from the current state");
         }
         if (params.contains("body")) {
-            require(_bodyCombo->findData(params["body"].toString()) >= 0, "Unknown body");
+            require(isArmsBody(params["body"].toString()), "Unknown body");
         }
         require(!params.contains("animationSet"), "Animation sets follow the equipped OMODs; select weapon parts instead.");
         if (params.contains("reloadNoExtender")) {
@@ -104,10 +104,10 @@ namespace reloadmaker
                     "NoExtender requires the standard Glock magazine and a QuickHands set");
             _glockNoExtender = params["reloadNoExtender"].toBool();
         }
+        // The rebuild below assembles the new body.
         if (params.contains("body")) {
-            const int index = _bodyCombo->findData(params["body"].toString());
-            require(index >= 0, "Unknown body");
-            _bodyCombo->setCurrentIndex(index);
+            _armsBody = params["body"].toString();
+            showArmsBody();
         }
         if (params.contains("slot")) {
             auto* config = configuration();
