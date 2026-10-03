@@ -319,8 +319,6 @@ namespace reloadmaker
         void setGripPlacement(const QJsonObject& params);
         QJsonObject mechanismOperation(const QJsonObject& params);
         void setMechanismStage(const QJsonObject& params);
-        void editReloadWindow(const QJsonObject& params);
-        void updateReloadWindow(ReloadRecipe& recipe, int index, const QJsonObject& params) const;
         void soundOperation(const QJsonObject& params);
         void editSoundCueFromCommand(int index, const QJsonObject& params);
 
@@ -601,7 +599,6 @@ namespace reloadmaker
         // refresh, remembering `source` when it happened outside a command.
         void noteDocumentChange(const QString& source);
         QJsonObject _pendingSession;
-        QJsonObject _pendingReloadDraft;
         QString _sessionPath;
         QString _lastError;
         QComboBox* _fingerJoint{nullptr};
@@ -612,21 +609,13 @@ namespace reloadmaker
         void createPartGripUi();
         void createMechanismUi();
         void createReloadUi();
-        void createReloadViewport();
         void setReloadWorkspace(bool active);
         void invalidateReloadCapture();
         void startReloadCapture();
         void advanceReloadCapture();
-        void refreshReloadWindows();
-        void selectReloadWindow(int window,int track=-1);
-        void refreshReloadMembers();
-        void selectReloadMember();
-        void applyReloadGrip();
+        void showReloadRecipe();
         void seekReload(float seconds);
         void tickReloadPreview();
-        void releaseReloadGrab(bool cancel);
-        void saveReloadRecipe();
-        [[nodiscard]] bool beginReloadGrab(QPointF point,ReloadDriveCurve& curve);
         void selectWorkshopPart(int anchorIndex,std::optional<Vec3f> point=std::nullopt,const QString& surface={});
         void refreshWorkshopChoices();
         void applyWorkshopPose();
@@ -1132,7 +1121,6 @@ namespace reloadmaker
         PartGripLibrary _partGripLibrary{PartGripLibrary::defaultDirectory()};
         QVector<PartGrip> _partGrips;
         std::optional<PartGrip> _partGripDraft;
-        std::optional<PartGrip> _suspendedAuthoringGrip;
         std::optional<PartGrip> _operateSuspendedGrip;
         struct PartGripFrame {
             bool weapon{false};
@@ -1142,16 +1130,12 @@ namespace reloadmaker
         } _partGripFrame;
         bool _gripPreviewValid{false};
         QString _gripError;
-        bool _reloadWorkspaceActive{false},_reloadCapturing{false},_reloadCaptureQueued{false},_reloadUpdating{false};
-        bool _reloadHeld{false},_reloadPlaying{false},_reloadReturning{false};
-        bool _reloadIgnoreSavedOnce{false};
+        bool _reloadWorkspaceActive{false},_reloadCapturing{false},_reloadCaptureQueued{false};
+        bool _reloadPlaying{false};
         bool _reloadOldWeaponFixed{true};
-        int _reloadWindow{-1},_reloadTrack{-1},_reloadCaptureFrame{0};
-        float _reloadGrabStart{0};
+        int _reloadCaptureFrame{0};
         QDockWidget* _reloadGraphDock{nullptr};
-        QDockWidget* _reloadInspectorDock{nullptr};
         ReloadGraph* _reloadGraph{nullptr};
-        ReloadDriveViewport* _reloadDrive{nullptr};
         QTimer* _reloadCaptureTimer{nullptr};
         QTimer* _reloadPreviewTimer{nullptr};
         QElapsedTimer _reloadClock;
@@ -1160,17 +1144,6 @@ namespace reloadmaker
         QProgressBar* _reloadProgress{nullptr};
         QPushButton* _reloadAnalyze{nullptr};
         QPushButton* _reloadPlay{nullptr};
-        QPushButton* _reloadTest{nullptr};
-        QListWidget* _reloadWindows{nullptr};
-        QListWidget* _reloadMembers{nullptr};
-        QLineEdit* _reloadWindowName{nullptr};
-        QLineEdit* _reloadPartName{nullptr};
-        QComboBox* _reloadGripChoice{nullptr};
-        QCheckBox* _reloadReturn{nullptr};
-        QSlider* _reloadWindowProgress{nullptr};
-        QPushButton* _reloadSave{nullptr};
-        QLabel* _reloadWindowInfo{nullptr};
-        ReloadRecipeLibrary _reloadRecipeLibrary;
         std::optional<ReloadRecipe> _reloadRecipe;
         HkxClip _reloadClip;
         QVector<Transformf> _reloadBase;

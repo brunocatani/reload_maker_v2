@@ -81,14 +81,12 @@ void ReloadMakerController::createSimulationUi() {
         if(!_simulationRig||!_reloadRecipe)return;
         const auto anchor=simulationMagazineAnchor();
         const auto key=handAssignmentKey(magazineGrabKey(poseRecordKey(currentWeapon()->formId),anchor.ownerRecord),_interactionHand);
-        const auto previous=_magazineGrabGrips.value(key),id=_simulationMagazineGrip->itemData(index).toString();
+        const auto id=_simulationMagazineGrip->itemData(index).toString();
         if(index>0)return; // This entry displays the resolved fit, including inherited defaults.
         if(_magazineGrabDefaults.contains(poseRecordKey(currentWeapon()->formId).toLower())) {
             setStatus("This weapon has a default hand fit. Configure the selected magazine to change it.");resolveMagazineGrabGrip();return;
         }
         if(id.isEmpty())_magazineGrabGrips.remove(key);else _magazineGrabGrips[key]=id;
-        for(auto& window:_reloadRecipe->windows)for(auto& member:window.members)
-            if(member.track==_simulationRig->magazine&&(member.gripId.isEmpty()||member.gripId==previous))member.gripId=id;
         _magazineGripDrafts.remove(key);resolveMagazineGrabGrip();(void)applyPose(_simulation.seconds);updateSimulationControls();(void)saveSession();
     });
     auto* optionsTitle=new QLabel("BEHAVIOUR",panel);optionsTitle->setObjectName("Section");layout->addWidget(optionsTitle);

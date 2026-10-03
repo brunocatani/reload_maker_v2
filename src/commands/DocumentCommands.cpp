@@ -183,12 +183,6 @@ namespace reloadmaker
                 id = value.id;
                 directory = MechanismLibrary::defaultDirectory();
                 validated = encodeMechanism(value, error);
-            } else if (kind == "reload-maker-reload-recipe") {
-                ReloadRecipe value;
-                require(decodeReloadRecipe(bytes, value, error), error);
-                id = value.id;
-                directory = ReloadRecipeLibrary::defaultDirectory();
-                validated = encodeReloadRecipe(value, error);
             } else {
                 PartGrip value;
                 require(decodePartGrip(bytes, value, error), error);

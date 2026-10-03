@@ -130,7 +130,7 @@ def control_playback(changes: dict, expected_revision: int) -> dict:
 
 @mcp.tool()
 def set_workspace(index: int, expected_revision: int) -> dict:
-    """Choose 2 Hands/grips, 4 Reload phases, 5 Operate, 6 Sounds, 7 Collisions or 8 Scopes."""
+    """Choose 2 Hands/grips, 4 Reload, 5 Operate, 6 Sounds, 7 Collisions or 8 Scopes."""
     return command('workspace',{'index':index},expected_revision)
 
 @mcp.tool()
@@ -210,23 +210,13 @@ def control_mechanism(changes: dict, expected_revision: int) -> dict:
 
 @mcp.tool()
 def learn_reload(expected_revision: int) -> dict:
-    """Capture the configured native reload; inspect busy state before editing its windows."""
+    """Capture the configured native reload; inspect busy state before using it."""
     return command('learn_reload',revision=expected_revision)
 
 @mcp.tool()
 def get_reload_recipe() -> dict:
-    """Read the complete current captured source curves and authored windows."""
+    """Read the complete current captured source curves."""
     return command('reload')
-
-@mcp.tool()
-def edit_reload_window(changes: dict, expected_revision: int) -> dict:
-    """Edit window/name/returnOnRelease and track/grabbable/gripId, or split at frame / merge."""
-    return command('edit_reload',changes,expected_revision)
-
-@mcp.tool()
-def save_reload_recipe(expected_revision: int) -> dict:
-    """Save a validated recipe revision to the V2-local library."""
-    return command('save_reload',revision=expected_revision)
 
 @mcp.tool()
 def save_project(expected_revision: int, path: str = '') -> dict:

@@ -10,48 +10,30 @@ namespace reloadmaker {
         bool surface{false};
         QVector<Transformf> poses; // Frame-aligned, complete Weapon-local transforms, including scale.
     };
-    enum class ReloadRelation { Independent, Rigid, Timed };
-    struct ReloadMember {
-        int track{-1};
-        ReloadRelation relation{ReloadRelation::Independent};
-        bool grabbable{false};
-        QString gripId;
-    };
-    struct ReloadWindow {
-        QString label;
-        int first{0},last{0};
-        QVector<ReloadMember> members;
-        bool returnOnRelease{false}; // Explicit author decision; animation cannot establish a spring.
-    };
+    // The learned base reload: every animated weapon part's Weapon-local pose
+    // at every captured frame.
     struct ReloadRecipe {
         QString id; // Digest of source identity AND captured part trajectories.
         QJsonObject source;
-        int revision{0};
         float duration{0};
         int frames{0};
         QVector<ReloadTrack> tracks;
-        QVector<ReloadWindow> windows;
+    };
+    // Frames first to last, inclusive, over which one part moves.
+    struct ReloadSpan {
+        int first{0};
+        int last{0};
     };
     inline constexpr int maximumReloadFrames=8193;
     inline constexpr int maximumReloadTracks=256;
     [[nodiscard]] float reloadPoseDistance(const Transformf& a,const Transformf& b);
     [[nodiscard]] bool reloadPoseVisible(const Transformf& pose);
     [[nodiscard]] Transformf reloadTrackPose(const ReloadRecipe& recipe,int track,float seconds);
-    [[nodiscard]] bool analyzeReloadWindows(ReloadRecipe& recipe,QString& error);
-    [[nodiscard]] QVector<ReloadMember> reloadMembers(const ReloadRecipe& recipe,int first,int last);
-    [[nodiscard]] bool splitReloadWindow(ReloadRecipe& recipe,int window,int frame,QString& error);
-    [[nodiscard]] bool mergeReloadWindow(ReloadRecipe& recipe,int window,QString& error);
+    // Checks a finished capture and gives it its identity.
+    [[nodiscard]] bool identifyReloadRecipe(ReloadRecipe& recipe,QString& error);
+    // When one part moves during the reload, as spans between its rests.
+    [[nodiscard]] QVector<ReloadSpan> reloadMotionSpans(const ReloadRecipe& recipe,int track);
     [[nodiscard]] QByteArray encodeReloadRecipe(const ReloadRecipe& recipe,QString& error);
     [[nodiscard]] bool decodeReloadRecipe(const QByteArray& bytes,ReloadRecipe& recipe,QString& error);
     [[nodiscard]] QString reloadRecipeIdentity(const ReloadRecipe& recipe);
-    class ReloadRecipeLibrary final {
-    public:
-        explicit ReloadRecipeLibrary(QString directory=defaultDirectory());
-        [[nodiscard]] static QString defaultDirectory();
-        [[nodiscard]] QString filePath(const QString& id)const;
-        [[nodiscard]] bool load(const QString& id,ReloadRecipe& recipe,QString& error)const;
-        [[nodiscard]] bool save(ReloadRecipe& recipe,QString& error)const;
-    private:
-        QString _directory;
-    };
 }

@@ -135,22 +135,20 @@ async def run():
             await idle()
             recipe=await call('get_reload_recipe')
             (EVIDENCE/'recipe-before-edit.json').write_text(json.dumps(recipe,indent=2),encoding='utf-8')
-            state=await call('get_state'); assert state['recipeWindows']>0 and state['recipeTracks']>0
-            await call('edit_reload_window',changes={'window':0,'name':'Inspect native first phase','returnOnRelease':False},expected_revision='current')
-            await call('save_reload_recipe',expected_revision='current')
+            state=await call('get_state'); assert state['recipeTracks']>0
             exported=await call('export_authored_record',kind='reload',expected_revision='current')
             assert Path(exported['path']).is_file()
             native_record=json.loads(Path(exported['path']).read_text(encoding='utf-8'))
             live_record=await call('get_reload_recipe')
-            assert live_record['revision']==native_record['revision'], 'Transport overwrote the saved record revision'
+            assert live_record['id']==native_record['id'] and 'windows' not in native_record
             assert live_record['documentRevision']==(await call('get_state'))['revision']
             await capture('04-reload-workspace','iso')
             await call('save_project',path=str(project),expected_revision='current')
             await call('open_project',path=str(project),expected_revision='current')
             final=await idle()
-            assert final['recipeWindows']>0
+            assert final['recipeTracks']>0
             restored_recipe=await call('get_reload_recipe')
-            assert 'Inspect native first phase' in json.dumps(restored_recipe)
+            assert restored_recipe['id']==live_record['id'], 'Reopening the project learned a different reload'
             # A source that fails after starting its worker must preserve completed
             # authoring data, not only the old weapon catalog.
             before_failure=await call('get_reload_recipe')
@@ -161,7 +159,7 @@ async def run():
                 await asyncio.sleep(.1)
             assert not failed_state['busy'] and failed_state['lastError']
             after_failure=await call('get_reload_recipe')
-            assert after_failure['id']==before_failure['id'] and after_failure['windows']==before_failure['windows']
+            assert after_failure['id']==before_failure['id'], 'A failed source replacement lost the learned reload'
             await call('set_workspace',index=4,expected_revision='current')
             final=await call('get_state')
             (EVIDENCE/'final-state.json').write_text(json.dumps(final,indent=2),encoding='utf-8')

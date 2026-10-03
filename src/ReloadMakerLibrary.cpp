@@ -30,13 +30,12 @@ namespace reloadmaker {
     void ReloadMakerController::setLoading(bool loading, const QString& message)
     {
         if (loading) {
-            // A failed/cancelled replacement must retain completed authored
-            // windows. Successful source installation clears them with caches.
+            // A failed/cancelled replacement keeps the learned reload.
+            // Successful source installation clears it with caches.
             if(_reloadCapturing)invalidateReloadCapture();
             else {
-                _reloadPreviewTimer->stop();_reloadPlaying=false;_reloadReturning=false;_reloadHeld=false;
+                _reloadPreviewTimer->stop();_reloadPlaying=false;
                 _reloadPlay->setText("PLAY RELOAD");
-                if(_reloadDrive)_reloadDrive->setActive(false,false);
             }
             if (_mechanismPreview) {stopMechanismPreview();if(_clip.valid())(void)applyPose(_playbackTime);}
             _pageBeforeLoad = _pages->currentIndex();
@@ -48,7 +47,6 @@ namespace reloadmaker {
         if (_pluginSearch) _pluginSearch->setEnabled(!loading && _pluginFilter->count() > 0);
         _pages->setTabEnabled(kLoadoutPage, !loading);
         if(_pages->count()>kReloadPage)_pages->setTabEnabled(kReloadPage,!loading);
-        if(_reloadInspectorDock)_reloadInspectorDock->setEnabled(!loading);
         if(_reloadGraphDock)_reloadGraphDock->setEnabled(!loading);
         if(_simulationDock)_simulationDock->setEnabled(!loading);
         if (!loading) { _pages->setCurrentIndex(_pageBeforeLoad); }

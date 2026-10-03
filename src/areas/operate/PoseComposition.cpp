@@ -116,8 +116,7 @@ namespace reloadmaker
         if (!applyMagazineGrabPose()) {
             return false;
         }
-        const bool gripWorkspace = (_workspace == 2 && _handEditorPage == HandEditorPage::PartGrip) || mechanismPageActive() ||
-                                   (_reloadWorkspaceActive && _reloadHeld);
+        const bool gripWorkspace = (_workspace == 2 && _handEditorPage == HandEditorPage::PartGrip) || mechanismPageActive();
         bool showGrip = gripWorkspace && _partGripDraft;
         if (showGrip && _mechanismPreview) {
             // During a mechanism preview the grip shows only on the part being
@@ -125,7 +124,7 @@ namespace reloadmaker
             const bool posing = _mechanismTeaching || (_mechanismHeld && _mechanismHandShownOnGrab);
             showGrip = posing && _mechanismDraft && sameMechanismPart(_partGripDraft->pose.placement, _mechanismDraft->anchor);
         }
-        if (showGrip && (!_reloadWorkspaceActive || _reloadHeld) && !applyPartGripPreview()) {
+        if (showGrip && !_reloadWorkspaceActive && !applyPartGripPreview()) {
             return false;
         }
         if (_mechanismPreview && showGrip && !applyMechanismPreview()) {

@@ -101,8 +101,6 @@ try:
     ids={g['pose']['id'] for g in bundle['grips']}
     bindings=bundle['magazineGrabBindings'];assert len(bindings)==6
     assert all(x['gripId'] in ids and not x['ownerModel'].lower().endswith('mag_50rnd.nif') for x in bindings)
-    for window in bundle['recipe']['windows']:
-        for member in window['members']:assert not member['gripId'] or member['gripId'] in ids
     assert pose_hashes=={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in (ROOT/'workspace/hand-poses').glob('*.json')}
     (OUT/'validated.json').write_text(json.dumps({'cases':cases,'drumExcluded':True,'fixedReloadSamples':len(samples),'bundle':exported['path'],'sourcePosesUnchanged':True},indent=2))
     print('PASS six magazine grips, free/rail following, reach and hand independence, drum exclusion, fixed/native reload authoring, persistence and self-contained export')

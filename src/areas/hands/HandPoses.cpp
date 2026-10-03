@@ -85,7 +85,7 @@ namespace reloadmaker
         refreshPartGripList();
         refreshMechanismChoices();
         // A rebuilt assembly is re-learned wherever the reload is consumed
-        // (Reload phases or Operate), so part swaps take effect in place.
+        // (Reload or Operate), so part swaps take effect in place.
         // Queued, not immediate: the rebuild must finish first. The queued
         // capture counts as busy so MCP clients do not race its revision bump.
         if (reloadCaptureAllowed()) {

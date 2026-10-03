@@ -277,7 +277,6 @@ namespace reloadmaker
                  { "partGrips", grips },
                  { "magazineGrabGrips", magazineGrabs },
                  { "magazineEditor", magazineEditorState() },
-                 { "recipeWindows", _reloadRecipe ? int(_reloadRecipe->windows.size()) : 0 },
                  { "recipeTracks", _reloadRecipe ? int(_reloadRecipe->tracks.size()) : 0 },
                  { "status", _window->statusBar()->currentMessage() },
                  { "lastError", _lastError },

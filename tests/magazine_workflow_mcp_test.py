@@ -161,7 +161,6 @@ try:
     blank = json.loads(working.read_text(encoding='utf-8'))
     blank['workspace']=5;blank.pop('gripDraft',None);blank['magazineGripDrafts']={}
     blank['magazineGrabGrips']={};blank['magazineGrabDefaults']={}
-    blank.pop('reloadDraft',None)
     empty = OUT/'unconfigured.project.json';empty.write_text(json.dumps(blank),encoding='utf-8')
     edit('open_project',path=str(empty));ready();edit('configure_magazine')
     assert command('state')['magazineEditor']['assignment']=='none'

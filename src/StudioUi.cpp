@@ -88,7 +88,7 @@ void ReloadMakerController::createUi() {
     // Stable workspace ids are persisted in projects and used by MCP clients;
     // display order is independent of the id.
     const std::pair<QString, int> workspaces[]{{"Operate", OperateWorkspace},
-        {"Hands && grips", GripsWorkspace}, {"Reload phases", PhasesWorkspace},{"Sounds",SoundsWorkspace},{"Collisions",CollisionsWorkspace},{"Scopes",ScopesWorkspace}};
+        {"Hands && grips", GripsWorkspace}, {"Reload", PhasesWorkspace},{"Sounds",SoundsWorkspace},{"Collisions",CollisionsWorkspace},{"Scopes",ScopesWorkspace}};
     for (const auto& [title, id] : workspaces) {
         auto* button = new QPushButton(title, header);
         button->setCheckable(true);
@@ -195,7 +195,7 @@ void ReloadMakerController::createUi() {
     });
     _packageDock->setWidget(packagePanel);
     auto* loadoutToggle=new QPushButton("Loadout",header);loadoutToggle->setObjectName("LoadoutToggle");
-    loadoutToggle->setCheckable(true);loadoutToggle->setChecked(true);loadoutToggle->setToolTip("Show or hide the left loadout / reload phases panel");header->addWidget(loadoutToggle);
+    loadoutToggle->setCheckable(true);loadoutToggle->setChecked(true);loadoutToggle->setToolTip("Show or hide the left loadout / reload panel");header->addWidget(loadoutToggle);
     connect(loadoutToggle,&QPushButton::toggled,_packageDock,&QWidget::setVisible);
     connect(_packageDock,&QDockWidget::visibilityChanged,loadoutToggle,[loadoutToggle](bool visible){const QSignalBlocker blocker(loadoutToggle);loadoutToggle->setChecked(visible);});
 
@@ -321,9 +321,6 @@ void ReloadMakerController::createUi() {
         scroll->setWidget(content);
         _handPosePages->insertTab(page, scroll, title);
     }
-    _reloadInspectorDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
-    _reloadInspectorDock->setMinimumWidth(320);
-    _reloadInspectorDock->setMaximumWidth(440);
     _reloadGraphDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
     _reloadGraphDock->setMinimumHeight(170);
     _reloadGraphDock->setMaximumHeight(360);
@@ -390,7 +387,7 @@ void ReloadMakerController::setWorkspace(int workspace) {
     if(_workspace==CollisionsWorkspace&&workspace!=CollisionsWorkspace&&_magazineWorldPreview){stopSimulation();_magazineWorldPreview=false;}
     if(_magazineFitPreview&&workspace!=GripsWorkspace){rememberMagazineGrip();stopSimulation();}
     // Operate replaces clips and poses freely; an in-progress authoring grip is
-    // parked while it is open and returned when leaving (as Reload phases does).
+    // parked while it is open and returned when leaving.
     if (simulationWorkspace(_workspace) && !simulationWorkspace(workspace)) {
         if((_magazineFitPreview&&workspace==GripsWorkspace)||(workspace==CollisionsWorkspace&&_magazineWorldPreview)) {
             _simulationTimer->stop();_magazineViewport->setActive(false);
@@ -398,18 +395,17 @@ void ReloadMakerController::setWorkspace(int workspace) {
         } else stopSimulation();
         _partGripDraft = _operateSuspendedGrip; _operateSuspendedGrip.reset();
     } else if (!simulationWorkspace(_workspace) && simulationWorkspace(workspace)) {
-        _operateSuspendedGrip = _reloadWorkspaceActive ? _suspendedAuthoringGrip : _partGripDraft;
-        if (_reloadWorkspaceActive) _suspendedAuthoringGrip.reset();
+        _operateSuspendedGrip = _partGripDraft;
         _partGripDraft.reset();
     }
     _workspace = workspace;
     if(workspace!=GripsWorkspace)_magazineFitPreview=false;
     _workspaceButtons->button(workspace)->setChecked(true);
-    // Reload phases replaces the loadout rail with its phase list and the
-    // native clip list; Operate and Hands & grips keep the loadout.
+    // Reload replaces the loadout rail with the reload page and the native
+    // clip list; Operate and Hands & grips keep the loadout.
     const bool phases = workspace == PhasesWorkspace;
     _pages->setCurrentIndex(phases ? kReloadPage : kLoadoutPage);
-    _packageDock->setWindowTitle(phases ? "RELOAD PHASES" : "LOADOUT");
+    _packageDock->setWindowTitle(phases ? "RELOAD" : "LOADOUT");
     _simulationDock->setVisible(workspace == OperateWorkspace);
     _soundsDock->setVisible(workspace==SoundsWorkspace);
     _collisionsDock->setVisible(workspace==CollisionsWorkspace);
@@ -417,9 +413,8 @@ void ReloadMakerController::setWorkspace(int workspace) {
     if(workspace==ScopesWorkspace){if(_playing)togglePlayback();_reloadPlaying=false;_reloadPreviewTimer->stop();refreshScopeTargets();}
     if(workspace==CollisionsWorkspace){if(_playing)togglePlayback();_reloadPlaying=false;_reloadPreviewTimer->stop();refreshCollisions();}
     _reloadGraphDock->setVisible(phases);
-    _reloadInspectorDock->setVisible(phases);
     _handPoseDock->setVisible(workspace == GripsWorkspace);
-    // Hands & grips needs a frame to capture from; phases shows the transport
+    // Hands & grips needs a frame to capture from; Reload shows the transport
     // only while a non-reload clip is being previewed.
     _timelineDock->setVisible(workspace == GripsWorkspace && !_magazineFitPreview);
     if (_slotOverlay) _slotOverlay->setActive(_pages->currentIndex() == kLoadoutPage && _showPartLabels);
@@ -427,7 +422,7 @@ void ReloadMakerController::setWorkspace(int workspace) {
     if(_clip.valid()&&!_reloadCapturing)(void)applyPose(_playbackTime);
     refreshFingerEditor();
     // Operate needs the learned reload for its rig; learning no longer depends
-    // on the Reload phases page being visible.
+    // on the Reload page being visible.
     if (simulationWorkspace(workspace)) { if(!_simulationActive){startReloadCapture();prepareSimulation();}refreshSoundsUi(); }
     ++_revision;
 }
@@ -438,8 +433,9 @@ void ReloadMakerController::previewNativeClip(int row) {
     // Operate action starts a fresh simulation from Ready.
     if (_simulationActive) { stopSimulation(); updateSimulationControls(); }
     if (_reloadWorkspaceActive) {
-        // In Reload phases the reload itself belongs to the phase graph; other
-        // clips are inspected on the transport until a phase is selected again.
+        // On the Reload page the reload itself belongs to its graph; other
+        // clips are inspected on the transport until the graph or PLAY RELOAD
+        // returns to the reload.
         const bool reload = _animationActions[row].resourcePath == _reloadExpectedPath;
         _reloadPreviewTimer->stop(); _reloadPlaying = false; _reloadPlay->setText("PLAY RELOAD");
         if (reload) { restoreReloadClip(); return; }

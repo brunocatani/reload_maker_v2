@@ -82,12 +82,12 @@ async def run():
             await capture('05-automatic-reload')
             ended=await finished();assert ended['magazinePresent'] and ended['slide']==0
             # A mode switch must release simulation visibility and restore the
-            # original reload document, including edited phase assignments.
+            # original reload document.
             await operation('drop_magazine')
             await call('set_workspace',index=4,expected_revision='current');await ready()
             assert not (await call('get_simulation_state'))['active']
             recipe_after=await call('get_reload_recipe')
-            assert recipe_after['windows']==recipe_before['windows'] and recipe_after['id']==recipe_before['id']
+            assert recipe_after['id']==recipe_before['id']
             await call('set_workspace',index=2,expected_revision='current');await ready()
             await call('set_workspace',index=5,expected_revision='current');await ready()
             s=await call('get_simulation_state');assert s['active'] and s['magazinePresent'] and not hidden(s)

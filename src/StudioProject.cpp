@@ -142,7 +142,7 @@ bool ReloadMakerController::saveSession(const QString& requested) {
         if(!error.isEmpty()){setStatus(error,true);return false;}
         record["handPreview"]=QJsonDocument::fromJson(bytes).object();
     }
-    const auto& authoredGrip=_reloadWorkspaceActive?_suspendedAuthoringGrip:simulationWorkspace(_workspace)?_operateSuspendedGrip:_partGripDraft;
+    const auto& authoredGrip=simulationWorkspace(_workspace)?_operateSuspendedGrip:_partGripDraft;
     if (authoredGrip) {
         const auto bytes = encodePartGrip(*authoredGrip,error);
         if (!error.isEmpty()) { setStatus("Finish the grip before saving: "+error,true); return false; }
@@ -152,11 +152,6 @@ bool ReloadMakerController::saveSession(const QString& requested) {
         const auto bytes = encodeMechanism(*_mechanismDraft,error);
         if (!error.isEmpty()) { setStatus("Finish the mechanism step before saving: "+error,true); return false; }
         record["mechanismDraft"] = QJsonDocument::fromJson(bytes).object();
-    }
-    if (_reloadRecipe && !_reloadCapturing) {
-        const auto bytes = encodeReloadRecipe(*_reloadRecipe,error);
-        if (!error.isEmpty()) { setStatus(error,true); return false; }
-        record["reloadDraft"] = QJsonDocument::fromJson(bytes).object();
     }
     QDir().mkpath(QFileInfo(path).absolutePath());
     QSaveFile file(path);
@@ -252,9 +247,7 @@ void ReloadMakerController::openSession(const QString& path) {
     if(record.contains("handPreview")){HandPose v;if(!decodeHandPose(QJsonDocument(record["handPreview"].toObject()).toJson(),v,error)){setStatus(error,true);return;}}
     if (record.contains("gripDraft")) { PartGrip v; if (!decodePartGrip(QJsonDocument(record["gripDraft"].toObject()).toJson(),v,error)) {setStatus(error,true);return;} }
     if (record.contains("mechanismDraft")) { PartMechanism v; if (!decodeMechanism(QJsonDocument(record["mechanismDraft"].toObject()).toJson(),v,error)) {setStatus(error,true);return;} }
-    if (record.contains("reloadDraft")) { ReloadRecipe v; if (!decodeReloadRecipe(QJsonDocument(record["reloadDraft"].toObject()).toJson(),v,error)) {setStatus(error,true);return;} }
     _pendingSession = record;
-    _pendingReloadDraft = {};
     _sessionPath = QFileInfo(path).absoluteFilePath();
     _gameDataText = record["gameData"].toString();
     if (!record["mo2Instance"].toString().isEmpty()) _mo2Instance = record["mo2Instance"].toString();
@@ -306,7 +299,7 @@ void ReloadMakerController::restoreSessionSelection() {
     for(auto it=magazineGrabs.begin();it!=magazineGrabs.end();++it)_magazineGrabGrips[it.key().toLower()]=it.value().toString();
     _magazineGrabDefaults.clear();const auto magazineDefaults=record["magazineGrabDefaults"].toObject();
     for(auto it=magazineDefaults.begin();it!=magazineDefaults.end();++it)_magazineGrabDefaults[it.key().toLower()]=it.value().toString();
-    _partGripDraft.reset();_operateSuspendedGrip.reset();_suspendedAuthoringGrip.reset();_editingMagazine=false;
+    _partGripDraft.reset();_operateSuspendedGrip.reset();_editingMagazine=false;
     _magazineGripDrafts.clear();const auto magazineDrafts=record["magazineGripDrafts"].toObject();
     for(auto it=magazineDrafts.begin();it!=magazineDrafts.end();++it){PartGrip grip;QString e;if(decodePartGrip(QJsonDocument(it.value().toObject()).toJson(),grip,e))_magazineGripDrafts[handAssignmentKey(magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord),grip.pose.hand)]=grip;}
     rebuildWeapon();
@@ -350,11 +343,6 @@ void ReloadMakerController::restoreSessionSelection() {
         const auto anchor=_scopeTargets[i].anchor;if(anchor>0&&anchor<_handPoseAnchors.size()&&scopeModelKey(_handPoseAnchors[anchor].description.ownerModel)==model){selectScopeTarget(i);break;}}}
     if(workspace==GripsWorkspace&&record.contains("handsPage"))setHandEditorPage(static_cast<HandEditorPage>(std::clamp(record["handsPage"].toInt(),0,3)));
     if(record.contains("camera")&&!_window->getGLView()->studioRestoreCamera(record["camera"].toObject()))appendDiagnostic("PROJECT: invalid saved camera ignored.");
-    if (record.contains("reloadDraft")) {
-        // Native recapture establishes live node bindings before restoring the
-        // saved trajectory/phase document. Source identity must still match.
-        _pendingReloadDraft = record["reloadDraft"].toObject();
-    }
     ++_revision;
     if(workspace==GripsWorkspace&&_handEditorPage==HandEditorPage::GrabLocations)prepareGrabLocationFrame();
     setStatus(error.isEmpty() ? "Project restored · "+QFileInfo(_sessionPath).fileName() : "Project restored with a grip warning: "+error,!error.isEmpty());

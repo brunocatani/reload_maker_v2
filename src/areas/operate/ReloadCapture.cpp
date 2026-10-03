@@ -13,7 +13,6 @@
 #include <QComboBox>
 #include <QCryptographicHash>
 #include <QJsonArray>
-#include <QJsonDocument>
 #include <QLabel>
 #include <QProgressBar>
 #include <QPushButton>
@@ -61,14 +60,6 @@ namespace reloadmaker
         _reloadExpectedPath.clear();
         _reloadCapturing = false;
         _reloadPlaying = false;
-        _reloadReturning = false;
-        _reloadHeld = false;
-        _reloadWindow = -1;
-        _reloadTrack = -1;
-        if (_reloadDrive) {
-            _reloadDrive->clearCurve();
-            _reloadDrive->setActive(_reloadWorkspaceActive, false);
-        }
         resetReloadPage();
     }
 
@@ -86,9 +77,8 @@ namespace reloadmaker
             return;
         }
         const auto expected = action->resourcePath;
-        // Phase selection drives the reload page's grip preview; Operate only
-        // consumes the recipe and must not inherit a phase member's grip or
-        // have its active clip replaced when the recipe is already current.
+        // Operate only consumes the recipe and must not have its active clip
+        // replaced when the recipe is already current.
         if (!_reloadWorkspaceActive && _reloadRecipe && _reloadExpectedPath == expected) {
             return;
         }
@@ -104,8 +94,8 @@ namespace reloadmaker
             return;
         }
         if (_reloadRecipe && _reloadExpectedPath == expected) {
-            refreshReloadWindows();
-            selectReloadWindow(std::max(0, _reloadWindow));
+            showReloadRecipe();
+            seekReload(_playbackTime);
             return;
         }
         invalidateReloadCapture();
@@ -297,9 +287,8 @@ namespace reloadmaker
         finishReloadCapture(error);
     }
 
-    // Splits the learned motion into reload windows and takes the saved setup
-    // for the same recipe (or its revision only, after LEARN RELOAD AGAIN), or
-    // the project's unsaved draft. Then the waiting workspace continues.
+    // Gives the learned reload its identity and shows it. Then the waiting
+    // workspace continues.
     void ReloadMakerController::finishReloadCapture(QString& error)
     {
         auto& recipe = *_reloadRecipe;
@@ -307,38 +296,14 @@ namespace reloadmaker
         _reloadCapturing = false;
         _reloadProgress->hide();
         _reloadAnalyze->setEnabled(true);
-        if (!analyzeReloadWindows(recipe, error)) {
+        if (!identifyReloadRecipe(recipe, error)) {
             invalidateReloadCapture();
-            setStatus("Reload window analysis failed: " + error, true);
+            setStatus("Reload capture is invalid: " + error, true);
             return;
         }
-        ReloadRecipe saved;
-        if (_reloadRecipeLibrary.load(recipe.id, saved, error)) {
-            if (_reloadIgnoreSavedOnce) {
-                recipe.revision = saved.revision;
-            } else {
-                recipe = std::move(saved);
-            }
-        } else if (!error.isEmpty()) {
-            appendDiagnostic("RELOAD SETUP: " + error);
-        }
-        _reloadIgnoreSavedOnce = false;
-        if (!_pendingReloadDraft.isEmpty()) {
-            ReloadRecipe restored;
-            if (decodeReloadRecipe(QJsonDocument(_pendingReloadDraft).toJson(), restored, error) && restored.id == recipe.id) {
-                recipe = std::move(restored);
-            } else {
-                appendDiagnostic("PROJECT: saved reload draft does not match the recaptured native source; review required.");
-            }
-            _pendingReloadDraft = {};
-        }
-        refreshReloadWindows();
-        if (!recipe.windows.isEmpty()) {
-            if (_reloadWorkspaceActive) {
-                selectReloadWindow(0);
-            }
-        } else {
-            _reloadSummary->setText("This base reload contains no measurable weapon-part movement. No substitute animation was used.");
+        showReloadRecipe();
+        if (_reloadWorkspaceActive) {
+            seekReload(0);
         }
         if (simulationWorkspace(_workspace)) {
             prepareSimulation();
@@ -357,18 +322,5 @@ namespace reloadmaker
             }
             prepareGrabLocationFrame();
         }
-    }
-
-    void ReloadMakerController::saveReloadRecipe()
-    {
-        if (!_reloadRecipe || _reloadCapturing) {
-            return;
-        }
-        QString error;
-        if (!_reloadRecipeLibrary.save(*_reloadRecipe, error)) {
-            setStatus(error, true);
-            return;
-        }
-        setStatus(QStringLiteral("Saved reload setup revision %1: source curves, windows, grabbable parts and grip links.").arg(_reloadRecipe->revision));
     }
 }

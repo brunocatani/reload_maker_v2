@@ -285,7 +285,6 @@ namespace reloadmaker
         }
         const auto previousAssignments = _magazineGrabGrips;
         const auto previousDefaults = _magazineGrabDefaults;
-        const auto previousWindows = _reloadRecipe ? _reloadRecipe->windows : QVector<ReloadWindow>{};
         const auto key = handAssignmentKey(magazineGrabKey(grip.weaponRecord, grip.pose.placement.ownerRecord), grip.pose.hand);
         _magazineGrabGrips[key] = grip.pose.id;
         if (allMagazines) {
@@ -298,24 +297,12 @@ namespace reloadmaker
             _partGripDraft->pose.name = grip.pose.name;
         }
         rememberMagazineGrip();
-        if (_reloadRecipe) {
-            for (auto& window : _reloadRecipe->windows) {
-                for (auto& member : window.members) {
-                    if (sameMechanismPart(_reloadRecipe->tracks[member.track].anchor, grip.pose.placement)) {
-                        member.gripId = grip.pose.id;
-                    }
-                }
-            }
-        }
         refreshPartGripLibrary();
         resolveMagazineGrabGrip();
         if (!saveSession()) {
             _magazineGrabGrips = previousAssignments;
             _magazineGrabDefaults = previousDefaults;
             resolveMagazineGrabGrip();
-            if (_reloadRecipe) {
-                _reloadRecipe->windows = previousWindows;
-            }
             setStatus("Fit snapshot saved, but the project assignment could not be saved. Retry Save for this magazine.", true);
             return false;
         }
@@ -369,8 +356,7 @@ namespace reloadmaker
     }
 
     // The fit Grab Magazine uses in Operate for the reload hand, with the
-    // bridge from the magazine's live binding to its attachment frame. The
-    // reload windows' magazine members follow it.
+    // bridge from the magazine's live binding to its attachment frame.
     void ReloadMakerController::resolveMagazineGrabGrip()
     {
         _magazineGrabGrip.reset();
@@ -415,14 +401,6 @@ namespace reloadmaker
             _magazineGrabBridge = composed(inverse, world);
         }
         _magazineGrabGrip = *selected;
-        const auto id = selected->pose.id;
-        for (auto& window : _reloadRecipe->windows) {
-            for (auto& member : window.members) {
-                if (member.track == _simulationRig->magazine && sameGripAnchor(anchor, _reloadRecipe->tracks[member.track].anchor)) {
-                    member.gripId = id;
-                }
-            }
-        }
     }
 
     // While the magazine is carried, solves the reload hand to its fit on the

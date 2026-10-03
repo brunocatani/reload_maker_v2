@@ -79,7 +79,6 @@ namespace reloadmaker
         _gripPreviewValid = false;
         _gripError.clear();
         _fingerDrafts = {};
-        _suspendedAuthoringGrip.reset();
         _operateSuspendedGrip.reset();
         clearHandPoseAnchors();
         _playing = false;

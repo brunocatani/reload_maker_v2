@@ -6,7 +6,6 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QQuaternion>
-#include <QTemporaryDir>
 #include <QTextStream>
 #include <QUuid>
 #include <cmath>
@@ -30,42 +29,31 @@ namespace {
         }
         return r;
     }
-    void windows(){
-        auto r=capture();QString error;check(analyzeReloadWindows(r,error),error);check(r.windows.size()>=6,"Lost reload phases");
-        bool lateReturn=false,rigid=false,timed=false,mag=false;
-        for(const auto& w:r.windows){bool bolt=false,magazine=false;
-            for(const auto& m:w.members){
-                check(m.track!=5,"Stationary part grouped");
-                if(m.track==0){bolt=true;}
-                if(m.track==2){magazine=true;mag=true;}
-                if(m.track==1&&m.relation==ReloadRelation::Rigid)rigid=true;
-                if(m.track==4&&m.relation==ReloadRelation::Timed)timed=true;
-                if(m.track==1||m.track==3)check(!m.grabbable,"Inherited follower became an independent grab by default");
-                if(m.track==0&&float(w.first)/120>3.4f)lateReturn=true;
-                for(int frame=w.first;frame<=w.last;++frame)check(reloadPoseVisible(r.tracks[m.track].poses[frame]),"Hidden teleport included in a drive window");
-            }
-            check(!(bolt&&magazine),"Separated bolt and magazine phases were grouped");
-        }
-        check(lateReturn&&rigid&&timed&&mag,"Missing return/rigid/co-timed/magazine evidence");
-        int split=-1;for(int i=0;i<r.windows.size();++i)if(r.windows[i].last-r.windows[i].first>10){split=i;break;}
-        check(split>=0,"No splittable window");const auto original=r.windows[split];r.windows[split].label="Lift bolt";r.windows[split].returnOnRelease=true;
-        check(splitReloadWindow(r,split,(original.first+original.last)/2,error),error);
-        check(r.windows[split].returnOnRelease&&r.windows[split+1].returnOnRelease,"Split lost release policy");
-        check(mergeReloadWindow(r,split,error),error);check(r.windows[split].first==original.first&&r.windows[split].last==original.last,"Merge lost original interval");
-        check(!splitReloadWindow(r,split,original.first,error),"Zero-length split accepted");
+    void motion(){
+        auto r=capture();QString error;check(identifyReloadRecipe(r,error),error);
+        const auto bolt=reloadMotionSpans(r,0);
+        check(bolt.size()>=2,"Bolt lift/pull and return were one movement");
+        check(float(bolt.back().first)/120>3.4f,"Bolt return missing");
+        check(reloadMotionSpans(r,5).isEmpty(),"Stationary part shown as moving");
+        const auto magazine=reloadMotionSpans(r,2);
+        check(!magazine.isEmpty(),"Magazine movement missing");
+        for(const auto& span:magazine)for(int frame=span.first;frame<=span.last;++frame)
+            check(reloadPoseVisible(r.tracks[2].poses[frame]),"Movement span crosses the hidden magazine");
+        check(reloadMotionSpans(r,-1).isEmpty()&&reloadMotionSpans(r,r.tracks.size()).isEmpty(),"Invalid track accepted");
     }
-    void persistence(){
-        auto r=capture();QString error;check(analyzeReloadWindows(r,error),error);const auto id=r.id;QTemporaryDir dir;ReloadRecipeLibrary library(dir.path());
-        check(library.save(r,error),error);auto stale=r;r.windows[0].label="Lift the handle";r.tracks[0].label="Bolt handle";
-        r.windows[0].members[0].grabbable=false;r.windows[0].members[0].gripId=QUuid::createUuid().toString(QUuid::WithoutBraces);
-        check(library.save(r,error),error);check(!library.save(stale,error),"Stale editor overwrote reload setup");
-        ReloadRecipe loaded;check(library.load(id,loaded,error),error);check(loaded.windows[0].label==r.windows[0].label&&loaded.revision==2,"Lost edit after restart");
-        check(!loaded.windows[0].members[0].grabbable&&loaded.windows[0].members[0].gripId==r.windows[0].members[0].gripId,"Lost grab/hand assignment after restart");
-        check(std::abs(loaded.tracks[0].poses[30].scale.x-1.3f)<.0001f,"Scale was reset to one");check(loaded.tracks[2].poses[210].scale.x==0,"Hidden scale lost");
-        check(loaded.id==id&&loaded.tracks[0].label=="Bolt handle","Labels changed source identity or were lost");r.source["animationSha256"]="override-b";check(reloadRecipeIdentity(r)!=id,"Animation override reused stale source identity");
-        check(encodeReloadRecipe(r,error).isEmpty(),"Changed source saved under old identity");
-        auto json=QJsonDocument::fromJson(encodeReloadRecipe(loaded,error)).object();json["version"]=2;
-        check(!decodeReloadRecipe(QJsonDocument(json).toJson(),r,error),"Unknown recipe version accepted");
+    void encoding(){
+        auto r=capture();QString error;check(identifyReloadRecipe(r,error),error);const auto id=r.id;
+        const auto bytes=encodeReloadRecipe(r,error);check(!bytes.isEmpty(),error);
+        const auto json=QJsonDocument::fromJson(bytes).object();
+        check(json["version"]==2&&!json.contains("windows")&&!json.contains("revision"),"Recipe still carries retired window or revision data");
+        ReloadRecipe loaded;check(decodeReloadRecipe(bytes,loaded,error),error);
+        check(loaded.id==id&&loaded.tracks.size()==r.tracks.size(),"Round trip changed the recipe");
+        check(std::abs(loaded.tracks[0].poses[30].scale.x-1.3f)<.0001f,"Scale was reset to one");
+        check(loaded.tracks[2].poses[210].scale.x==0,"Hidden scale lost");
+        r.source["animationSha256"]="override-b";check(reloadRecipeIdentity(r)!=id,"Animation override reused stale source identity");
+        check(encodeReloadRecipe(r,error).isEmpty(),"Changed source encoded under old identity");
+        auto future=json;future["version"]=3;
+        check(!decodeReloadRecipe(QJsonDocument(future).toJson(),loaded,error),"Unknown recipe version accepted");
     }
     void curve(){
         check(std::abs(reloadCurveTime({{0,0},{100,0}},{0,1},{98,0},.9f,.025f)-1)<1e-6f,"Bolt pointer stopped before its rear end stop");
@@ -80,12 +68,11 @@ namespace {
     }
     void bundles(){
         auto r=capture();r.tracks[2].anchor.anchorName="WeaponMagazine";
-        QString error;check(analyzeReloadWindows(r,error),error);
+        QString error;check(identifyReloadRecipe(r,error),error);
         PartGrip grip;grip.weaponRecord=r.source["weaponRecord"].toString();grip.sourcePoseId=QUuid::createUuid().toString(QUuid::WithoutBraces);
         grip.pose.id=QUuid::createUuid().toString(QUuid::WithoutBraces);grip.pose.name="Chosen magazine grip";grip.pose.createdUtc="2026-09-29T22:00:00.000Z";
         grip.pose.hand=PoseHand::Left;grip.pose.placement=r.tracks[2].anchor;grip.pose.placement.handInAnchor=pose({1,2,3},37);
         grip.pose.fingers[0]=pose({.25f,.5f,1.f},61);
-        for(auto& window:r.windows)for(auto& m:window.members)if(m.track==2)m.gripId=grip.pose.id;
         const QHash<QString,QString> bindings{{magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord),grip.pose.id}};
         const auto bytes=encodeReloadBundle(r,{grip},{},bindings,error);check(!bytes.isEmpty(),error);
         const auto bundle=QJsonDocument::fromJson(bytes).object();check(bundle["grips"].toArray().size()==1,"Shared grip exported more than once");
@@ -112,8 +99,8 @@ namespace {
         check(withPart["mechanisms"].toArray().size()==1,"Shared part definition was not embedded");
         auto other=bad;other.pose.id=QUuid::createUuid().toString(QUuid::WithoutBraces);other.pose.placement.ownerRecord="OtherMagazine.esp:123456";
         auto otherBindings=bindings;otherBindings[magazineGrabKey(grip.weaponRecord,other.pose.placement.ownerRecord)]=other.pose.id;
-        // The valid recipe grip includes the definition before the second
-        // magazine assignment tries to reuse it with a different owner.
+        // Both magazine assignments name one part definition; the grip whose
+        // anchor differs from the definition is refused.
         check(encodeReloadBundle(r,{bad,other},{part},otherBindings,error).isEmpty(),"Reused definition hid a mismatched grip anchor");
         auto drum=grip.pose.placement;drum.ownerModel="Weapons/Glock19x/Attachments/Glock19x_Mag_50RND.nif";
         check(magazineGrabSupported(drum),"Drum authoring was excluded");
@@ -135,12 +122,10 @@ namespace {
         check(namedFit&&sameGripAnchor(namedFit->pose.placement,named.pose.placement),"Explicit magazine role still depends on a hardcoded part name");
         auto defaultRecipe=r;defaultRecipe.tracks[2].anchor=drum;
         defaultRecipe.id=reloadRecipeIdentity(defaultRecipe);
-        for(auto& window:defaultRecipe.windows)for(auto& member:window.members)if(member.track==2)member.gripId=inherited->pose.id;
         const auto inheritedBundle=encodeReloadBundle(defaultRecipe,{grip},{},bindings,error,defaults);
         check(!inheritedBundle.isEmpty(),error);
         check(QJsonDocument::fromJson(inheritedBundle)["magazineGrabBindings"].toArray().size()==2,"Export omitted concrete default binding");
         auto rifle=r;
-        for(auto& window:rifle.windows)for(auto& member:window.members)member.gripId.clear();
         rifle.tracks[0].anchor.anchorName="WeaponBolt";
         rifle.tracks[2].anchor.ownerModel=rifle.tracks[0].anchor.ownerModel;
         rifle.tracks[2].anchor.ownerRecord=rifle.tracks[0].anchor.ownerRecord;
@@ -154,20 +139,11 @@ namespace {
     void slowAndStatic(){
         auto r=capture();r.tracks.resize(1);r.tracks[0].parent=-1;
         for(int i=0;i<r.frames;++i)r.tracks[0].poses[i]=pose({0,.5f*ramp(r.duration*i/(r.frames-1),.4f,3.6f),0});
-        QString error;check(analyzeReloadWindows(r,error),error);check(!r.windows.isEmpty()&&r.windows.back().last>400,"Slow continuous movement was classified as rest");
+        QString error;check(identifyReloadRecipe(r,error),error);const auto slow=reloadMotionSpans(r,0);
+        check(!slow.isEmpty()&&slow.back().last>400,"Slow continuous movement was classified as rest");
         for(auto& p:r.tracks[0].poses)p=pose({},37);
-        check(analyzeReloadWindows(r,error),error);check(r.windows.isEmpty(),"Quaternion rounding created fake movement in a static part");
-        r.source["action"]="WPNFire";check(!analyzeReloadWindows(r,error),"Non-reload motion source accepted");
-    }
-    void mergeSafety(){
-        auto r=capture();QString error;check(analyzeReloadWindows(r,error),error);
-        r.windows[0].returnOnRelease=true;const int count=r.windows.size();check(!mergeReloadWindow(r,0,error)&&r.windows.size()==count,"Merge silently discarded a release rule");
-        r.windows[0].returnOnRelease=false;
-        for(int i=0;i+1<r.windows.size();++i){
-            bool firstMag=false,nextMag=false;for(const auto& m:r.windows[i].members)firstMag|=m.track==2;for(const auto& m:r.windows[i+1].members)nextMag|=m.track==2;
-            if(firstMag&&nextMag&&r.windows[i].last<210&&r.windows[i+1].first>210){check(!mergeReloadWindow(r,i,error),"Merge interpolated across a hidden magazine");return;}
-        }
-        check(false,"No visibility-gap test windows found");
+        check(identifyReloadRecipe(r,error),error);check(reloadMotionSpans(r,0).isEmpty(),"Quaternion rounding created fake movement in a static part");
+        r.source["action"]="WPNFire";check(!identifyReloadRecipe(r,error),"Non-reload motion source accepted");
     }
     QByteArray read(const QString& path){QFile f(path);check(f.open(QIODevice::ReadOnly),path);return f.readAll();}
     void fixture(const QStringList& args){
@@ -177,9 +153,13 @@ namespace {
         for(int i=0;i<rig.bones.size();++i){bool part=false;for(int p=rig.bones[i].parentIndex;p>=0;p=rig.bones[p].parentIndex)if(p==weapon){part=true;break;}if(part){ReloadTrack t;t.anchor={"animated-part",rig.bones[i].name,rig.bones[i].name,"Fixture.nif","Fixture.esp:123456",{}, {}};t.label=rig.bones[i].name;t.surface=true;r.tracks.append(t);bones.append(i);}}
         for(int i=0;i<bones.size();++i)r.tracks[i].parent=bones.indexOf(rig.bones[bones[i]].parentIndex);
         for(int i=0;i<r.frames;++i){check(samplePose(rig,clip,r.duration*i/(r.frames-1),&baseline,sampled,local,global,error),error);Transformf inverse;check(invertUniformTransform(global[weapon],inverse),"Invalid Weapon");for(int j=0;j<bones.size();++j)r.tracks[j].poses.append(composed(inverse,global[bones[j]]));}
-        check(analyzeReloadWindows(r,error),error);check(!r.windows.isEmpty(),"Fixture has no motion windows");
-        QTextStream(stdout)<<"FIXTURE "<<args[3]<<" windows="<<r.windows.size()<<" tracks="<<r.tracks.size()<<'\n';
-        if(args.contains("--windows"))for(const auto& w:r.windows){QStringList members;for(const auto& m:w.members)members.append(r.tracks[m.track].label);QTextStream(stdout)<<r.duration*w.first/(r.frames-1)<<".."<<r.duration*w.last/(r.frames-1)<<" "<<members.join(", ")<<'\n';}
+        check(identifyReloadRecipe(r,error),error);
+        int moving=0;
+        for(int i=0;i<r.tracks.size();++i)moving+=reloadMotionSpans(r,i).isEmpty()?0:1;
+        check(moving>0,"Fixture has no moving parts");
+        QTextStream(stdout)<<"FIXTURE "<<args[3]<<" moving parts="<<moving<<" tracks="<<r.tracks.size()<<'\n';
+        if(args.contains("--spans"))for(int i=0;i<r.tracks.size();++i)for(const auto& s:reloadMotionSpans(r,i))
+            QTextStream(stdout)<<r.duration*s.first/(r.frames-1)<<".."<<r.duration*s.last/(r.frames-1)<<" "<<r.tracks[i].label<<'\n';
     }
 }
-int main(int argc,char** argv){QCoreApplication app(argc,argv);try{windows();persistence();curve();slowAndStatic();mergeSafety();bundles();if(app.arguments().size()>=4)fixture(app.arguments());QTextStream(stdout)<<"PASS complete reload phases, co-timed/rigid groups, visibility gaps, slow/static motion, reload-only identity, saved labels/grabs, safe split/merge, curved/reverse dragging and self-contained grip exports\n";return 0;}catch(const std::exception& e){QTextStream(stderr)<<"FAIL "<<e.what()<<'\n';return 1;}}
+int main(int argc,char** argv){QCoreApplication app(argc,argv);try{motion();encoding();curve();slowAndStatic();bundles();if(app.arguments().size()>=4)fixture(app.arguments());QTextStream(stdout)<<"PASS reload part motion spans, visibility gaps, slow/static motion, reload-only identity, recipe format 2, curved/reverse dragging and self-contained grip exports";return 0;}catch(const std::exception& e){QTextStream(stderr)<<"FAIL "<<e.what()<<'\n';return 1;}}

@@ -101,13 +101,6 @@ QByteArray encodeReloadBundle(const ReloadRecipe& recipe,const QVector<PartGrip>
         }
         grips.append(QJsonDocument::fromJson(bytes).object());included.insert(grip.pose.id);return true;
     };
-    for(const auto& window:recipe.windows)for(const auto& member:window.members)if(!member.gripId.isEmpty()) {
-        const auto* grip=findGrip(member.gripId);if(!grip)return {};
-        if(!sameMechanismPart(grip->pose.placement,recipe.tracks[member.track].anchor)) {
-            error="Reload phase grip targets a different part: "+grip->pose.name;return {};
-        }
-        if(!include(*grip))return {};
-    }
     bool bothHands=false;QSet<QString> magazineOwners;auto keys=magazineGrabs.keys();keys.sort();
     for(const auto& key:keys)if(key.startsWith(weapon.toLower()+"|")) {
         const auto* grip=findGrip(magazineGrabs[key]);if(!grip)return {};

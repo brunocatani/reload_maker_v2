@@ -93,8 +93,6 @@ namespace reloadmaker
         _simulationActive = true;
         _reloadPreviewTimer->stop();
         _reloadPlaying = false;
-        _reloadHeld = false;
-        _reloadDrive->setActive(false, false);
         if (!selectSimulationClip(false, false)) {
             stopSimulation();
             updateSimulationControls();

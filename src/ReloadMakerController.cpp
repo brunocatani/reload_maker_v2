@@ -92,7 +92,6 @@ namespace reloadmaker
         _slotOverlay = new SlotOverlay(_window->getGLView(), this);
         _slotOverlay->selected = [this](SlotKey slot) { focusSlot(slot); };
         createGripViewport();
-        createReloadViewport();
         createSimulationViewport();
         applyStyle();
         setWorkspace(OperateWorkspace);
