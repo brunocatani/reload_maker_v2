@@ -2,26 +2,22 @@
 #include "ReloadGraph.h"
 #include "StudioWindow.h"
 #include "glview.h"
-#include "gl/glshape.h"
 #include "model/nifmodel.h"
 #include <QScopedValueRollback>
 #include <QCheckBox>
 #include <QComboBox>
-#include <QCryptographicHash>
 #include <QDesktopServices>
 #include <QDockWidget>
 #include <QDir>
 #include <QFileInfo>
 #include <QGroupBox>
 #include <QJsonArray>
-#include <QJsonDocument>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QScrollArea>
-#include <QSet>
 #include <QSignalBlocker>
 #include <QSlider>
 #include <QTabWidget>
@@ -29,7 +25,6 @@
 #include <QUrl>
 #include <QVBoxLayout>
 #include <algorithm>
-#include <cmath>
 
 namespace reloadmaker {
     void ReloadMakerController::createReloadUi()
@@ -161,125 +156,6 @@ namespace reloadmaker {
         }
         updateGripViewport();
     }
-    void ReloadMakerController::invalidateReloadCapture()
-    {
-        stopSimulation();_simulationRig.reset();_simulationAmmo={};_simulation.configureAmmunition(0,false);
-        if(_reloadCaptureTimer){_reloadCaptureTimer->stop();}
-        if(_reloadPreviewTimer){_reloadPreviewTimer->stop();}
-        if(_reloadGraph)_reloadGraph->setRecipe(nullptr);
-        _reloadRecipe.reset();_reloadTrackNodes.clear();_reloadClip={};_reloadBase.clear();_reloadExpectedPath.clear();
-        _reloadCapturing=false;_reloadPlaying=false;_reloadReturning=false;_reloadHeld=false;_reloadWindow=-1;_reloadTrack=-1;
-        if(_reloadDrive){_reloadDrive->clearCurve();_reloadDrive->setActive(_reloadWorkspaceActive,false);}
-        if(_reloadWindows){const QSignalBlocker block(_reloadWindows);_reloadWindows->clear();}
-        if(_reloadMembers){const QSignalBlocker block(_reloadMembers);_reloadMembers->clear();}
-        if(_reloadPlay){_reloadAnalyze->setEnabled(true);_reloadPlay->setEnabled(false);_reloadPlay->setText("PLAY RELOAD");_reloadTest->setChecked(false);_reloadTest->setEnabled(false);_reloadSave->setEnabled(false);_reloadWindowProgress->setEnabled(false);_reloadProgress->hide();_reloadSummary->setText("Select a configured weapon. Its base Reload is the only motion source for this page.");}
-        if(_reloadWindowName){_reloadWindowName->clear();_reloadWindowName->setEnabled(false);_reloadPartName->clear();_reloadPartName->setEnabled(false);_reloadWindowInfo->setText("Select a reload movement window to label its parts.");_reloadGripChoice->clear();_reloadGripChoice->setEnabled(false);_reloadReturn->setEnabled(false);}
-    }
-    void ReloadMakerController::startReloadCapture()
-    {
-        _reloadCaptureQueued=false;
-        if(!reloadCaptureAllowed()||_loadThread||_rebuildTimer->isActive()||_reloadCapturing)return;
-        const auto action=std::find_if(_animationActions.cbegin(),_animationActions.cend(),[](const auto& a){return a.baseReload;});
-        if(action==_animationActions.cend()||_nodeBindings.isEmpty()||_renderedWeapon!=_selectedWeapon){
-            _reloadSummary->setText("This configuration has no resolved base WPNReload. No fire, charge, unload or alternative clip will be substituted.");return;
-        }
-        const auto expected=action->resourcePath;
-        // Phase selection drives the reload page's grip preview; Operate only
-        // consumes the recipe and must not inherit a phase member's grip or
-        // have its active clip replaced when the recipe is already current.
-        if(!_reloadWorkspaceActive&&_reloadRecipe&&_reloadExpectedPath==expected)return;
-        const int actionRow=actionIndex(expected);
-        if(actionRow<0)return;
-        if(_workspace==GripsWorkspace&&_handPosePages->currentIndex()==3)
-            _grabLocationCapturePreview=std::pair{_activeAnimationPath,_playbackTime};
-        selectAction(actionRow);
-        if(!_clip.valid()||_activeAnimationPath!=expected)return;
-        if(_reloadRecipe&&_reloadExpectedPath==expected){refreshReloadWindows();selectReloadWindow(std::max(0,_reloadWindow));return;}
-        invalidateReloadCapture();_reloadExpectedPath=expected;_reloadClip=_clip;_reloadBase=_stateBaselineLocalPose;
-        ReloadRecipe recipe;
-        QString error;const auto clipBytes=readAnimationResource(expected,error);if(clipBytes.isEmpty()){setStatus(error,true);return;}
-        const auto baseBytes=readAnimationResource(_stateBaselineAnimationPath,error);if(baseBytes.isEmpty()){setStatus(error,true);return;}
-        // Analyze and display the same bytes whose identity we persist, even if
-        // the user replaced the loose clip since the normal preview cached it.
-        const auto sourceClip=HkxReader::readClip(clipBytes,error),sourceBase=HkxReader::readClip(baseBytes,error);
-        QVector<Transformf> sourceTracks,baseGlobal;
-        if(!sourceClip.valid()||!sourceBase.valid()||!samplePose(_skeleton,sourceBase,0,sourceBase.additive?&_readyLocalPose:nullptr,sourceTracks,_reloadBase,baseGlobal,error)){
-            setStatus("Cannot sample the resolved reload source: "+error,true);return;
-        }
-        _reloadClip=sourceClip;_clip=sourceClip;_stateBaselineLocalPose=_reloadBase;
-        recipe.duration=sourceClip.durationSeconds;
-        if(!std::isfinite(recipe.duration)||recipe.duration<=0||recipe.duration*120>maximumReloadFrames-1){setStatus("Reload exceeds the supported 120 Hz analysis duration; no frames were silently dropped.",true);return;}
-        recipe.frames=int(std::ceil(recipe.duration*120))+1;
-        QJsonArray mods;for(const auto* mod:configuredObjectMods())mods.append(QJsonObject{{"record",poseRecordKey(mod->formId)},{"model",mod->modelPath}});
-        recipe.source={{"action","WPNReload"},{"weaponRecord",poseRecordKey(currentWeapon()->formId)},{"baseModel",currentWeapon()->baseModelPath},{"mods",mods},{"animation",expected},{"baseline",_stateBaselineAnimationPath},
-            {"animationSha256",QString::fromLatin1(QCryptographicHash::hash(clipBytes,QCryptographicHash::Sha256).toHex())},{"baselineSha256",QString::fromLatin1(QCryptographicHash::hash(baseBytes,QCryptographicHash::Sha256).toHex())}};
-        if(!compileMechanismScene(_assemblyNodes,_nodeBindings,{},_reloadScenePlan,error)){setStatus(error,true);return;}
-        QSet<int> geometry;auto* model=activeModel();auto* scene=_window->getGLView()->getScene();
-        for(auto* shape:scene->shapes){
-            if(!shape){continue;}
-            auto node=model->getBlockIndex(shape->id());bool weapon=false;QVector<int> ancestors;
-            for(int depth=0;node.isValid()&&depth<model->getBlockCount();++depth){ancestors.append(model->getBlockNumber(node));if(node==_weaponRoot)weapon=true;for(const auto& root:_partRoots)if(root==node)weapon=true;node=model->getBlockIndex(model->getParent(node));}
-            if(!weapon){continue;}
-            const auto skin=shape->reloadMakerSkinBones();
-            if(skin.isEmpty())for(int block:ancestors)geometry.insert(block);else for(int bone:skin)geometry.insert(bone);
-        }
-        QVector<int> bindingIndices;
-        for(int i=0;i<_nodeBindings.size();++i){const auto& binding=_nodeBindings[i];if(!binding.weaponPart)continue;
-            const int anchor= [&](){for(int a=1;a<_handPoseAnchors.size();++a)if(_handPoseAnchors[a].node==_sceneNodes[binding.nodeIndex]&&_handPoseAnchors[a].description.anchorKind=="animated-part")return a;return -1;}();
-            if(anchor<0)continue;
-            ReloadTrack track;track.anchor=_handPoseAnchors[anchor].description;track.label=_handPoseAnchor->itemText(anchor);track.surface=geometry.contains(model->getBlockNumber(_sceneNodes[binding.nodeIndex]));track.poses.reserve(recipe.frames);
-            recipe.tracks.append(std::move(track));_reloadTrackNodes.append(binding.nodeIndex);bindingIndices.append(i);
-        }
-        if(recipe.tracks.isEmpty()||recipe.tracks.size()>maximumReloadTracks){setStatus("No supported concrete animated-part tracks, or too many tracks for this capture.",true);return;}
-        for(int i=0;i<bindingIndices.size();++i)recipe.tracks[i].parent=bindingIndices.indexOf(_nodeBindings[bindingIndices[i]].semanticParentBinding);
-        _reloadRecipe=std::move(recipe);_reloadCaptureFrame=0;_reloadCapturing=true;
-        _reloadSourceLabel->setText(QStringLiteral("Native reload · %1").arg(QFileInfo(QFileInfo(expected).path()).fileName()));_reloadSourceLabel->setToolTip(expected+"\n"+(_libraryMode?_packageResources.provider(expected):_package.sourcePath));
-        _reloadAnalyze->setEnabled(false);_reloadProgress->setRange(0,_reloadRecipe->frames);_reloadProgress->setValue(0);_reloadProgress->show();_reloadSummary->setText("Sampling native weapon-part poses…");
-        _reloadCaptureTimer->start();
-    }
-    void ReloadMakerController::advanceReloadCapture()
-    {
-        if(!_reloadCapturing||!_reloadRecipe||!reloadCaptureAllowed()||_loadThread||_rebuildTimer->isActive()){invalidateReloadCapture();return;}
-        QString error;QVector<Transformf> tracks,local,global,boundLocal,boundGlobal,nativeLocal,world;
-        auto& recipe=*_reloadRecipe;
-        for(int batch=0;batch<16&&_reloadCaptureFrame<recipe.frames;++batch,++_reloadCaptureFrame){
-            const float seconds=recipe.duration*_reloadCaptureFrame/(recipe.frames-1);
-            if(!samplePose(_skeleton,_reloadClip,seconds,&_reloadBase,tracks,local,global,error)||
-                !evaluateSceneBindings(_skeleton,_nodeBindings,local,_reloadBase,global,boundLocal,boundGlobal,error)||
-                !nativeMechanismScene(_reloadScenePlan,_nodeBindings,boundLocal,nativeLocal,world,error)){
-                invalidateReloadCapture();setStatus("Reload capture failed: "+error,true);return;
-            }
-            Transformf inverse;if(!invertUniformTransform(global[_weaponBoneIndex],inverse)){invalidateReloadCapture();setStatus("Reload Weapon frame cannot be inverted",true);return;}
-            for(int i=0;i<recipe.tracks.size();++i)recipe.tracks[i].poses.append(composed(inverse,world[_reloadTrackNodes[i]]));
-        }
-        _reloadProgress->setValue(_reloadCaptureFrame);
-        if(_reloadCaptureFrame<recipe.frames)return;
-        _reloadCaptureTimer->stop();_reloadCapturing=false;_reloadProgress->hide();_reloadAnalyze->setEnabled(true);
-        if(!analyzeReloadWindows(recipe,error)){invalidateReloadCapture();setStatus("Reload window analysis failed: "+error,true);return;}
-        ReloadRecipe saved;if(_reloadRecipeLibrary.load(recipe.id,saved,error)){if(_reloadIgnoreSavedOnce)recipe.revision=saved.revision;else recipe=std::move(saved);}else if(!error.isEmpty())appendDiagnostic("RELOAD SETUP: "+error);
-        _reloadIgnoreSavedOnce=false;
-        if (!_pendingReloadDraft.isEmpty()) {
-            ReloadRecipe restored;
-            if (decodeReloadRecipe(QJsonDocument(_pendingReloadDraft).toJson(), restored, error) && restored.id == recipe.id)
-                recipe = std::move(restored);
-            else appendDiagnostic("PROJECT: saved reload draft does not match the recaptured native source; review required.");
-            _pendingReloadDraft = {};
-        }
-        refreshReloadWindows();if(!recipe.windows.isEmpty()){if(_reloadWorkspaceActive)selectReloadWindow(0);}else _reloadSummary->setText("This base reload contains no measurable weapon-part movement. No substitute animation was used.");
-        if(simulationWorkspace(_workspace))prepareSimulation();
-        else if(_workspace==GripsWorkspace&&_handPosePages->currentIndex()==3){
-            // Learning establishes live part bindings without replacing the
-            // frame the user chose for surface picking.
-            if(_grabLocationCapturePreview){
-                const auto [path,seconds]=*_grabLocationCapturePreview;_grabLocationCapturePreview.reset();
-                if(const int i=actionIndex(path);i>=0){
-                    selectAction(i);
-                    _playbackTime=std::clamp(seconds,0.f,playbackDuration());(void)applyPose(_playbackTime);updateTimelineText();
-                }
-            }
-            prepareGrabLocationFrame();
-        }
-    }
     void ReloadMakerController::refreshReloadWindows()
     {
         if(!_reloadRecipe||_reloadCapturing){return;}
@@ -390,11 +266,17 @@ namespace reloadmaker {
         else if(_reloadPlaying){const auto previous=_playbackTime;seekReload(_playbackTime+delta);playSourceSounds(_reloadClip,previous,_playbackTime);if(_reloadRecipe&&_playbackTime>=_reloadRecipe->duration){_reloadPlaying=false;_reloadPlay->setText("PLAY RELOAD");}}
         if(!_reloadPlaying&&!_reloadReturning)_reloadPreviewTimer->stop();
     }
-    void ReloadMakerController::saveReloadRecipe()
+    // Empties the reload page after the recipe is dropped.
+    void ReloadMakerController::resetReloadPage()
     {
-        if(!_reloadRecipe||_reloadCapturing){return;}
-        QString error;
-        if(!_reloadRecipeLibrary.save(*_reloadRecipe,error)){setStatus(error,true);return;}
-        setStatus(QStringLiteral("Saved reload setup revision %1: source curves, windows, grabbable parts and grip links.").arg(_reloadRecipe->revision));
+        if(_reloadWindows){const QSignalBlocker block(_reloadWindows);_reloadWindows->clear();}
+        if(_reloadMembers){const QSignalBlocker block(_reloadMembers);_reloadMembers->clear();}
+        if(_reloadPlay){_reloadAnalyze->setEnabled(true);_reloadPlay->setEnabled(false);_reloadPlay->setText("PLAY RELOAD");_reloadTest->setChecked(false);_reloadTest->setEnabled(false);_reloadSave->setEnabled(false);_reloadWindowProgress->setEnabled(false);_reloadProgress->hide();_reloadSummary->setText("Select a configured weapon. Its base Reload is the only motion source for this page.");}
+        if(_reloadWindowName){_reloadWindowName->clear();_reloadWindowName->setEnabled(false);_reloadPartName->clear();_reloadPartName->setEnabled(false);_reloadWindowInfo->setText("Select a reload movement window to label its parts.");_reloadGripChoice->clear();_reloadGripChoice->setEnabled(false);_reloadReturn->setEnabled(false);}
+    }
+    void ReloadMakerController::showReloadCaptureStarted(const QString& expected)
+    {
+        _reloadSourceLabel->setText(QStringLiteral("Native reload · %1").arg(QFileInfo(QFileInfo(expected).path()).fileName()));_reloadSourceLabel->setToolTip(expected+"\n"+(_libraryMode?_packageResources.provider(expected):_package.sourcePath));
+        _reloadAnalyze->setEnabled(false);_reloadProgress->setRange(0,_reloadRecipe->frames);_reloadProgress->setValue(0);_reloadProgress->show();_reloadSummary->setText("Sampling native weapon-part poses…");
     }
 }

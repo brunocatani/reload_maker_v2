@@ -506,6 +506,24 @@ namespace reloadmaker
         [[nodiscard]] QJsonArray magazineRootsJson() const;
         [[nodiscard]] QJsonArray magazineShapesJson() const;
         bool addRifleExport(QJsonObject& result) const;
+        // Movement timing and provenance an operating setup mode supplies.
+        struct ConfiguredMotion
+        {
+            float duration{ 0 };
+            float ejectSeconds{ -1 };
+            QJsonObject provenance;
+        };
+        bool sampleSetupClip(const OperatingSetup& setup, SimulationParts& parts, ConfiguredMotion& motion, QString& error);
+        bool composeManualMovements(const OperatingSetup& setup, SimulationParts& parts, ConfiguredMotion& motion, QString& error);
+        bool composeManualMovement(const OperatingSetup& setup, int track, const QString& movementId, SimulationParts& parts,
+                                   QJsonArray& definitions, QString& error);
+        bool reverseSetupWindow(SimulationParts& parts, ConfiguredMotion& motion, QString& error);
+        bool readReloadSource(const QString& expected, ReloadRecipe& recipe, QString& error);
+        bool addReloadTracks(ReloadRecipe& recipe, QString& error);
+        [[nodiscard]] QSet<int> weaponGeometryBlocks() const;
+        void finishReloadCapture(QString& error);
+        void resetReloadPage();
+        void showReloadCaptureStarted(const QString& expected);
         std::optional<MagazineSetup> _magazineSetup;
         MagazineViewport* _magazineViewport{nullptr};
         QPushButton* _magazineOut{nullptr};

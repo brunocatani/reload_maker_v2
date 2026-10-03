@@ -1,9 +1,7 @@
 #include "ReloadMakerController.h"
 #include "StudioWindow.h"
 #include "glview.h"
-#include <QCryptographicHash>
 #include <QJsonArray>
-#include <QJsonDocument>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
@@ -17,104 +15,9 @@
 #include <QScrollArea>
 #include <QTimer>
 #include <QVBoxLayout>
-#include <algorithm>
 #include <stdexcept>
 
 namespace reloadmaker {
-bool ReloadMakerController::buildConfiguredSimulationRig(const OperatingSetup& setup,SimulationRig& rig,QString& error) {
-    const auto fail=[&](const QString& why){error=why;return false;};
-    if(!_reloadRecipe||setup.recipeId!=_reloadRecipe->id)return fail("The source assembly changed. Review and save its operating setup again.");
-    const auto& recipe=*_reloadRecipe;auto parts=setup.parts;SimulationRig preset;
-    const auto valid=[&](int track){return track>=0&&track<recipe.tracks.size();};
-    if(!valid(parts.operating)||!valid(parts.bolt)||!valid(parts.magazine))return fail("An operating role is outside the current source tracks");
-    if(parts.openFrame>=recipe.frames||parts.closedFrame>=recipe.frames)return fail("The selected movement window exceeds this capture");
-    float duration=recipe.duration,ejection=setup.ejectSeconds;QJsonObject provenance;
-    if(setup.mode=="preset") {
-        if(!buildSourceSimulationRig(preset,error))return false;
-        if(!preset.derivedHandle.isEmpty())parts.curves[preset.slide]=preset.derivedHandle;
-        if(!preset.derivedBolt.isEmpty())parts.curves[preset.bolt]=preset.derivedBolt;
-        provenance=preset.mechanicalSource;
-    }else if(setup.mode=="clip") {
-        const auto bytes=readAnimationResource(setup.clip,error),baseBytes=readAnimationResource(setup.baseline,error);
-        const auto clip=HkxReader::readClip(bytes,error),base=HkxReader::readClip(baseBytes,error);
-        if(!clip.valid()||!base.valid())return false;
-        QVector<int> selected=parts.followers;if(!selected.contains(parts.bolt))selected.append(parts.bolt);
-        for(int track:selected)if(!valid(track))return fail("A follower is missing from the current reload");
-        QVector<Transformf> sampled,baseline,local,global,boundLocal,boundGlobal,sceneLocal,sceneWorld;
-        if(!samplePose(_skeleton,base,0,&_readyLocalPose,sampled,baseline,global,error))return false;
-        for(int frame=0;frame<recipe.frames;++frame){
-            if(!samplePose(_skeleton,clip,clip.durationSeconds*frame/(recipe.frames-1),&baseline,sampled,local,global,error)||
-               !evaluateSceneBindings(_skeleton,_nodeBindings,local,baseline,global,boundLocal,boundGlobal,error)||
-               !nativeMechanismScene(_reloadScenePlan,_nodeBindings,boundLocal,sceneLocal,sceneWorld,error))return false;
-            Transformf inverse;if(!invertUniformTransform(global[_weaponBoneIndex],inverse))return fail("Invalid native movement reference frame");
-            for(int track:selected)parts.curves[track].append(composed(inverse,sceneWorld[_reloadTrackNodes[track]]));
-        }
-        duration=clip.durationSeconds;const auto hash=[](const QByteArray& data){return QString::fromLatin1(QCryptographicHash::hash(data,QCryptographicHash::Sha256).toHex());};
-        if(ejection<0)for(const auto& event:clip.annotations)if(event.text.compare("EjectShellCasing",Qt::CaseInsensitive)==0){ejection=event.timeSeconds;break;}
-        provenance={{"animation",setup.clip},{"animationSha256",hash(bytes)},{"baseline",setup.baseline},{"baselineSha256",hash(baseBytes)},{"duration",duration}};
-    }else if(setup.mode=="manual") {
-        QJsonArray definitions;
-        for(auto it=setup.movements.cbegin();it!=setup.movements.cend();++it){
-            if(!valid(it.key()))return fail("An authored movement names a missing part");
-            const auto movement=std::find_if(_mechanisms.cbegin(),_mechanisms.cend(),[&](const auto& m){return m.id==it.value();});
-            if(movement==_mechanisms.cend()||movement->stages.isEmpty()||!sameMechanismPart(movement->anchor,recipe.tracks[it.key()].anchor))return fail("Choose a saved movement authored on this exact native part");
-            if(!validateMechanism(*movement,error))return false;
-            QHash<int,Transformf> followers;
-            for(const auto& follower:movement->followers){int found=-1;for(int i=0;i<recipe.tracks.size();++i)if(sameMechanismPart(follower.anchor,recipe.tracks[i].anchor)){if(found>=0)return fail("An authored follower is ambiguous");found=i;}
-                if(found<0)return fail("An authored movement follower is not installed");followers[found]=follower.inPartAtRest;if(!parts.followers.contains(found))parts.followers.append(found);}
-            if(parts.curves.contains(it.key()))return fail("Two authored movements control the same part");
-            for(int track:followers.keys())if(parts.curves.contains(track)||setup.movements.contains(track))return fail("A rigid follower also has an independent movement; remove the duplicate ownership");
-            const auto rest=recipe.tracks[it.key()].poses.back();
-            for(int frame=0;frame<recipe.frames;++frame){
-                const float u=float(frame)/(recipe.frames-1);const float path=movement->stages.size()*(simulationMechanism()==WeaponMechanism::BoltAction?u:1-u);
-                const auto pose=composed(rest,mechanismDelta(*movement,path));parts.curves[it.key()].append(pose);
-                for(auto f=followers.cbegin();f!=followers.cend();++f)parts.curves[f.key()].append(composed(pose,f.value()));
-            }
-            definitions.append(QJsonDocument::fromJson(encodeMechanism(*movement,error)).object());
-        }
-        for(int track:parts.followers)if(!parts.curves.contains(track))return fail("Assign a movement to every manual follower, or link it in the operating part's movement");
-        duration=setup.duration;provenance={{"method","authored-part-local-stages"},{"definitions",definitions},{"duration",duration}};
-    }
-    const bool reversed=parts.openFrame>=0&&parts.closedFrame<parts.openFrame;
-    if(reversed){auto tracks=parts.followers;if(!tracks.contains(parts.bolt))tracks.append(parts.bolt);
-        for(int track:tracks){if(!valid(track))return fail("A follower is outside this capture");auto curve=parts.curves.value(track,recipe.tracks[track].poses);std::reverse(curve.begin(),curve.end());parts.curves[track]=std::move(curve);}
-        parts.openFrame=recipe.frames-1-parts.openFrame;parts.closedFrame=recipe.frames-1-parts.closedFrame;provenance["reversedSourceWindow"]=true;}
-    if(!buildSimulationRig(recipe,rig,error,simulationMechanism(),setup.deriveHandle,{},&parts))return false;
-    if(setup.mode=="preset"&&!reversed){
-        if(rig.slide==preset.slide)rig.derivedHandle=preset.derivedHandle;
-        if(rig.bolt==preset.bolt)rig.derivedBolt=preset.derivedBolt;
-    }
-    rig.customSetup=true;rig.manualCycle=(setup.mode=="manual"||setup.mode=="clip")&&simulationMechanism()==WeaponMechanism::BoltAction;
-    rig.fireFromStroke=setup.fireMode=="stroke";rig.presetFire=setup.fireMode=="preset";rig.manualEjectSeconds=ejection;
-    rig.motionDuration=duration;rig.mechanicalSource=provenance;rig.authoring=operatingSetupJson(setup);return true;
-}
-
-QJsonObject ReloadMakerController::operatingSetupState() {
-    if(!_reloadRecipe||_loadThread||_reloadCapturing||_reloadCaptureQueued||_rebuildTimer->isActive())throw std::runtime_error("Capture the current reload before configuring operating parts");
-    QJsonArray tracks,movements,clips;for(int i=0;i<_reloadRecipe->tracks.size();++i){const auto& t=_reloadRecipe->tracks[i];tracks.append(QJsonObject{{"index",i},{"name",t.anchor.anchorName},{"label",t.label},{"path",t.anchor.anchorPath},{"model",t.anchor.ownerModel},{"surface",t.surface}});}
-    for(const auto& m:_mechanisms)movements.append(QJsonObject{{"id",m.id},{"name",m.name},{"part",m.anchor.anchorName},{"model",m.anchor.ownerModel}});
-    for(const auto& a:_animationActions)clips.append(QJsonObject{{"name",a.label},{"path",a.resourcePath},{"baseline",a.baselineResourcePath}});
-    auto saved=_authoringRoadmaps.value(roadmapKey()).toObject().value("operating").toObject();const bool stale=!saved.isEmpty()&&saved["recipeId"]!=_reloadRecipe->id;
-    QString error;OperatingSetup setup;setup.recipeId=_reloadRecipe->id;setup.baseline=_reloadRecipe->source["baseline"].toString();setup.clip=_reloadRecipe->source["animation"].toString();
-    SimulationRig source;if(_simulationRig&&_simulationRig->recipeId==_reloadRecipe->id&&_simulationRig->mechanism==simulationMechanism())source=*_simulationRig;else if(!buildSourceSimulationRig(source,error))setup.mode="reload";
-    setup.parts.operating=source.slide;setup.parts.bolt=source.bolt;setup.parts.magazine=source.magazine;setup.parts.followers=source.slideTracks;
-    if(simulationMechanism()==WeaponMechanism::PistolSlide&&setup.parts.bolt<0)setup.parts.bolt=setup.parts.operating;
-    if(!saved.isEmpty()&&!stale)(void)readOperatingSetup(saved,setup,error);
-    return {{"settings",operatingSetupJson(setup)},{"saved",!saved.isEmpty()},{"stale",stale},{"tracks",tracks},{"movements",movements},{"clips",clips},
-        {"frames",_reloadRecipe->frames},{"duration",_reloadRecipe->duration},{"suggestedOpenFrame",source.openFrame},{"suggestedClosedFrame",source.closedFrame},{"error",error}};
-}
-QJsonObject ReloadMakerController::configureOperatingSetup(const QJsonObject& request) {
-    const auto key=roadmapKey();if(!_reloadRecipe||_loadThread||_reloadCapturing||_reloadCaptureQueued||_rebuildTimer->isActive()||key.isEmpty())throw std::runtime_error("Wait for the current source capture");
-    auto plan=_authoringRoadmaps.value(key).toObject();if(!plan.contains("step"))plan["step"]=3;
-    if(request["operation"]=="reset")plan.remove("operating");
-    else if(request["operation"]=="save") {
-        OperatingSetup setup;QString error;SimulationRig checked;
-        if(!readOperatingSetup(request["settings"].toObject(),setup,error)||!buildConfiguredSimulationRig(setup,checked,error))throw std::runtime_error(error.toStdString());
-        plan["operating"]=operatingSetupJson(setup);
-    }else throw std::runtime_error("Choose save or reset for the operating setup");
-    stopSimulation();_authoringRoadmaps[key]=plan;_simulationRig.reset();++_revision;prepareSimulation();
-    if(!saveSession())throw std::runtime_error("Could not save operating setup");return operatingSetupState();
-}
 
 void ReloadMakerController::showOperatingSetup() {
     if(auto* existing=_window->findChild<QDialog*>("OperatingSetupDialog")){existing->show();existing->raise();return;}
