@@ -251,9 +251,6 @@ namespace reloadmaker
         void createFingerEditor();
         void refreshFingerEditor();
         void editFinger(int joint, const Quaternionf& rotation);
-        bool saveSession(const QString& path = {});
-        QString suggestedSessionPath() const;
-        bool beginWeaponProject(int selectedIndex);
         // Selected weapon: an index into _weaponSelections, -1 when none.
         // selectWeapon() is the user-facing change: it may switch projects and
         // reassembles. Restores assign the field directly.
@@ -285,8 +282,20 @@ namespace reloadmaker
         QJsonObject configureSourcePolicy(const QJsonObject&);
         void showSourcePolicy();
         QJsonObject _sourcePolicies;
+        // Project files (src/areas/project).
+        bool saveSession(const QString& path = {});
+        QString suggestedSessionPath() const;
+        bool beginWeaponProject(int selectedIndex);
+        QJsonObject animationSourceIdentity() const;
+        [[nodiscard]] QJsonObject projectRecord() const;
+        bool appendProjectDrafts(QJsonObject& record, QString& message);
         void openSession(const QString& path);
         void restoreSessionSelection();
+        bool selectProjectWeapon(const QJsonObject& record);
+        void restoreProjectLoadout(const QJsonObject& record);
+        void restoreProjectAuthoring(const QJsonObject& record);
+        void restoreProjectPose(const QJsonObject& record, QString& error);
+        void restoreProjectView(const QJsonObject& record);
 
         // Command pipe and registry; definitions live in src/commands by area.
         CommandRegistry _commands;
@@ -361,7 +370,6 @@ namespace reloadmaker
         QString _packCancelFile;
         bool connectInstalledProfile();
         bool handOffToMo2(const InstallationSetup& setup, const InstallationCheck& check);
-        QJsonObject animationSourceIdentity() const;
         void cacheWeaponFitBounds();
         bool fitWeapon();
         QVector<QVector3D> _weaponFitCorners;
