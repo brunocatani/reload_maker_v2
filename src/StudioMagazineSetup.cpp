@@ -1,7 +1,6 @@
 #include "ReloadMakerController.h"
 #include "StudioWindow.h"
 #include "glview.h"
-#include "model/nifmodel.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
@@ -15,58 +14,9 @@
 #include <QTimer>
 #include <QTreeWidget>
 #include <QVBoxLayout>
-#include <algorithm>
 #include <stdexcept>
 
 namespace reloadmaker {
-QString ReloadMakerController::magazinePiecePath(const QModelIndex& leaf) const {
-    auto* model=activeModel();if(!model)return {};QStringList path;auto node=leaf;
-    for(int depth=0;node.isValid()&&depth<model->getBlockCount();++depth){auto name=model->get<QString>(node,"Name");if(name.isEmpty())name=QString("unnamed:%1").arg(model->getBlockNumber(node));path.prepend(name);node=model->getBlockIndex(model->getParent(node));}
-    return path.join('/');
-}
-bool ReloadMakerController::sampledMagazinePayload() const {return _magazineSetup?_magazineSetup->sampledPayload:isM1AConfiguration();}
-QJsonObject ReloadMakerController::magazineSetupState() const {
-    if(!_reloadRecipe||!_simulationRig||_loadThread||_reloadCapturing||_reloadCaptureQueued||_rebuildTimer->isActive())throw std::runtime_error("Prepare the operating roles and native magazine first");
-    const auto saved=_authoringRoadmaps.value(roadmapKey()).toObject().value("magazineSetup").toObject();
-    if(!_magazineRail&&saved.isEmpty())throw std::runtime_error((_magazineError.isEmpty()?QString("The magazine source is not ready"):_magazineError).toStdString());
-    QJsonArray pieces,tracks,movements;MagazineSetup value;value.recipeId=_reloadRecipe->id;
-    value.emptyTrack=_magazineRail?_magazineRail->emptyTrack:_simulationRig->magazine;value.sampledPayload=isM1AConfiguration();
-    value.loadedFrame=value.sampledPayload?_m1aLoadedMagazineFrame:0;value.emptyFrame=value.sampledPayload?_m1aEmptyMagazineFrame:0;
-    value.entrySeconds=_reloadRecipe->duration*value.loadedFrame/(_reloadRecipe->frames-1);
-    QSet<QString> seen;
-    for(const auto& v:_magazineVisuals){const auto path=magazinePiecePath(v.node);if(seen.contains(path))throw std::runtime_error("Magazine pieces have ambiguous native paths");seen.insert(path);
-        const auto role=v.nativeOnly?"spare":v.cartridge?"cartridge":"body";value.pieces[path]=role;
-        pieces.append(QJsonObject{{"path",path},{"name",activeModel()->get<QString>(v.node,"Name")},{"role",role},{"empty",v.empty},{"track",v.track}});}
-    for(int i=0;i<_reloadRecipe->tracks.size();++i){const auto& track=_reloadRecipe->tracks[i];if(track.surface&&std::any_of(_magazineVisuals.cbegin(),_magazineVisuals.cend(),[&](const auto& v){return v.track==i&&!v.cartridge;}))tracks.append(QJsonObject{{"index",i},{"name",track.anchor.anchorName},{"model",track.anchor.ownerModel}});}
-    for(const auto& m:_mechanisms)if(sameMechanismPart(m.anchor,_reloadRecipe->tracks[_simulationRig->magazine].anchor))movements.append(QJsonObject{{"id",m.id},{"name",m.name}});
-    return {{"movements",movements},{"settings",saved.isEmpty()?magazineSetupJson(value):saved},{"saved",!saved.isEmpty()},{"stale",!saved.isEmpty()&&saved["recipeId"]!=_reloadRecipe->id},
-        {"fullTrack",_simulationRig->magazine},{"fullName",_reloadRecipe->tracks[_simulationRig->magazine].anchor.anchorName},{"tracks",tracks},{"pieces",pieces},
-        {"frames",_reloadRecipe->frames},{"duration",_reloadRecipe->duration},{"error",_magazineError}};
-}
-QJsonObject ReloadMakerController::configureMagazineSetup(const QJsonObject& request) {
-    if(!_reloadRecipe||!_simulationRig||_loadThread||_reloadCapturing||_reloadCaptureQueued||_rebuildTimer->isActive())throw std::runtime_error("Wait for the native magazine source");
-    const auto key=roadmapKey();const auto previous=_authoringRoadmaps.value(key);auto plan=previous.toObject();if(!plan.contains("step"))plan["step"]=5;
-    if(request["operation"]=="reset")plan.remove("magazineSetup");
-    else if(request["operation"]=="save") {
-        MagazineSetup value;QString error;if(!readMagazineSetup(request["settings"].toObject(),value,error))throw std::runtime_error(error.toStdString());
-        if(value.recipeId!=_reloadRecipe->id||value.emptyTrack>=_reloadRecipe->tracks.size()||value.loadedFrame>=_reloadRecipe->frames||value.emptyFrame>=_reloadRecipe->frames)throw std::runtime_error("Magazine recipe changed; review the current parts and samples");
-        const auto state=magazineSetupState();bool body=false;for(const auto& row:state["tracks"].toArray())body|=row.toObject()["index"].toInt()==value.emptyTrack;
-        if(!body)throw std::runtime_error("Choose an empty body from this magazine assembly");
-        const auto descendant=[&](int child,int parent){for(int depth=0;child>=0&&depth<_reloadRecipe->tracks.size();child=_reloadRecipe->tracks[child].parent,++depth)if(child==parent)return true;return false;};
-        if(value.emptyTrack!=_simulationRig->magazine&&(descendant(value.emptyTrack,_simulationRig->magazine)||descendant(_simulationRig->magazine,value.emptyTrack)))throw std::runtime_error("Separate full and empty carriers must be independent branches; choose the full carrier for a shared body");
-        if(value.motion=="native"&&(value.entrySeconds<=0||value.entrySeconds>=_reloadRecipe->duration))throw std::runtime_error("Native insertion must begin inside the reload clip");
-        const auto pieces=state["pieces"].toArray();if(pieces.size()!=value.pieces.size())throw std::runtime_error("Review all native magazine pieces");
-        for(const auto& row:pieces)if(!value.pieces.contains(row.toObject()["path"].toString()))throw std::runtime_error("A saved piece is not in this source");
-        plan["magazineSetup"]=magazineSetupJson(value);
-    }else throw std::runtime_error("Choose save or reset for magazine presentation");
-    stopSimulation();_authoringRoadmaps[key]=plan;prepareSimulation();
-    if(!_magazineError.isEmpty()||!_simulationError.isEmpty()) {
-        const auto failure=_magazineError.isEmpty()?_simulationError:_magazineError;stopSimulation();
-        if(previous.isUndefined())_authoringRoadmaps.remove(key);else _authoringRoadmaps[key]=previous;
-        prepareSimulation();throw std::runtime_error(failure.toStdString());
-    }
-    ++_revision;if(!saveSession())throw std::runtime_error("Could not save magazine presentation");return magazineSetupState();
-}
 void ReloadMakerController::showMagazineSetup() {
     if(auto* existing=_window->findChild<QDialog*>("MagazineSetupDialog")){existing->show();existing->raise();return;}
     QJsonObject state;try{state=magazineSetupState();}catch(const std::exception& e){setStatus(e.what(),true);if(_simulationRig&&_reloadRecipe)showMagazineReference();return;}

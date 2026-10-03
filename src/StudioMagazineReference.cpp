@@ -2,7 +2,6 @@
 #include "MagazineReference.h"
 #include "StudioWindow.h"
 #include "glview.h"
-#include "model/nifmodel.h"
 #include <QComboBox>
 #include <QDialog>
 #include <QDoubleSpinBox>
@@ -11,54 +10,11 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QQuaternion>
-#include <QTimer>
 #include <QVBoxLayout>
 #include <algorithm>
 #include <stdexcept>
 
 namespace reloadmaker {
-bool ReloadMakerController::magazineReferenceCandidate(int index) const {
-    if(!_simulationRig||!_reloadRecipe||index<=0||index>=_handPoseAnchors.size())return false;
-    auto* model=activeModel();if(!model)return false;
-    const auto node=_handPoseAnchors[index].node;
-    const auto below=[&](QModelIndex child,const QModelIndex& root) {
-        for(int depth=0;child.isValid()&&depth<model->getBlockCount();++depth){if(child==root)return true;child=model->getBlockIndex(model->getParent(child));}return false;
-    };
-    const auto trackNode=[&](int track)->QModelIndex{return track>=0&&track<_reloadTrackNodes.size()?QModelIndex(_sceneNodes.value(_reloadTrackNodes[track])):QModelIndex{};};
-    const auto carrier=trackNode(_simulationRig->magazine);
-    return node.isValid()&&carrier.isValid()&&(below(node,carrier)||below(carrier,node))&&
-        !below(trackNode(_simulationRig->slide),node)&&!below(trackNode(_simulationRig->bolt),node);
-}
-QJsonObject ReloadMakerController::magazineReferenceState() const {
-    if(!_reloadRecipe||!_simulationRig||_loadThread||_reloadCapturing||_reloadCaptureQueued||_rebuildTimer->isActive())throw std::runtime_error("Prepare the operating roles before choosing a magazine reference");
-    QJsonArray anchors;for(int i=1;i<_handPoseAnchors.size();++i)if(magazineReferenceCandidate(i)) {
-        const auto& p=_handPoseAnchors[i].description;anchors.append(QJsonObject{{"index",i},{"key",magazineReferenceKey(p)},{"name",p.anchorName},
-            {"kind",p.anchorKind},{"path",p.anchorPath},{"model",p.ownerModel},{"record",p.ownerRecord}});
-    }
-    const auto saved=_authoringRoadmaps.value(roadmapKey()).toObject().value("magazineReference").toObject();
-    MagazineReference initial;initial.recipeId=_reloadRecipe->id;const int selected=currentMagazineAnchor();
-    if(selected>=0)initial.anchorKey=magazineReferenceKey(_handPoseAnchors[selected].description);
-    Transformf carrier,inverse;QString error;
-    if(_magazineRail&&sceneNodeWorld(_sceneNodes[_reloadTrackNodes[_simulationRig->magazine]],carrier,error)&&invertUniformTransform(carrier,inverse))initial.connectionInCarrier=composed(inverse,_magazineRail->connection);
-    return {{"settings",saved.isEmpty()?magazineReferenceJson(initial):saved},{"anchors",anchors},{"selectedAnchor",selected},
-        {"saved",!saved.isEmpty()},{"stale",!saved.isEmpty()&&saved["recipeId"]!=_reloadRecipe->id},{"error",_magazineError}};
-}
-QJsonObject ReloadMakerController::configureMagazineReference(const QJsonObject& request) {
-    (void)magazineReferenceState();const auto key=roadmapKey();auto plan=_authoringRoadmaps.value(key).toObject();
-    if(!plan.contains("step"))plan["step"]=5;
-    if(request["operation"]=="reset")plan.remove("magazineReference");
-    else if(request["operation"]=="save") {
-        MagazineReference reference;QString error;if(!readMagazineReference(request["settings"].toObject(),reference,error))throw std::runtime_error(error.toStdString());
-        if(reference.recipeId!=_reloadRecipe->id)throw std::runtime_error("The magazine source changed; reopen reference settings");
-        int found=-1;for(int i=1;i<_handPoseAnchors.size();++i)if(magazineReferenceKey(_handPoseAnchors[i].description)==reference.anchorKey) {
-            if(found>=0||!magazineReferenceCandidate(i))throw std::runtime_error("Choose a unique reference within the magazine assembly, excluding operating parts");found=i;
-        }
-        if(found<0)throw std::runtime_error("The selected magazine reference is missing");
-        plan["magazineReference"]=magazineReferenceJson(reference);
-    }else throw std::runtime_error("Choose save or reset for magazine references");
-    stopSimulation();_authoringRoadmaps[key]=plan;prepareSimulation();++_revision;
-    if(!saveSession())throw std::runtime_error("Cannot save the magazine reference");return magazineReferenceState();
-}
 void ReloadMakerController::showMagazineReference() {
     if(auto* existing=_window->findChild<QDialog*>("MagazineReferenceDialog")){existing->show();existing->raise();return;}
     QJsonObject state;try{state=magazineReferenceState();}catch(const std::exception& e){setStatus(e.what(),true);return;}

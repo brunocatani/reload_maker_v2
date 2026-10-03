@@ -468,6 +468,29 @@ namespace reloadmaker
         void showConfigurationSaver();
         QJsonObject exportSlideProfile() const;
         void prepareMagazineInteraction();
+        // Steps of prepareMagazineInteraction (src/areas/magazine).
+        struct MagazineConnection
+        {
+            QString name;
+            Transformf frame;
+            bool authored{ false };
+        };
+        struct MagazineShape
+        {
+            QPersistentModelIndex node;
+            int track{ -1 };
+        };
+        bool loadMagazineSetup();
+        bool resolveMagazineConnection(MagazineConnection& connection);
+        bool collectMagazineGeometry(QVector<QVector3D>& body, QVector<QVector3D>& frame, QVector<MagazineShape>& shapes);
+        bool isSrepSpareMagazineShape(QModelIndex node) const;
+        bool buildMagazineMotion(const QVector<QVector3D>& body, MagazineRail& rail);
+        bool buildTestbedMagazineMotion(const QVector<QVector3D>& body, MagazineRail& rail);
+        void classifyMagazineShapes(const QVector<MagazineShape>& shapes, const MagazineRail& rail, bool& emptyBody, bool& fullBody);
+        bool isMagazineCartridge(const MagazineShape& shape, bool isEmpty) const;
+        bool applyMagazinePieceRoles(const MagazineRail& rail);
+        bool magazineSettingsBusy() const;
+        void checkMagazineSetup(const MagazineSetup& value) const;
         void moveFreeMagazine(QVector3D offset);
         void moveMagazineRail(float distance);
         void cancelMagazine();

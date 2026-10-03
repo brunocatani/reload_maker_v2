@@ -1,7 +1,6 @@
 #include "ReloadMakerController.h"
 #include "ReloadBundle.h"
 #include "MagazineViewport.h"
-#include "MagazineReference.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDockWidget>
@@ -29,25 +28,6 @@ bool sameFit(const PartGrip& a,const PartGrip& b,const QString& name) {
     for(int i=0;i<15;++i)if(!samePlacement(a.pose.fingers[i],b.pose.fingers[i]))return false;
     return true;
 }
-}
-int ReloadMakerController::currentMagazineAnchor() const {
-    const auto saved=_authoringRoadmaps.value(roadmapKey()).toObject().value("magazineReference").toObject();
-    if(!saved.isEmpty()) {
-        MagazineReference reference;QString error;
-        if(!_reloadRecipe||!readMagazineReference(saved,reference,error)||reference.recipeId!=_reloadRecipe->id)return -1;
-        int found=-1;for(int i=1;i<_handPoseAnchors.size();++i)if(magazineReferenceKey(_handPoseAnchors[i].description)==reference.anchorKey) {
-            if(found>=0||!magazineReferenceCandidate(i))return -1;found=i;
-        }
-        return found;
-    }
-    int result=-1;
-    for(int i=0;i<_handPoseAnchors.size();++i)if(magazineGrabSupported(_handPoseAnchors[i].description)) {
-        const auto& anchor=_handPoseAnchors[i].description;
-        if(isRifleConfiguration()&&!isMk18Configuration()&&!isSrepEmbeddedMagazine()?(anchor.anchorKind!="installed-part"):(anchor.anchorName.compare("WeaponMagazine",Qt::CaseInsensitive)!=0))continue;
-        if(result>=0)return -1;
-        result=i;
-    }
-    return result;
 }
 
 void ReloadMakerController::rememberMagazineGrip() {

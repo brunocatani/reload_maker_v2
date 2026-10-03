@@ -8,40 +8,10 @@
 #include <QJsonArray>
 #include <QLabel>
 #include <QPushButton>
-#include <QTimer>
 #include <QVBoxLayout>
 #include <stdexcept>
 
 namespace reloadmaker {
-QJsonObject ReloadMakerController::magazineGuideState() const {
-    if(!_reloadRecipe||_loadThread||_reloadCapturing||_reloadCaptureQueued||_rebuildTimer->isActive())throw std::runtime_error("Wait for the magazine's current source capture");
-    const auto saved=_authoringRoadmaps.value(roadmapKey()).toObject().value("magazineGuide").toObject();
-    const bool stale=!saved.isEmpty()&&saved["recipeId"]!=_reloadRecipe->id;
-    if(!_simulationRig&&saved.isEmpty())throw std::runtime_error("Choose the operating and magazine roles first");
-    QJsonObject settings=saved;
-    if(settings.isEmpty()&&_magazineRail) {
-        const auto rail=magazineRailJson(*_magazineRail);
-        settings={{"version",1},{"recipeId",_reloadRecipe->id},{"outwardInConnection",rail["outwardInConnection"]},
-            {"travel",rail["travel"]},{"captureRadius",rail["captureRadius"]},{"releaseMargin",rail["releaseMargin"]}};
-    }
-    if(settings.isEmpty())settings=magazineGuideJson(MagazineGuide{_reloadRecipe->id,QVector3D(0,0,-1),10,1,.6f});
-    return {{"settings",settings},{"saved",!saved.isEmpty()},{"stale",stale},{"ready",_magazineRail.has_value()},{"canConfigure",_simulationRig.has_value()},
-        {"rail",_magazineRail?magazineRailJson(*_magazineRail):QJsonObject{}},{"error",_magazineError}};
-}
-QJsonObject ReloadMakerController::configureMagazineGuide(const QJsonObject& request) {
-    if(!_reloadRecipe||_loadThread||_reloadCapturing||_reloadCaptureQueued||_rebuildTimer->isActive())throw std::runtime_error("Wait for the magazine's current source capture");
-    const auto key=roadmapKey();auto plan=_authoringRoadmaps.value(key).toObject();if(!plan.contains("step"))plan["step"]=6;
-    if(request["operation"]=="reset")plan.remove("magazineGuide");
-    else if(request["operation"]=="save") {
-        MagazineGuide guide;QString error;
-        if(!readMagazineGuide(request["settings"].toObject(),guide,error))throw std::runtime_error(error.toStdString());
-        if(!_simulationRig||guide.recipeId!=_reloadRecipe->id)throw std::runtime_error("Guide source changed; reset and review the current magazine before saving");
-        if(_magazineRail){auto checked=*_magazineRail;if(!applyMagazineGuide(guide,checked,error))throw std::runtime_error(error.toStdString());}
-        plan["magazineGuide"]=magazineGuideJson(guide);
-    }else throw std::runtime_error("Choose save or reset for the magazine guide");
-    stopSimulation();_authoringRoadmaps[key]=plan;++_revision;prepareSimulation();
-    if(!saveSession())throw std::runtime_error("Could not save the magazine guide");return magazineGuideState();
-}
 void ReloadMakerController::showMagazineGuide() {
     if(auto* existing=_window->findChild<QDialog*>("MagazineGuideDialog")){existing->show();existing->raise();return;}
     QJsonObject state;try{state=magazineGuideState();}catch(const std::exception& e){setStatus(e.what(),true);return;}
