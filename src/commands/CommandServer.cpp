@@ -209,9 +209,9 @@ namespace reloadmaker
                                         { "plugin", plugin.fileName } });
         }
         QJsonArray actions;
-        for (int i = 0; i < _animationList->count(); ++i) {
-            actions.append(QJsonObject{ { "index", i }, { "name", _animationList->item(i)->text() },
-                                        { "path", _animationList->item(i)->data(Qt::UserRole).toString() } });
+        for (int i = 0; i < _animationActions.size(); ++i) {
+            actions.append(QJsonObject{ { "index", i }, { "name", _animationActions[i].label },
+                                        { "path", _animationActions[i].resourcePath } });
         }
         QJsonArray configurationSlots;
         if (const auto* config = configuration()) {

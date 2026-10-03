@@ -532,9 +532,7 @@ namespace reloadmaker
 
     void ReloadMakerController::resetAssemblyState(bool reuseGeometry)
     {
-        _playing = false;
-        _playbackTimer->stop();
-        _playButton->setText(QStringLiteral("PLAY"));
+        stopPlayback();
         _clip = {};
         _readyClip = {};
         _handPosePreview.reset();
@@ -929,13 +927,12 @@ namespace reloadmaker
         refreshPartPicking();
         _window->getGLView()->updateScene();
         refreshAnimations();
-        QListWidgetItem* initialAnimation = _animationList->count() > 0 ? _animationList->item(0) : nullptr;
-        if (!initialAnimation) {
+        if (_animationActions.isEmpty()) {
             error = QStringLiteral("The configured graph exposes no playable animation actions.");
             return false;
         }
 
-        _readyAnimationPath = initialAnimation->data(Qt::UserRole).toString();
+        _readyAnimationPath = _animationActions.first().resourcePath;
         QString detail;
         _readyClip = cachedClip(_readyAnimationPath, detail);
         if (!_readyClip.valid() ||
@@ -948,19 +945,19 @@ namespace reloadmaker
         _stateBaselineAnimationPath = _readyAnimationPath;
         // Cache the assembled weapon in Ready before any firing/reload pose.
         // Fit never includes arms, detached magazines or parked source copies.
-        selectAnimation(initialAnimation);
+        selectAction(0);
         cacheWeaponFitBounds();
         appendDiagnostic(QStringLiteral("BASE  Ready pose=%1 sample=0.000s").arg(_readyAnimationPath));
+        int initialAction = 0;
         if (sameWeapon && !previousAction.isEmpty()) {
-            for (int row = 0; row < _animationList->count(); ++row) {
-                if (_animationList->item(row)->text() == previousAction) {
-                    initialAnimation = _animationList->item(row);
+            for (int i = 0; i < _animationActions.size(); ++i) {
+                if (_animationActions[i].label == previousAction) {
+                    initialAction = i;
                     break;
                 }
             }
         }
-        _animationList->setCurrentItem(initialAnimation);
-        selectAnimation(initialAnimation);
+        selectAction(initialAction);
         refreshHandPoseAnchors();
         if (!sameWeapon) {
             (void)fitWeapon();

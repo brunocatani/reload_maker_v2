@@ -144,7 +144,7 @@ namespace reloadmaker {
         _reloadWorkspaceActive=active;
         if(active){
             _suspendedAuthoringGrip=_partGripDraft;
-            restoreHandPosePreview();_playing=false;_playbackTimer->stop();_playButton->setText("PLAY");
+            restoreHandPosePreview();stopPlayback();
             // Dock visibility is owned by setWorkspace; phase editing only
             // forces the weapon-fixed frame and restores the user's choice after.
             _reloadOldWeaponFixed=_weaponFixedMotion;_weaponFixedMotion=true;showWeaponFixedMotion();
@@ -188,11 +188,11 @@ namespace reloadmaker {
         // consumes the recipe and must not inherit a phase member's grip or
         // have its active clip replaced when the recipe is already current.
         if(!_reloadWorkspaceActive&&_reloadRecipe&&_reloadExpectedPath==expected)return;
-        QListWidgetItem* item=nullptr;for(int i=0;i<_animationList->count();++i)if(_animationList->item(i)->data(Qt::UserRole).toString()==expected){item=_animationList->item(i);break;}
-        if(!item)return;
+        const int actionRow=actionIndex(expected);
+        if(actionRow<0)return;
         if(_workspace==GripsWorkspace&&_handPosePages->currentIndex()==3)
             _grabLocationCapturePreview=std::pair{_activeAnimationPath,_playbackTime};
-        _animationList->setCurrentItem(item);selectAnimation(item);
+        selectAction(actionRow);
         if(!_clip.valid()||_activeAnimationPath!=expected)return;
         if(_reloadRecipe&&_reloadExpectedPath==expected){refreshReloadWindows();selectReloadWindow(std::max(0,_reloadWindow));return;}
         invalidateReloadCapture();_reloadExpectedPath=expected;_reloadClip=_clip;_reloadBase=_stateBaselineLocalPose;
@@ -272,9 +272,9 @@ namespace reloadmaker {
             // frame the user chose for surface picking.
             if(_grabLocationCapturePreview){
                 const auto [path,seconds]=*_grabLocationCapturePreview;_grabLocationCapturePreview.reset();
-                for(int i=0;i<_animationList->count();++i)if(_animationList->item(i)->data(Qt::UserRole).toString()==path){
-                    _animationList->setCurrentRow(i);selectAnimation(_animationList->item(i));
-                    _playbackTime=std::clamp(seconds,0.f,playbackDuration());(void)applyPose(_playbackTime);updateTimelineText();break;
+                if(const int i=actionIndex(path);i>=0){
+                    selectAction(i);
+                    _playbackTime=std::clamp(seconds,0.f,playbackDuration());(void)applyPose(_playbackTime);updateTimelineText();
                 }
             }
             prepareGrabLocationFrame();

@@ -481,4 +481,21 @@ namespace reloadmaker
         };
         return true;
     }
+
+    // Whether `ancestorIndex` is `boneIndex` or one of its skeleton parents.
+    bool ReloadMakerController::isDescendantOf(const int boneIndex, const int ancestorIndex) const
+    {
+        const int bones = int(_skeleton.bones.size());
+        if (boneIndex < 0 || boneIndex >= bones || ancestorIndex < 0 || ancestorIndex >= bones) {
+            return false;
+        }
+        int current = boneIndex;
+        for (int depth = 0; depth < bones && current >= 0; ++depth) {
+            if (current == ancestorIndex) {
+                return true;
+            }
+            current = _skeleton.bones.at(current).parentIndex;
+        }
+        return false;
+    }
 }

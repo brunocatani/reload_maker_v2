@@ -6,6 +6,7 @@
 #include "glview.h"
 #include "LoadoutView.h"
 #include "MagazineViewport.h"
+#include "areas/operate/PlaybackTimeline.h"
 #include <QCompleter>
 #include <QAbstractItemModel>
 #include <QDir>
@@ -45,7 +46,6 @@
 
 namespace reloadmaker {
 namespace {
-constexpr int kTimelineMaximum = 100000;
 QLabel* hint(const QString& text, QWidget* parent) {
     auto* label = new QLabel(text, parent);
     label->setWordWrap(true);
@@ -223,7 +223,7 @@ void ReloadMakerController::createUi() {
     _playButton->setObjectName("PrimaryButton");
     auto* replayButton = new QPushButton("Restart", timelinePanel);
     _loopCheck = new QCheckBox("Loop", timelinePanel);
-    _loopCheck->setChecked(true);
+    _loopCheck->setChecked(_loopPlayback);
     _speedCombo = new QComboBox(timelinePanel);
     for (float rate : {.25f, .5f, 1.f, 1.5f, 2.f}) _speedCombo->addItem(QString::number(rate)+"×", rate);
     _speedCombo->setCurrentIndex(2);
@@ -286,7 +286,8 @@ void ReloadMakerController::createUi() {
         connect(_timeline, &QSlider::sliderReleased,
                 this, &ReloadMakerController::capturePoseDiagnostics);
         connect(_speedCombo, qOverload<int>(&QComboBox::currentIndexChanged),
-                this, &ReloadMakerController::updatePlaybackRate);
+                this, [this](int index) { setPlaybackRate(_speedCombo->itemData(index).toFloat()); });
+        connect(_loopCheck, &QCheckBox::toggled, this, [this](bool loop) { setLoopPlayback(loop); });
         connect(_motionMode, qOverload<int>(&QComboBox::currentIndexChanged), this,
                 [this](int index) { setWeaponFixedMotion(index == 0); });
         connect(_transitionCheck, &QCheckBox::toggled, this, [this](bool enabled) { setApproximateTransitions(enabled); });
@@ -432,20 +433,19 @@ void ReloadMakerController::setWorkspace(int workspace) {
 }
 
 void ReloadMakerController::previewNativeClip(int row) {
-    if (row < 0 || row >= _animationList->count()) return;
+    if (row < 0 || row >= _animationActions.size()) return;
     // Previewing a native clip leaves the interactive weapon state; the next
     // Operate action starts a fresh simulation from Ready.
     if (_simulationActive) { stopSimulation(); updateSimulationControls(); }
     if (_reloadWorkspaceActive) {
         // In Reload phases the reload itself belongs to the phase graph; other
         // clips are inspected on the transport until a phase is selected again.
-        const bool reload = _animationList->item(row)->data(Qt::UserRole).toString() == _reloadExpectedPath;
+        const bool reload = _animationActions[row].resourcePath == _reloadExpectedPath;
         _reloadPreviewTimer->stop(); _reloadPlaying = false; _reloadPlay->setText("PLAY RELOAD");
         if (reload) { restoreReloadClip(); return; }
         _timelineDock->setVisible(true);
     }
-    _animationList->setCurrentRow(row);
-    selectAnimation(_animationList->item(row));
+    selectAction(row);
 }
 
 void ReloadMakerController::restoreReloadClip() {

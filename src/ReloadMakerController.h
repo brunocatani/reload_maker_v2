@@ -41,6 +41,7 @@
 #include <optional>
 
 class NifModel;
+class Scene;
 class StudioWindow;
 class QCheckBox;
 class QComboBox;
@@ -94,13 +95,11 @@ namespace reloadmaker
     private slots:
         void browsePackage();
         void rebuildWeapon();
-        void selectAnimation(QListWidgetItem* item);
         void togglePlayback();
         void replay();
         void advancePlayback();
         void scrubTimeline(int value);
         void capturePoseDiagnostics();
-        void updatePlaybackRate(int index);
         void setArmsVisible(bool visible);
 
     private:
@@ -756,6 +755,9 @@ namespace reloadmaker
                                                        QString& error) const;
         [[nodiscard]] QString resolveAnimationPath(const QString& graphAnimationPath) const;
         [[nodiscard]] bool rebuildAnimationActions(QString& error);
+        bool loadBehaviorGraph(const QString& requestedPath, int depth, HkxBehaviorGraph& combined,
+                               QSet<QString>& visited, QString& error);
+        QVector<AnimationAction> authoredGraphActions(const HkxBehaviorGraph& graph, const QString& readyResource);
         [[nodiscard]] QString normalizeNifPath(const QString& path) const;
         [[nodiscard]] bool loadNif(const ResourceArchive& archive, const QString& resourcePath,
                                    NifModel& destination, QString& error) const;
@@ -799,6 +801,11 @@ namespace reloadmaker
         [[nodiscard]] float playbackDuration() const noexcept;
         [[nodiscard]] bool isDescendantOf(int boneIndex, int ancestorIndex) const;
         [[nodiscard]] bool applyPose(float timeSeconds);
+        bool failPose();
+        bool poseSkeleton();
+        bool applyFingerOverrides();
+        bool applyPartOverrides();
+        bool writeScenePose(NifModel* model, Scene* scene);
         void updateTimelineText();
         void showClipDetails();
 
@@ -1043,5 +1050,17 @@ namespace reloadmaker
         float _playbackRate{ 1.0f };
         QElapsedTimer _playbackClock;
         bool _playing{ false };
+        // The catalog action on the timeline (index in _animationActions, -1 for
+        // none). The clip list and the transport's clip picker only show it.
+        int _selectedAction{ -1 };
+        bool _loopPlayback{ true };
+        void selectAction(int index);
+        void showSelectedAction();
+        // Index of the catalog action with this resource path, or -1.
+        [[nodiscard]] int actionIndex(const QString& resourcePath) const;
+        void stopPlayback();
+        void showPlaybackState();
+        void setPlaybackRate(float rate);
+        void setLoopPlayback(bool loop);
     };
 }

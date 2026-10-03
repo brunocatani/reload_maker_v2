@@ -311,7 +311,7 @@ void ReloadMakerController::restoreSessionSelection() {
     for(auto it=magazineDrafts.begin();it!=magazineDrafts.end();++it){PartGrip grip;QString e;if(decodePartGrip(QJsonDocument(it.value().toObject()).toJson(),grip,e))_magazineGripDrafts[handAssignmentKey(magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord),grip.pose.hand)]=grip;}
     rebuildWeapon();
     if (!_clip.valid()) return;
-    for (int i = 0; i < _animationList->count(); ++i) if (_animationList->item(i)->data(Qt::UserRole).toString() == record["animation"].toString()) { _animationList->setCurrentRow(i); selectAnimation(_animationList->item(i)); break; }
+    if (const int action = actionIndex(record["animation"].toString()); action >= 0) selectAction(action);
     setWeaponFixedMotion(record["motionMode"].toInt()==0);
     setApproximateTransitions(record["transitions"].toBool());
     setArmsShown(record["showArms"].toBool(true));

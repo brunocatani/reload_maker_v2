@@ -4,6 +4,10 @@
 // Each setter does what the control's change used to trigger, and only when
 // the value changes.
 #include "ReloadMakerController.h"
+#include "StudioWindow.h"
+#include "gl/glscene.h"
+#include "glview.h"
+#include "model/nifmodel.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -92,5 +96,34 @@ namespace reloadmaker
                           .arg(_activeAction, motionModeName())
                           .arg(playbackDuration(), 0, 'f', 3));
         }
+    }
+
+    // Shows or hides the first-person body and hands roots; the weapon
+    // animation keeps running either way.
+    void ReloadMakerController::setArmsVisible(const bool visible)
+    {
+        NifModel* model = activeModel();
+        Scene* scene = _window ? _window->getGLView()->getScene() : nullptr;
+        if (!model || !scene) {
+            return;
+        }
+        const auto updateRoot = [model, scene, visible](const QPersistentModelIndex& root, const int originalFlags) {
+            if (!root.isValid()) {
+                return;
+            }
+            const int flags = visible ? originalFlags : originalFlags | 1;
+            if (!model->set<int>(root, "Flags", flags)) {
+                return;
+            }
+            if (Node* node = scene->getNode(model, root)) {
+                node->update(model, root);
+            }
+        };
+        const QSignalBlocker signalBlocker(model);
+        updateRoot(_bodyRoot, _bodyRootFlags);
+        updateRoot(_handsRoot, _handsRootFlags);
+        _window->getGLView()->update();
+        appendDiagnostic(visible ? QStringLiteral("VIEW  arms and hands visible")
+                                 : QStringLiteral("VIEW  arms and hands hidden; weapon animation remains active"));
     }
 }

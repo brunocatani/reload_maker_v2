@@ -7,7 +7,6 @@
 #include "areas/operate/SimulationNames.h"
 #include "model/nifmodel.h"
 
-#include <QListWidget>
 #include <QScopedValueRollback>
 #include <QSignalBlocker>
 #include <QTimer>
@@ -40,7 +39,7 @@ namespace reloadmaker
                 }
             }
         }
-        if (index < 0 || index >= _animationList->count()) {
+        if (index < 0 || index >= _animationActions.size()) {
             if (!fire) {
                 _simulationError = "No resolved reload animation.";
             } else if (_simulationAmmo.automatic) {
@@ -50,9 +49,7 @@ namespace reloadmaker
             }
             return false;
         }
-        const QSignalBlocker blocker(_animationList);
-        _animationList->setCurrentRow(index);
-        selectAnimation(_animationList->item(index));
+        selectAction(index);
         return _clip.valid();
     }
 

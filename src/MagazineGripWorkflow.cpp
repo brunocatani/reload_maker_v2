@@ -84,7 +84,7 @@ bool ReloadMakerController::editMagazineGrip(const QString& savedId) {
         _magazineFitPreview=true;
     }
     _editingMagazine=true;setWorkspace(GripsWorkspace);_handPosePages->setCurrentIndex(1);
-    _playing=false;_playbackTimer->stop();_playButton->setText("PLAY");
+    stopPlayback();
     if(fit) {
         if(!loadGripRecord(*fit))return false;
     } else {

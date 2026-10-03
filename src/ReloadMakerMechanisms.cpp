@@ -160,7 +160,7 @@ namespace reloadmaker {
         if(!_mechanismDraft||!_clip.valid()||_loadThread)return;
         QString error;if(!teaching&&(!validateMechanism(*_mechanismDraft,error)||_mechanismDraft->stages.isEmpty())){setStatus("Set a movement endpoint before testing. "+error,true);return;}
         _workshopHandEditing=false;_workshopPicking=false;_gripViewport->setPicking(false);
-        _playing=false;_playbackTimer->stop();_playButton->setText("PLAY");stopMechanismPreview();if(!applyPose(_playbackTime))return;
+        stopPlayback();stopMechanismPreview();if(!applyPose(_playbackTime))return;
         QVector<int> roots;for(const auto& anchor:QVector<HandPosePlacement>{_mechanismDraft->anchor}){int i=resolveMechanismAnchor(anchor,error);if(i<0){setStatus(error,true);return;}roots.append(_sceneNodes.indexOf(_handPoseAnchors[i].node));}
         for(const auto& f:_mechanismDraft->followers){int i=resolveMechanismAnchor(f.anchor,error);if(i<0){setStatus(error,true);return;}roots.append(_sceneNodes.indexOf(_handPoseAnchors[i].node));}
         if(!compileMechanismScene(_assemblyNodes,_nodeBindings,roots,_mechanismScene,error)){setStatus(error,true);return;}

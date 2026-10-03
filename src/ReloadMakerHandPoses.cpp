@@ -311,7 +311,7 @@ namespace reloadmaker {
         updateHandPoseControls();
         if (!_saveHandPose->isEnabled()) { return false; }
         if (_handPoseNotes->toPlainText().size() > 4096) { setStatus(QStringLiteral("Keep pose notes below 4097 characters."),true); return false; }
-        _playing = false; _playbackTimer->stop(); _playButton->setText(QStringLiteral("PLAY"));
+        stopPlayback();
         if (!applyPose(_playbackTime)) { updateHandPoseControls(); return false; }
         const int selection = _handPoseAnchor->currentData().toInt();
         if (selection < 0 || selection >= _handPoseAnchors.size()) { return false; }
@@ -366,7 +366,7 @@ namespace reloadmaker {
         auto check = _localPose;
         QString error;
         if (!applyHandPoseFingers(_skeleton,*selected,check,error)) { setStatus(error,true); return; }
-        _playing = false; _playbackTimer->stop(); _playButton->setText(QStringLiteral("PLAY"));
+        stopPlayback();
         _handPosePreview = *selected;
         setArmsShown(true);
         if (!applyPose(_playbackTime)) { _handPosePreview.reset(); updateHandPoseControls(); return; }

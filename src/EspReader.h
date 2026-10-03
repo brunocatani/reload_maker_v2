@@ -11,6 +11,12 @@
 
 namespace reloadmaker
 {
+    // A form ID as eight upper-case hex digits.
+    [[nodiscard]] inline QString formIdText(std::uint32_t formId)
+    {
+        return QStringLiteral("%1").arg(formId, 8, 16, QLatin1Char('0')).toUpper();
+    }
+
     struct SoundRecord {
         std::uint32_t formId{0};
         QString editorId;

@@ -40,7 +40,7 @@ namespace reloadmaker
         _commands.add({ "action", CommandAccess::Edit, CommandGate::WhenIdle,
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
                             const int index = params["index"].toInt(-1);
-                            require(index >= 0 && index < _animationList->count(), "Invalid action index");
+                            require(index >= 0 && index < _animationActions.size(), "Invalid action index");
                             previewNativeClip(index);
                             return std::nullopt;
                         } });
@@ -154,7 +154,7 @@ namespace reloadmaker
             }
         }
         if (params.contains("loop")) {
-            _loopCheck->setChecked(params["loop"].toBool());
+            setLoopPlayback(params["loop"].toBool());
         }
     }
 

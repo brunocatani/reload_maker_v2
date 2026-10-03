@@ -40,8 +40,7 @@ namespace reloadmaker {
             }
             if (_mechanismPreview) {stopMechanismPreview();if(_clip.valid())(void)applyPose(_playbackTime);}
             _pageBeforeLoad = _pages->currentIndex();
-            _playing = false; _playbackTimer->stop(); _rebuildTimer->stop();
-            _playButton->setText(QStringLiteral("PLAY"));
+            stopPlayback(); _rebuildTimer->stop();
         }
         if (_sourceMenu) _sourceMenu->setEnabled(!loading);
         if (_weaponPicker) _weaponPicker->setEnabled(!loading && _weaponPicker->count() > 0);

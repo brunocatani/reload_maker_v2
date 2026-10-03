@@ -301,7 +301,7 @@ namespace reloadmaker {
         const int anchor=_gripReferenceCombo->currentData().toInt();
         _editingMagazine=anchor>=0&&anchor<_handPoseAnchors.size()&&magazineGrabAnchor(_handPoseAnchors[anchor].description)>=0;
         restoreHandPosePreview();
-        _playing=false; _playbackTimer->stop(); _playButton->setText("PLAY");
+        stopPlayback();
         if(!applyPose(_playbackTime)) return;
         QString error;
         if(!preparePartGripFrame(anchor,error)) { setStatus(error,true); return; }
@@ -366,7 +366,7 @@ namespace reloadmaker {
                 setStatus(QStringLiteral("The grip's shared part definition is missing or does not match this part."),true);return false;
             }
         }
-        restoreHandPosePreview(); _playing=false; _playbackTimer->stop(); _playButton->setText("PLAY");
+        restoreHandPosePreview(); stopPlayback();
         if(!applyPose(_playbackTime)) return false;
         if(!preparePartGripFrame(anchor,error)) { setStatus(error,true); return false; }
         {

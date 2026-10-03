@@ -311,7 +311,7 @@ namespace reloadmaker {
     {
         if(!_clip.valid()||_loadThread||(contactOnly&&!_partGripDraft))return;
         stopMechanismPreview();_workshopHandEditing=false;
-        _playing=false;_playbackTimer->stop();_playButton->setText("PLAY");
+        stopPlayback();
         if(!applyPose(_playbackTime))return;
         _workshopPicking=true;_workshopContactOnly=contactOnly;_workshopPivotPicking=false;
         _handPosePages->setCurrentIndex(2);updateGripViewport();_gripViewport->setPicking(true);
