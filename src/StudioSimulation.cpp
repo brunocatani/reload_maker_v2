@@ -51,7 +51,8 @@ void ReloadMakerController::createSimulationUi() {
     _simulationFire=button("FIRE","fire");_simulationFire->setObjectName("PrimaryButton");
     connect(_simulationFire,&QPushButton::pressed,this,[this]{setSimulationTrigger(true);});
     connect(_simulationFire,&QPushButton::released,this,[this]{setSimulationTrigger(false);});
-    connect(qGuiApp,&QGuiApplication::applicationStateChanged,this,[this](Qt::ApplicationState state){if(state!=Qt::ApplicationActive){setSimulationTrigger(false);_audio.stop();}});
+    // Leaving the application releases a held trigger. An unattended run has no one holding it; only commands do.
+    if(!qApp->property("unattended").toBool())connect(qGuiApp,&QGuiApplication::applicationStateChanged,this,[this](Qt::ApplicationState state){if(state!=Qt::ApplicationActive){setSimulationTrigger(false);_audio.stop();}});
     _simulationSlideRelease=button("SLIDE RELEASE","slide_release");
     _simulationReload=button("AUTOMATIC RELOAD","reload");
     _simulationReset=button("RESET","reset");

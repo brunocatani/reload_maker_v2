@@ -5,6 +5,7 @@
 #include "gamemanager.h"
 #include "InstallationSetup.h"
 #include "StudioSession.h"
+#include "UnattendedRun.h"
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QDir>
@@ -38,8 +39,10 @@ int main(int argc, char* argv[]) {
     parser.addOption({"handoff", "Verified source reconnect token", "token"});
     parser.addOption({"library", "Open installed library in MO2 context"});
     parser.addOption({"no-restore", "Start without restoring the last project"});
+    parser.addOption({"unattended", "Automated run: open in the background and ignore the desktop's mouse, keyboard and focus"});
     parser.addPositionalArgument("package", "Read-only mod folder or ZIP", "[package]");
     parser.process(app);
+    if(parser.isSet("unattended")){app.setProperty("unattended",true);new reloadmaker::UnattendedRun(app);}
     app.setProperty("requestedMo2Profile",parser.value("mo2-profile"));
     if(parser.isSet("source-receipt")) {
         const auto snapshot=reloadmaker::readLoadOrderSnapshot(parser.value("mo2-instance"),parser.value("game-data"),parser.value("mo2-profile"));

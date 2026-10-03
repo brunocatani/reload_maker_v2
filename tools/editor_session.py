@@ -56,8 +56,9 @@ def launch_editor():
     if endpoint_alive():
         raise RuntimeError('Reload Maker is already running for this workspace; close it first')
     previous_endpoint = ENDPOINT.read_text(encoding='utf-8') if ENDPOINT.exists() else ''
-    # Tests choose their own projects; restoring the last one could need MO2.
-    process = subprocess.Popen([str(EXECUTABLE), '--project', str(ROOT), '--no-restore'], cwd=str(ROOT))
+    # Tests choose their own projects; restoring the last one could need MO2. Unattended keeps
+    # the desktop's pointer, keyboard and focus out of the run, and the editor behind other windows.
+    process = subprocess.Popen([str(EXECUTABLE), '--project', str(ROOT), '--no-restore', '--unattended'], cwd=str(ROOT))
     deadline = time.monotonic() + STARTUP_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         current = ENDPOINT.read_text(encoding='utf-8') if ENDPOINT.exists() else ''
