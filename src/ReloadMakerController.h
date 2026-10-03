@@ -954,6 +954,25 @@ namespace reloadmaker
         [[nodiscard]] QJsonArray preparedPartMeshes(const CollisionProfile& profile, const QMatrix4x4& inverse) const;
         [[nodiscard]] QString preparedPartForCollision() const;
         void startCollisionCook(const QString& geometry, const QString& output);
+        // Pack jobs and the runtime configuration export (src/areas/packs).
+        void cancelPackJob();
+        void appendInventoryArguments(QStringList& arguments, const QJsonObject& request) const;
+        void appendAuthoringArguments(QStringList& arguments, const QJsonObject& request, const QString& operation) const;
+        void startPackProcess(const QString& python, const QStringList& arguments, const QJsonObject& job);
+        [[nodiscard]] QString loadedConfigurationSourceReport(const QJsonObject& inspection) const;
+        [[nodiscard]] QJsonObject runtimeOperatingProfile() const;
+        [[nodiscard]] QVector<int> runtimeOperatingTracks() const;
+        [[nodiscard]] QJsonObject runtimeOperatingTrack(int index) const;
+        [[nodiscard]] bool runtimeFullTrack(int index) const;
+        [[nodiscard]] bool runtimePayloadTrack(int index) const;
+        [[nodiscard]] QJsonObject runtimeMagazine(const HandPosePlacement& anchor, const QString& weapon) const;
+        void addRuntimeMagazineGrips(QJsonObject& magazine, const HandPosePlacement& anchor, const QString& weapon) const;
+        void addRuntimeMagazineReference(QJsonObject& magazine, const HandPosePlacement& anchor) const;
+        void addRuntimeMagazineParts(QJsonObject& magazine) const;
+        void addRuntimeMagazineHiding(QJsonObject& magazine) const;
+        [[nodiscard]] QJsonArray runtimeSourceResources(const QJsonObject& sources, const HandPosePlacement& anchor) const;
+        [[nodiscard]] QJsonObject runtimeProfileHeader(const QString& weapon, bool concreteReceiver, const QString& receiverKey,
+                                                       const QString& magazineKey, const QJsonObject& selection) const;
         void startLibraryLoad();
         void installLibrary(LoadOrderLibrary& library);
         void setLoading(bool loading, const QString& message = {});
