@@ -40,6 +40,7 @@
 #include <QScrollBar>
 #include <QSettings>
 #include <QScopeGuard>
+#include <QScopedValueRollback>
 #include <QSet>
 #include <QSignalBlocker>
 #include <QSlider>
@@ -2291,6 +2292,7 @@ namespace reloadmaker
 
     void ReloadMakerController::advancePlayback()
     {
+        const QScopedValueRollback<bool> viewOnly(_viewRefresh, true);
         if (!_playing || !_clip.valid()) {
             return;
         }

@@ -39,7 +39,7 @@ async def run():
                     s = await call('get_simulation_state')
                     if s['action'] == 'Ready' and s['magazine']['phase'] not in ('Full magazine in', 'Empty magazine out', 'Loaded magazine out'):
                         return s
-                    await asyncio.sleep(.025)
+                    await op('step', seconds=.025)  # commands advance simulated time only by stepping
                 raise AssertionError(('Action did not finish', s))
             async def reject(name, **args):
                 r = await session.call_tool('simulate_weapon', dict(operation=name, expected_revision=(await call('get_state'))['revision'], **args))

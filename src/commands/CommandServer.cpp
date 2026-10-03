@@ -71,20 +71,27 @@ namespace reloadmaker
         });
         // UI edits and command edits share the same generation; clients must read
         // current state instead of reusing selections from an earlier scene.
+        // Timer-driven view refreshes (for example the highlighted sound cue
+        // during playback) are not edits.
+        const auto widgetChanged = [this] {
+            if (!_viewRefresh) {
+                ++_revision;
+            }
+        };
         for (auto* widget : _window->findChildren<QComboBox*>()) {
-            connect(widget, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] { ++_revision; });
+            connect(widget, qOverload<int>(&QComboBox::currentIndexChanged), this, widgetChanged);
         }
         for (auto* widget : _window->findChildren<QDoubleSpinBox*>()) {
-            connect(widget, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this] { ++_revision; });
+            connect(widget, qOverload<double>(&QDoubleSpinBox::valueChanged), this, widgetChanged);
         }
         for (auto* widget : _window->findChildren<QLineEdit*>()) {
-            connect(widget, &QLineEdit::textEdited, this, [this] { ++_revision; });
+            connect(widget, &QLineEdit::textEdited, this, widgetChanged);
         }
         for (auto* widget : _window->findChildren<QCheckBox*>()) {
-            connect(widget, &QCheckBox::toggled, this, [this] { ++_revision; });
+            connect(widget, &QCheckBox::toggled, this, widgetChanged);
         }
         for (auto* widget : _window->findChildren<QListWidget*>()) {
-            connect(widget, &QListWidget::currentRowChanged, this, [this] { ++_revision; });
+            connect(widget, &QListWidget::currentRowChanged, this, widgetChanged);
         }
     }
 

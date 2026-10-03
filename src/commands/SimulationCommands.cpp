@@ -73,6 +73,10 @@ namespace reloadmaker
             require(isActionOperation(operation), "Unknown simulation operation");
             runSimulationAction(operation);
         }
+        // Commands never leave the live clock running: simulated time advances
+        // only through "step", so each call acts on exactly the state the
+        // previous call returned. Buttons and viewport drags keep real time.
+        _simulationTimer->stop();
         require(_lastError.isEmpty(), _lastError);
         ++_revision;
         return simulationState();

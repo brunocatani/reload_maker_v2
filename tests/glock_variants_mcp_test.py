@@ -27,7 +27,7 @@ def finished():
     for _ in range(500):
         s=command('simulation_state')
         if s['action']=='Ready' and s['magazine']['phase'] not in ('Full magazine in','Empty magazine out','Loaded magazine out'):return s
-        time.sleep(.02)
+        op('step',seconds=.02)  # commands advance simulated time only by stepping
     raise AssertionError(('Action timeout',s))
 def choose(slot,mod):
     current=next(x for x in command('state')['slots'] if x['key']==slot)

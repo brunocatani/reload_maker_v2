@@ -4,6 +4,7 @@
 #include "glview.h"
 #include "gl/glshape.h"
 #include "model/nifmodel.h"
+#include <QScopedValueRollback>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDesktopServices>
@@ -183,7 +184,7 @@ namespace reloadmaker {
     }
     void ReloadMakerController::stopMechanismPreview(){if(_mechanismTimer)_mechanismTimer->stop();if(_mechanismPreview)_mechanismRestorePending=true;_mechanismPreview=false;_mechanismTeaching=false;_mechanismHeld=false;_mechanismState.returning=false;}
     void ReloadMakerController::releaseMechanismGrab(){if(!_mechanismPreview||!_mechanismDraft||_mechanismTeaching)return;_mechanismHeld=false;releaseMechanism(*_mechanismDraft,_mechanismState);if(_mechanismState.returning){_mechanismClock.restart();_mechanismTimer->start();}(void)applyPose(_playbackTime);updateMechanismControls();updateGripViewport();}
-    void ReloadMakerController::advanceMechanismPreview(){if(!_mechanismPreview||!_mechanismDraft){_mechanismTimer->stop();return;}const float seconds=float(_mechanismClock.nsecsElapsed())/1e9f;_mechanismClock.restart();advanceMechanism(*_mechanismDraft,_mechanismState,seconds);if(!_mechanismState.returning)_mechanismTimer->stop();if(!applyPose(_playbackTime)){stopMechanismPreview();return;}updateMechanismControls();updateGripViewport();}
+    void ReloadMakerController::advanceMechanismPreview(){const QScopedValueRollback<bool> viewOnly(_viewRefresh,true);if(!_mechanismPreview||!_mechanismDraft){_mechanismTimer->stop();return;}const float seconds=float(_mechanismClock.nsecsElapsed())/1e9f;_mechanismClock.restart();advanceMechanism(*_mechanismDraft,_mechanismState,seconds);if(!_mechanismState.returning)_mechanismTimer->stop();if(!applyPose(_playbackTime)){stopMechanismPreview();return;}updateMechanismControls();updateGripViewport();}
     void ReloadMakerController::cancelMechanismGrab(){
         if(!_mechanismPreview)return;
         if(_mechanismTeaching){const int i=_mechanismStages->currentRow();if(_mechanismDraft&&i>=0){_mechanismDraft->stages[i]=_teachingDragStart;displayMechanism();}}

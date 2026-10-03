@@ -35,7 +35,7 @@ async def run():
                 for _ in range(120):
                     s=await call('get_simulation_state')
                     if s['action']=='Ready':return s
-                    await asyncio.sleep(.05)
+                    await operation('step',seconds=.05)  # commands advance simulated time only by stepping
                 raise AssertionError('Action did not complete')
             async def capture(name):
                 result=await call('render_view',view='side',fit=True,zoom=2)
@@ -72,12 +72,12 @@ async def run():
             await capture('03-dropped-and-racked')
             await operation('release');await finished()
             fire=await operation('fire');assert fire['action']=='Firing' and hidden(fire)
-            await asyncio.sleep(.06)
+            await operation('step',seconds=.06)  # commands advance simulated time only by stepping
             fire_state=await call('get_state');assert 'fire' in fire_state['animation'].lower()
             await capture('04-fire-without-magazine')
             ended=await finished();assert not ended['magazinePresent'] and hidden(ended)
             reload=await operation('reload');assert reload['action']=='Automatic reload' and reload['magazinePresent'] and not hidden(reload)
-            await asyncio.sleep(.8)
+            await operation('step',seconds=.8)
             action=await call('get_state');assert 'reload' in action['animation'].lower() and action['seconds']>.5
             await capture('05-automatic-reload')
             ended=await finished();assert ended['magazinePresent'] and ended['slide']==0

@@ -7,6 +7,7 @@
 #include "glview.h"
 #include "gl/glscene.h"
 #include "model/nifmodel.h"
+#include <QScopedValueRollback>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFileInfo>
@@ -409,6 +410,7 @@ void ReloadMakerController::runSimulationAction(const QString& action) {
     setStatus(action=="drop_magazine"?"Magazine removed. Grab a fresh magazine and guide it into the well.":actionName(_simulation.action,isRifleConfiguration(),isBoltActionConfiguration()));
 }
 void ReloadMakerController::tickSimulation() {
+    const QScopedValueRollback<bool> viewOnly(_viewRefresh,true);
     if(!_simulationActive||!simulationWorkspace(_workspace)){_simulationTimer->stop();return;}
     const float delta=float(_simulationClock.nsecsElapsed())/1e9f;_simulationClock.restart();
     advanceSimulation(delta);

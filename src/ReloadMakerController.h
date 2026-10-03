@@ -454,6 +454,10 @@ namespace reloadmaker
         int _workspace{0};
         bool _showPartLabels{false};
         quint64 _revision{0};
+        // True while a timer only advances what is shown (playback, previews,
+        // simulated time). Widget changes made then are not document edits and
+        // do not advance _revision.
+        bool _viewRefresh{false};
         QJsonObject _pendingSession;
         QJsonObject _pendingReloadDraft;
         QString _sessionPath;

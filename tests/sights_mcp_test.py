@@ -32,7 +32,7 @@ def finished():
         s=command('simulation_state')
         if s['action']=='Ready':return s
         attached()
-        time.sleep(.03)
+        op('step',seconds=.03)  # commands advance simulated time only by stepping
     raise AssertionError('Simulation did not finish')
 
 def attached():

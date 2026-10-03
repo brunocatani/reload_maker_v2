@@ -4,6 +4,7 @@
 #include "glview.h"
 #include "gl/glshape.h"
 #include "model/nifmodel.h"
+#include <QScopedValueRollback>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCryptographicHash>
@@ -382,6 +383,7 @@ namespace reloadmaker {
     }
     void ReloadMakerController::tickReloadPreview()
     {
+        const QScopedValueRollback<bool> viewOnly(_viewRefresh, true);
         if(!_reloadRecipe||!_reloadWorkspaceActive){_reloadPreviewTimer->stop();return;}
         const float delta=float(_reloadClock.nsecsElapsed())/1e9f;_reloadClock.restart();
         if(_reloadReturning&&_reloadWindow>=0){const float start=_reloadRecipe->duration*_reloadRecipe->windows[_reloadWindow].first/(_reloadRecipe->frames-1);seekReload(std::max(start,_playbackTime-delta));if(_playbackTime<=start)_reloadReturning=false;}

@@ -36,7 +36,7 @@ async def run():
                 for _ in range(120):
                     s=await call('get_simulation_state')
                     if s['magazine']['phase']==expected:return s
-                    await asyncio.sleep(.025)
+                    await operation('step',seconds=.025)  # commands advance simulated time only by stepping
                 raise AssertionError((expected,s['magazine']))
             async def shot(name,view='side'):
                 result=await call('render_view',view=view,fit=True,zoom=1.5)
@@ -54,12 +54,12 @@ async def run():
                 await operation('fire')
                 for _ in range(120):
                     if (await call('get_simulation_state'))['action']=='Ready':break
-                    await asyncio.sleep(.025)
+                    await operation('step',seconds=.025)  # commands advance simulated time only by stepping
                 else:raise AssertionError('Shot did not complete')
             initial=await call('get_simulation_state')
             assert initial['ammunition']['slideLocked'] and not initial['ammunition']['chambered']
             initial_parts={p['track']:p['world'] for p in initial['parts']}
-            await operation('mag_out');await asyncio.sleep(.2)
+            await operation('mag_out');await operation('step',seconds=.2)
             moving=await call('get_simulation_state')
             assert moving['magazine']['phase']=='Empty magazine out' and 0<moving['magazine']['distance']<rail['travel']
             empty=await phase('Empty magazine clear')
@@ -67,7 +67,7 @@ async def run():
             for p in empty['parts']:
                 if not p['magazineOwner']:assert p['world']==initial_parts[p['track']],'Mag Out moved another weapon part'
             await shot('validated-empty-out','iso')
-            await operation('mag_in');await asyncio.sleep(.2)
+            await operation('mag_in');await operation('step',seconds=.2)
             incoming=await call('get_simulation_state')
             assert incoming['magazine']['phase']=='Full magazine in' and len(visible(incoming))==2
             await phase('Seated full');await operation('drop_magazine')

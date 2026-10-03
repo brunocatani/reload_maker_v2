@@ -79,7 +79,7 @@ try:
     edit('configure',{'slot':slot,'mod':str(0x1001770)});ready()
     edit('playback',{'mode':0});op('reload');samples=[]
     for _ in range(8):
-        time.sleep(.1);samples.append(command('pose'))
+        op('step',seconds=.1);samples.append(command('pose'))
     weapon=bones(samples[0])['Weapon']
     assert math.dist(weapon['translate'],[0,0,0])<.001
     for sample in samples:assert math.dist(bones(sample)['Weapon']['translate'],weapon['translate'])<.001
