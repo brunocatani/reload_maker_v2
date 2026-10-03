@@ -973,6 +973,22 @@ namespace reloadmaker
         [[nodiscard]] QJsonArray runtimeSourceResources(const QJsonObject& sources, const HandPosePlacement& anchor) const;
         [[nodiscard]] QJsonObject runtimeProfileHeader(const QString& weapon, bool concreteReceiver, const QString& receiverKey,
                                                        const QString& magazineKey, const QJsonObject& selection) const;
+        // Scopes document (src/areas/scopes): the optics offered and the
+        // selected one.
+        struct ScopeTarget
+        {
+            int anchor{ 0 };
+            QString label;
+        };
+        QVector<ScopeTarget> _scopeTargets;
+        int _selectedScopeTarget{ -1 };
+        void selectScopeTarget(int index);
+        [[nodiscard]] int scopeTargetAnchor() const;
+        [[nodiscard]] QString scopeTargetLabel() const;
+        void importScopeProfile(const QString& path);
+        // Scopes views.
+        void showScopeTargets();
+        void showSelectedScopeTarget();
         void startLibraryLoad();
         void installLibrary(LoadOrderLibrary& library);
         void setLoading(bool loading, const QString& message = {});

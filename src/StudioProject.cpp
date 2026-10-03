@@ -346,8 +346,8 @@ void ReloadMakerController::restoreSessionSelection() {
     setSlideSpringReturn(record["simulationSpringReturn"].toBool(true));
     const int workspace=record["workspace"].toInt(OperateWorkspace);
     setWorkspace(validWorkspace(workspace)?workspace:OperateWorkspace);
-    if(record.contains("scopeSelection")){const auto model=record["scopeSelection"].toString();for(int i=0;i<_scopePart->count();++i){
-        const auto anchor=_scopePart->itemData(i).toInt();if(anchor>0&&anchor<_handPoseAnchors.size()&&scopeModelKey(_handPoseAnchors[anchor].description.ownerModel)==model){_scopePart->setCurrentIndex(i);break;}}}
+    if(record.contains("scopeSelection")){const auto model=record["scopeSelection"].toString();for(int i=0;i<_scopeTargets.size();++i){
+        const auto anchor=_scopeTargets[i].anchor;if(anchor>0&&anchor<_handPoseAnchors.size()&&scopeModelKey(_handPoseAnchors[anchor].description.ownerModel)==model){selectScopeTarget(i);break;}}}
     if(workspace==GripsWorkspace&&record.contains("handsPage"))setHandEditorPage(static_cast<HandEditorPage>(std::clamp(record["handsPage"].toInt(),0,3)));
     if(record.contains("camera")&&!_window->getGLView()->studioRestoreCamera(record["camera"].toObject()))appendDiagnostic("PROJECT: invalid saved camera ignored.");
     if (record.contains("reloadDraft")) {
