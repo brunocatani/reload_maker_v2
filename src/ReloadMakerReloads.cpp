@@ -147,7 +147,7 @@ namespace reloadmaker {
             restoreHandPosePreview();_playing=false;_playbackTimer->stop();_playButton->setText("PLAY");
             // Dock visibility is owned by setWorkspace; phase editing only
             // forces the weapon-fixed frame and restores the user's choice after.
-            _reloadOldMotionMode=_motionMode->currentIndex();{const QSignalBlocker block(_motionMode);_motionMode->setCurrentIndex(0);}
+            _reloadOldWeaponFixed=_weaponFixedMotion;_weaponFixedMotion=true;showWeaponFixedMotion();
             _window->resizeDocks({_reloadGraphDock},{230},Qt::Vertical);
             if(_reloadDrive)_reloadDrive->setActive(true,false);
             startReloadCapture();
@@ -156,7 +156,7 @@ namespace reloadmaker {
             _reloadPreviewTimer->stop();_reloadPlaying=false;_reloadReturning=false;_reloadHeld=false;
             _partGripDraft=_suspendedAuthoringGrip;_suspendedAuthoringGrip.reset();
             if(_reloadDrive){_reloadDrive->setActive(false,false);_reloadDrive->clearCurve();}
-            {const QSignalBlocker block(_motionMode);_motionMode->setCurrentIndex(_reloadOldMotionMode);}
+            _weaponFixedMotion=_reloadOldWeaponFixed;showWeaponFixedMotion();
             if(_clip.valid())(void)applyPose(_playbackTime);
         }
         updateGripViewport();

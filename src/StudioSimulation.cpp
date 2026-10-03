@@ -112,7 +112,8 @@ void ReloadMakerController::createSimulationUi() {
     auto* grabLocations=new QPushButton("CONFIGURE GRAB LOCATIONS",panel);layout->addWidget(grabLocations);
     connect(grabLocations,&QPushButton::clicked,this,[this]{(void)openGrabLocations();});
     auto* operatingSetup=new QPushButton("OPERATING PARTS AND MOVEMENT",panel);layout->addWidget(operatingSetup);connect(operatingSetup,&QPushButton::clicked,this,&ReloadMakerController::showOperatingSetup);
-    _simulationSpring=new QCheckBox("Slide returns when released",panel);_simulationSpring->setChecked(true);layout->addWidget(_simulationSpring);
+    _simulationSpring=new QCheckBox("Slide returns when released",panel);_simulationSpring->setChecked(_slideSpringReturn);layout->addWidget(_simulationSpring);
+    connect(_simulationSpring,&QCheckBox::toggled,this,[this](bool enabled){setSlideSpringReturn(enabled);});
     _simulationNoExtender=new QCheckBox("QuickHands: standard magazine grip",panel);layout->addWidget(_simulationNoExtender);
     _simulationNoExtender->setToolTip("Use the package's optional NoExtender reload with the unextended standard magazine and a QuickHands animation set.");
     connect(_simulationNoExtender,&QCheckBox::toggled,this,[this](bool enabled){_glockNoExtender=enabled;rebuildWeapon();});
@@ -390,7 +391,7 @@ void ReloadMakerController::runSimulationAction(const QString& action) {
         if(_simulation.action==SimulationAction::Idle) {
             if(action=="mag_out")accepted=_simulation.magazineOut();
             else if(action=="mag_in")accepted=_simulation.magazineIn(*_magazineRail);
-            else {accepted=_simulation.grabMagazine(*_magazineRail);if(accepted){if(_magazineGrabGrip)_showArmsCheck->setChecked(true);_magazineViewport->beginCarry();}}
+            else {accepted=_simulation.grabMagazine(*_magazineRail);if(accepted){if(_magazineGrabGrip)setArmsShown(true);_magazineViewport->beginCarry();}}
         }
         if(accepted&&_simulation.magazine.animated()){_simulationClock.restart();_simulationTimer->start();}
     }
@@ -470,7 +471,7 @@ void ReloadMakerController::dragSimulation(float progress) {
 }
 void ReloadMakerController::releaseSimulation(bool cancel) {
     if(!_simulationActive)return;
-    _simulation.release(cancel,_simulationSpring->isChecked());
+    _simulation.release(cancel,_slideSpringReturn);
     if(cancel)resetSoundTracking();
     if(_simulation.action==SimulationAction::Returning){_simulationClock.restart();_simulationTimer->start();}
     if(!applyPose(0)){_simulationError=_lastError;stopSimulation();}
@@ -550,7 +551,7 @@ QJsonObject ReloadMakerController::simulationState() const {
         {"rackSeconds",_glockReloadRackAt},{"feedSeconds",_glockReloadFeedAt},{"noExtender",_glockNoExtender},{"noExtenderAvailable",!glockNoExtenderPath().isEmpty()},
         {"startedLoaded",_simulation.reloadStartedLoaded},{"startedOpen",_simulation.reloadStartedOpen},{"cycled",_simulation.reloadCycled},{"fed",_simulation.reloadFed},
         {"fireAction",_simulationAmmo.automatic?"Fire — automatic":"Fire — single"}};
-    if(_simulationRig&&_reloadRecipe)result["setup"]=simulationRigJson(*_reloadRecipe,*_simulationRig,_simulationSpring->isChecked());
+    if(_simulationRig&&_reloadRecipe)result["setup"]=simulationRigJson(*_reloadRecipe,*_simulationRig,_slideSpringReturn);
     QJsonArray parts;
     if(_simulationActive&&_reloadRecipe&&_simulationRig)for(int i=0;i<_reloadTrackNodes.size();++i) {
         Transformf world;QString error;
@@ -584,7 +585,7 @@ QJsonObject ReloadMakerController::exportSlideProfile() const {
         {"sourceFirstFrame",rig.openFrame},{"sourceLastFrame",rig.closedFrame},{"sourceFrames",recipe.frames},
         {"frames",rig.closedFrame-rig.openFrame+1},{"duration",(rig.motionDuration>0?rig.motionDuration:recipe.duration)*(rig.closedFrame-rig.openFrame)/(recipe.frames-1)},
         {"slideTrack",rig.slideTracks.indexOf(rig.slide)},{"openFrame",0},{"closedFrame",rig.closedFrame-rig.openFrame},
-        {"springReturn",_simulationSpring->isChecked()},{"tracks",tracks}};
+        {"springReturn",_slideSpringReturn},{"tracks",tracks}};
     const auto fingers=exportInteractionGrips()["operatingFingers"].toArray();
     if(!fingers.isEmpty())result["operatingFingers"]=fingers;
     if(rig.customSetup)result["motionSource"]=rig.mechanicalSource;
@@ -593,7 +594,7 @@ QJsonObject ReloadMakerController::exportSlideProfile() const {
 QJsonObject ReloadMakerController::exportSimulation() const {
     if(!_simulationRig||!_reloadRecipe)return {};
     QString error;const auto bytes=encodeReloadRecipe(*_reloadRecipe,error);if(!error.isEmpty())return {};
-    auto result=simulationRigJson(*_reloadRecipe,*_simulationRig,_simulationSpring->isChecked());
+    auto result=simulationRigJson(*_reloadRecipe,*_simulationRig,_slideSpringReturn);
     if(_magazineRail)result["magazineInteraction"]=magazineRailJson(*_magazineRail);
     result["ammunitionConfiguration"]=_simulationAmmo.json();
     if(isRifleConfiguration()) {

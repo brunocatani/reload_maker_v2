@@ -316,7 +316,7 @@ namespace reloadmaker {
         _partGripDraft=std::move(draft);
         if(!assignGripPart(anchor,error)) {setStatus(error,true);_partGripDraft.reset();return;}
         if(!sameSource||_gripName->text().trimmed().isEmpty()) _gripName->setText(selected->name+" · "+_handPoseAnchors[anchor].description.anchorName);
-        _showArmsCheck->setChecked(true);
+        setArmsShown(true);
         showPartGripValues(); (void)applyPose(_playbackTime); updateHandPoseControls();
     }
     bool ReloadMakerController::applyPartGripPreview()
@@ -382,7 +382,7 @@ namespace reloadmaker {
         // matrices instead of a world -> local floating-point round trip.
         _partGripDraft->pose.placement=copy.pose.placement;
         _partGripDraft->surfaceContact=copy.surfaceContact;
-        _showArmsCheck->setChecked(true); showPartGripValues();
+        setArmsShown(true); showPartGripValues();
         (void)applyPose(_playbackTime); updateHandPoseControls();return _gripPreviewValid;
     }
 }

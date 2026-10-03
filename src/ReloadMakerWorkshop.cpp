@@ -302,7 +302,7 @@ namespace reloadmaker {
             _partGripDraft->mechanismId=_mechanismDraft->id;
             {const QSignalBlocker a(_gripPoseCombo),b(_gripReferenceCombo);_gripPoseCombo->setCurrentIndex(_gripPoseCombo->findData(_partGripDraft->sourcePoseId));_gripReferenceCombo->setCurrentIndex(anchor);}
             _gripName->setText(_partGripDraft->pose.name+" · "+_mechanismDraft->name);
-            _showArmsCheck->setChecked(true);showPartGripValues();
+            setArmsShown(true);showPartGripValues();
         }
         if(!applyPose(_playbackTime))return;
         beginMechanismTeaching();

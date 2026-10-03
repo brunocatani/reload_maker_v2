@@ -236,19 +236,20 @@ void ReloadMakerController::createUi() {
     timelineLayout->addLayout(transport);
     auto* viewOptions = new QHBoxLayout;
     _transitionCheck = new QCheckBox("Approximate entry / exit blends", timelinePanel);
-    _transitionCheck->setChecked(true);
+    _transitionCheck->setChecked(_approximateTransitions);
     _transitionCheck->setToolTip("Graph-derived transition preview; not full Havok behavior emulation.");
     viewOptions->addWidget(_transitionCheck); viewOptions->addStretch();
     viewOptions->addWidget(hint("Drag: orbit   ·   Middle drag: pan   ·   Wheel: zoom", timelinePanel));
     timelineLayout->addLayout(viewOptions);
     _timelineDock->setWidget(timelinePanel);
-    // One authority each for the motion frame and arm visibility; both live
-    // in the always-visible view toolbar.
+    // The motion frame and arm visibility controls live in the always-visible
+    // view toolbar and show the document fields (areas/operate/PreviewSettings.cpp).
     _motionMode = new QComboBox(_window);
     _motionMode->addItems({"Weapon fixed", "Full native motion"});
+    showWeaponFixedMotion();
     _motionMode->setToolTip("Weapon fixed holds the weapon frame still while hands and moving parts keep their native relative motion.");
     _showArmsCheck = new QCheckBox("Arms && hands", _window);
-    _showArmsCheck->setChecked(true);
+    _showArmsCheck->setChecked(_armsShown);
     _bodyCombo = new QComboBox(_window);_bodyCombo->setObjectName("ArmsBodyPicker");_bodyCombo->setAccessibleName("Hand model");
     _bodyCombo->addItem("Male arms", "male");_bodyCombo->addItem("Female arms", "female");
 
@@ -286,20 +287,10 @@ void ReloadMakerController::createUi() {
                 this, &ReloadMakerController::capturePoseDiagnostics);
         connect(_speedCombo, qOverload<int>(&QComboBox::currentIndexChanged),
                 this, &ReloadMakerController::updatePlaybackRate);
-        const auto refreshPoseMode = [this]() {
-            if (!_clip.valid()) { return; }
-            _playbackTime = std::min(_playbackTime, playbackDuration());
-            if (applyPose(_playbackTime)) {
-                updateTimelineText();
-                showClipDetails();
-                setStatus(QStringLiteral("%1 — %2 — %3 s; offline clip preview")
-                              .arg(_activeAction, _motionMode->currentText()).arg(playbackDuration(), 0, 'f', 3));
-            }
-        };
-        connect(_motionMode, qOverload<int>(&QComboBox::currentIndexChanged), this, refreshPoseMode);
-        connect(_transitionCheck, &QCheckBox::toggled, this, refreshPoseMode);
-        connect(_showArmsCheck, &QCheckBox::toggled,
-                this, &ReloadMakerController::setArmsVisible);
+        connect(_motionMode, qOverload<int>(&QComboBox::currentIndexChanged), this,
+                [this](int index) { setWeaponFixedMotion(index == 0); });
+        connect(_transitionCheck, &QCheckBox::toggled, this, [this](bool enabled) { setApproximateTransitions(enabled); });
+        connect(_showArmsCheck, &QCheckBox::toggled, this, [this](bool shown) { setArmsShown(shown); });
         createHandPoseUi();
         createReloadUi();
         createSimulationUi();

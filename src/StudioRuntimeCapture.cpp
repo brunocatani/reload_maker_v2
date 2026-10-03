@@ -36,7 +36,7 @@ QJsonObject ReloadMakerController::exportRuntimeConfiguration() const {
     requireCapture(_simulationError.isEmpty()&&_magazineError.isEmpty()&&_magazineGrabError.isEmpty(),"Resolve the current simulation/magazine errors before capture");
     requireCapture(_simulation.action==SimulationAction::Idle&&_simulation.magazine.seated(),"Reset Operate to a seated magazine before capturing runtime data");
     const auto& recipe=*_reloadRecipe;const auto& rig=*_simulationRig;const auto& rail=*_magazineRail;
-    requireCapture(rig.mechanism==WeaponMechanism::BoltAction||_simulationSpring->isChecked(),"This template requires spring return; enable it before export");
+    requireCapture(rig.mechanism==WeaponMechanism::BoltAction||_slideSpringReturn,"This template requires spring return; enable it before export");
     const auto anchor=simulationMagazineAnchor();const auto weapon=poseRecordKey(currentWeapon()->formId);
     const auto* receiver=resolvedReceiverObjectMod();
     requireCapture(receiver||recipe.tracks[rig.slide].anchor.ownerRecord.compare(weapon,Qt::CaseInsensitive)==0,"This template needs a concrete receiver selection");

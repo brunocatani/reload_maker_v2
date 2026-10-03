@@ -924,7 +924,7 @@ namespace reloadmaker
     // baseline use. A rebuild of the same weapon returns to its previous action.
     bool ReloadMakerController::showReadyPose(bool sameWeapon, const QString& previousAction, QString& error)
     {
-        setArmsVisible(_showArmsCheck->isChecked());
+        setArmsVisible(_armsShown);
         refreshSlotCallouts();
         refreshPartPicking();
         _window->getGLView()->updateScene();

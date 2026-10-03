@@ -68,7 +68,7 @@ namespace reloadmaker
             require(_simulation.magazine.carried(), "No cursor-held magazine to cancel");
             cancelMagazine();
         } else if (operation == "spring") {
-            _simulationSpring->setChecked(params["enabled"].toBool(true));
+            setSlideSpringReturn(params["enabled"].toBool(true));
         } else {
             require(isActionOperation(operation), "Unknown simulation operation");
             runSimulationAction(operation);

@@ -270,7 +270,7 @@ namespace reloadmaker
                  { "seconds", _playbackTime },
                  { "duration", playbackDuration() },
                  { "playing", _playing || _reloadPlaying },
-                 { "motionMode", _motionMode->currentIndex() },
+                 { "motionMode", _weaponFixedMotion ? 0 : 1 },
                  { "anchors", anchors },
                  { "interaction", interactionGripState() },
                  { "handPoses", poses },

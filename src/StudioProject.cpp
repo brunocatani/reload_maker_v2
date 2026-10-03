@@ -86,8 +86,8 @@ bool ReloadMakerController::saveSession(const QString& requested) {
         {"weaponName",currentWeapon()->name.isEmpty()?currentWeapon()->editorId:currentWeapon()->name},{"weaponEditorId",currentWeapon()->editorId},
         {"library",_libraryMode},{"mo2Instance",_mo2Instance},{"mo2Profile",_libraryMode?_launchSnapshot.profileName:QString()},{"weapon",poseRecordKey(currentWeapon()->formId)},
         {"body",_armsBody},{"animationSource",animationSourceIdentity()},
-        {"animation",_activeAnimationPath},{"seconds",_playbackTime},{"motionMode",_motionMode->currentIndex()},
-        {"transitions",_transitionCheck->isChecked()},{"showArms",_showArmsCheck->isChecked()},{"workspace",_workspace},
+        {"animation",_activeAnimationPath},{"seconds",_playbackTime},{"motionMode",_weaponFixedMotion?0:1},
+        {"transitions",_approximateTransitions},{"showArms",_armsShown},{"workspace",_workspace},
         {"hand",_handPoseSide->currentData().toInt()},{"fingerJoint",_fingerJoint->currentIndex()},
         {"selectedHandPose",selectedHandPose()?selectedHandPose()->id:QString()}};
     QJsonObject choices;
@@ -100,7 +100,7 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     record["reloadTemplates"]=_reloadTemplateAssignments;
     record["sourcePolicies"]=_sourcePolicies;
     if(const auto* config=configuration())record["recordChoices"]=config->savedChoices(*currentPlugin());
-    record["simulationSpringReturn"] = _simulationSpring->isChecked();
+    record["simulationSpringReturn"] = _slideSpringReturn;
     record["camera"] = _window->getGLView()->studioCameraState();
     record["glockReloadNoExtender"] = _glockNoExtender;
     QJsonObject magazineGrabs;for(auto it=_magazineGrabGrips.cbegin();it!=_magazineGrabGrips.cend();++it)magazineGrabs[it.key()]=it.value();
@@ -117,7 +117,7 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     QJsonObject magazineDefaults;
     for(auto it=_magazineGrabDefaults.cbegin();it!=_magazineGrabDefaults.cend();++it)magazineDefaults[it.key()]=it.value();
     record["magazineGrabDefaults"]=magazineDefaults;
-    if(_simulationRig&&_reloadRecipe)record["simulationSetup"]=simulationRigJson(*_reloadRecipe,*_simulationRig,_simulationSpring->isChecked());
+    if(_simulationRig&&_reloadRecipe)record["simulationSetup"]=simulationRigJson(*_reloadRecipe,*_simulationRig,_slideSpringReturn);
     if(_magazineRail)record["magazineInteraction"]=magazineRailJson(*_magazineRail);
     if(_simulationAmmo.valid())record["ammunitionConfiguration"]=_simulationAmmo.json();
     QString error;
@@ -312,9 +312,9 @@ void ReloadMakerController::restoreSessionSelection() {
     rebuildWeapon();
     if (!_clip.valid()) return;
     for (int i = 0; i < _animationList->count(); ++i) if (_animationList->item(i)->data(Qt::UserRole).toString() == record["animation"].toString()) { _animationList->setCurrentRow(i); selectAnimation(_animationList->item(i)); break; }
-    _motionMode->setCurrentIndex(record["motionMode"].toInt());
-    _transitionCheck->setChecked(record["transitions"].toBool());
-    _showArmsCheck->setChecked(record["showArms"].toBool(true));
+    setWeaponFixedMotion(record["motionMode"].toInt()==0);
+    setApproximateTransitions(record["transitions"].toBool());
+    setArmsShown(record["showArms"].toBool(true));
     _playbackTime = std::clamp(float(record["seconds"].toDouble()),0.f,playbackDuration());
     QString error;
     const auto fingers = record["fingerDrafts"].toArray();
@@ -345,7 +345,7 @@ void ReloadMakerController::restoreSessionSelection() {
         }
     }
     (void)applyPose(_playbackTime); updateTimelineText(); refreshFingerEditor();
-    _simulationSpring->setChecked(record["simulationSpringReturn"].toBool(true));
+    setSlideSpringReturn(record["simulationSpringReturn"].toBool(true));
     const int workspace=record["workspace"].toInt(OperateWorkspace);
     setWorkspace(validWorkspace(workspace)?workspace:OperateWorkspace);
     if(record.contains("scopeSelection")){const auto model=record["scopeSelection"].toString();for(int i=0;i<_scopePart->count();++i){

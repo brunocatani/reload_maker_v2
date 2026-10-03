@@ -23,12 +23,12 @@ bool ReloadMakerController::authorReloadGrips() {
     }
     if(anchor<0){setStatus("The configured magazine has no capture frame.",true);return false;}
     setWorkspace(2);restoreHandPosePreview();_handPosePages->setCurrentIndex(0);
-    _motionMode->setCurrentIndex(0);
+    setWeaponFixedMotion(true);
     if(!selectSimulationClip(false,true)){setStatus(_simulationError,true);return false;}
     _playbackTime=std::min(seconds,playbackDuration());
     _handPoseAnchor->setCurrentIndex(_handPoseAnchor->findData(anchor));
     _handPoseSide->setCurrentIndex(_handPoseSide->findData(int(PoseHand::Left)));
-    _showArmsCheck->setChecked(true);
+    setArmsShown(true);
     if(!applyPose(_playbackTime))return false;
     updateTimelineText();refreshFingerEditor();updateHandPoseControls();
     setStatus("Weapon fixed. Scrub to the hand pose you want and save it. Select a saved pose to place it on a weapon part.");

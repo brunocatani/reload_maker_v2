@@ -781,8 +781,8 @@ namespace reloadmaker
                 .arg(value.rotation.w, 0, 'f', 5);
         };
         appendDiagnostic(QStringLiteral("\nPOSE time=%1 action=%2 mode=%3 transitions=%4\n  file=%5")
-                             .arg(_playbackTime, 0, 'f', 4).arg(_activeAction, _motionMode->currentText(),
-                                  _transitionCheck->isChecked() ? QStringLiteral("approximate") :
+                             .arg(_playbackTime, 0, 'f', 4).arg(_activeAction, motionModeName(),
+                                  _approximateTransitions ? QStringLiteral("approximate") :
                                   QStringLiteral("off"), _activeAnimationPath));
         // Read rendered-node locals/worlds, not only the desired skeleton array.
         // Flush only this view's queued render request, not arbitrary UI events.
@@ -856,7 +856,7 @@ namespace reloadmaker
     float ReloadMakerController::playbackDuration() const noexcept
     {
         return _clip.valid()
-            ? _clip.durationSeconds + (_transitionCheck->isChecked() ? _clipBlendOutSeconds : 0.0f)
+            ? _clip.durationSeconds + (_approximateTransitions ? _clipBlendOutSeconds : 0.0f)
             : 0.0f;
     }
 
@@ -893,7 +893,7 @@ namespace reloadmaker
     float ReloadMakerController::actionBlendWeight(
         const float timeSeconds) const noexcept
     {
-        if (!_transitionCheck->isChecked()) { return 1.0f; }
+        if (!_approximateTransitions) { return 1.0f; }
         if (_clipBlendInSeconds > 0.0f &&
             timeSeconds < _clipBlendInSeconds) {
             const float progress = std::clamp(
@@ -974,7 +974,7 @@ namespace reloadmaker
         // Reload authoring must honor the fixed Weapon frame for hands and
         // internal parts alike. Firing retains its native recoil presentation.
         const bool simulationFire = _simulationActive && _simulation.action == SimulationAction::Fire;
-        const Transformf frame = _motionMode->currentIndex() == 0 && !simulationFire
+        const Transformf frame = _weaponFixedMotion && !simulationFire
             ? _globalPose.at(_weaponBoneIndex) : _readyGlobalPose.at(_weaponBoneIndex);
         if (!reframePose(_skeleton, frame, Transformf{}, _localPose, _globalPose, _poseError)) {
             return fail();
@@ -1062,8 +1062,8 @@ namespace reloadmaker
             "  AUTHORITY %1; native hands/fingers; common pose-frame conversion\n"
             "  GRAPH clip selection only; masks/modifiers/conditions are not evaluated\n"
             "  TRANSITIONS %2")
-                             .arg(_motionMode->currentText(),
-                                  _transitionCheck->isChecked() ? QStringLiteral("approximate state blend") :
+                             .arg(motionModeName(),
+                                  _approximateTransitions ? QStringLiteral("approximate state blend") :
                                   QStringLiteral("off — authored clip timing")));
         for (const HkxAnnotation& annotation : _clip.annotations) {
             appendDiagnostic(QStringLiteral("  %1  %2  %3")

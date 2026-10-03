@@ -352,8 +352,8 @@ namespace reloadmaker {
         return {{"weaponName",weapon->name},{"weaponEditorId",weapon->editorId},{"weaponRecord",poseRecordKey(weapon->formId)},
             {"modifications",mods},{"action",_activeAction},{"animation",_activeAnimationPath},{"baselineAnimation",_stateBaselineAnimationPath},
             {"timeSeconds",_playbackTime},{"clipTimeSeconds",std::min(_playbackTime,_clip.durationSeconds)},
-            {"body",_armsBody},{"viewMode",_motionMode->currentText()},
-            {"approximateTransitions",_transitionCheck->isChecked()},
+            {"body",_armsBody},{"viewMode",motionModeName()},
+            {"approximateTransitions",_approximateTransitions},
             {"resourceProvider",_libraryMode ? _packageResources.provider(_activeAnimationPath) : _package.sourcePath}};
     }
 
@@ -368,7 +368,7 @@ namespace reloadmaker {
         if (!applyHandPoseFingers(_skeleton,*selected,check,error)) { setStatus(error,true); return; }
         _playing = false; _playbackTimer->stop(); _playButton->setText(QStringLiteral("PLAY"));
         _handPosePreview = *selected;
-        _showArmsCheck->setChecked(true);
+        setArmsShown(true);
         if (!applyPose(_playbackTime)) { _handPosePreview.reset(); updateHandPoseControls(); return; }
         updateHandPoseControls();
         setStatus(QStringLiteral("Previewing “%1”: saved fingers, current wrist. Placement metadata has not been applied.").arg(selected->name));

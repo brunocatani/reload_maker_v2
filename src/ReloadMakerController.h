@@ -254,6 +254,18 @@ namespace reloadmaker
         [[nodiscard]] int validWeaponIndex(int index) const;
         // First-person arms body, "male" or "female". The arms picker shows it.
         QString _armsBody{ "male" };
+        // Preview and Operate settings saved with the project (areas/operate/PreviewSettings.cpp).
+        bool _slideSpringReturn{ true };      // the slide, handle or bolt returns when released
+        bool _weaponFixedMotion{ true };      // the preview holds the weapon frame still
+        bool _approximateTransitions{ true }; // clip entry and exit blends
+        bool _armsShown{ true };
+        [[nodiscard]] QString motionModeName() const;
+        void setSlideSpringReturn(bool enabled);
+        void setWeaponFixedMotion(bool fixed);
+        void showWeaponFixedMotion();
+        void setApproximateTransitions(bool enabled);
+        void setArmsShown(bool shown);
+        void refreshPoseMode();
         [[nodiscard]] static bool isArmsBody(const QString& body);
         void showArmsBody();
         QString sourcePolicyKey() const;
@@ -814,7 +826,8 @@ namespace reloadmaker
         bool _reloadWorkspaceActive{false},_reloadCapturing{false},_reloadCaptureQueued{false},_reloadUpdating{false};
         bool _reloadHeld{false},_reloadPlaying{false},_reloadReturning{false};
         bool _reloadIgnoreSavedOnce{false};
-        int _reloadOldMotionMode{0},_reloadWindow{-1},_reloadTrack{-1},_reloadCaptureFrame{0};
+        bool _reloadOldWeaponFixed{true};
+        int _reloadWindow{-1},_reloadTrack{-1},_reloadCaptureFrame{0};
         float _reloadGrabStart{0};
         QDockWidget* _reloadGraphDock{nullptr};
         QDockWidget* _reloadInspectorDock{nullptr};

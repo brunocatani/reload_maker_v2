@@ -124,7 +124,7 @@ namespace reloadmaker
         if (params.contains("mode")) {
             const int mode = params["mode"].toInt(-1);
             require(mode == 0 || mode == 1, "Mode must be 0 fixed or 1 native");
-            _motionMode->setCurrentIndex(mode);
+            setWeaponFixedMotion(mode == 0);
         }
         if (params.contains("seconds")) {
             const float seconds = number(params["seconds"]);
