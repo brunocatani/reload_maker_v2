@@ -117,7 +117,7 @@ namespace reloadmaker
                                        { "parentWorld", commands::transformJson(parent) },
                                        { "attachmentWorld", commands::transformJson(root) } });
         }
-        return { { "text", _details->toPlainText() }, { "viewport", _window->getGLView()->studioDiagnostics() },
+        return { { "text", _diagnosticLines.join(QLatin1Char('\n')) }, { "viewport", _window->getGLView()->studioDiagnostics() },
                  { "attachmentRemaps", remaps }, { "weaponLibrary", _weaponLibraryReport } };
     }
 

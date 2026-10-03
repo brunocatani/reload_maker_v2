@@ -80,23 +80,7 @@ namespace reloadmaker {
             invalidateReloadCapture();
             startReloadCapture();
         });
-        connect(_reloadPlay, &QPushButton::clicked, this, [this] {
-            if (!_reloadRecipe || _reloadCapturing) {
-                return;
-            }
-            restoreReloadClip();
-            _reloadPlaying = !_reloadPlaying;
-            if (_reloadPlaying) {
-                if (_playbackTime >= _reloadRecipe->duration) {
-                    seekReload(0);
-                }
-                _reloadClock.restart();
-                _reloadPreviewTimer->start();
-            } else {
-                _reloadPreviewTimer->stop();
-            }
-            _reloadPlay->setText(_reloadPlaying ? "PAUSE RELOAD" : "PLAY RELOAD");
-        });
+        connect(_reloadPlay, &QPushButton::clicked, this, [this] { setReloadPlaying(!_reloadPlaying); });
         _reloadGraph->sought = [this](float seconds) {
             restoreReloadClip();
             _reloadPlaying = false;
@@ -153,6 +137,26 @@ namespace reloadmaker {
         } else {
             _reloadSummary->setText(QStringLiteral("%1 moving parts · %2 native part tracks").arg(_reloadGraph->movingParts()).arg(r.tracks.size()));
         }
+    }
+
+    // Plays or pauses the learned reload; playing from its end starts over.
+    void ReloadMakerController::setReloadPlaying(bool playing)
+    {
+        if (!_reloadRecipe || _reloadCapturing || playing == _reloadPlaying) {
+            return;
+        }
+        restoreReloadClip();
+        _reloadPlaying = playing;
+        if (playing) {
+            if (_playbackTime >= _reloadRecipe->duration) {
+                seekReload(0);
+            }
+            _reloadClock.restart();
+            _reloadPreviewTimer->start();
+        } else {
+            _reloadPreviewTimer->stop();
+        }
+        _reloadPlay->setText(playing ? "PAUSE RELOAD" : "PLAY RELOAD");
     }
 
     void ReloadMakerController::seekReload(float seconds)

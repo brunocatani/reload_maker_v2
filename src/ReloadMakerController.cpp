@@ -408,8 +408,19 @@ namespace reloadmaker
         }
     }
 
+    // The log keeps as many lines as the details dock shows.
     void ReloadMakerController::appendDiagnostic(const QString& message)
     {
+        _diagnosticLines += message.split(QLatin1Char('\n'));
+        if (_diagnosticLines.size() > kMaximumDiagnosticLines) {
+            _diagnosticLines.erase(_diagnosticLines.begin(), _diagnosticLines.end() - kMaximumDiagnosticLines);
+        }
         _details->appendPlainText(message);
+    }
+
+    void ReloadMakerController::clearDiagnostics()
+    {
+        _diagnosticLines.clear();
+        _details->clear();
     }
 }

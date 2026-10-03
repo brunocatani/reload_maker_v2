@@ -103,7 +103,7 @@ namespace reloadmaker {
         connect(_handPoseSide, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int index) {
             setEditedHand(static_cast<PoseHand>(_handPoseSide->itemData(index).toInt()));
         });
-        connect(_handPoseSearch, &QLineEdit::textChanged, this, &ReloadMakerController::refreshHandPoseList);
+        connect(_handPoseSearch, &QLineEdit::textChanged, this, &ReloadMakerController::setHandPoseFilter);
         connect(_handPoseList, &QListWidget::currentItemChanged, this, [this](QListWidgetItem* item) {
             selectHandPose(item ? item->data(Qt::UserRole).toString() : QString());
         });
@@ -129,34 +129,32 @@ namespace reloadmaker {
     {
         const QSignalBlocker blocker(_handPoseList);
         _handPoseList->clear();
-        const QString query = _handPoseSearch->text().trimmed();
+        QString first;
+        int listed = 0;
+        bool selectedListed = false;
         for (const auto& pose : _savedHandPoses) {
+            if (!handPoseMatchesFilter(pose)) { continue; }
             const QString side = pose.hand == PoseHand::Left ? QStringLiteral("Left") : QStringLiteral("Right");
             const QString weapon = pose.source.value("weaponName").toString();
-            if (!(pose.name + side + weapon + pose.notes).contains(query, Qt::CaseInsensitive)) { continue; }
             auto* item = new QListWidgetItem(QStringLiteral("%1\n%2 hand · %3").arg(pose.name, side, weapon), _handPoseList);
             item->setData(Qt::UserRole, pose.id);
             item->setToolTip(QStringLiteral("%1\n%2\n%3").arg(pose.createdUtc, pose.notes, pose.id));
-            if (pose.id == _selectedHandPoseId) { _handPoseList->setCurrentItem(item); }
+            if (listed++ == 0) { first = pose.id; }
+            if (pose.id == _selectedHandPoseId) { _handPoseList->setCurrentItem(item); selectedListed = true; }
         }
-        if (!_handPoseList->currentItem() && _handPoseList->count()) { _handPoseList->setCurrentRow(0); }
         // Filtering is not a user selection; the document follows the list.
-        const auto* current = _handPoseList->currentItem();
-        _selectedHandPoseId = current ? current->data(Qt::UserRole).toString() : QString();
+        if (!selectedListed) {
+            _selectedHandPoseId = first;
+            if (listed) { _handPoseList->setCurrentRow(0); }
+        }
         updateHandPoseControls();
     }
 
-    bool ReloadMakerController::handPoseListed(const QString& id) const
+    void ReloadMakerController::showHandPoseFilter()
     {
-        for (int row = 0; row < _handPoseList->count(); ++row) {
-            if (_handPoseList->item(row)->data(Qt::UserRole).toString() == id) { return true; }
-        }
-        return false;
-    }
-
-    void ReloadMakerController::clearHandPoseSearch()
-    {
-        _handPoseSearch->clear();
+        if (_handPoseSearch->text() == _handPoseFilter) { return; }
+        const QSignalBlocker blocker(_handPoseSearch);
+        _handPoseSearch->setText(_handPoseFilter);
     }
 
     void ReloadMakerController::updateHandPoseControls()

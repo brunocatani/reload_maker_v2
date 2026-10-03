@@ -202,7 +202,7 @@ void ReloadMakerController::createUi() {
     _detailsDock = dock(_window, "DIAGNOSTICS", Qt::BottomDockWidgetArea);
     _details = new QPlainTextEdit(_detailsDock);
     _details->setReadOnly(true);
-    _details->setMaximumBlockCount(3000);
+    _details->setMaximumBlockCount(kMaximumDiagnosticLines);
     _details->setMaximumHeight(165);
     _detailsDock->setWidget(_details);
     _detailsDock->hide();
@@ -354,7 +354,7 @@ void ReloadMakerController::createUi() {
     camera->addWidget(_showArmsCheck);
     camera->addWidget(_bodyCombo);
     connect(labels,&QCheckBox::toggled,this,[this](bool show) {
-        _showPartLabels=show;if(_slotOverlay)_slotOverlay->setActive(show&&_pages->currentIndex()==kLoadoutPage);
+        _showPartLabels=show;if(_slotOverlay)_slotOverlay->setActive(show&&!_reloadWorkspaceActive);
     });
     connect(_workspaceButtons, &QButtonGroup::idClicked, this, &ReloadMakerController::setWorkspace);
     connect(diagnostics, &QAction::toggled, _detailsDock, &QWidget::setVisible);
@@ -382,6 +382,11 @@ bool ReloadMakerController::mechanismPageActive() const {
     return _workspace == GripsWorkspace && _handEditorPage == HandEditorPage::Mechanism;
 }
 
+// The left rail shows the reload page in Reload and the loadout elsewhere.
+void ReloadMakerController::showWorkspacePage() {
+    _pages->setCurrentIndex(_workspace == PhasesWorkspace ? kReloadPage : kLoadoutPage);
+}
+
 void ReloadMakerController::setWorkspace(int workspace) {
     if (!validWorkspace(workspace) || _loadThread) return;
     if(_workspace==CollisionsWorkspace&&workspace!=CollisionsWorkspace&&_magazineWorldPreview){stopSimulation();_magazineWorldPreview=false;}
@@ -404,7 +409,7 @@ void ReloadMakerController::setWorkspace(int workspace) {
     // Reload replaces the loadout rail with the reload page and the native
     // clip list; Operate and Hands & grips keep the loadout.
     const bool phases = workspace == PhasesWorkspace;
-    _pages->setCurrentIndex(phases ? kReloadPage : kLoadoutPage);
+    showWorkspacePage();
     _packageDock->setWindowTitle(phases ? "RELOAD" : "LOADOUT");
     _simulationDock->setVisible(workspace == OperateWorkspace);
     _soundsDock->setVisible(workspace==SoundsWorkspace);
@@ -417,7 +422,7 @@ void ReloadMakerController::setWorkspace(int workspace) {
     // Hands & grips needs a frame to capture from; Reload shows the transport
     // only while a non-reload clip is being previewed.
     _timelineDock->setVisible(workspace == GripsWorkspace && !_magazineFitPreview);
-    if (_slotOverlay) _slotOverlay->setActive(_pages->currentIndex() == kLoadoutPage && _showPartLabels);
+    if (_slotOverlay) _slotOverlay->setActive(!_reloadWorkspaceActive && _showPartLabels);
     updateGripViewport();
     if(_clip.valid()&&!_reloadCapturing)(void)applyPose(_playbackTime);
     refreshFingerEditor();

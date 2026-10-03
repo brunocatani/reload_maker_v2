@@ -335,7 +335,7 @@ namespace reloadmaker
             settings.setValue("paths/gameData", _gameData);
             settings.setValue("paths/lastPackage", _package.sourcePath);
 
-            _details->clear();
+            clearDiagnostics();
             for (const PluginContent& plugin : _plugins) {
                 appendDiagnostic(QStringLiteral("PLUGIN %1 weapons=%2 omods=%3")
                                      .arg(plugin.fileName)

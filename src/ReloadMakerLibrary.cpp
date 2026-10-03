@@ -38,7 +38,6 @@ namespace reloadmaker {
                 _reloadPlay->setText("PLAY RELOAD");
             }
             if (_mechanismPreview) {stopMechanismPreview();if(_clip.valid())(void)applyPose(_playbackTime);}
-            _pageBeforeLoad = _pages->currentIndex();
             stopPlayback(); _rebuildTimer->stop();
         }
         if (_sourceMenu) _sourceMenu->setEnabled(!loading);
@@ -49,7 +48,7 @@ namespace reloadmaker {
         if(_pages->count()>kReloadPage)_pages->setTabEnabled(kReloadPage,!loading);
         if(_reloadGraphDock)_reloadGraphDock->setEnabled(!loading);
         if(_simulationDock)_simulationDock->setEnabled(!loading);
-        if (!loading) { _pages->setCurrentIndex(_pageBeforeLoad); }
+        if (!loading) { showWorkspacePage(); }
         _playButton->setEnabled(!loading);
         _timelineDock->setEnabled(!loading);
         _handPoseDock->widget()->setEnabled(!loading);

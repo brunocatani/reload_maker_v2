@@ -146,12 +146,12 @@ namespace reloadmaker {
             selectMechanismStage(row);
         });
         connect(_mechanismName,&QLineEdit::textEdited,this,&ReloadMakerController::readMechanismForm);
-        for(auto* edit:{_stageForward,_stageReverse})connect(edit,&QLineEdit::editingFinished,this,&ReloadMakerController::readMechanismForm);
+        for(auto* edit:{_stageForward,_stageReverse})connect(edit,&QLineEdit::textEdited,this,&ReloadMakerController::readMechanismForm);
         for(auto* spin:{_stageFrom,_stageTo,_stageRate,_stagePivot[0],_stagePivot[1],_stagePivot[2]})connect(spin,qOverload<double>(&QDoubleSpinBox::valueChanged),this,&ReloadMakerController::readMechanismForm);
         for(auto* combo:{_stageMotion,_stageRelease})connect(combo,qOverload<int>(&QComboBox::currentIndexChanged),this,&ReloadMakerController::readMechanismForm);
         connect(_mechanismFollowers,&QListWidget::itemChanged,this,[this](){
             if(_mechanismUpdating)return;
-            applyFollowerChange();
+            applyFollowerChange(mechanismForm());
         });
         connect(_mechanismList,qOverload<int>(&QComboBox::currentIndexChanged),this,[this](int i){selectMechanism(_mechanismList->itemData(i).toString());});
         connect(_workshopAddStage,&QPushButton::clicked,this,&ReloadMakerController::addMechanismStage);

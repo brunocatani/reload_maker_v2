@@ -260,7 +260,7 @@ namespace reloadmaker
             setStatus(QStringLiteral("Hand pose was not saved: %1").arg(error), true);
             return false;
         }
-        clearHandPoseSearch();
+        setHandPoseFilter(QString());
         refreshHandPoseLibrary();
         if (handPoseListed(pose.id)) {
             selectHandPose(pose.id);

@@ -102,6 +102,14 @@ void ReloadMakerController::renderPluginPicker()
     _pluginFilter->setCurrentIndex(_pluginFilter->findData(_browserPlugin));
 }
 
+// With several plugins to choose from, opens the plugin picker.
+void ReloadMakerController::offerPluginChoice()
+{
+    if (_pluginFilter->count() > 1) {
+        _pluginFilter->showPopup();
+    }
+}
+
 void ReloadMakerController::refreshWeaponPicker()
 {
     if (!_weaponPicker) {

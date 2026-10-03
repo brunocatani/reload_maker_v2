@@ -118,7 +118,6 @@ namespace reloadmaker
     // scene group. A grip draft on the same part links to it.
     void ReloadMakerController::saveMechanism()
     {
-        readMechanismForm();
         if (!_mechanismDraft || !_clip.valid() || _loadThread || _mechanismPreview) {
             return;
         }

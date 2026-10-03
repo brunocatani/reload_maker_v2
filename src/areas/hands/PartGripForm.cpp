@@ -1,9 +1,11 @@
 // The part grip form's document state: the saved finger pose and reference
-// part a new grip starts from, the grip's name, and the saved grip selected
-// in the history list. Their controls only show these fields and report
+// part a new grip starts from, the grip's name, the saved grip selected
+// in the history list and whether older copies are listed. Their controls
+// only show these fields and report
 // user changes. Each setter does what the control's change used to trigger,
 // and only when the value changes.
 #include "ReloadMakerController.h"
+#include "ReloadBundle.h"
 
 #include <QTimer>
 #include <algorithm>
@@ -70,6 +72,38 @@ namespace reloadmaker
         showSelectedPartGrip();
         updatePartGripControls();
         noteDocumentChange("selected part grip");
+    }
+
+    // The list follows the option, and the selection follows the list.
+    void ReloadMakerController::setShowGripHistory(bool show)
+    {
+        if (show == _showGripHistory) {
+            return;
+        }
+        _showGripHistory = show;
+        showGripHistory();
+        refreshPartGripList();
+        noteDocumentChange("grip history shown");
+    }
+
+    // This weapon's saved grips; a magazine grip that no binding uses only
+    // with history shown.
+    bool ReloadMakerController::partGripShown(const PartGrip& grip) const
+    {
+        const auto* weapon = currentWeapon();
+        const auto record = weapon ? poseRecordKey(weapon->formId) : QString();
+        if (grip.weaponRecord.compare(record, Qt::CaseInsensitive) != 0) {
+            return false;
+        }
+        if (_showGripHistory || !magazineGrabSupported(grip.pose.placement)) {
+            return true;
+        }
+        return _magazineGrabGrips.values().contains(grip.pose.id) || _magazineGrabDefaults.values().contains(grip.pose.id);
+    }
+
+    bool ReloadMakerController::partGripListed(const QString& id) const
+    {
+        return std::any_of(_partGrips.cbegin(), _partGrips.cend(), [&](const PartGrip& grip) { return grip.pose.id == id && partGripShown(grip); });
     }
 
     const PartGrip* ReloadMakerController::selectedPartGrip() const

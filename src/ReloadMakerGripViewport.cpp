@@ -34,9 +34,7 @@ namespace reloadmaker {
         _gripViewport->simulationCancel=[this](){cancelMechanismGrab();};
         _gripViewport->simulationReset=[this](){if(!_mechanismPreview)return;_mechanismTimer->stop();_mechanismState={};_mechanismHeld=false;_mechanismDirection=1;(void)applyPose(_playbackTime);updateMechanismControls();updateGripViewport();};
         _gripViewport->simulationStop=[this](){beginMechanismTeaching();};
-        // The pages were assembled before this connection; the editor starts
-        // on the page they left current.
-        _handEditorPage=static_cast<HandEditorPage>(_handPosePages->currentIndex());
+        showHandEditorPage();
         connect(_handPosePages,&QTabWidget::currentChanged,this,[this](int page){setHandEditorPage(static_cast<HandEditorPage>(page));});
         connect(_handPoseDock,&QDockWidget::visibilityChanged,this,[this](){updateGripViewport();});
         updateGripViewport();
@@ -64,9 +62,9 @@ namespace reloadmaker {
             _gripViewport->setTeaching(_mechanismTeaching,start);
             if(_mechanismTeaching)_gripViewport->setRotationTool(_teachingRotation);
         }else {_gripViewport->setSimulation(false);_gripViewport->setTeaching(false);}
-        if(_slotOverlay) _slotOverlay->setActive(_pages->currentIndex()==kLoadoutPage && _showPartLabels && !active);
+        if(_slotOverlay) _slotOverlay->setActive(!_reloadWorkspaceActive && _showPartLabels && !active);
         // Clicking the model selects parts on the loadout page, unless the grip tools own the viewport.
-        if(_partPicker) _partPicker->setActive(_pages->currentIndex()==kLoadoutPage && !active);
+        if(_partPicker) _partPicker->setActive(!_reloadWorkspaceActive && !active);
         if(points){
             const auto g=currentGrabLocations();const int i=_grabLocationList?_selectedGrabLocation:-1,a=operatingAnchor();
             Transformf reference;QString error;

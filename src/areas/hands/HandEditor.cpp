@@ -1,12 +1,14 @@
 // The hands editor's document state: the open page, the hand and finger
 // joint being edited, the capture form (reference part, name and notes) and
-// the selected saved pose. Their controls only show these fields and report
+// the selected saved pose and the search over saved poses. Their controls
+// only show these fields and report
 // user changes. Each setter does what the control's change used to trigger,
 // and only when the value changes.
 #include "ReloadMakerController.h"
 #include "GripViewport.h"
 
 #include <QTimer>
+#include <algorithm>
 
 namespace reloadmaker
 {
@@ -120,6 +122,31 @@ namespace reloadmaker
         showSelectedHandPose();
         updateHandPoseControls();
         noteDocumentChange("selected hand pose");
+    }
+
+    // The list follows the search, and the selection follows the list.
+    void ReloadMakerController::setHandPoseFilter(const QString& text)
+    {
+        if (text == _handPoseFilter) {
+            return;
+        }
+        _handPoseFilter = text;
+        showHandPoseFilter();
+        refreshHandPoseList();
+        noteDocumentChange("hand pose search");
+    }
+
+    bool ReloadMakerController::handPoseMatchesFilter(const HandPose& pose) const
+    {
+        const QString side = pose.hand == PoseHand::Left ? QStringLiteral("Left") : QStringLiteral("Right");
+        const QString weapon = pose.source.value("weaponName").toString();
+        return (pose.name + side + weapon + pose.notes).contains(_handPoseFilter.trimmed(), Qt::CaseInsensitive);
+    }
+
+    bool ReloadMakerController::handPoseListed(const QString& id) const
+    {
+        return std::any_of(_savedHandPoses.cbegin(), _savedHandPoses.cend(),
+                           [&](const HandPose& pose) { return pose.id == id && handPoseMatchesFilter(pose); });
     }
 
     const HandPose* ReloadMakerController::selectedHandPose() const

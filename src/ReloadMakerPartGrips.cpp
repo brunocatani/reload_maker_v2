@@ -111,7 +111,7 @@ namespace reloadmaker {
         advancedLayout->addWidget(new QLabel("Reference part",advanced));advancedLayout->addWidget(_gripReferenceCombo);
         advancedLayout->addWidget(_gripCapturedStart);advancedLayout->addWidget(mechanism);
         _gripHistory=new QCheckBox("Show older snapshots and unassigned copies",advanced);advancedLayout->addWidget(_gripHistory);
-        connect(_gripHistory,&QCheckBox::toggled,this,&ReloadMakerController::refreshPartGripList);
+        connect(_gripHistory,&QCheckBox::toggled,this,&ReloadMakerController::setShowGripHistory);
         layout->addWidget(advanced);advanced->hide();connect(advancedToggle,&QPushButton::toggled,advanced,&QWidget::setVisible);
         _gripList=new QListWidget(page); _gripList->setAlternatingRowColors(true); _gripList->setMinimumHeight(180);advancedLayout->addWidget(_gripList);
         auto* footer=new QHBoxLayout();
@@ -175,10 +175,10 @@ namespace reloadmaker {
         for(int row=0;row<_gripList->count();++row) if(_gripList->item(row)->data(Qt::UserRole).toString()==_selectedGripId) { _gripList->setCurrentRow(row); return; }
         _gripList->setCurrentRow(-1);
     }
-    bool ReloadMakerController::partGripListed(const QString& id) const
+    void ReloadMakerController::showGripHistory()
     {
-        for(int row=0;row<_gripList->count();++row) if(_gripList->item(row)->data(Qt::UserRole).toString()==id) return true;
-        return false;
+        const QSignalBlocker blocker(_gripHistory);
+        _gripHistory->setChecked(_showGripHistory);
     }
     void ReloadMakerController::showGripStatus(const QString& text)
     {
@@ -190,20 +190,17 @@ namespace reloadmaker {
     void ReloadMakerController::refreshPartGripList()
     {
         const QSignalBlocker blocker(_gripList); _gripList->clear();
-        const auto* weapon=currentWeapon(); const auto record=weapon?poseRecordKey(weapon->formId):QString();
+        QString first; int listed=0; bool selectedListed=false;
         for(const auto& grip:_partGrips) {
-            if(grip.weaponRecord.compare(record,Qt::CaseInsensitive)!=0) continue;
-            const bool assigned=_magazineGrabGrips.values().contains(grip.pose.id)||_magazineGrabDefaults.values().contains(grip.pose.id);
-            if(_gripHistory&&!_gripHistory->isChecked()&&magazineGrabSupported(grip.pose.placement)&&!assigned)continue;
+            if(!partGripShown(grip)) continue;
             auto* item=new QListWidgetItem(QStringLiteral("%1\n%2 hand · %3").arg(grip.pose.name,grip.pose.hand==PoseHand::Left?"Left":"Right",grip.pose.placement.anchorName),_gripList);
             item->setData(Qt::UserRole,grip.pose.id);
             item->setToolTip(QStringLiteral("%1\n%2\n%3").arg(grip.pose.placement.ownerModel,grip.pose.placement.ownerRecord,grip.pose.createdUtc));
-            if(grip.pose.id==_selectedGripId) _gripList->setCurrentItem(item);
+            if(listed++==0) first=grip.pose.id;
+            if(grip.pose.id==_selectedGripId) { _gripList->setCurrentItem(item); selectedListed=true; }
         }
-        if(!_gripList->currentItem() && _gripList->count()) _gripList->setCurrentRow(0);
         // Filtering is not a user selection; the document follows the list.
-        const auto* current=_gripList->currentItem();
-        _selectedGripId=current?current->data(Qt::UserRole).toString():QString();
+        if(!selectedListed) { _selectedGripId=first; if(listed) _gripList->setCurrentRow(0); }
         updatePartGripControls();
     }
     void ReloadMakerController::updatePartGripControls()

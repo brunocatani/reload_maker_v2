@@ -494,16 +494,16 @@ namespace reloadmaker
         updateGripViewport();
     }
 
-    // Follower checkboxes changed: re-read the form outside any preview, then
+    // Follower checkboxes changed: apply the form outside any preview, then
     // resume teaching.
-    void ReloadMakerController::applyFollowerChange()
+    void ReloadMakerController::applyFollowerChange(const MechanismForm& form)
     {
         const bool resume = _mechanismTeaching;
         stopMechanismPreview();
         if (_clip.valid()) {
             (void)applyPose(_playbackTime);
         }
-        readMechanismForm();
+        applyMechanismForm(form);
         if (resume) {
             beginMechanismTeaching();
         }

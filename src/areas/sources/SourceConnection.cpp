@@ -346,7 +346,7 @@ namespace reloadmaker
         _plugins.clear();
         _plugins.append(std::move(library.catalog));
         _libraryPlugins = library.plugins;
-        _details->clear();
+        clearDiagnostics();
         configureResourcePaths();
         refreshWeapons();
         refreshAnimations();
@@ -361,8 +361,8 @@ namespace reloadmaker
         settings.setValue("paths/gameData", _gameData);
         restoreSessionSelection();
         setStatus("MO2 profile indexed. Choose a plugin, then its weapon, in the source bar.");
-        if (_selectedWeapon < 0 && _pluginFilter->count() > 1) {
-            _pluginFilter->showPopup();
+        if (_selectedWeapon < 0) {
+            offerPluginChoice();
         }
     }
 

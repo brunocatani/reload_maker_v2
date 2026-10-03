@@ -146,9 +146,7 @@ namespace reloadmaker
             const bool playing = params["playing"].toBool();
             if (_reloadWorkspaceActive) {
                 require(_reloadRecipe.has_value(), "Learn the reload first");
-                if (playing != _reloadPlaying) {
-                    _reloadPlay->click();
-                }
+                setReloadPlaying(playing);
             } else if (playing != _playing) {
                 togglePlayback();
             }

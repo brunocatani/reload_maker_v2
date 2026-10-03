@@ -164,17 +164,20 @@ namespace reloadmaker
         enum Workspace : int { GripsWorkspace = 2, PhasesWorkspace = 4, OperateWorkspace = 5, SoundsWorkspace = 6, CollisionsWorkspace = 7, ScopesWorkspace = 8 };
         static bool simulationWorkspace(int value) { return value==OperateWorkspace||value==SoundsWorkspace; }
         static constexpr int kLoadoutPage = 0, kReloadPage = 1;
+        static constexpr int kMaximumDiagnosticLines = 3000;
         // Hands editor pages, in tab order; saved in projects as handsPage.
         enum class HandEditorPage : int { FingerPoses = 0, PartGrip = 1, Mechanism = 2, GrabLocations = 3 };
         static constexpr int kPoseNameLength = 128;
         void createSourceBar(QToolBar* bar);
         void refreshSourceBar();
         void refreshWeaponPicker();
+        void offerPluginChoice();
         void restoreReloadClip();
         [[nodiscard]] bool mechanismPageActive() const;
         [[nodiscard]] static bool validWorkspace(int workspace);
         void createUi();
         void setWorkspace(int workspace);
+        void showWorkspacePage();
         void previewNativeClip(int row);
         [[nodiscard]] bool reloadCaptureAllowed() const noexcept;
         void createCollisionsUi();
@@ -614,6 +617,7 @@ namespace reloadmaker
         void startReloadCapture();
         void advanceReloadCapture();
         void showReloadRecipe();
+        void setReloadPlaying(bool playing);
         void seekReload(float seconds);
         void tickReloadPreview();
         void selectWorkshopPart(int anchorIndex,std::optional<Vec3f> point=std::nullopt,const QString& surface={});
@@ -748,13 +752,18 @@ namespace reloadmaker
         [[nodiscard]] bool sceneNodeWorld(const QModelIndex& node, Transformf& world, QString& error) const;
         [[nodiscard]] QString poseRecordKey(std::uint32_t formId) const;
         // Hands editor document (src/areas/hands).
-        HandEditorPage _handEditorPage{ HandEditorPage::FingerPoses };
+        // Hands & grips opens on the part workshop, the page the assembled
+        // tabs have always left current.
+        HandEditorPage _handEditorPage{ HandEditorPage::Mechanism };
         PoseHand _editedHand{ PoseHand::Right };
         int _fingerJointIndex{ 0 };
         int _handCaptureAnchor{ -1 };
         QString _handCaptureName;
         QString _handCaptureNotes;
         QString _selectedHandPoseId;
+        // Saved poses are listed when their name, hand, weapon or notes
+        // contain this text.
+        QString _handPoseFilter;
         void setHandEditorPage(HandEditorPage page);
         void handEditorPageChanged();
         void setEditedHand(PoseHand hand);
@@ -763,6 +772,9 @@ namespace reloadmaker
         void setHandCaptureName(const QString& name);
         void setHandCaptureNotes(const QString& notes);
         void selectHandPose(const QString& id);
+        void setHandPoseFilter(const QString& text);
+        [[nodiscard]] bool handPoseMatchesFilter(const HandPose& pose) const;
+        [[nodiscard]] bool handPoseListed(const QString& id) const;
         void clearHandPoseAnchors();
         [[nodiscard]] bool handPoseFrameReady() const;
         [[nodiscard]] bool partGripPreviewActive() const;
@@ -782,17 +794,22 @@ namespace reloadmaker
         void showHandCaptureName();
         void showHandCaptureNotes();
         void showSelectedHandPose();
-        [[nodiscard]] bool handPoseListed(const QString& id) const;
-        void clearHandPoseSearch();
+        void showHandPoseFilter();
         // Part grip form document (src/areas/hands).
         QString _gripPoseId;
         int _gripAnchor{ -1 };
         QString _gripDraftName;
         QString _selectedGripId;
+        // Older snapshots and magazine copies in no binding are listed only
+        // on request.
+        bool _showGripHistory{ false };
         void setGripPose(const QString& id);
         void setGripAnchor(int anchor);
         void setGripDraftName(const QString& name);
         void selectPartGrip(const QString& id);
+        void setShowGripHistory(bool show);
+        [[nodiscard]] bool partGripShown(const PartGrip& grip) const;
+        [[nodiscard]] bool partGripListed(const QString& id) const;
         void followGripInForm(const QString& poseId, int anchor);
         [[nodiscard]] QString knownHandPoseId(const QString& id) const;
         [[nodiscard]] const HandPose* gripPose() const;
@@ -813,7 +830,7 @@ namespace reloadmaker
         void showGripAnchor();
         void showGripDraftName();
         void showSelectedPartGrip();
-        [[nodiscard]] bool partGripListed(const QString& id) const;
+        void showGripHistory();
         void showGripStatus(const QString& text);
         bool convertToMagazineFrame(PartGrip& grip, int targetAnchor);
         void showMagazineGrabGrip(const PartGrip* selected);
@@ -878,7 +895,7 @@ namespace reloadmaker
         void removeMechanismStage();
         void moveMechanismStage(int delta);
         void chooseTeachingTool(bool rotation);
-        void applyFollowerChange();
+        void applyFollowerChange(const MechanismForm& form);
         void suggestMechanismFollowers();
         // Mechanism workshop views.
         [[nodiscard]] MechanismForm mechanismForm() const;
@@ -986,6 +1003,7 @@ namespace reloadmaker
         void applyStyle();
         void setStatus(const QString& message, bool error = false);
         void appendDiagnostic(const QString& message);
+        void clearDiagnostics();
         void refreshWeapons();
         void refreshAttachments();
         void showLoadoutChoices(SlotKey key);
@@ -1221,7 +1239,6 @@ namespace reloadmaker
         QThread* _loadThread{nullptr};
         bool _libraryMode{false};
         bool _closing{false};
-        int _pageBeforeLoad{0};
         LoadOrderSnapshot _launchSnapshot;
         QVector<LibraryPlugin> _libraryPlugins;
         QListWidget* _partList{ nullptr };
@@ -1238,6 +1255,8 @@ namespace reloadmaker
         AttachmentConnections _attachmentConnections;
         QListWidget* _animationList{ nullptr };
         QPlainTextEdit* _details{ nullptr };
+        // The diagnostics log the details dock shows, oldest line first.
+        QStringList _diagnosticLines;
         QPushButton* _playButton{ nullptr };
         QCheckBox* _loopCheck{ nullptr };
         QCheckBox* _showArmsCheck{ nullptr };
