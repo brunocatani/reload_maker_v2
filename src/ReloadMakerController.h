@@ -907,6 +907,39 @@ namespace reloadmaker
         void editGrabLocationFields(OperatingGrabLocations& g, int i, const QJsonObject& p) const;
         void showSelectedGrabLocation();
         void showGrabLocationStatus(const QString& text);
+        // Sounds document (src/areas/sounds).
+        int _selectedSoundCue{ -1 };
+        // The cue form: the original sound's record, the trigger, movement
+        // progress and volume as fractions, and whether the cue plays.
+        struct SoundCueForm
+        {
+            QString record;
+            QString trigger;
+            float progress{ 0 };
+            float gain{ 1 };
+            bool enabled{ false };
+        };
+        // The clips the default cues take their source times from.
+        struct SoundCueSources
+        {
+            QString animation;
+            QString cyclePath;
+            HkxClip cycle;
+        };
+        void selectSoundCue(int index);
+        void normalizeSoundCueSelection();
+        void applySoundCueForm(const SoundCueForm& form);
+        void setSoundsMuted(bool muted);
+        void buildSoundCatalog();
+        SoundCue findSoundByEditorId(const QString& edid);
+        [[nodiscard]] QString mk18SoundVariant(const QString& original, const QString& alternate) const;
+        void addSoundCue(const SoundCueSources& sources, const char* id, const char* label, const char* trigger, float progress,
+                         const QString& edid, bool bolt = false);
+        void addDefaultSoundCues(const SoundCueSources& sources);
+        void resolveSoundDescriptors();
+        // Sounds views.
+        [[nodiscard]] SoundCueForm soundCueForm() const;
+        void showSoundsMuted();
         void startLibraryLoad();
         void installLibrary(LoadOrderLibrary& library);
         void setLoading(bool loading, const QString& message = {});

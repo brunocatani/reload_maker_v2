@@ -36,10 +36,7 @@ namespace reloadmaker
             require(saveSounds(), _lastError);
         } else if (operation == "mute") {
             require(params["enabled"].isBool(), "Specify enabled");
-            _soundsMuted = params["enabled"].toBool();
-            if (_soundsMuted) {
-                _audio.stop();
-            }
+            setSoundsMuted(params["enabled"].toBool());
             refreshSoundsUi();
         } else if (operation == "edit") {
             require(index >= 0, "Unknown sound cue");
