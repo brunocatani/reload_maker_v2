@@ -361,7 +361,7 @@ namespace reloadmaker
         settings.setValue("paths/gameData", _gameData);
         restoreSessionSelection();
         setStatus("MO2 profile indexed. Choose a plugin, then its weapon, in the source bar.");
-        if (_weaponCombo->currentIndex() < 0 && _pluginFilter->count() > 1) {
+        if (_selectedWeapon < 0 && _pluginFilter->count() > 1) {
             _pluginFilter->showPopup();
         }
     }

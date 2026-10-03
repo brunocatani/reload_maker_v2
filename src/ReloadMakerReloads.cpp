@@ -180,7 +180,7 @@ namespace reloadmaker {
         _reloadCaptureQueued=false;
         if(!reloadCaptureAllowed()||_loadThread||_rebuildTimer->isActive()||_reloadCapturing)return;
         const auto action=std::find_if(_animationActions.cbegin(),_animationActions.cend(),[](const auto& a){return a.baseReload;});
-        if(action==_animationActions.cend()||_nodeBindings.isEmpty()||_renderedWeapon!=_weaponCombo->currentIndex()){
+        if(action==_animationActions.cend()||_nodeBindings.isEmpty()||_renderedWeapon!=_selectedWeapon){
             _reloadSummary->setText("This configuration has no resolved base WPNReload. No fire, charge, unload or alternative clip will be substituted.");return;
         }
         const auto expected=action->resourcePath;

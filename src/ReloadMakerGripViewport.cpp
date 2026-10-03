@@ -57,7 +57,7 @@ namespace reloadmaker {
         const bool workshop=_handPosePages->currentIndex()==2;
         const bool points=_handPosePages->currentIndex()==3;_gripViewport->setPointAuthoring(points);
         const bool active=!_reloadWorkspaceActive && (_handPosePages->currentIndex()==1 || workshop || points) && _handPoseDock->isVisible() && _handPoseDock->widget()->isEnabled() && !_loadThread &&
-            !_rebuildTimer->isActive() && _clip.valid() && _renderedWeapon==_weaponCombo->currentIndex();
+            !_rebuildTimer->isActive() && _clip.valid() && _renderedWeapon==_selectedWeapon;
         _gripViewport->configure(active,points?operatingAnchor()>=0:workshop?_workshopPick->isEnabled():_gripPick->isEnabled(),points?operatingAnchor()>=0:workshop?_mechanismSave->isEnabled():_gripSave->isEnabled());
         _gripViewport->setWorkshop(workshop,_mechanismDraft?_mechanismDraft->name:QString(),_workshopHandEditing);
         if(_mechanismPreview&&_mechanismDraft&&!_workshopPicking){

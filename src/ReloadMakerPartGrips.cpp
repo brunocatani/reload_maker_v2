@@ -230,7 +230,7 @@ namespace reloadmaker {
     {
         if(!_gripPoseCombo) return;
         const bool frame=!_loadThread && !_rebuildTimer->isActive() && _clip.valid() && !_geometrySignature.isEmpty() &&
-            _renderedWeapon>=0 && _renderedWeapon==_weaponCombo->currentIndex();
+            _renderedWeapon>=0 && _renderedWeapon==_selectedWeapon;
         const bool start=frame && _gripPoseCombo->currentIndex()>=0 && _gripReferenceCombo->currentIndex()>=0;
         _gripCapturedStart->setEnabled(start); _gripCurrentStart->setEnabled(start);
         _gripPick->setEnabled(frame && (_partGripDraft.has_value() || start));

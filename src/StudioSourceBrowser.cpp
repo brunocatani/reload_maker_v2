@@ -114,7 +114,7 @@ void ReloadMakerController::refreshWeaponPicker()
         _weaponPicker->setItemData(_weaponPicker->count() - 1,
                                    QString("%1\n%2\nWinning record: %3").arg(row.editorId, row.record, row.winner), Qt::ToolTipRole);
     }
-    _weaponPicker->setCurrentIndex(_weaponPicker->findData(_weaponCombo->currentIndex()));
+    _weaponPicker->setCurrentIndex(_weaponPicker->findData(_selectedWeapon));
     if (_browserPlugin.isEmpty()) {
         _weaponPicker->setPlaceholderText("Choose a plugin first…");
     } else {
