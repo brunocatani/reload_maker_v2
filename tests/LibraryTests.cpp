@@ -1,6 +1,7 @@
 #include "LoadOrderLibrary.h"
 #include "LibraryResources.h"
 #include "WeaponConfiguration.h"
+#include "areas/sources/SourceBrowserRows.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -178,6 +179,43 @@ namespace {
         const auto package=PackageSource::prepare(dir.filePath("Patch.esl"));
         require(package.ok()&&package.plugins==QStringList({QFileInfo(root.filePath).canonicalFilePath()}),"single-plugin source cannot be opened");
     }
+    // The rows the source bar and the source_browser command both list.
+    void sourceBrowserRowTests() {
+        PluginDependencies dependencies;
+        dependencies.set("Patch.esl", { "Addon.esm", "Base.esm" });
+        dependencies.set("addon.esm", { "Base.esm" });
+        dependencies.set("Loop.esp", { "Loop.esp", "Other.esp" });
+        dependencies.set("Other.esp", { "loop.esp" });
+        require(dependencies.masters("PATCH.ESL") == QStringList({ "Addon.esm", "Base.esm" }), "masters lost order or case-insensitive lookup");
+        require(dependencies.masters("Loop.esp") == QStringList({ "Other.esp" }), "a master cycle repeated a plugin");
+        dependencies.set("ADDON.ESM", {});
+        require(dependencies.masters("Addon.esm").isEmpty(), "a later entry did not replace the earlier one");
+
+        dependencies.set("Addon.esm", { "Base.esm" });
+        const auto rows = buildSourcePluginRows({ kAllWeaponsSource, "Base.esm", "Addon.esm", "Patch.esl", "Other.esp" },
+                                                "patch.esl", dependencies, { { "*", 7 }, { "patch.esl", 2 } });
+        require(rows.size() == 5 && rows[0].label == "LOAD ALL WEAPONS" && rows[0].weaponCount == 7, "all-weapons entry changed");
+        require(rows[1].role == SourcePluginRole::Master && rows[1].label == "Base.esm  · master", "required master not marked");
+        require(rows[3].role == SourcePluginRole::Selected && rows[3].label == "Patch.esl" && rows[3].weaponCount == 2, "selected plugin not marked");
+        require(rows[4].role == SourcePluginRole::Available && rows[4].masters == QStringList({ "loop.esp" }), "unrelated plugin marked");
+
+        const auto weapon = [](int index, const char* name, const char* record, const char* coverage) {
+            SourceWeaponRow row;
+            row.index = index;
+            row.name = name;
+            row.record = record;
+            row.coverage = coverage;
+            return row;
+        };
+        const QVector<SourceWeaponRow> weapons{ weapon(0, "pistol", "B.esp:000801", ""), weapon(1, "Rifle", "A.esp:000802", "Draft · 1 editor project(s)"),
+                                                weapon(2, "Pistol", "A.esp:000803", ""), weapon(3, "Pistol", "A.esp:000804", "") };
+        const auto scoped = buildSourceWeaponRows(weapons, false);
+        require(scoped[0].index == 2 && scoped[1].index == 3 && scoped[2].label == "Rifle · Draft · 1 editor project(s)" && scoped[3].index == 0,
+                "weapons not sorted by case-sensitive label with stable ties");
+        const auto all = buildSourceWeaponRows(weapons, true);
+        require(all[0].label == "Pistol · A.esp" && all[3].label == "pistol · B.esp", "all-weapons labels lost their plugin");
+    }
+
     void profileTests() {
         QTemporaryDir dir;
         const auto instance = dir.filePath("MO2");
@@ -266,7 +304,7 @@ namespace {
 int main(int argc, char** argv) {
     QCoreApplication app(argc, argv);
     try {
-        mergeTests(); readerTests(); profileTests(); weaponNamesAndAdmission(); dependencyBrowserTests(); resourceTests();
+        mergeTests(); readerTests(); profileTests(); weaponNamesAndAdmission(); dependencyBrowserTests(); sourceBrowserRowTests(); resourceTests();
         if (app.arguments().value(1) == "--archive") { realArchiveTest(app.arguments()); return 0; }
         QVector<PluginContent> parsed;
         const bool merge = app.arguments().contains("--merge");

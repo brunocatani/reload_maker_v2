@@ -9,4 +9,4 @@ INCLUDEPATH += ../src $$LIBFO
 SOURCES += LibraryTests.cpp ../src/LoadOrderLibrary.cpp ../src/LibraryResources.cpp ../src/PackageSource.cpp ../src/EspReader.cpp ../src/WeaponConfiguration.cpp \
     $$LIBFO/ba2file.cpp $$LIBFO/common.cpp $$LIBFO/filebuf.cpp $$LIBFO/zlib.cpp
 
-SOURCES += ../src/StudioPaths.cpp
+SOURCES += ../src/StudioPaths.cpp ../src/areas/sources/SourceBrowserRows.cpp

@@ -93,7 +93,7 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     QJsonObject choices;
     const auto sourcePlugins=selectionPlugins(_weaponCombo->currentIndex());
     if(allWeaponsSelected())record["browserPlugin"]=kAllWeaponsSource;
-    else if(!sourcePlugins.isEmpty())record["browserPlugin"]=sourcePlugins.contains(_pluginFilter->currentData().toString(),Qt::CaseInsensitive)?_pluginFilter->currentData().toString():sourcePlugins.first();
+    else if(!sourcePlugins.isEmpty())record["browserPlugin"]=sourcePlugins.contains(_browserPlugin,Qt::CaseInsensitive)?_browserPlugin:sourcePlugins.first();
     if (const auto* config = configuration()) for (const auto& slot : config->entries()) choices[QString::number(slot.key)] = QString::number(config->selected(slot.key));
     record["choices"] = choices;
     record["authoringRoadmaps"]=_authoringRoadmaps;

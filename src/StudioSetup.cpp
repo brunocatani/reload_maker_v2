@@ -15,25 +15,10 @@
 #include <QSignalBlocker>
 #include <QVBoxLayout>
 #include <QDir>
-#include <QProcess>
 #include <QCoreApplication>
-#include <QUuid>
 #include <QTimer>
 
 namespace reloadmaker {
-QJsonObject ReloadMakerController::installationState() const {
-    QString error;const auto s=loadInstallationSetup(&error);auto result=checkInstallation(s).json();result["settingsError"]=error;
-    result["settings"]=installationJson(s);result["workspace"]=studioRoot();
-    result["virtualFilesystem"]=insideMo2VirtualFilesystem();return result;
-}
-bool ReloadMakerController::configureInstallation(const QJsonObject& json) {
-    InstallationSetup s;QString error;
-    if(!readInstallation(json,s,error)||!saveInstallationSetup(s,error)){setStatus(error,true);return false;}
-    const auto check=checkInstallation(s);
-    // Setup changes future loads, never the active source under an open project.
-    if(check.collisionReady)qputenv("ELRIC_EXE",check.elric.toUtf8());else qunsetenv("ELRIC_EXE");
-    ++_revision;setStatus(check.gameReady?"Setup saved. Connect or open a source when ready.":"Setup draft saved. Select a valid game folder to load sources.");return true;
-}
 void ReloadMakerController::showSetup() {
     QDialog dialog(_window);dialog.setWindowTitle("Setup & tools");dialog.resize(720,570);
     auto* layout=new QVBoxLayout(&dialog);
@@ -75,27 +60,5 @@ void ReloadMakerController::showSetup() {
     connect(connectSource,&QPushButton::clicked,&dialog,[&]{const auto c=checkInstallation(value());if(!c.gameReady||!c.profileReady){refresh();return;}
         if(!configureInstallation(installationJson(value()))||!connectInstalledProfile()){report->setPlainText(_lastError);return;}dialog.accept();});
     refreshProfiles();dialog.exec();
-}
-bool ReloadMakerController::connectInstalledProfile() {
-    const auto s=loadInstallationSetup();const auto c=checkInstallation(s);
-    if(!c.gameReady||!c.profileReady){setStatus(c.errors.join('\n'),true);return false;}
-    if(!insideMo2VirtualFilesystem()||!_launchSnapshot.valid()||_launchSnapshot.profileName!=s.profile||QDir::cleanPath(_launchSnapshot.instancePath).compare(QDir::cleanPath(s.mo2Instance),Qt::CaseInsensitive)!=0||
-       QDir::cleanPath(_launchSnapshot.dataPath).compare(QDir::cleanPath(c.dataPath),Qt::CaseInsensitive)!=0||_launchSnapshot.fingerprint!=profileFingerprint(s.mo2Instance,c.profilePath)){
-        if(!_profileHandoff.isEmpty()){setStatus("An MO2 connection is already starting.",true);return false;}
-        if(_loadThread||_reloadCapturing||!saveSession()){setStatus("Finish the current load/capture and save the project before connecting.",true);return false;}
-        const auto executable=QDir(s.mo2Instance).filePath("ModOrganizer.exe");
-        if(!QFileInfo::exists(executable)){setStatus("ModOrganizer.exe is missing from the selected instance.",true);return false;}
-        const auto token=QUuid::createUuid().toString(QUuid::WithoutBraces);
-        const auto quote=[](const QString& value){auto v=value;v.replace('"',"\\\"");return '"'+v+'"';};
-        const QString arguments="--project "+quote(studioRoot())+" --mo2-instance "+quote(s.mo2Instance)+" --mo2-profile "+quote(s.profile)+" --game-data "+quote(c.dataPath)+" --handoff "+token+" --library";
-        auto* process=new QProcess(this);process->setProgram(executable);process->setArguments({"--profile",s.profile,"run","--arguments",arguments,QCoreApplication::applicationFilePath()});process->setWorkingDirectory(s.mo2Instance);
-        _profileHandoff=token;
-        connect(process,&QProcess::errorOccurred,this,[this,process,token]{if(_profileHandoff==token){_profileHandoff.clear();setStatus("MO2 connection failed: "+process->errorString()+". Your project is still open.",true);}});
-        connect(process,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),this,[this,process,token](int code,QProcess::ExitStatus status){if(_profileHandoff==token&&(code!=0||status!=QProcess::NormalExit)){_profileHandoff.clear();setStatus("MO2 rejected the connection. Your project is still open.",true);}process->deleteLater();});
-        process->start();
-        QTimer::singleShot(20000,this,[this,token]{if(_profileHandoff==token){_profileHandoff.clear();setStatus("MO2 did not connect a verified editor session. Your current project was retained.",true);}});
-        setStatus("Opening the selected MO2 profile. This project will close only after the new source session verifies its virtual files.");return true;
-    }
-    _mo2Instance=s.mo2Instance;_requestedMo2Profile=s.profile;_gameDataText=c.dataPath;startLibraryLoad();return true;
 }
 }

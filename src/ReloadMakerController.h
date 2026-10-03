@@ -24,6 +24,8 @@
 #include "OperatingGrabLocations.h"
 #include "CollisionAuthoring.h"
 #include "ScopeProfile.h"
+#include "InstallationSetup.h"
+#include "areas/sources/SourceBrowserRows.h"
 #include "commands/CommandRegistry.h"
 
 #include <QHash>
@@ -228,6 +230,7 @@ namespace reloadmaker
         QString suggestedSessionPath() const;
         bool beginWeaponProject(int selectedIndex);
         QString sourcePolicyKey() const;
+        [[nodiscard]] bool sourcePluginLoaded(const QString& plugin) const;
         QJsonObject sourcePolicyState() const;
         QJsonObject configureSourcePolicy(const QJsonObject&);
         void showSourcePolicy();
@@ -309,6 +312,7 @@ namespace reloadmaker
         QJsonObject _packJob;
         QString _packCancelFile;
         bool connectInstalledProfile();
+        bool handOffToMo2(const InstallationSetup& setup, const InstallationCheck& check);
         QJsonObject animationSourceIdentity() const;
         void cacheWeaponFitBounds();
         bool fitWeapon();
@@ -350,14 +354,26 @@ namespace reloadmaker
         bool selectSourcePlugin(const QString& plugin);
         bool selectSourceWeapon(int index);
         bool selectSourceMode(const QString& mode);
-        static constexpr const char* kAllWeaponsSource = "*";
         bool allWeaponsSelected() const;
         QStringList selectionPlugins(int index) const;
         QStringList sourcePluginOrder() const;
-        QStringList sourcePluginMasters(const QString& plugin) const;
-        void updatePluginColors();
+        // Browser entries: kAllWeaponsSource first for an MO2 profile, then the plugins.
+        [[nodiscard]] QStringList browserPluginNames() const;
+        // The listed entry matching `name` case-insensitively, or empty.
+        [[nodiscard]] QString browserPluginEntry(const QString& name) const;
+        [[nodiscard]] PluginDependencies pluginDependencies() const;
+        [[nodiscard]] QVector<SourcePluginRow> sourcePluginRows() const;
+        [[nodiscard]] QVector<SourceWeaponRow> sourceWeaponRows() const;
+        void resolveBrowserPlugin();
+        // Moves the browser selection to a plugin the open weapon comes from.
+        void alignBrowserPlugin();
         void alignPluginToWeapon();
+        void renderPluginPicker();
+        [[nodiscard]] SourceBrowserProjection sourceBrowserProjection() const;
         QJsonObject sourceBrowserState() const;
+        // Selected source browser entry, always one of browserPluginNames() or
+        // empty. The plugin picker only shows it.
+        QString _browserPlugin;
         QString _browserSourceKey;
         QVector<Transformf> _rifleBoltCycle;
         int _rifleBoltOpen{0};
@@ -618,6 +634,7 @@ namespace reloadmaker
         [[nodiscard]] bool sceneNodeWorld(const QModelIndex& node, Transformf& world, QString& error) const;
         [[nodiscard]] QString poseRecordKey(std::uint32_t formId) const;
         void startLibraryLoad();
+        void installLibrary(LoadOrderLibrary& library);
         void setLoading(bool loading, const QString& message = {});
         void startPackageLoad(const QString& path, const QString& dataPath,bool newDocument=false);
         [[nodiscard]] const ResourceArchive& referenceMeshes() const;

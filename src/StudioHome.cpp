@@ -14,19 +14,6 @@
 #include <stdexcept>
 
 namespace reloadmaker {
-QJsonObject ReloadMakerController::homeState() const {
-    QSettings settings;const auto recent=settings.value("projects/lastProject").toString();
-    const auto* dialog=_window->findChild<QDialog*>("MakerHome");
-    return {{"role",settings.value("home/role").toString()},{"workspace",studioRoot()},{"recentProject",recent},
-        {"canResume",!recent.isEmpty()&&QFileInfo(recent).isFile()},{"visible",dialog&&dialog->isVisible()},{"installation",installationState()},
-        {"playerNeedsCreationKit",false},{"playerNeedsSourceScene",false},{"creatorNeedsKitForNewCollision",true}};
-}
-QJsonObject ReloadMakerController::chooseHomeRole(const QString& role) {
-    if(role!="creator"&&role!="player")throw std::runtime_error("Choose creator or player");
-    QSettings settings;settings.setValue("home/role",role);settings.sync();
-    if(settings.status()!=QSettings::NoError)throw std::runtime_error("Could not save the workspace's home preference");
-    return homeState();
-}
 void ReloadMakerController::showHome() {
     if(auto* existing=_window->findChild<QDialog*>("MakerHome")){existing->show();existing->raise();return;}
     auto* dialog=new QDialog(_window);dialog->setObjectName("MakerHome");dialog->setAttribute(Qt::WA_DeleteOnClose);dialog->setWindowTitle("Reload Maker");dialog->resize(780,470);

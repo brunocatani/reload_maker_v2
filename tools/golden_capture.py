@@ -26,7 +26,7 @@ from editor_session import ROOT, TESTBEDS, EditorRun, command, edit, ready
 STATES = (
     'roadmap', 'operating_setup_state', 'magazine_guide_state', 'magazine_setup_state',
     'magazine_reference_state', 'source_policy_state', 'sound_state',
-    'grab_locations_state', 'simulation_state',
+    'grab_locations_state', 'simulation_state', 'source_browser', 'installation', 'home',
 )
 EXPORTS = ('runtime_configuration', 'sounds', 'grab_locations', 'simulation', 'reload_bundle')
 VIEWS = ('side', 'iso')

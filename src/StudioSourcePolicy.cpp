@@ -20,48 +20,6 @@
 #include <stdexcept>
 
 namespace reloadmaker {
-QString ReloadMakerController::sourcePolicyKey() const {
-    return currentWeapon()?poseRecordKey(currentWeapon()->formId).toLower()+"|"+QFileInfo(suggestedSessionPath()).dir().dirName():QString();
-}
-QJsonObject ReloadMakerController::sourcePolicyState() const {
-    if(!currentWeapon())throw std::runtime_error("Select the source weapon first");
-    const auto key=sourcePolicyKey(),weapon=poseRecordKey(currentWeapon()->formId);
-    QJsonObject policy;QString preset;
-    if(_sourcePolicies.contains(key))policy=_sourcePolicies.value(key).toObject();
-    else {
-        QFile file(QCoreApplication::applicationDirPath()+"/assets/source-policies.json");
-        if(!file.open(QIODevice::ReadOnly)||file.size()>1024*1024)throw std::runtime_error("Bundled source compatibility defaults are unavailable");
-        QJsonParseError parse;const auto doc=QJsonDocument::fromJson(file.readAll(),&parse).object();
-        if(parse.error!=QJsonParseError::NoError||doc["version"]!=1||!doc["policies"].isArray()||doc["policies"].toArray().size()>256)throw std::runtime_error("Bundled source compatibility defaults are invalid");
-        for(const auto& value:doc["policies"].toArray()) {
-            const auto entry=value.toObject();if(entry["weapon"].toString().compare(weapon,Qt::CaseInsensitive)!=0)continue;
-            const auto candidate=entry["policy"].toObject();QString error;if(!validSourcePolicy(candidate,error))throw std::runtime_error(error.toStdString());
-            if(candidate.contains("sourceOverride")) {
-                const auto marker=candidate["sourceOverride"].toObject();const auto plugin=marker["marker"].toString().section(':',0,0);bool loaded=false;
-                if(_libraryMode)loaded=_launchSnapshot.plugins.contains(plugin,Qt::CaseInsensitive);
-                for(const auto& path:_package.plugins)loaded|=QFileInfo(path).fileName().compare(plugin,Qt::CaseInsensitive)==0;
-                for(const auto& p:_plugins)loaded|=p.fileName.compare(plugin,Qt::CaseInsensitive)==0;
-                if(loaded!=marker["present"].toBool())continue;
-            }
-            if(!preset.isEmpty())throw std::runtime_error("Several compatibility defaults match this source; resolve the policy definitions");
-            policy=candidate;preset=entry["id"].toString();
-        }
-    }
-    QMap<QString,QString> mods;const auto* config=configuration();
-    if(config)for(const auto& slot:config->entries())for(auto id:slot.choices)if(const auto* mod=config->mod(id))mods[poseRecordKey(id)]=mod->name.isEmpty()?mod->editorId:mod->name;
-    QJsonArray choices;for(auto it=mods.cbegin();it!=mods.cend();++it)choices.append(QJsonObject{{"record",it.key()},{"name",it.value()}});
-    return {{"key",key},{"weapon",weapon},{"policy",policy},{"saved",_sourcePolicies.contains(key)},{"preset",preset},{"modifications",choices}};
-}
-QJsonObject ReloadMakerController::configureSourcePolicy(const QJsonObject& request) {
-    if(_loadThread||_reloadCapturing||!currentWeapon())throw std::runtime_error("Wait for the current source load");
-    const auto key=sourcePolicyKey();if(request["key"]!=key)throw std::runtime_error("Source context changed; reopen compatibility rules");
-    if(request["operation"]=="reset")_sourcePolicies.remove(key);
-    else if(request["operation"]=="save") {
-        QString error;if(!request["policy"].isObject()||!validSourcePolicy(request["policy"].toObject(),error))throw std::runtime_error(error.isEmpty()?"Choose valid compatibility rules":error.toStdString());
-        _sourcePolicies[key]=request["policy"];
-    }else throw std::runtime_error("Choose save or reset for source compatibility");
-    ++_revision;if(!saveSession())throw std::runtime_error("Cannot save source compatibility rules");return sourcePolicyState();
-}
 void ReloadMakerController::showSourcePolicy() {
     if(auto* existing=_window->findChild<QDialog*>("SourcePolicyDialog")){existing->show();existing->raise();return;}
     QJsonObject state;try{state=sourcePolicyState();}catch(const std::exception& e){setStatus(e.what(),true);return;}
