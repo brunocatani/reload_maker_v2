@@ -8,6 +8,7 @@
 #include "gl/glshape.h"
 #include "model/nifmodel.h"
 #include "ReloadGraph.h"
+#include "areas/operate/WeaponLocalSampler.h"
 
 #include <QComboBox>
 #include <QCryptographicHash>
@@ -270,25 +271,23 @@ namespace reloadmaker
             return;
         }
         QString error;
-        QVector<Transformf> tracks, local, global, boundLocal, boundGlobal, nativeLocal, world;
+        WeaponLocalSampler sampler(_skeleton, _nodeBindings, _reloadScenePlan, _weaponBoneIndex);
+        sampler.setBaseline(_reloadBase);
         auto& recipe = *_reloadRecipe;
         for (int batch = 0; batch < kCaptureBatchFrames && _reloadCaptureFrame < recipe.frames; ++batch, ++_reloadCaptureFrame) {
             const float seconds = recipe.duration * _reloadCaptureFrame / (recipe.frames - 1);
-            if (!samplePose(_skeleton, _reloadClip, seconds, &_reloadBase, tracks, local, global, error) ||
-                !evaluateSceneBindings(_skeleton, _nodeBindings, local, _reloadBase, global, boundLocal, boundGlobal, error) ||
-                !nativeMechanismScene(_reloadScenePlan, _nodeBindings, boundLocal, nativeLocal, world, error)) {
+            if (!sampler.sample(_reloadClip, seconds, error)) {
                 invalidateReloadCapture();
                 setStatus("Reload capture failed: " + error, true);
                 return;
             }
-            Transformf inverse;
-            if (!invertUniformTransform(global[_weaponBoneIndex], inverse)) {
+            if (!sampler.weaponFrameValid()) {
                 invalidateReloadCapture();
                 setStatus("Reload Weapon frame cannot be inverted", true);
                 return;
             }
             for (int i = 0; i < recipe.tracks.size(); ++i) {
-                recipe.tracks[i].poses.append(composed(inverse, world[_reloadTrackNodes[i]]));
+                recipe.tracks[i].poses.append(sampler.nodePose(_reloadTrackNodes[i]));
             }
         }
         _reloadProgress->setValue(_reloadCaptureFrame);

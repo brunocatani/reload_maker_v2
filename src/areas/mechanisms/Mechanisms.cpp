@@ -5,6 +5,7 @@
 #include "ReloadMakerController.h"
 #include "GripViewport.h"
 #include "StudioWindow.h"
+#include "areas/operate/WeaponLocalSampler.h"
 #include "glview.h"
 #include "gl/glshape.h"
 #include "model/nifmodel.h"
@@ -623,25 +624,26 @@ namespace reloadmaker
         float movement = 0;
         float rotation = 0;
         Transformf firstMaster;
-        QVector<Transformf> local, global, boundLocal, boundGlobal, nativeLocal, world;
+        WeaponLocalSampler sampler(_skeleton, _nodeBindings, plan, _weaponBoneIndex);
+        sampler.setBaseline(_stateBaselineLocalPose);
+        QVector<Transformf> local, global;
         for (int sample = 0; sample <= 60; ++sample) {
             if (!sampleActionPose(_clip.durationSeconds * sample / 60.f, local, global)) {
                 setStatus(_poseError, true);
                 return;
             }
-            if (!evaluateSceneBindings(_skeleton, _nodeBindings, local, _stateBaselineLocalPose, global, boundLocal, boundGlobal, error) ||
-                !nativeMechanismScene(plan, _nodeBindings, boundLocal, nativeLocal, world, error)) {
+            if (!sampler.evaluate(local, global, error)) {
                 setStatus(error, true);
                 return;
             }
+            const auto& world = sampler.sceneWorld();
             Transformf inverse;
-            Transformf weaponInverse;
-            if (!invertUniformTransform(world[master], inverse) || !invertUniformTransform(global[_weaponBoneIndex], weaponInverse)) {
+            if (!invertUniformTransform(world[master], inverse) || !sampler.weaponFrameValid()) {
                 setStatus("Master is hidden in this clip; relationship analysis unavailable.", true);
                 return;
             }
             // Whole-weapon movement is not evidence that a bolt/follower articulates.
-            const auto relativeMaster = composed(weaponInverse, world[master]);
+            const auto relativeMaster = sampler.nodePose(master);
             if (sample == 0) {
                 firstMaster = relativeMaster;
             }

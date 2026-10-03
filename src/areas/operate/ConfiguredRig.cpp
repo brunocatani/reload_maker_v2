@@ -6,6 +6,7 @@
 //   clip    another native clip, sampled over the recipe's frames,
 //   manual  saved Move / Rotate movements authored on the parts.
 #include "ReloadMakerController.h"
+#include "areas/operate/WeaponLocalSampler.h"
 
 #include <QCryptographicHash>
 #include <QJsonArray>
@@ -114,24 +115,21 @@ namespace reloadmaker
                 return false;
             }
         }
-        QVector<Transformf> sampled, baseline, local, global, boundLocal, boundGlobal, sceneLocal, sceneWorld;
-        if (!samplePose(_skeleton, base, 0, &_readyLocalPose, sampled, baseline, global, error)) {
+        WeaponLocalSampler sampler(_skeleton, _nodeBindings, _reloadScenePlan, _weaponBoneIndex);
+        if (!sampler.setBaselineClip(base, _readyLocalPose, error)) {
             return false;
         }
         for (int frame = 0; frame < recipe.frames; ++frame) {
             const float seconds = clip.durationSeconds * frame / (recipe.frames - 1);
-            if (!samplePose(_skeleton, clip, seconds, &baseline, sampled, local, global, error) ||
-                !evaluateSceneBindings(_skeleton, _nodeBindings, local, baseline, global, boundLocal, boundGlobal, error) ||
-                !nativeMechanismScene(_reloadScenePlan, _nodeBindings, boundLocal, sceneLocal, sceneWorld, error)) {
+            if (!sampler.sample(clip, seconds, error)) {
                 return false;
             }
-            Transformf inverse;
-            if (!invertUniformTransform(global[_weaponBoneIndex], inverse)) {
+            if (!sampler.weaponFrameValid()) {
                 error = "Invalid native movement reference frame";
                 return false;
             }
             for (const int track : selected) {
-                parts.curves[track].append(composed(inverse, sceneWorld[_reloadTrackNodes[track]]));
+                parts.curves[track].append(sampler.nodePose(_reloadTrackNodes[track]));
             }
         }
         motion.duration = clip.durationSeconds;

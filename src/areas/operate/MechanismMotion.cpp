@@ -3,6 +3,7 @@
 // Sampled poses are weapon-local: each frame is divided by the weapon bone.
 #include "ReloadMakerController.h"
 #include "ReloadTemplates.h"
+#include "areas/operate/WeaponLocalSampler.h"
 
 #include <QCryptographicHash>
 #include <QJsonArray>
@@ -113,23 +114,21 @@ namespace reloadmaker
         if (!clip.valid() || !base.valid()) {
             return false;
         }
-        QVector<Transformf> sampled, baseline, local, global, boundLocal, boundGlobal, sceneLocal, sceneWorld, poses;
-        if (!samplePose(_skeleton, base, 0, &_readyLocalPose, sampled, baseline, global, error)) {
+        WeaponLocalSampler sampler(_skeleton, _nodeBindings, _reloadScenePlan, _weaponBoneIndex);
+        QVector<Transformf> poses;
+        if (!sampler.setBaselineClip(base, _readyLocalPose, error)) {
             return false;
         }
         for (int frame = 0; frame < recipe.frames; ++frame) {
             const float seconds = clip.durationSeconds * frame / (recipe.frames - 1);
-            if (!samplePose(_skeleton, clip, seconds, &baseline, sampled, local, global, error) ||
-                !evaluateSceneBindings(_skeleton, _nodeBindings, local, baseline, global, boundLocal, boundGlobal, error) ||
-                !nativeMechanismScene(_reloadScenePlan, _nodeBindings, boundLocal, sceneLocal, sceneWorld, error)) {
+            if (!sampler.sample(clip, seconds, error)) {
                 return false;
             }
-            Transformf inverse;
-            if (!invertUniformTransform(global[_weaponBoneIndex], inverse)) {
+            if (!sampler.weaponFrameValid()) {
                 error = "Invalid native bolt source frame.";
                 return false;
             }
-            poses.append(composed(inverse, sceneWorld[_reloadTrackNodes[bolt]]));
+            poses.append(sampler.nodePose(_reloadTrackNodes[bolt]));
         }
         if (!buildSimulationRig(recipe, rig, error, simulationMechanism(), true, poses)) {
             return false;
@@ -258,25 +257,22 @@ namespace reloadmaker
             _simulationError = "Rifle firing motion exceeds the sampling limit.";
             return false;
         }
-        QVector<Transformf> sampled, baseline, local, global, boundLocal, boundGlobal, sceneLocal, sceneWorld;
-        if (!samplePose(_skeleton, base, 0, &_readyLocalPose, sampled, baseline, global, error)) {
+        WeaponLocalSampler sampler(_skeleton, _nodeBindings, _reloadScenePlan, _weaponBoneIndex);
+        if (!sampler.setBaselineClip(base, _readyLocalPose, error)) {
             _simulationError = error;
             return false;
         }
         for (int frame = 0; frame < frames; ++frame) {
             const float seconds = clip.durationSeconds * frame / (frames - 1);
-            if (!samplePose(_skeleton, clip, seconds, &baseline, sampled, local, global, error) ||
-                !evaluateSceneBindings(_skeleton, _nodeBindings, local, baseline, global, boundLocal, boundGlobal, error) ||
-                !nativeMechanismScene(_reloadScenePlan, _nodeBindings, boundLocal, sceneLocal, sceneWorld, error)) {
+            if (!sampler.sample(clip, seconds, error)) {
                 _simulationError = error;
                 return false;
             }
-            Transformf inverse;
-            if (!invertUniformTransform(global[_weaponBoneIndex], inverse)) {
+            if (!sampler.weaponFrameValid()) {
                 _simulationError = "Invalid firing reference frame.";
                 return false;
             }
-            _rifleBoltCycle.append(composed(inverse, sceneWorld[_reloadTrackNodes[_simulationRig->bolt]]));
+            _rifleBoltCycle.append(sampler.nodePose(_reloadTrackNodes[_simulationRig->bolt]));
         }
         return true;
     }
@@ -375,26 +371,23 @@ namespace reloadmaker
             _simulationError = "Native bolt cycle exceeds the sampling limit.";
             return false;
         }
-        QVector<Transformf> sampled, baseline, local, global, boundLocal, boundGlobal, sceneLocal, sceneWorld;
-        if (!samplePose(_skeleton, base, 0, &_readyLocalPose, sampled, baseline, global, error)) {
+        WeaponLocalSampler sampler(_skeleton, _nodeBindings, _reloadScenePlan, _weaponBoneIndex);
+        if (!sampler.setBaselineClip(base, _readyLocalPose, error)) {
             _simulationError = error;
             return false;
         }
         // Weapon-local poses of every cycle track at one moment of a clip.
         const auto sample = [&](const HkxClip& source, float seconds, QVector<Transformf>& result) {
-            if (!samplePose(_skeleton, source, seconds, &baseline, sampled, local, global, error) ||
-                !evaluateSceneBindings(_skeleton, _nodeBindings, local, baseline, global, boundLocal, boundGlobal, error) ||
-                !nativeMechanismScene(_reloadScenePlan, _nodeBindings, boundLocal, sceneLocal, sceneWorld, error)) {
+            if (!sampler.sample(source, seconds, error)) {
                 return false;
             }
-            Transformf inverse;
-            if (!invertUniformTransform(global[_weaponBoneIndex], inverse)) {
+            if (!sampler.weaponFrameValid()) {
                 error = "Invalid bolt reference frame.";
                 return false;
             }
             result.clear();
             for (const int track : _boltCycle.tracks) {
-                result.append(composed(inverse, sceneWorld[_reloadTrackNodes[track]]));
+                result.append(sampler.nodePose(_reloadTrackNodes[track]));
             }
             return true;
         };
