@@ -25,6 +25,7 @@
 #include "CollisionAuthoring.h"
 #include "ScopeProfile.h"
 #include "InstallationSetup.h"
+#include "areas/collisions/CollisionWorkshop.h"
 #include "areas/sources/SourceBrowserRows.h"
 #include "commands/CommandRegistry.h"
 
@@ -205,6 +206,8 @@ namespace reloadmaker
         void paintCollisions();
         QVector<int> _collisionTargets;
         CollisionPanel* _collisions{};
+        // The collision document (src/areas/collisions); _collisions shows it.
+        CollisionWorkshop _collisionWorkshop;
         QDockWidget* _collisionsDock{};
         void createSoundsUi();
         void prepareSounds();

@@ -2,7 +2,6 @@
 #include "AuthoringProgress.h"
 #include "ReloadBundle.h"
 #include "ReloadTemplates.h"
-#include "CollisionPanel.h"
 #include <QJsonDocument>
 #include <QCryptographicHash>
 #include <QComboBox>
@@ -14,7 +13,7 @@
 namespace reloadmaker {
 void ReloadMakerController::rememberCollisionDraft() {
     if(!_collisions||!_reloadRecipe||!currentWeapon())return;
-    const auto& profile=_collisions->profile();const auto reference=profile.referencePose;const auto presentation=reference["presentation"].toString();
+    const auto& profile=_collisionWorkshop.profile();const auto reference=profile.referencePose;const auto presentation=reference["presentation"].toString();
     if(!profile.valid()||reference["space"]!="magazine-carrier"||(presentation!="full"&&presentation!="empty")||reference["sourceRecipeId"]!=_reloadRecipe->id)return;
     const auto key=profile.weapon.toLower()+"/"+profile.configuration;if(key!=roadmapKey())return;
     auto plan=_authoringRoadmaps.value(key).toObject();if(!plan.contains("step"))plan["step"]=10;

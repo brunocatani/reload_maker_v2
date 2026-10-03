@@ -1,44 +1,21 @@
 #pragma once
-#include "CollisionAuthoring.h"
 #include <QWidget>
-#include <QFutureWatcher>
-#include <functional>
 class QComboBox; class QListWidget; class QLabel; class QDoubleSpinBox; class QCheckBox;
 namespace reloadmaker {
+class CollisionWorkshop;
+// Shows the collision workshop; its controls edit the workshop.
 class CollisionPanel final : public QWidget {
 public:
-    explicit CollisionPanel(QWidget* parent=nullptr);
-    ~CollisionPanel() override;
-    std::function<CollisionProfile(int,bool)> snapshot;
-    std::function<void(bool)> changed; // true only for authored geometry/physics changes
-    std::function<void()> cook;
-    std::function<void()> prepare;
-    void setTargets(const QStringList& names);
-    void invalidate();
-    void cancel();
-    QJsonObject command(const QJsonObject& args);
-    QJsonObject state() const;
-    const CollisionProfile& profile()const{return _profile;}
-    const CollisionProfile& baseline()const{return _baseline;}
-    bool overlay()const;
-    bool compare()const;
-    bool isolated()const;
-    int selected()const;
+    explicit CollisionPanel(CollisionWorkshop& workshop,QWidget* parent=nullptr);
 private:
-    void refresh(bool authored=false);
-    void showError(const QString& error);
-    CollisionProfile context(bool referenceOnly);
-    QString savePath()const;
+    void showWorkshop();
+    void run(const QString& operation);
+    CollisionWorkshop& _workshop;
     QComboBox* _target{};
     QListWidget* _hulls{};
     QListWidget* _pieces{};
     QLabel* _status{};
     QDoubleSpinBox *_gap{},*_error{},*_points{},*_mass{},*_radius{};
     QCheckBox *_overlay{},*_compare{},*_isolate{};
-    CollisionProfile _profile,_baseline;
-    QFutureWatcher<CollisionResult> _worker;
-    std::shared_ptr<std::atomic<bool>> _cancel;
-    QString _lastError,_lastPath;
-    bool _dirty{false},_refreshing{false},_generating{false};
 };
 }

@@ -1,5 +1,4 @@
 #include "ReloadMakerController.h"
-#include "CollisionPanel.h"
 
 // Commands of the self-contained workspace tools: grab locations, collisions,
 // scopes and pack building. Each tool owns its own state and operations.
@@ -23,13 +22,13 @@ namespace reloadmaker
         _commands.add({ "collision_state", CommandAccess::Read, CommandGate::Always,
                         [this](const QJsonObject&) -> std::optional<QJsonObject> {
                             refreshCollisions();
-                            return _collisions->state();
+                            return _collisionWorkshop.state();
                         } });
 
         _commands.add({ "collisions", CommandAccess::Edit, CommandGate::WhenIdle,
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
                             refreshCollisions();
-                            return _collisions->command(params);
+                            return _collisionWorkshop.command(params);
                         } });
     }
 

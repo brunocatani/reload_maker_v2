@@ -1,6 +1,5 @@
 #include "ReloadMakerController.h"
 #include "StudioWindow.h"
-#include "CollisionPanel.h"
 #include "glview.h"
 #include "gl/glshape.h"
 #include "model/nifmodel.h"
@@ -69,7 +68,7 @@ QJsonObject ReloadMakerController::captureMagazineWorld(bool empty) {
         requireAsset(!captured.sources.isEmpty(),"No visible magazine body found for this presentation");captured.inputTriangles=total;
     }
     _magazineWorldSnapshot=std::move(captured);_simulation=presentation;_magazineWorldPreview=true;setWorkspace(CollisionsWorkspace);refreshCollisions();
-    const auto result=_collisions->command({{"operation","defaults"},{"target",_collisionTargets.size()-1}});
+    const auto result=_collisionWorkshop.command({{"operation","defaults"},{"target",_collisionTargets.size()-1}});
     setStatus(QString("%1 magazine captured in its carrier frame. Review world pieces and collision, then capture and cook the model.").arg(empty?"Empty":"Full"));return result;
 }
 }
