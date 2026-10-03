@@ -643,7 +643,6 @@ namespace reloadmaker
         void loadMechanism();
         void saveMechanism();
         void displayMechanism();
-        void readMechanismControls();
         void analyzeMechanismAnimation();
         void beginMechanismPreview();
         void updateMechanismControls();
@@ -827,6 +826,80 @@ namespace reloadmaker
         bool convertToMagazineFrame(PartGrip& grip, int targetAnchor);
         void showMagazineGrabGrip(const PartGrip* selected);
         void showOperatingFingerChoices();
+        // Mechanism workshop document (src/areas/mechanisms).
+        int _mechanismStage{ -1 };
+        QString _workshopPoseChoice;
+        QString _selectedMechanismId;
+        bool _mechanismHandShownOnGrab{ true };
+        struct WorkshopPoseChoice
+        {
+            QString label;
+            QString key;
+        };
+        // The definition form: name, the selected step's fields (motion is
+        // the axis plus 3 for rotation) and the checked follower anchors.
+        struct MechanismForm
+        {
+            QString name;
+            QString forwardName;
+            QString reverseName;
+            int motion{ 0 };
+            int release{ 0 };
+            float from{ 0 };
+            float to{ 0 };
+            float returnRate{ 0 };
+            Vec3f pivot{};
+            QVector<int> followers;
+        };
+        // Whether a part keeps a fixed relation to the definition's part
+        // over the clip, by anchor index.
+        struct FollowerObservation
+        {
+            bool visible{ false };
+            bool related{ false };
+            float distance{ 0 };
+            float angle{ 0 };
+        };
+        void selectMechanismStage(int stage);
+        void normalizeMechanismStage();
+        void setWorkshopPoseChoice(const QString& choice);
+        void chooseWorkshopPose(const QString& choice);
+        [[nodiscard]] QVector<WorkshopPoseChoice> workshopPoseChoices() const;
+        [[nodiscard]] bool workshopPoseListed(const QString& choice) const;
+        void selectMechanism(const QString& id);
+        void setMechanismHandShownOnGrab(bool shown);
+        void applyMechanismForm(const MechanismForm& form);
+        [[nodiscard]] bool workshopFrameReady() const;
+        [[nodiscard]] bool canSaveMechanism() const;
+        [[nodiscard]] QVector<const PartMechanism*> weaponMechanisms() const;
+        [[nodiscard]] bool mechanismListed(const QString& id) const;
+        bool compileMechanismPreview(QString& error);
+        [[nodiscard]] bool mechanismSkinOwned() const;
+        void holdMechanismSlider();
+        void slideMechanism(int value);
+        void changeMechanismStep(int direction);
+        void endMechanismTest();
+        bool placeWorkshopFingerPose(const QString& id);
+        void pickWorkshopPivot(const Vec3f& world);
+        void pickWorkshopContact(const Vec3f& world, const QString& surface, const QVector<int>& candidates);
+        void addMechanismStage();
+        void removeMechanismStage();
+        void moveMechanismStage(int delta);
+        void chooseTeachingTool(bool rotation);
+        void applyFollowerChange();
+        void suggestMechanismFollowers();
+        // Mechanism workshop views.
+        [[nodiscard]] MechanismForm mechanismForm() const;
+        void readMechanismForm();
+        void showMechanismStageSummary(int stage);
+        void showTaughtStage(int stage);
+        void showFollowerObservations(const QVector<FollowerObservation>& observations);
+        void showWorkshopPoseChoice();
+        void showWorkshopHint(const QString& text);
+        void showMechanismStage();
+        void showMechanismChoices();
+        void showSelectedMechanism();
+        void showMechanismHandShownOnGrab();
         void startLibraryLoad();
         void installLibrary(LoadOrderLibrary& library);
         void setLoading(bool loading, const QString& message = {});

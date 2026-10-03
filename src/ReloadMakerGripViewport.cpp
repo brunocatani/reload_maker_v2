@@ -24,7 +24,7 @@ namespace reloadmaker {
         _gripViewport->pickingCancelled=[this](){
             _pickingGrabLocation=false;
             _workshopPicking=false;
-            if(_workshopPivotPicking&&_mechanismTeaching){_workshopPivotPicking=false;_mechanismState.path=float(_mechanismStages->currentRow()+1);(void)applyPose(_playbackTime);}
+            if(_workshopPivotPicking&&_mechanismTeaching){_workshopPivotPicking=false;_mechanismState.path=float(_mechanismStage+1);(void)applyPose(_playbackTime);}
             updateMechanismControls();updateGripViewport();
         };
         _gripViewport->simulationHit=[this](QPointF p){return grabMechanismAt(p);};
@@ -49,10 +49,10 @@ namespace reloadmaker {
         const bool points=_handEditorPage==HandEditorPage::GrabLocations;_gripViewport->setPointAuthoring(points);
         const bool active=!_reloadWorkspaceActive && (_handEditorPage==HandEditorPage::PartGrip || workshop || points) && _handPoseDock->isVisible() && _handPoseDock->widget()->isEnabled() && !_loadThread &&
             !_rebuildTimer->isActive() && _clip.valid() && _renderedWeapon==_selectedWeapon;
-        _gripViewport->configure(active,points?operatingAnchor()>=0:workshop?_workshopPick->isEnabled():canPickGripSurface(),points?operatingAnchor()>=0:workshop?_mechanismSave->isEnabled():canSavePartGrip());
+        _gripViewport->configure(active,points?operatingAnchor()>=0:workshop?workshopFrameReady():canPickGripSurface(),points?operatingAnchor()>=0:workshop?canSaveMechanism():canSavePartGrip());
         _gripViewport->setWorkshop(workshop,_mechanismDraft?_mechanismDraft->name:QString(),_workshopHandEditing);
         if(_mechanismPreview&&_mechanismDraft&&!_workshopPicking){
-            const int i=_mechanismTeaching?std::max(0,_mechanismStages->currentRow()):std::clamp(_mechanismState.activeStage,0,int(_mechanismDraft->stages.size())-1);
+            const int i=_mechanismTeaching?std::max(0,_mechanismStage):std::clamp(_mechanismState.activeStage,0,int(_mechanismDraft->stages.size())-1);
             const auto stage=i<_mechanismDraft->stages.size()?_mechanismDraft->stages[i]:MechanismStage{};
             const auto start=composed(composed(_globalPose[_weaponBoneIndex],_mechanismDraft->partInWeaponAtRest),mechanismDelta(*_mechanismDraft,float(i)));
             const auto current=composed(composed(_globalPose[_weaponBoneIndex],_mechanismDraft->partInWeaponAtRest),mechanismDelta(*_mechanismDraft,_mechanismState.path));
