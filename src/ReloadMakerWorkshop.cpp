@@ -215,8 +215,8 @@ namespace reloadmaker {
         QVector<int> listed;
         for(int i=1;i<_handPoseAnchors.size();++i){
             if(std::any_of(listed.cbegin(),listed.cend(),[&](int old){return sameMechanismPart(_handPoseAnchors[old].description,_handPoseAnchors[i].description);}))continue;
-            listed.append(i);_workshopPart->addItem(_handPoseAnchor->itemText(i),i);
-            _workshopPart->setItemData(_workshopPart->count()-1,_handPoseAnchor->itemData(i,Qt::ToolTipRole),Qt::ToolTipRole);
+            listed.append(i);_workshopPart->addItem(_handPoseAnchors[i].label,i);
+            _workshopPart->setItemData(_workshopPart->count()-1,_handPoseAnchors[i].tooltip,Qt::ToolTipRole);
             if(_mechanismDraft&&sameMechanismPart(_mechanismDraft->anchor,_handPoseAnchors[i].description))_workshopPart->setCurrentIndex(_workshopPart->count()-1);
         }
         _workshopPose->clear();_workshopPose->addItem("No hand — edit the part only",QString());
@@ -261,7 +261,7 @@ namespace reloadmaker {
             if(choice<0)choice=_workshopPose->findData("pose:"+_partGripDraft->sourcePoseId);
             if(choice>=0)_workshopPose->setCurrentIndex(choice);
         }else if(!same&&_workshopPose->count()>1&&_workshopPose->itemData(1).toString().startsWith("grip:"))_workshopPose->setCurrentIndex(1);
-        _handPosePages->setCurrentIndex(2);
+        setHandEditorPage(HandEditorPage::Mechanism);
         applyWorkshopPose();
     }
     void ReloadMakerController::applyWorkshopPose()
@@ -314,7 +314,7 @@ namespace reloadmaker {
         stopPlayback();
         if(!applyPose(_playbackTime))return;
         _workshopPicking=true;_workshopContactOnly=contactOnly;_workshopPivotPicking=false;
-        _handPosePages->setCurrentIndex(2);updateGripViewport();_gripViewport->setPicking(true);
+        setHandEditorPage(HandEditorPage::Mechanism);updateGripViewport();_gripViewport->setPicking(true);
         _workshopHint->setText(contactOnly?"Click the contact point on the selected part. Then ADJUST HAND shows its move/rotate handles.":"Click the part you want to drive. No hand pose is required. If several bones drive the surface, choose the intended part from the menu.");
     }
     void ReloadMakerController::pickWorkshopPart(QPointF point)
@@ -348,7 +348,7 @@ namespace reloadmaker {
         _workshopPicking=false;_gripViewport->setPicking(false);
         auto* menu=new QMenu(_window);menu->setAttribute(Qt::WA_DeleteOnClose);
         menu->addSection("Which part should this point drive?");
-        for(int index:candidates){auto* action=menu->addAction(_handPoseAnchor->itemText(index));connect(action,&QAction::triggered,this,[this,index,world,surface](){selectWorkshopPart(index,world,surface);});}
+        for(int index:candidates){auto* action=menu->addAction(_handPoseAnchors[index].label);connect(action,&QAction::triggered,this,[this,index,world,surface](){selectWorkshopPart(index,world,surface);});}
         menu->popup(_window->getGLView()->mapToGlobal(point.toPoint()));
     }
     void ReloadMakerController::editWorkshopHand(bool enabled)

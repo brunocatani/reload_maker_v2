@@ -1,18 +1,13 @@
 #include "ReloadMakerController.h"
-#include "GripViewport.h"
 #include "StudioWindow.h"
-#include "model/nifmodel.h"
 
-#include <QCheckBox>
 #include <QComboBox>
-#include <QDateTime>
 #include <QDesktopServices>
 #include <QDir>
 #include <QDockWidget>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
-#include <QJsonArray>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -22,7 +17,6 @@
 #include <QTimer>
 #include <QTabWidget>
 #include <QUrl>
-#include <QUuid>
 #include <QVBoxLayout>
 #include <algorithm>
 
@@ -45,7 +39,7 @@ namespace reloadmaker {
         auto* form = new QFormLayout(capture);
         form->setRowWrapPolicy(QFormLayout::WrapLongRows);
         _handPoseName = new QLineEdit(capture);
-        _handPoseName->setMaxLength(128);
+        _handPoseName->setMaxLength(kPoseNameLength);
         _handPoseName->setPlaceholderText(QStringLiteral("e.g. Bolt pinch · relaxed"));
         _handPoseSide = new QComboBox(capture);
         _handPoseSide->addItem(QStringLiteral("Right hand"), static_cast<int>(PoseHand::Right));
@@ -104,12 +98,18 @@ namespace reloadmaker {
         _window->addDockWidget(Qt::RightDockWidgetArea, _handPoseDock);
 
         _handPoseDock->show(); _handPoseDock->raise();
-        connect(_handPoseName, &QLineEdit::textChanged, this, &ReloadMakerController::updateHandPoseControls);
+        connect(_handPoseName, &QLineEdit::textChanged, this, &ReloadMakerController::setHandCaptureName);
+        connect(_handPoseNotes, &QPlainTextEdit::textChanged, this, [this]() { setHandCaptureNotes(_handPoseNotes->toPlainText()); });
+        connect(_handPoseSide, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int index) {
+            setEditedHand(static_cast<PoseHand>(_handPoseSide->itemData(index).toInt()));
+        });
         connect(_handPoseSearch, &QLineEdit::textChanged, this, &ReloadMakerController::refreshHandPoseList);
-        connect(_handPoseList, &QListWidget::currentItemChanged, this, &ReloadMakerController::updateHandPoseControls);
+        connect(_handPoseList, &QListWidget::currentItemChanged, this, [this](QListWidgetItem* item) {
+            selectHandPose(item ? item->data(Qt::UserRole).toString() : QString());
+        });
         connect(_handPoseList, &QListWidget::itemActivated, this, [this]() { previewSavedHandPose(); });
         connect(_saveHandPose, &QPushButton::clicked, this, &ReloadMakerController::saveCurrentHandPose);
-        connect(_handPoseAnchor,qOverload<int>(&QComboBox::currentIndexChanged),this,&ReloadMakerController::updateHandPoseControls);
+        connect(_handPoseAnchor,qOverload<int>(&QComboBox::currentIndexChanged),this,&ReloadMakerController::setHandCaptureAnchor);
         connect(_previewHandPose, &QPushButton::clicked, this, &ReloadMakerController::previewSavedHandPose);
         connect(_restoreHandPose, &QPushButton::clicked, this, &ReloadMakerController::restoreHandPosePreview);
         connect(refresh, &QPushButton::clicked, this, &ReloadMakerController::refreshHandPoseLibrary);
@@ -123,33 +123,10 @@ namespace reloadmaker {
         QTimer::singleShot(0, this, &ReloadMakerController::refreshHandPoseLibrary);
     }
 
-    const HandPose* ReloadMakerController::selectedHandPose() const
-    {
-        const auto* item = _handPoseList->currentItem();
-        if (!item) { return nullptr; }
-        const QString id = item->data(Qt::UserRole).toString();
-        for (const auto& pose : _savedHandPoses) { if (pose.id == id) { return &pose; } }
-        return nullptr;
-    }
-
-    void ReloadMakerController::refreshHandPoseLibrary()
-    {
-        QStringList diagnostics;
-        _savedHandPoses = _handPoseLibrary.load(diagnostics);
-        refreshHandPoseList();
-        refreshPartGripLibrary();
-        refreshMechanisms();
-        for (const auto& message : diagnostics) { appendDiagnostic(QStringLiteral("POSE FILE %1").arg(message)); }
-        if (!diagnostics.isEmpty()) {
-            setStatus(QStringLiteral("Loaded %1 poses; %2 invalid pose files were left untouched. See Diagnostics.")
-                .arg(_savedHandPoses.size()).arg(diagnostics.size()), true);
-        }
-    }
-
+    // The saved poses matching the search text. The selection stays on the
+    // selected pose while it is listed, else moves to the first listed pose.
     void ReloadMakerController::refreshHandPoseList()
     {
-        const auto* current = _handPoseList->currentItem();
-        const QString selected = current ? current->data(Qt::UserRole).toString() : QString();
         const QSignalBlocker blocker(_handPoseList);
         _handPoseList->clear();
         const QString query = _handPoseSearch->text().trimmed();
@@ -160,23 +137,36 @@ namespace reloadmaker {
             auto* item = new QListWidgetItem(QStringLiteral("%1\n%2 hand · %3").arg(pose.name, side, weapon), _handPoseList);
             item->setData(Qt::UserRole, pose.id);
             item->setToolTip(QStringLiteral("%1\n%2\n%3").arg(pose.createdUtc, pose.notes, pose.id));
-            if (pose.id == selected) { _handPoseList->setCurrentItem(item); }
+            if (pose.id == _selectedHandPoseId) { _handPoseList->setCurrentItem(item); }
         }
         if (!_handPoseList->currentItem() && _handPoseList->count()) { _handPoseList->setCurrentRow(0); }
+        // Filtering is not a user selection; the document follows the list.
+        const auto* current = _handPoseList->currentItem();
+        _selectedHandPoseId = current ? current->data(Qt::UserRole).toString() : QString();
         updateHandPoseControls();
+    }
+
+    bool ReloadMakerController::handPoseListed(const QString& id) const
+    {
+        for (int row = 0; row < _handPoseList->count(); ++row) {
+            if (_handPoseList->item(row)->data(Qt::UserRole).toString() == id) { return true; }
+        }
+        return false;
+    }
+
+    void ReloadMakerController::clearHandPoseSearch()
+    {
+        _handPoseSearch->clear();
     }
 
     void ReloadMakerController::updateHandPoseControls()
     {
         if (!_handPoseDock) { return; }
-        const bool frame = !_loadThread && !_rebuildTimer->isActive() && _clip.valid() &&
-            _renderedWeapon == _selectedWeapon && _renderedWeapon >= 0 &&
-            !_geometrySignature.isEmpty() &&
-            _globalPose.size() == _skeleton.bones.size();
+        const bool frame = handPoseFrameReady();
         const auto* selected = selectedHandPose();
-        const bool gripActive = _partGripDraft && _handPosePages->currentIndex() != 0;
-        _saveHandPose->setEnabled(frame && !_handPosePreview && !gripActive && !_handPoseName->text().trimmed().isEmpty() && !_handPoseAnchors.isEmpty());
-        _previewHandPose->setEnabled(frame && selected);
+        const bool gripActive = partGripPreviewActive();
+        _saveHandPose->setEnabled(canSaveHandPose());
+        _previewHandPose->setEnabled(canPreviewHandPose());
         _restoreHandPose->setEnabled((_handPosePreview.has_value() || gripActive) && !_loadThread);
         const QString status = _handPosePreview
             ? QStringLiteral("PREVIEW: %1 · %2 hand\nFingers only at the current wrist. Restore animation before capturing again.")
@@ -196,196 +186,57 @@ namespace reloadmaker {
             .arg(selected->placement.ownerRecord, selected->notes));
     }
 
-    QString ReloadMakerController::poseRecordKey(std::uint32_t formId) const
+    void ReloadMakerController::showHandEditorPage()
     {
-        const auto* plugin = currentPlugin();
-        if (!plugin || !formId) { return {}; }
-        const auto found = plugin->origins.constFind(formId);
-        if (found != plugin->origins.cend()) {
-            return QStringLiteral("%1:%2").arg(found->plugin).arg(found->objectId,6,16,QLatin1Char('0'));
-        }
-        const auto index = formId >> 24;
-        const QString origin = index < static_cast<std::uint32_t>(plugin->masters.size()) ? plugin->masters[index] : plugin->fileName;
-        return QStringLiteral("%1:%2").arg(origin).arg(formId & 0xffffffU,6,16,QLatin1Char('0'));
+        if (!_handPosePages) { return; }
+        const QSignalBlocker blocker(_handPosePages);
+        _handPosePages->setCurrentIndex(int(_handEditorPage));
     }
 
-    void ReloadMakerController::refreshHandPoseAnchors()
+    void ReloadMakerController::showEditedHand()
     {
-        const QString previous = _handPoseAnchor->currentText();
+        if (!_handPoseSide) { return; }
+        const QSignalBlocker blocker(_handPoseSide);
+        _handPoseSide->setCurrentIndex(_handPoseSide->findData(int(_editedHand)));
+    }
+
+    void ReloadMakerController::showHandPoseAnchors()
+    {
         const QSignalBlocker blocker(_handPoseAnchor);
-        _handPoseAnchor->clear(); _handPoseAnchors.clear();
-        if (!_skeleton.valid() || _renderedWeapon < 0) { updateHandPoseControls(); return; }
-        _handPoseAnchors.append(HandPoseAnchor{{"weapon", "Weapon", "Weapon", {}, {}, {}, {}}, {}});
-        _handPoseAnchor->addItem(QStringLiteral("Weapon · whole weapon"), 0);
-        const auto* model = activeModel();
-        const auto* config = configuration();
-        if (!model || !config) { updateHandPoseControls(); return; }
-        const auto add = [this,model](const QModelIndex& node, const QString& kind, const QString& label,
-                                     const QString& modelPath, const QString& record, const QModelIndex& owner) {
-            if (!node.isValid()) { return; }
-            QStringList path;
-            auto ancestor = node;
-            for (int depth=0; ancestor.isValid() && depth<model->getBlockCount(); ++depth) {
-                path.prepend(model->get<QString>(ancestor,"Name"));
-                if (ancestor == owner) { break; }
-                ancestor = model->getBlockIndex(model->getParent(ancestor));
-            }
-            _handPoseAnchors.append(HandPoseAnchor{{kind,model->get<QString>(node,"Name"),path.join('/'),modelPath,record,{},{}}, node});
-            _handPoseAnchor->addItem(label, _handPoseAnchors.size()-1);
-            _handPoseAnchor->setItemData(_handPoseAnchor->count()-1,
-                QStringLiteral("%1\n%2\n%3").arg(record,modelPath,path.join('/')),Qt::ToolTipRole);
-        };
-        if (_weaponRoot.isValid() && currentWeapon()) {
-            add(_weaponRoot,"installed-part",QStringLiteral("Base weapon model"),currentWeapon()->baseModelPath,poseRecordKey(currentWeapon()->formId),_weaponRoot);
+        _handPoseAnchor->clear();
+        for (int i = 0; i < _handPoseAnchors.size(); ++i) {
+            _handPoseAnchor->addItem(_handPoseAnchors[i].label, i);
+            if (!_handPoseAnchors[i].tooltip.isEmpty()) { _handPoseAnchor->setItemData(i, _handPoseAnchors[i].tooltip, Qt::ToolTipRole); }
         }
-        for (const auto& slot : config->entries()) {
-            const auto root = _partRoots.value(slot.key);
-            const auto* mod = config->mod(config->selected(slot.key));
-            if (root.isValid() && mod) {
-                add(root,"installed-part",QStringLiteral("%1 · %2").arg(slot.label,mod->name),mod->modelPath,poseRecordKey(mod->formId),root);
-            }
-        }
-        for (const auto& binding : _nodeBindings) {
-            if (!binding.weaponPart) { continue; }
-            const auto node = _sceneNodes[binding.nodeIndex];
-            auto ancestor = QModelIndex(node);
-            bool added = false;
-            for (int depth=0; ancestor.isValid() && depth<model->getBlockCount() && !added; ++depth) {
-                for (const auto& slot : config->entries()) {
-                    const auto root = _partRoots.value(slot.key);
-                    if (!root.isValid() || root != ancestor) { continue; }
-                    const auto* mod = config->mod(config->selected(slot.key));
-                    if (mod) {
-                        add(node,"animated-part",QStringLiteral("%1 · %2").arg(_skeleton.bones[binding.boneIndex].name,slot.label),
-                            mod->modelPath,poseRecordKey(mod->formId),root);
-                        added = true;
-                    }
-                    break;
-                }
-                if (!added && ancestor == _weaponRoot && currentWeapon()) {
-                    add(node,"animated-part",QStringLiteral("%1 · base weapon").arg(_skeleton.bones[binding.boneIndex].name),
-                        currentWeapon()->baseModelPath,poseRecordKey(currentWeapon()->formId),_weaponRoot);
-                    added = true;
-                }
-                ancestor = model->getBlockIndex(model->getParent(ancestor));
-            }
-            if (!added && currentWeapon()) {
-                add(node,"animated-part",QStringLiteral("%1 · native rig").arg(_skeleton.bones[binding.boneIndex].name),
-                    currentWeapon()->baseModelPath,poseRecordKey(currentWeapon()->formId),node);
-            }
-        }
-        const int restore = _handPoseAnchor->findText(previous);
-        if (restore >= 0) { _handPoseAnchor->setCurrentIndex(restore); }
-        refreshPartGripChoices();
-        refreshScopeTargets();
-        refreshPartGripList();
-        refreshMechanismChoices();
-        // A rebuilt assembly is re-learned wherever the reload is consumed
-        // (Reload phases or Operate), so part swaps take effect in place.
-        // Queued, not immediate: the rebuild must finish first. The queued
-        // capture counts as busy so MCP clients do not race its revision bump.
-        if(reloadCaptureAllowed()){_reloadCaptureQueued=true;QTimer::singleShot(0,this,&ReloadMakerController::startReloadCapture);}
-        updateHandPoseControls();
+        _handPoseAnchor->setCurrentIndex(_handCaptureAnchor);
     }
 
-    bool ReloadMakerController::sceneNodeWorld(const QModelIndex& node, Transformf& world, QString& error) const
+    void ReloadMakerController::showHandCaptureAnchor()
     {
-        const auto* model = activeModel();
-        if (!model || !node.isValid()) { error = QStringLiteral("The placement part is no longer available"); return false; }
-        auto ancestor = node;
-        world = {};
-        for (int depth=0; ancestor.isValid() && depth<model->getBlockCount(); ++depth) {
-            Transformf local;
-            if (!readNodeTransform(ancestor,local)) { error = QStringLiteral("The selected part has an invalid or zero-scaled frame"); return false; }
-            world = composed(local,world);
-            const int parent = model->getParent(ancestor);
-            if (parent < 0) { return true; }
-            ancestor = model->getBlockIndex(parent);
-        }
-        error = QStringLiteral("Cannot resolve the selected part's complete parent chain");
-        return false;
+        const QSignalBlocker blocker(_handPoseAnchor);
+        _handPoseAnchor->setCurrentIndex(_handCaptureAnchor);
     }
 
-    bool ReloadMakerController::saveCurrentHandPose()
+    void ReloadMakerController::showHandCaptureName()
     {
-        updateHandPoseControls();
-        if (!_saveHandPose->isEnabled()) { return false; }
-        if (_handPoseNotes->toPlainText().size() > 4096) { setStatus(QStringLiteral("Keep pose notes below 4097 characters."),true); return false; }
-        stopPlayback();
-        if (!applyPose(_playbackTime)) { updateHandPoseControls(); return false; }
-        const int selection = _handPoseAnchor->currentData().toInt();
-        if (selection < 0 || selection >= _handPoseAnchors.size()) { return false; }
-        const auto& anchor = _handPoseAnchors[selection];
-        Transformf frame = _globalPose[_weaponBoneIndex];
-        QString error;
-        if (anchor.description.anchorKind != "weapon" && !sceneNodeWorld(anchor.node,frame,error)) { setStatus(error,true); return false; }
-        HandPose pose;
-        pose.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-        pose.name = _handPoseName->text().trimmed(); pose.notes = _handPoseNotes->toPlainText();
-        pose.createdUtc = QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
-        pose.hand = static_cast<PoseHand>(_handPoseSide->currentData().toInt());
-        pose.placement = anchor.description;
-        pose.source = currentPoseSource();
-        if (!captureHandPose(_skeleton,_localPose,_globalPose,frame,pose,error) || !_handPoseLibrary.save(pose,error)) {
-            setStatus(QStringLiteral("Hand pose was not saved: %1").arg(error),true); return false;
-        }
-        _handPoseSearch->clear();
-        refreshHandPoseLibrary();
-        for (int row=0;row<_handPoseList->count();++row) {
-            if (_handPoseList->item(row)->data(Qt::UserRole).toString()==pose.id) { _handPoseList->setCurrentRow(row); break; }
-        }
-        appendDiagnostic(QStringLiteral("SAVED HAND POSE %1 · %2 · %3").arg(pose.name,pose.id,_handPoseLibrary.directory()));
-        _handPoseName->clear();
-        setStatus(QStringLiteral("Saved %1 hand pose “%2”. It will remain available after restart.")
-            .arg(pose.hand==PoseHand::Left ? "left" : "right",pose.name));
-        return true;
+        if (_handPoseName->text() == _handCaptureName) { return; }
+        const QSignalBlocker blocker(_handPoseName);
+        _handPoseName->setText(_handCaptureName);
     }
 
-    QJsonObject ReloadMakerController::currentPoseSource() const
+    void ReloadMakerController::showHandCaptureNotes()
     {
-        QJsonArray mods;
-        for (const auto* mod : configuredObjectMods()) {
-            mods.append(QJsonObject{{"record",poseRecordKey(mod->formId)},{"editorId",mod->editorId},{"name",mod->name},{"model",mod->modelPath}});
+        if (_handPoseNotes->toPlainText() == _handCaptureNotes) { return; }
+        const QSignalBlocker blocker(_handPoseNotes);
+        _handPoseNotes->setPlainText(_handCaptureNotes);
+    }
+
+    void ReloadMakerController::showSelectedHandPose()
+    {
+        const QSignalBlocker blocker(_handPoseList);
+        for (int row = 0; row < _handPoseList->count(); ++row) {
+            if (_handPoseList->item(row)->data(Qt::UserRole).toString() == _selectedHandPoseId) { _handPoseList->setCurrentRow(row); return; }
         }
-        const auto* weapon = currentWeapon();
-        if (!weapon) { return {}; }
-        return {{"weaponName",weapon->name},{"weaponEditorId",weapon->editorId},{"weaponRecord",poseRecordKey(weapon->formId)},
-            {"modifications",mods},{"action",_activeAction},{"animation",_activeAnimationPath},{"baselineAnimation",_stateBaselineAnimationPath},
-            {"timeSeconds",_playbackTime},{"clipTimeSeconds",std::min(_playbackTime,_clip.durationSeconds)},
-            {"body",_armsBody},{"viewMode",motionModeName()},
-            {"approximateTransitions",_approximateTransitions},
-            {"resourceProvider",_libraryMode ? _packageResources.provider(_activeAnimationPath) : _package.sourcePath}};
-    }
-
-    void ReloadMakerController::previewSavedHandPose()
-    {
-        updateHandPoseControls();
-        const auto* selected = selectedHandPose();
-        if (!_previewHandPose->isEnabled() || !selected) { return; }
-        restoreHandPosePreview();
-        auto check = _localPose;
-        QString error;
-        if (!applyHandPoseFingers(_skeleton,*selected,check,error)) { setStatus(error,true); return; }
-        stopPlayback();
-        _handPosePreview = *selected;
-        setArmsShown(true);
-        if (!applyPose(_playbackTime)) { _handPosePreview.reset(); updateHandPoseControls(); return; }
-        updateHandPoseControls();
-        setStatus(QStringLiteral("Previewing “%1”: saved fingers, current wrist. Placement metadata has not been applied.").arg(selected->name));
-    }
-
-    void ReloadMakerController::restoreHandPosePreview()
-    {
-        rememberMagazineGrip();
-        _workshopHandEditing=false;_workshopPicking=false;
-        if(_gripViewport)_gripViewport->setPicking(false);
-        if (!_handPosePreview && !_partGripDraft && !_mechanismPreview) { return; }
-        stopMechanismPreview();
-        _handPosePreview.reset();
-        _partGripDraft.reset();
-        _gripPreviewValid = false;
-        _gripError.clear();
-        if (_clip.valid() && !_loadThread) { (void)applyPose(_playbackTime); }
-        updateHandPoseControls();
+        _handPoseList->setCurrentRow(-1);
     }
 }

@@ -95,7 +95,7 @@ namespace reloadmaker
         if (actionRow < 0) {
             return;
         }
-        if (_workspace == GripsWorkspace && _handPosePages->currentIndex() == 3) {
+        if (_workspace == GripsWorkspace && _handEditorPage == HandEditorPage::GrabLocations) {
             _grabLocationCapturePreview = std::pair{ _activeAnimationPath, _playbackTime };
         }
         selectAction(actionRow);
@@ -202,7 +202,7 @@ namespace reloadmaker
             }
             ReloadTrack track;
             track.anchor = _handPoseAnchors[anchor].description;
-            track.label = _handPoseAnchor->itemText(anchor);
+            track.label = _handPoseAnchors[anchor].label;
             track.surface = geometry.contains(model->getBlockNumber(_sceneNodes[binding.nodeIndex]));
             track.poses.reserve(recipe.frames);
             recipe.tracks.append(std::move(track));
@@ -343,7 +343,7 @@ namespace reloadmaker
         }
         if (simulationWorkspace(_workspace)) {
             prepareSimulation();
-        } else if (_workspace == GripsWorkspace && _handPosePages->currentIndex() == 3) {
+        } else if (_workspace == GripsWorkspace && _handEditorPage == HandEditorPage::GrabLocations) {
             // Learning establishes live part bindings without replacing the
             // frame the user chose for surface picking.
             if (_grabLocationCapturePreview) {

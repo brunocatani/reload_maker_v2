@@ -538,8 +538,7 @@ namespace reloadmaker
         _handPosePreview.reset();
         _fingerDrafts = {};
         _suspendedAuthoringGrip.reset();
-        _handPoseAnchors.clear();
-        _handPoseAnchor->clear();
+        clearHandPoseAnchors();
         _readyLocalPose.clear();
         _readyGlobalPose.clear();
         _activeAction.clear();

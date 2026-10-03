@@ -231,7 +231,7 @@ namespace reloadmaker
         }
         QJsonArray anchors;
         for (int i = 0; i < _handPoseAnchors.size(); ++i) {
-            anchors.append(QJsonObject{ { "index", i }, { "name", _handPoseAnchor->itemText(i) },
+            anchors.append(QJsonObject{ { "index", i }, { "name", _handPoseAnchors[i].label },
                                         { "kind", _handPoseAnchors[i].description.anchorKind } });
         }
         QJsonArray poses;

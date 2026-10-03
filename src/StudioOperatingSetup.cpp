@@ -60,7 +60,7 @@ void ReloadMakerController::showOperatingSetup() {
         configureOperatingSetup({{"operation","save"},{"settings",value}});setWorkspace(OperateWorkspace);status->setText(_simulationError.isEmpty()?"Saved for this assembly. Test the complete stroke in the viewport.":_simulationError);
     }catch(const std::exception& e){status->setText(e.what());}});
     connect(reset,&QPushButton::clicked,dialog,[=,this]{try{if(!_reloadRecipe||_reloadRecipe->id!=recipe)throw std::runtime_error("Source changed; reopen operating setup for the current assembly");configureOperatingSetup({{"operation","reset"}});dialog->close();}catch(const std::exception& e){status->setText(e.what());}});
-    connect(author,&QPushButton::clicked,dialog,[=,this]{setWorkspace(GripsWorkspace);_handPosePages->setCurrentIndex(2);dialog->close();});
+    connect(author,&QPushButton::clicked,dialog,[=,this]{setWorkspace(GripsWorkspace);setHandEditorPage(HandEditorPage::Mechanism);dialog->close();});
     dialog->show();
 }
 }

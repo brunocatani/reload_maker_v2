@@ -71,7 +71,7 @@ namespace reloadmaker
                             const int anchor = _gripReferenceCombo->findData(params["anchor"].toInt(-1));
                             require(pose >= 0 && anchor >= 0, "Unknown saved pose or reference part");
                             setWorkspace(2);
-                            _handPosePages->setCurrentIndex(1);
+                            setHandEditorPage(HandEditorPage::PartGrip);
                             _gripPoseCombo->setCurrentIndex(pose);
                             _gripReferenceCombo->setCurrentIndex(anchor);
                             startPartGrip(params["captured"].toBool(true));
@@ -96,7 +96,7 @@ namespace reloadmaker
                             const int anchor = params["anchor"].toInt(-1);
                             require(anchor > 0 && anchor < _handPoseAnchors.size(), "Choose a concrete part");
                             setWorkspace(GripsWorkspace);
-                            _handPosePages->setCurrentIndex(2);
+                            setHandEditorPage(HandEditorPage::Mechanism);
                             selectWorkshopPart(anchor);
                             return std::nullopt;
                         } });
@@ -116,8 +116,8 @@ namespace reloadmaker
             valid.append({ joint, commands::unitQuaternion(edit["rotation"]) });
         }
         setWorkspace(2);
-        _handPosePages->setCurrentIndex(0);
-        _handPoseSide->setCurrentIndex(_handPoseSide->findData(int(hand)));
+        setHandEditorPage(HandEditorPage::FingerPoses);
+        setEditedHand(hand);
         for (const auto& [joint, rotation] : valid) {
             editFinger(joint, rotation);
         }
@@ -127,16 +127,16 @@ namespace reloadmaker
     {
         const auto hand = handParameter(params, "Choose left or right");
         require(!params["name"].toString().trimmed().isEmpty(), "Name the pose");
-        const int anchor = params.contains("anchor") ? params["anchor"].toInt(-1) : _handPoseAnchor->currentData().toInt();
+        const int anchor = params.contains("anchor") ? params["anchor"].toInt(-1) : _handCaptureAnchor;
         require(anchor >= 0 && anchor < _handPoseAnchors.size(), "Choose a current reference part");
         setWorkspace(2);
-        _handPosePages->setCurrentIndex(0);
-        _handPoseAnchor->setCurrentIndex(_handPoseAnchor->findData(anchor));
-        _handPoseSide->setCurrentIndex(_handPoseSide->findData(int(hand)));
-        _handPoseName->setText(params["name"].toString());
-        _handPoseNotes->setPlainText(params["notes"].toString());
+        setHandEditorPage(HandEditorPage::FingerPoses);
+        setHandCaptureAnchor(anchor);
+        setEditedHand(hand);
+        setHandCaptureName(params["name"].toString());
+        setHandCaptureNotes(params["notes"].toString());
         updateHandPoseControls();
-        require(_saveHandPose->isEnabled(), "The current native hand cannot be captured");
+        require(canSaveHandPose(), "The current native hand cannot be captured");
         require(saveCurrentHandPose(), _lastError);
     }
 

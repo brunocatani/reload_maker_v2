@@ -81,8 +81,7 @@ namespace reloadmaker
         _fingerDrafts = {};
         _suspendedAuthoringGrip.reset();
         _operateSuspendedGrip.reset();
-        _handPoseAnchors.clear();
-        _handPoseAnchor->clear();
+        clearHandPoseAnchors();
         _playing = false;
         _playbackTimer->stop();
         _rebuildTimer->stop();

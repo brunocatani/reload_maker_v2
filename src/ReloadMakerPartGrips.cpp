@@ -179,8 +179,8 @@ namespace reloadmaker {
     {
         const auto* pose=selectedHandPose();
         if(pose) _gripPoseCombo->setCurrentIndex(_gripPoseCombo->findData(pose->id));
-        _gripReferenceCombo->setCurrentIndex(_handPoseAnchor->currentIndex());
-        _handPosePages->setCurrentIndex(1);
+        _gripReferenceCombo->setCurrentIndex(_handCaptureAnchor);
+        setHandEditorPage(HandEditorPage::PartGrip);
     }
     void ReloadMakerController::refreshPartGripLibrary()
     {
@@ -196,8 +196,8 @@ namespace reloadmaker {
         _gripPoseCombo->clear(); _gripReferenceCombo->clear();
         for(const auto& pose:_savedHandPoses) _gripPoseCombo->addItem(QStringLiteral("%1 · %2 hand").arg(pose.name,pose.hand==PoseHand::Left?"Left":"Right"),pose.id);
         for(int i=0;i<_handPoseAnchors.size();++i) {
-            _gripReferenceCombo->addItem(_handPoseAnchor->itemText(i),i);
-            _gripReferenceCombo->setItemData(i,_handPoseAnchor->itemData(i,Qt::ToolTipRole),Qt::ToolTipRole);
+            _gripReferenceCombo->addItem(_handPoseAnchors[i].label,i);
+            _gripReferenceCombo->setItemData(i,_handPoseAnchors[i].tooltip,Qt::ToolTipRole);
         }
         const int found=_gripPoseCombo->findData(poseId); if(found>=0) _gripPoseCombo->setCurrentIndex(found);
         if(anchor>=0 && anchor<_gripReferenceCombo->count()) _gripReferenceCombo->setCurrentIndex(anchor);

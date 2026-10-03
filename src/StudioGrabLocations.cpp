@@ -19,7 +19,7 @@
 namespace reloadmaker {
 bool ReloadMakerController::reloadCaptureAllowed() const noexcept {
     return _reloadWorkspaceActive||simulationWorkspace(_workspace)||
-        (_workspace==GripsWorkspace&&_handPosePages&&_handPosePages->currentIndex()==3);
+        (_workspace==GripsWorkspace&&_handEditorPage==HandEditorPage::GrabLocations);
 }
 OperatingGrabLocations ReloadMakerController::currentGrabLocations() const {
     const auto a=operatingAnchor();if(a<0||!currentWeapon())return {};
@@ -55,7 +55,7 @@ void ReloadMakerController::createGrabLocationsUi(){
 }
 bool ReloadMakerController::openGrabLocations(){
     if(!currentWeapon()||_loadThread){setStatus("Load a weapon first.",true);return false;}
-    rememberMagazineGrip();setWorkspace(GripsWorkspace);_handPosePages->setCurrentIndex(3);prepareGrabLocationFrame();return true;
+    rememberMagazineGrip();setWorkspace(GripsWorkspace);setHandEditorPage(HandEditorPage::GrabLocations);prepareGrabLocationFrame();return true;
 }
 void ReloadMakerController::prepareGrabLocationFrame(){
     if(_loadThread||_reloadCapturing||_reloadCaptureQueued)return;

@@ -404,7 +404,7 @@ namespace reloadmaker
             : QStringLiteral("color:#aeb4ba"));
         _window->statusBar()->showMessage(message);
         if (error) {
-            if(_workshopHint&&_handPosePages&&_handPosePages->currentIndex()==2)_workshopHint->setText(message);
+            if(_workshopHint&&_handEditorPage==HandEditorPage::Mechanism)_workshopHint->setText(message);
             appendDiagnostic(QStringLiteral("ERROR  %1").arg(message));
         }
     }

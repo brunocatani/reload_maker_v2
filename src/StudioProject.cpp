@@ -88,7 +88,7 @@ bool ReloadMakerController::saveSession(const QString& requested) {
         {"body",_armsBody},{"animationSource",animationSourceIdentity()},
         {"animation",_activeAnimationPath},{"seconds",_playbackTime},{"motionMode",_weaponFixedMotion?0:1},
         {"transitions",_approximateTransitions},{"showArms",_armsShown},{"workspace",_workspace},
-        {"hand",_handPoseSide->currentData().toInt()},{"fingerJoint",_fingerJoint->currentIndex()},
+        {"hand",int(_editedHand)},{"fingerJoint",_fingerJointIndex},
         {"selectedHandPose",selectedHandPose()?selectedHandPose()->id:QString()}};
     QJsonObject choices;
     const auto sourcePlugins=selectionPlugins(_selectedWeapon);
@@ -105,7 +105,7 @@ bool ReloadMakerController::saveSession(const QString& requested) {
     record["glockReloadNoExtender"] = _glockNoExtender;
     QJsonObject magazineGrabs;for(auto it=_magazineGrabGrips.cbegin();it!=_magazineGrabGrips.cend();++it)magazineGrabs[it.key()]=it.value();
     record["magazineGrabGrips"]=magazineGrabs;
-    record["handsPage"]=_handPosePages->currentIndex();
+    record["handsPage"]=int(_handEditorPage);
     record["interactionHand"]=_interactionHand==PoseHand::Left?"left":"right";
     QJsonObject sounds;for(auto it=_savedSounds.cbegin();it!=_savedSounds.cend();++it)sounds[it.key()]=soundProfileJson(it.value());
     if(!_soundProfile.weapon.isEmpty())sounds[soundProfileKey()]=soundProfileJson(_soundProfile);
@@ -322,9 +322,9 @@ void ReloadMakerController::restoreSessionSelection() {
         HandPose pose; if (decodeHandPose(QJsonDocument(fingers[i].toObject()).toJson(),pose,error)) _fingerDrafts[i] = pose;
     }
     if(record.contains("handPreview")){HandPose v;if(decodeHandPose(QJsonDocument(record["handPreview"].toObject()).toJson(),v,error))_handPosePreview=v;}
-    _handPoseSide->setCurrentIndex(std::max(0,_handPoseSide->findData(record["hand"].toInt(int(PoseHand::Right)))));
-    _fingerJoint->setCurrentIndex(std::clamp(record["fingerJoint"].toInt(),0,14));
-    for(int i=0;i<_handPoseList->count();++i)if(_handPoseList->item(i)->data(Qt::UserRole).toString()==record["selectedHandPose"].toString())_handPoseList->setCurrentRow(i);
+    setEditedHand(record["hand"].toInt(int(PoseHand::Right))==int(PoseHand::Left)?PoseHand::Left:PoseHand::Right);
+    setFingerJoint(std::clamp(record["fingerJoint"].toInt(),0,14));
+    if(handPoseListed(record["selectedHandPose"].toString()))selectHandPose(record["selectedHandPose"].toString());
     if (record.contains("mechanismDraft")) {
         PartMechanism part; if (decodeMechanism(QJsonDocument(record["mechanismDraft"].toObject()).toJson(),part,error)) { _mechanismDraft=part;displayMechanism(); }
     }
@@ -339,7 +339,7 @@ void ReloadMakerController::restoreSessionSelection() {
                 _gripPoseCombo->setCurrentIndex(_gripPoseCombo->findData(grip.sourcePoseId));
                 _gripReferenceCombo->setCurrentIndex(anchor);
                 _editingMagazine=magazineGrabAnchor(grip.pose.placement)>=0;
-                if(record["workspace"].toInt()==GripsWorkspace)_handPosePages->setCurrentIndex(1);
+                if(record["workspace"].toInt()==GripsWorkspace)setHandEditorPage(HandEditorPage::PartGrip);
                 showPartGripValues();
             }
         }
@@ -350,7 +350,7 @@ void ReloadMakerController::restoreSessionSelection() {
     setWorkspace(validWorkspace(workspace)?workspace:OperateWorkspace);
     if(record.contains("scopeSelection")){const auto model=record["scopeSelection"].toString();for(int i=0;i<_scopePart->count();++i){
         const auto anchor=_scopePart->itemData(i).toInt();if(anchor>0&&anchor<_handPoseAnchors.size()&&scopeModelKey(_handPoseAnchors[anchor].description.ownerModel)==model){_scopePart->setCurrentIndex(i);break;}}}
-    if(workspace==GripsWorkspace&&record.contains("handsPage"))_handPosePages->setCurrentIndex(std::clamp(record["handsPage"].toInt(),0,3));
+    if(workspace==GripsWorkspace&&record.contains("handsPage"))setHandEditorPage(static_cast<HandEditorPage>(std::clamp(record["handsPage"].toInt(),0,3)));
     if(record.contains("camera")&&!_window->getGLView()->studioRestoreCamera(record["camera"].toObject()))appendDiagnostic("PROJECT: invalid saved camera ignored.");
     if (record.contains("reloadDraft")) {
         // Native recapture establishes live node bindings before restoring the
@@ -358,7 +358,7 @@ void ReloadMakerController::restoreSessionSelection() {
         _pendingReloadDraft = record["reloadDraft"].toObject();
     }
     ++_revision;
-    if(workspace==GripsWorkspace&&_handPosePages->currentIndex()==3)prepareGrabLocationFrame();
+    if(workspace==GripsWorkspace&&_handEditorPage==HandEditorPage::GrabLocations)prepareGrabLocationFrame();
     setStatus(error.isEmpty() ? "Project restored · "+QFileInfo(_sessionPath).fileName() : "Project restored with a grip warning: "+error,!error.isEmpty());
 }
 }

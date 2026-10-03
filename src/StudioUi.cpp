@@ -382,7 +382,7 @@ bool ReloadMakerController::validWorkspace(int workspace) {
 }
 
 bool ReloadMakerController::mechanismPageActive() const {
-    return _workspace == GripsWorkspace && _handPosePages && _handPosePages->currentIndex() == 2;
+    return _workspace == GripsWorkspace && _handEditorPage == HandEditorPage::Mechanism;
 }
 
 void ReloadMakerController::setWorkspace(int workspace) {

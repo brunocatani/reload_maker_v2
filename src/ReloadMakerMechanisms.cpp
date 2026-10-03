@@ -61,7 +61,7 @@ namespace reloadmaker {
             for(int i=0;i<_mechanismDraft->stages.size();++i){const auto& s=_mechanismDraft->stages[i];_mechanismStages->addItem(QStringLiteral("%1. %2 ↔ %3 · %4 %5 [%6 → %7]").arg(i+1).arg(s.forwardName,s.reverseName,s.rotation?"Rotate":"Slide",QStringList{"X","Y","Z"}[s.axis]).arg(s.from).arg(s.to));}
             if(!_mechanismDraft->stages.isEmpty())_mechanismStages->setCurrentRow(std::clamp(selected,0,int(_mechanismDraft->stages.size())-1));
             QString error;const int master=resolveMechanismAnchor(_mechanismDraft->anchor,error);const int root=master>=0?_sceneNodes.indexOf(_handPoseAnchors[master].node):-1;
-            for(int i=1;i<_handPoseAnchors.size();++i){if(i==master)continue;const auto& anchor=_handPoseAnchors[i];auto* item=new QListWidgetItem(_handPoseAnchor->itemText(i),_mechanismFollowers);item->setData(Qt::UserRole,i);item->setFlags(item->flags()|Qt::ItemIsUserCheckable);item->setCheckState(Qt::Unchecked);
+            for(int i=1;i<_handPoseAnchors.size();++i){if(i==master)continue;const auto& anchor=_handPoseAnchors[i];auto* item=new QListWidgetItem(_handPoseAnchors[i].label,_mechanismFollowers);item->setData(Qt::UserRole,i);item->setFlags(item->flags()|Qt::ItemIsUserCheckable);item->setCheckState(Qt::Unchecked);
                 MechanismScenePlan plan;QString reason;if(root<0||!compileMechanismScene(_assemblyNodes,_nodeBindings,{root,int(_sceneNodes.indexOf(anchor.node))},plan,reason)){item->setFlags(item->flags()&~Qt::ItemIsEnabled);item->setText(item->text()+" · inherited / overlapping");}
                 item->setData(Qt::UserRole+1,item->text());
                 for(const auto& f:_mechanismDraft->followers)if(sameGripAnchor(f.anchor,anchor.description))item->setCheckState(Qt::Checked);

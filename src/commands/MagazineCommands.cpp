@@ -68,7 +68,7 @@ namespace reloadmaker
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
                             const int index = _gripPoseCombo->findData(params["poseId"].toString());
                             require(index >= 0, "Unknown named finger pose");
-                            require(_workspace == GripsWorkspace && _handPosePages->currentIndex() == 1,
+                            require(_workspace == GripsWorkspace && _handEditorPage == HandEditorPage::PartGrip,
                                     "Configure the magazine first");
                             _gripPoseCombo->setCurrentIndex(index);
                             require(_gripCurrentStart->isEnabled(), "Wait for the magazine editor");

@@ -80,7 +80,7 @@ namespace reloadmaker
     // simulation holds a part.
     bool ReloadMakerController::applyFingerOverrides()
     {
-        const bool editingFingers = _workspace == 2 && _handPosePages->currentIndex() == 0;
+        const bool editingFingers = _workspace == 2 && _handEditorPage == HandEditorPage::FingerPoses;
         if (editingFingers && !_mechanismPreview) {
             for (const auto& draft : _fingerDrafts) {
                 if (draft && !applyHandPoseFingers(_skeleton, *draft, _localPose, _poseError)) {
@@ -116,7 +116,7 @@ namespace reloadmaker
         if (!applyMagazineGrabPose()) {
             return false;
         }
-        const bool gripWorkspace = (_workspace == 2 && _handPosePages->currentIndex() == 1) || mechanismPageActive() ||
+        const bool gripWorkspace = (_workspace == 2 && _handEditorPage == HandEditorPage::PartGrip) || mechanismPageActive() ||
                                    (_reloadWorkspaceActive && _reloadHeld);
         bool showGrip = gripWorkspace && _partGripDraft;
         if (showGrip && _mechanismPreview) {

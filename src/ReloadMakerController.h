@@ -163,6 +163,9 @@ namespace reloadmaker
         enum Workspace : int { GripsWorkspace = 2, PhasesWorkspace = 4, OperateWorkspace = 5, SoundsWorkspace = 6, CollisionsWorkspace = 7, ScopesWorkspace = 8 };
         static bool simulationWorkspace(int value) { return value==OperateWorkspace||value==SoundsWorkspace; }
         static constexpr int kLoadoutPage = 0, kReloadPage = 1;
+        // Hands editor pages, in tab order; saved in projects as handsPage.
+        enum class HandEditorPage : int { FingerPoses = 0, PartGrip = 1, Mechanism = 2, GrabLocations = 3 };
+        static constexpr int kPoseNameLength = 128;
         void createSourceBar(QToolBar* bar);
         void refreshSourceBar();
         void refreshWeaponPicker();
@@ -753,6 +756,43 @@ namespace reloadmaker
         [[nodiscard]] const HandPose* selectedHandPose() const;
         [[nodiscard]] bool sceneNodeWorld(const QModelIndex& node, Transformf& world, QString& error) const;
         [[nodiscard]] QString poseRecordKey(std::uint32_t formId) const;
+        // Hands editor document (src/areas/hands).
+        HandEditorPage _handEditorPage{ HandEditorPage::FingerPoses };
+        PoseHand _editedHand{ PoseHand::Right };
+        int _fingerJointIndex{ 0 };
+        int _handCaptureAnchor{ -1 };
+        QString _handCaptureName;
+        QString _handCaptureNotes;
+        QString _selectedHandPoseId;
+        void setHandEditorPage(HandEditorPage page);
+        void handEditorPageChanged();
+        void setEditedHand(PoseHand hand);
+        void setFingerJoint(int joint);
+        void setHandCaptureAnchor(int anchor);
+        void setHandCaptureName(const QString& name);
+        void setHandCaptureNotes(const QString& notes);
+        void selectHandPose(const QString& id);
+        void clearHandPoseAnchors();
+        [[nodiscard]] bool handPoseFrameReady() const;
+        [[nodiscard]] bool partGripPreviewActive() const;
+        [[nodiscard]] bool canSaveHandPose() const;
+        [[nodiscard]] bool canPreviewHandPose() const;
+        bool collectHandPoseAnchors();
+        void addAnimatedPartAnchor(const ScenePoseBinding& binding);
+        void addHandPoseAnchor(const QModelIndex& node, const QString& kind, const QString& label, const QString& modelPath,
+                               const QString& record, const QModelIndex& owner);
+        [[nodiscard]] HandPose captureFingerDraft(PoseHand hand) const;
+        // Hands editor views.
+        void showHandEditorPage();
+        void showEditedHand();
+        void showFingerJoint();
+        void showHandPoseAnchors();
+        void showHandCaptureAnchor();
+        void showHandCaptureName();
+        void showHandCaptureNotes();
+        void showSelectedHandPose();
+        [[nodiscard]] bool handPoseListed(const QString& id) const;
+        void clearHandPoseSearch();
         void startLibraryLoad();
         void installLibrary(LoadOrderLibrary& library);
         void setLoading(bool loading, const QString& message = {});
@@ -866,9 +906,13 @@ namespace reloadmaker
         QListWidget* _handPoseList{nullptr};
         QPlainTextEdit* _handPoseDetails{nullptr};
         QLabel* _handPoseStatus{nullptr};
+        // A reference part a hand can be placed against, with its label and
+        // tooltip as every part list shows them.
         struct HandPoseAnchor {
             HandPosePlacement description;
             QPersistentModelIndex node;
+            QString label;
+            QString tooltip;
         };
         QVector<HandPoseAnchor> _handPoseAnchors;
         HandPoseLibrary _handPoseLibrary{HandPoseLibrary::defaultDirectory()};

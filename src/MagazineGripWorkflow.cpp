@@ -63,7 +63,7 @@ bool ReloadMakerController::editMagazineGrip(const QString& savedId) {
         _simulation.magazine.drop();_simulation.magazine.grab(*_magazineRail);
         _magazineFitPreview=true;
     }
-    _editingMagazine=true;setWorkspace(GripsWorkspace);_handPosePages->setCurrentIndex(1);
+    _editingMagazine=true;setWorkspace(GripsWorkspace);setHandEditorPage(HandEditorPage::PartGrip);
     stopPlayback();
     if(fit) {
         if(!loadGripRecord(*fit))return false;

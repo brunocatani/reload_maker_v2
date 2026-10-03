@@ -88,7 +88,7 @@ void ReloadMakerController::refreshScopeTargets() {
     if(!_scopePart)return;const auto previous=_scopePart->currentText();const QSignalBlocker block(_scopePart);_scopePart->clear();int preferred=-1;
     for(int i=1;i<_handPoseAnchors.size();++i){const auto& anchor=_handPoseAnchors[i];
         if(anchor.description.anchorKind!="installed-part"||anchor.node==_weaponRoot||anchor.description.ownerModel.isEmpty())continue;
-        const auto name=_handPoseAnchor->itemText(i);_scopePart->addItem(name,i);
+        const auto name=_handPoseAnchors[i].label;_scopePart->addItem(name,i);
         if(name.contains("sight",Qt::CaseInsensitive)||name.contains("scope",Qt::CaseInsensitive))preferred=_scopePart->count()-1;
     }
     const int old=_scopePart->findText(previous);_scopePart->setCurrentIndex(old>=0?old:preferred);

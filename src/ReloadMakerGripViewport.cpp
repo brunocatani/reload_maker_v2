@@ -18,11 +18,11 @@ namespace reloadmaker {
     void ReloadMakerController::createGripViewport()
     {
         _gripViewport=new GripViewport(_window->getGLView(),this);
-        _gripViewport->beginPick=[this](){if(_handPosePages->currentIndex()==3)beginGrabLocationPick();else if(_handPosePages->currentIndex()==2)beginWorkshopPick(_workshopHandEditing);else beginGripSurfacePick();};
-        _gripViewport->surfacePicked=[this](QPointF point){if(_handPosePages->currentIndex()==3)pickGrabLocation(point);else if(_handPosePages->currentIndex()==2)pickWorkshopPart(point);else pickGripSurface(point);};
-        _gripViewport->edited=[this](const Transformf& world){if(_handPosePages->currentIndex()==3)editGrabLocationWorld(world);else editGripWorld(world);};
-        _gripViewport->save=[this](){if(_handPosePages->currentIndex()==3)saveGrabLocations();else if(_handPosePages->currentIndex()==2)saveWorkshop();else (void)savePartGrip();};
-        _gripViewport->end=[this](){_gripViewport->setPicking(false);if(_handPosePages->currentIndex()==3){_pickingGrabLocation=false;setWorkspace(OperateWorkspace);}else if(_handPosePages->currentIndex()==2)editWorkshopHand(false);else restoreHandPosePreview();};
+        _gripViewport->beginPick=[this](){if(_handEditorPage==HandEditorPage::GrabLocations)beginGrabLocationPick();else if(_handEditorPage==HandEditorPage::Mechanism)beginWorkshopPick(_workshopHandEditing);else beginGripSurfacePick();};
+        _gripViewport->surfacePicked=[this](QPointF point){if(_handEditorPage==HandEditorPage::GrabLocations)pickGrabLocation(point);else if(_handEditorPage==HandEditorPage::Mechanism)pickWorkshopPart(point);else pickGripSurface(point);};
+        _gripViewport->edited=[this](const Transformf& world){if(_handEditorPage==HandEditorPage::GrabLocations)editGrabLocationWorld(world);else editGripWorld(world);};
+        _gripViewport->save=[this](){if(_handEditorPage==HandEditorPage::GrabLocations)saveGrabLocations();else if(_handEditorPage==HandEditorPage::Mechanism)saveWorkshop();else (void)savePartGrip();};
+        _gripViewport->end=[this](){_gripViewport->setPicking(false);if(_handEditorPage==HandEditorPage::GrabLocations){_pickingGrabLocation=false;setWorkspace(OperateWorkspace);}else if(_handEditorPage==HandEditorPage::Mechanism)editWorkshopHand(false);else restoreHandPosePreview();};
         _gripViewport->teachingGrab=[this](int axis,bool rotation){beginTeachingDrag(axis,rotation);};
         _gripViewport->teachingTool=[this](bool rotation){_teachingRotation=rotation;_gripViewport->setRotationTool(rotation);updateMechanismControls();updateGripViewport();};
         _gripViewport->test=[this](){beginMechanismPreview();};
@@ -39,14 +39,10 @@ namespace reloadmaker {
         _gripViewport->simulationCancel=[this](){cancelMechanismGrab();};
         _gripViewport->simulationReset=[this](){if(!_mechanismPreview)return;_mechanismTimer->stop();_mechanismState={};_mechanismHeld=false;_mechanismDirection=1;(void)applyPose(_playbackTime);updateMechanismControls();updateGripViewport();};
         _gripViewport->simulationStop=[this](){beginMechanismTeaching();};
-        connect(_handPosePages,&QTabWidget::currentChanged,this,[this](int page){
-            if(page!=3){_pickingGrabLocation=false;_gripViewport->setPicking(false);}else prepareGrabLocationFrame();
-            if(page!=2){_workshopPicking=false;_workshopHandEditing=false;_gripViewport->setPicking(false);if(_mechanismPreview){stopMechanismPreview();if(_clip.valid())(void)applyPose(_playbackTime);}}
-            updatePartGripControls();
-            // Finger, grip and mechanism previews depend on the visible tab.
-            if(_clip.valid()&&!_reloadCapturing)(void)applyPose(_playbackTime);
-            refreshFingerEditor();updateGripViewport();
-        });
+        // The pages were assembled before this connection; the editor starts
+        // on the page they left current.
+        _handEditorPage=static_cast<HandEditorPage>(_handPosePages->currentIndex());
+        connect(_handPosePages,&QTabWidget::currentChanged,this,[this](int page){setHandEditorPage(static_cast<HandEditorPage>(page));});
         connect(_handPoseDock,&QDockWidget::visibilityChanged,this,[this](){updateGripViewport();});
         updateGripViewport();
     }
@@ -54,9 +50,9 @@ namespace reloadmaker {
     {
         updateScopeViewport();
         if(!_gripViewport) return;
-        const bool workshop=_handPosePages->currentIndex()==2;
-        const bool points=_handPosePages->currentIndex()==3;_gripViewport->setPointAuthoring(points);
-        const bool active=!_reloadWorkspaceActive && (_handPosePages->currentIndex()==1 || workshop || points) && _handPoseDock->isVisible() && _handPoseDock->widget()->isEnabled() && !_loadThread &&
+        const bool workshop=_handEditorPage==HandEditorPage::Mechanism;
+        const bool points=_handEditorPage==HandEditorPage::GrabLocations;_gripViewport->setPointAuthoring(points);
+        const bool active=!_reloadWorkspaceActive && (_handEditorPage==HandEditorPage::PartGrip || workshop || points) && _handPoseDock->isVisible() && _handPoseDock->widget()->isEnabled() && !_loadThread &&
             !_rebuildTimer->isActive() && _clip.valid() && _renderedWeapon==_selectedWeapon;
         _gripViewport->configure(active,points?operatingAnchor()>=0:workshop?_workshopPick->isEnabled():_gripPick->isEnabled(),points?operatingAnchor()>=0:workshop?_mechanismSave->isEnabled():_gripSave->isEnabled());
         _gripViewport->setWorkshop(workshop,_mechanismDraft?_mechanismDraft->name:QString(),_workshopHandEditing);
@@ -104,7 +100,7 @@ namespace reloadmaker {
             showPartGripValues(); (void)applyPose(_playbackTime);
         }
         if(!_partGripDraft) return;
-        _handPosePages->setCurrentIndex(1); updateGripViewport(); _gripViewport->setPicking(true);
+        setHandEditorPage(HandEditorPage::PartGrip); updateGripViewport(); _gripViewport->setPicking(true);
         _gripStatus->setText(QStringLiteral("Click a weapon surface to place the palm and identify its part. Multi-bone surfaces need an explicit Reference part choice. Esc cancels picking."));
     }
     void ReloadMakerController::pickGripSurface(QPointF point)
@@ -204,7 +200,7 @@ namespace reloadmaker {
         const auto reference=_partGripFrame.weapon?_globalPose[_weaponBoneIndex]:composed(_boundGlobalPose.at(_partGripFrame.binding),_partGripFrame.bridge);
         Transformf inverse; if(!invertUniformTransform(reference,inverse)) return;
         _partGripDraft->pose.placement.handInAnchor=composed(inverse,world);
-        if(_handPosePages->currentIndex()==2)_workshopGripDirty=true;
+        if(_handEditorPage==HandEditorPage::Mechanism)_workshopGripDirty=true;
         showPartGripValues(); (void)applyPose(_playbackTime); updateHandPoseControls();
     }
 }

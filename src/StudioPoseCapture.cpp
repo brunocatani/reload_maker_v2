@@ -1,40 +1,14 @@
 #include "ReloadMakerController.h"
 #include "ReloadBundle.h"
-#include <QCheckBox>
 #include <QComboBox>
 #include <QDateTime>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSignalBlocker>
-#include <QTabWidget>
 #include <QUuid>
 #include <algorithm>
 
 namespace reloadmaker {
-bool ReloadMakerController::authorReloadGrips() {
-    if(_loadThread||_reloadCapturing||!_simulationRig||!_reloadRecipe) {
-        setStatus("Wait for the configured reload to finish preparing.",true);return false;
-    }
-    const auto magazine=_reloadRecipe->tracks[_simulationRig->magazine].anchor;
-    const float seconds=_simulationActive&&_simulation.action==SimulationAction::Reload?_simulation.seconds:0.f;
-    int anchor=-1;
-    for(int i=0;i<_handPoseAnchors.size();++i)if(sameMechanismPart(_handPoseAnchors[i].description,magazine)) {
-        if(anchor>=0){setStatus("The magazine frame is ambiguous in this assembly.",true);return false;}anchor=i;
-    }
-    if(anchor<0){setStatus("The configured magazine has no capture frame.",true);return false;}
-    setWorkspace(2);restoreHandPosePreview();_handPosePages->setCurrentIndex(0);
-    setWeaponFixedMotion(true);
-    if(!selectSimulationClip(false,true)){setStatus(_simulationError,true);return false;}
-    _playbackTime=std::min(seconds,playbackDuration());
-    _handPoseAnchor->setCurrentIndex(_handPoseAnchor->findData(anchor));
-    _handPoseSide->setCurrentIndex(_handPoseSide->findData(int(PoseHand::Left)));
-    setArmsShown(true);
-    if(!applyPose(_playbackTime))return false;
-    updateTimelineText();refreshFingerEditor();updateHandPoseControls();
-    setStatus("Weapon fixed. Scrub to the hand pose you want and save it. Select a saved pose to place it on a weapon part.");
-    return true;
-}
-
 void ReloadMakerController::applySavedPoseToPart() {
     _editingMagazine=false;
     const auto* pose=selectedHandPose();
