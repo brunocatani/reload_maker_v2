@@ -900,6 +900,13 @@ namespace reloadmaker
         void showMechanismChoices();
         void showSelectedMechanism();
         void showMechanismHandShownOnGrab();
+        // Grab locations document (src/areas/grabpoints).
+        int _selectedGrabLocation{ -1 };
+        void selectGrabLocation(int index);
+        void normalizeGrabLocationSelection();
+        void editGrabLocationFields(OperatingGrabLocations& g, int i, const QJsonObject& p) const;
+        void showSelectedGrabLocation();
+        void showGrabLocationStatus(const QString& text);
         void startLibraryLoad();
         void installLibrary(LoadOrderLibrary& library);
         void setLoading(bool loading, const QString& message = {});

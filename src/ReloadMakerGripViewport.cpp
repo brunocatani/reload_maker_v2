@@ -68,7 +68,7 @@ namespace reloadmaker {
         // Clicking the model selects parts on the loadout page, unless the grip tools own the viewport.
         if(_partPicker) _partPicker->setActive(_pages->currentIndex()==kLoadoutPage && !active);
         if(points){
-            const auto g=currentGrabLocations();const int i=_grabLocationList?_grabLocationList->currentRow():-1,a=operatingAnchor();
+            const auto g=currentGrabLocations();const int i=_grabLocationList?_selectedGrabLocation:-1,a=operatingAnchor();
             Transformf reference;QString error;
             if(i<0||i>=g.points.size()||a<0||!sceneNodeWorld(_handPoseAnchors[a].node,reference,error)){_gripViewport->clearGrip();return;}
             const auto target=composed(reference,Transformf{g.points[i].point});_gripViewport->setGrip(reference,target,{},target.translation);return;
