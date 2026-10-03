@@ -13,6 +13,7 @@
 #include <QListWidget>
 #include <QLocalServer>
 #include <QLocalSocket>
+#include <QScopedValueRollback>
 #include <QStatusBar>
 #include <QThread>
 #include <QTimer>
@@ -73,26 +74,41 @@ namespace reloadmaker
         // current state instead of reusing selections from an earlier scene.
         // Timer-driven view refreshes (for example the highlighted sound cue
         // during playback) are not edits.
-        const auto widgetChanged = [this] {
-            if (!_viewRefresh) {
-                ++_revision;
+        const auto widgetChanged = [this](const QObject* widget) {
+            if (_viewRefresh) {
+                return;
+            }
+            ++_revision;
+            if (!_executingCommand) {
+                _revisionChangedOutside = QStringLiteral("%1 \"%2\"").arg(widget->metaObject()->className(), widget->objectName());
             }
         };
         for (auto* widget : _window->findChildren<QComboBox*>()) {
-            connect(widget, qOverload<int>(&QComboBox::currentIndexChanged), this, widgetChanged);
+            connect(widget, qOverload<int>(&QComboBox::currentIndexChanged), this, [widgetChanged, widget] { widgetChanged(widget); });
         }
         for (auto* widget : _window->findChildren<QDoubleSpinBox*>()) {
-            connect(widget, qOverload<double>(&QDoubleSpinBox::valueChanged), this, widgetChanged);
+            connect(widget, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [widgetChanged, widget] { widgetChanged(widget); });
         }
         for (auto* widget : _window->findChildren<QLineEdit*>()) {
-            connect(widget, &QLineEdit::textEdited, this, widgetChanged);
+            connect(widget, &QLineEdit::textEdited, this, [widgetChanged, widget] { widgetChanged(widget); });
         }
         for (auto* widget : _window->findChildren<QCheckBox*>()) {
-            connect(widget, &QCheckBox::toggled, this, widgetChanged);
+            connect(widget, &QCheckBox::toggled, this, [widgetChanged, widget] { widgetChanged(widget); });
         }
         for (auto* widget : _window->findChildren<QListWidget*>()) {
-            connect(widget, &QListWidget::currentRowChanged, this, widgetChanged);
+            connect(widget, &QListWidget::currentRowChanged, this, [widgetChanged, widget] { widgetChanged(widget); });
         }
+    }
+
+    QString ReloadMakerController::staleRevisionMessage() const
+    {
+        const QString message = QStringLiteral("Stale document revision; read state again");
+        if (_revision == _revisionAfterCommand) {
+            return message;
+        }
+        const QString source = _revisionChangedOutside.isEmpty() ? QStringLiteral("an unattributed view or viewport change")
+                                                                  : _revisionChangedOutside;
+        return message + QStringLiteral(" (changed outside a command by %1)").arg(source);
     }
 
     // Requests are newline-delimited JSON objects; every request gets exactly one
@@ -130,6 +146,9 @@ namespace reloadmaker
         } catch (const std::exception& error) {
             response = { { "ok", false }, { "error", QString::fromUtf8(error.what()) } };
         }
+        // The caller now holds this revision; later changes happen outside commands.
+        _revisionAfterCommand = _revision;
+        _revisionChangedOutside.clear();
         // Saved mechanisms/recipes own their revision field. Do not overwrite it
         // with the live document generation.
         response["documentRevision"] = double(_revision);
@@ -150,10 +169,11 @@ namespace reloadmaker
         }
         const auto* command = _commands.find(method);
         require(command != nullptr, "Unknown studio command: " + method);
-        if (command->access == CommandAccess::Edit && request.contains("expectedRevision")) {
-            require(request["expectedRevision"].toDouble() == double(_revision),
-                    "Stale document revision; read state again");
+        const bool stale = request.contains("expectedRevision") && request["expectedRevision"].toDouble() != double(_revision);
+        if (command->access == CommandAccess::Edit && stale) {
+            require(false, staleRevisionMessage());
         }
+        const QScopedValueRollback<bool> executing(_executingCommand, true);
         if (command->gate == CommandGate::WhenIdle) {
             requireIdle();
             _lastError.clear();

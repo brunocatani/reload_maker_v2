@@ -15,6 +15,7 @@ def edit(method,**params):
         try:return command(method,params,command('state')['revision'])
         except RuntimeError as error:
             if 'Stale document revision' not in str(error) or attempt==4:raise
+            print('retrying after:',error,flush=True)
 def op(operation,**params):return edit('simulate',operation=operation,**params)
 def ready():
     deadline=time.monotonic()+45

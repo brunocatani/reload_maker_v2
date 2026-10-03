@@ -23,6 +23,7 @@ def edit(method, **params):
         except RuntimeError as error:
             if 'Stale document revision' not in str(error) or attempt == 4:
                 raise
+            print('retrying after:', error, flush=True)
 
 
 def ready(method='state'):

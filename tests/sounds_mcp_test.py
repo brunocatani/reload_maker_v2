@@ -9,6 +9,7 @@ def edit(m,**p):
         try:return command(m,p,command('state')['revision'])
         except RuntimeError as e:
             if 'Stale document revision' not in str(e) or attempt==4:raise
+            print('retrying after:',e,flush=True)
 def ready():
     end=time.monotonic()+60
     while time.monotonic()<end:

@@ -474,6 +474,13 @@ namespace reloadmaker
         // simulated time). Widget changes made then are not document edits and
         // do not advance _revision.
         bool _viewRefresh{false};
+        // Where the revision moved between commands, so a stale request can
+        // say what changed: a widget the user (or a deferred update) changed,
+        // or an unattributed bump outside the command pipe.
+        bool _executingCommand{false};
+        quint64 _revisionAfterCommand{0};
+        QString _revisionChangedOutside;
+        [[nodiscard]] QString staleRevisionMessage() const;
         QJsonObject _pendingSession;
         QJsonObject _pendingReloadDraft;
         QString _sessionPath;
