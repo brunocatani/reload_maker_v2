@@ -17,6 +17,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSet>
 #include <QSignalBlocker>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -188,5 +189,37 @@ void ReloadMakerController::updateSimulationControls() {
     if(!_simulationAmmo.valid())_simulationParts->setText(_simulationParts->text()+"\n\nAmmunition: "+_simulationAmmo.error);
     if(_magazineGrabGrip)_simulationParts->setText(_simulationParts->text()+"\n\nMAGAZINE GRAB · "+_magazineGrabGrip->pose.name);
     if(!_magazineGrabError.isEmpty())_simulationParts->setText(_simulationParts->text()+"\n\nMagazine hand: "+_magazineGrabError);
+}
+void ReloadMakerController::updateInteractionGripUi() {
+    const bool free=_simulation.action==SimulationAction::Idle&&!_simulation.magazine.carried();
+    for(auto* picker:{_interactionHandPicker,_magazineHandPicker})if(picker){const QSignalBlocker block(picker);picker->setCurrentIndex(int(_interactionHand));picker->setEnabled(!isGlockConfiguration()&&free&&!_loadThread&&!_reloadCapturing);}
+    const auto& fingers=_operatingFingers[int(_interactionHand)];
+    if(_operatingGripStatus)_operatingGripStatus->setText(!_operatingFingerError.isEmpty()?_operatingFingerError:fingers?
+        "Fingers only · "+fingers->name+(fingers->source["operatingMirrored"].toBool()?" · mirrored for this hand":"")+"\nWrist position and angle stay live.":"No operating finger pose assigned. Select a saved pose below.");
+    if(_operatingFingerPicker) {
+        const QSignalBlocker block(_operatingFingerPicker);
+        _operatingFingerPicker->setCurrentIndex(fingers?_operatingFingerPicker->findData(fingers->id):0);
+        _operatingFingerPicker->setEnabled(free&&_simulationActive);
+    }
+    _operatingHover=false;if(_simulationDrive)_simulationDrive->setMarkers({});refreshGrabLocationsUi();
+}
+// Saved hand poses, then grips assigned as operating fingers, once each.
+void ReloadMakerController::showOperatingFingerChoices() {
+    if(_operatingFingerPicker) {
+        const QSignalBlocker block(_operatingFingerPicker);_operatingFingerPicker->clear();
+        _operatingFingerPicker->addItem("Choose operating finger pose…");
+        QSet<QString> ids;
+        const auto add=[&](const HandPose& p){if(ids.contains(p.id))return;ids.insert(p.id);_operatingFingerPicker->addItem(p.name+(p.hand==PoseHand::Left?" · left":" · right"),p.id);};
+        for(const auto& p:_savedHandPoses)add(p);
+        for(const auto& g:_partGrips)if(_savedOperatingGrips.values().contains(g.pose.id))add(g.pose);
+    }
+}
+// The magazine grip Grab Magazine uses: the native hand, or the active fit.
+void ReloadMakerController::showMagazineGrabGrip(const PartGrip* selected) {
+    const QSignalBlocker block(_simulationMagazineGrip);
+    _simulationMagazineGrip->clear();_simulationMagazineGrip->addItem("Magazine grip · native hand",QString());
+    if(!selected)return;
+    _simulationMagazineGrip->addItem(selected->pose.name+" · "+(selected->pose.hand==PoseHand::Left?"Left":"Right"),selected->pose.id);
+    _simulationMagazineGrip->setCurrentIndex(1);
 }
 }

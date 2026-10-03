@@ -250,4 +250,20 @@ namespace reloadmaker {
         // Merely displaying rounded Euler values never overwrites the saved matrix.
         updatePartGripControls();
     }
+    void ReloadMakerController::updateMagazineGripUi() {
+        if(!_magazineFitStatus)return;
+        const auto state=magazineEditorState();
+        _editMagazineGrip->setEnabled(!state.isEmpty()&&!_loadThread&&!_reloadCapturing);
+        const auto weapon=currentWeapon()?poseRecordKey(currentWeapon()->formId).toLower():QString();
+        _useDefaultMagazineGrip->setEnabled(!state.isEmpty()&&(_magazineGrabDefaults.contains(handAssignmentKey(weapon,_interactionHand))||_magazineGrabDefaults.contains(weapon)));
+        if(state.isEmpty()){_magazineFitStatus->setText("Select a magazine in Loadout to configure its hand.");return;}
+        const auto assignment=state["assignment"].toString();
+        const auto source=assignment=="custom"?"Custom fit":assignment=="default"?"Weapon default":"No saved fit";
+        QString text=state["magazine"].toString()+"\n"+source;
+        if(!state["name"].toString().isEmpty())text+=" · "+state["name"].toString();
+        if(state["unsaved"].toBool())text+="\nUnsaved adjustments — Save for this magazine";
+        else if(state["editing"].toBool())text+="\nSaved · adjust with Move / Rotate";
+        if(!state["error"].toString().isEmpty())text+="\n"+state["error"].toString();
+        _magazineFitStatus->setText(text);
+    }
 }

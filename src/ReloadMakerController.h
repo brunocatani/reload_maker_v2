@@ -824,6 +824,9 @@ namespace reloadmaker
         void showSelectedPartGrip();
         [[nodiscard]] bool partGripListed(const QString& id) const;
         void showGripStatus(const QString& text);
+        bool convertToMagazineFrame(PartGrip& grip, int targetAnchor);
+        void showMagazineGrabGrip(const PartGrip* selected);
+        void showOperatingFingerChoices();
         void startLibraryLoad();
         void installLibrary(LoadOrderLibrary& library);
         void setLoading(bool loading, const QString& message = {});
