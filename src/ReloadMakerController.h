@@ -943,6 +943,17 @@ namespace reloadmaker
         // Sounds views.
         [[nodiscard]] SoundCueForm soundCueForm() const;
         void showSoundsMuted();
+        // Collision capture and world models (src/areas/collisions).
+        [[nodiscard]] CollisionProfile collisionProfileIdentity(int target) const;
+        void collectCollisionSources(CollisionProfile& p, int target, bool captureRender);
+        bool findShapeOwner(const QModelIndex& node, const QModelIndex& targetNode, QModelIndex& owner, QStringList& path) const;
+        [[nodiscard]] CollisionMesh collisionSource(const QModelIndex& node, const QModelIndex& owner, const QStringList& path,
+                                                    const QString& weaponRecord) const;
+        [[nodiscard]] CollisionProfile magazineWorldIdentity(bool empty, const HandPosePlacement& anchor, const QMatrix4x4& root) const;
+        void collectMagazineWorldSources(CollisionProfile& captured, bool empty, const QModelIndex& carrierNode, const HandPosePlacement& anchor);
+        [[nodiscard]] QJsonArray preparedPartMeshes(const CollisionProfile& profile, const QMatrix4x4& inverse) const;
+        [[nodiscard]] QString preparedPartForCollision() const;
+        void startCollisionCook(const QString& geometry, const QString& output);
         void startLibraryLoad();
         void installLibrary(LoadOrderLibrary& library);
         void setLoading(bool loading, const QString& message = {});

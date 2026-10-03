@@ -1,20 +1,13 @@
 #include "ReloadMakerController.h"
 #include "StudioWindow.h"
 #include "StudioPaths.h"
-#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDialog>
-#include <QDir>
-#include <QFile>
 #include <QFileDialog>
-#include <QJsonDocument>
-#include <QJsonArray>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QPushButton>
-#include <QSaveFile>
-#include <QUuid>
 #include <QVBoxLayout>
 #include <stdexcept>
 
@@ -25,9 +18,7 @@ void ReloadMakerController::showCollisionCooker() {
     auto* instruction=new QLabel("Select the prepared rigid magazine NIF in the same reference frame as this collision profile. It must contain only the intended full or empty magazine geometry and no existing physics. The current enabled hulls and physical settings will be cooked with your configured Creation Kit.");
     instruction->setWordWrap(true);layout->addWidget(instruction);
     auto* row=new QHBoxLayout;layout->addLayout(row);auto* source=new QLineEdit;row->addWidget(source,1);
-    QJsonArray pieces;for(const auto& piece:_collisionWorkshop.profile().sources)if(piece.worldIncluded)pieces.append(piece.key);
-    if(_preparedPart["target"].toString()==_collisionWorkshop.profile().target&&_preparedPart["configuration"].toString()==_collisionWorkshop.profile().configuration&&
-       _preparedPart["pieces"].toArray()==pieces&&_preparedPart["referencePose"].toObject()==_collisionWorkshop.profile().referencePose)source->setText(_preparedPart["output"].toString());
+    if(const auto prepared=preparedPartForCollision();!prepared.isEmpty())source->setText(prepared);
     auto* browse=new QPushButton("Prepared render NIF…");row->addWidget(browse);
     connect(browse,&QPushButton::clicked,&dialog,[&]{const auto path=QFileDialog::getOpenFileName(&dialog,"Prepared magazine render model",studioDataPath("exports"),"Fallout 4 model (*.nif)");if(!path.isEmpty())source->setText(path);});
     layout->addWidget(new QLabel("New finished world model"));
@@ -42,15 +33,7 @@ void ReloadMakerController::showCollisionCooker() {
         else{const auto result=state["result"].toObject();report->setPlainText(QString("Last completed cook — finished model validated.\n%1 hulls · %2 support points\n\n%3\n\nGeometry, transforms and material references were preserved. Use this finished model in its full or empty magazine object definition; verify physical behavior in game.").arg(result["hulls"].toInt()).arg(result["supportPoints"].toInt()).arg(result["output"].toString()));}
     };
     connect(this,&ReloadMakerController::packJobChanged,&dialog,update);
-    connect(cook,&QPushButton::clicked,&dialog,[&]{try{
-        const auto folder=studioDataPath("local/asset-jobs/"+QUuid::createUuid().toString(QUuid::WithoutBraces));QDir().mkpath(folder);
-        const auto hulls=folder+"/hulls.json";_collisionWorkshop.command({{"operation","export-hulls"},{"path",hulls}});
-        const auto reference=[](const QString& path){QFile file(path);if(!file.open(QIODevice::ReadOnly)||file.size()>64*1024*1024)throw std::runtime_error("Cannot read prepared asset input (maximum 64 MiB)");return QJsonObject{{"path",path},{"sha256",QString::fromLatin1(QCryptographicHash::hash(file.readAll(),QCryptographicHash::Sha256).toHex())}};};
-        const QJsonObject job{{"format","reload-maker-world-object-job"},{"version",1},{"geometry",reference(source->text())},{"collision",reference(hulls)}};
-        const auto path=folder+"/job.json";const auto bytes=QJsonDocument(job).toJson();QSaveFile file(path);
-        if(!file.open(QIODevice::WriteOnly)||file.write(bytes)!=bytes.size()||!file.commit())throw std::runtime_error("Could not freeze the asset cook job");
-        packCommand({{"operation","cook"},{"job",path},{"output",output->text()}});update();
-    }catch(const std::exception& e){report->setPlainText(e.what());}});
+    connect(cook,&QPushButton::clicked,&dialog,[&]{try{startCollisionCook(source->text(),output->text());update();}catch(const std::exception& e){report->setPlainText(e.what());}});
     connect(cancel,&QPushButton::clicked,&dialog,[&]{try{packCommand({{"operation","cancel"}});}catch(const std::exception& e){report->setPlainText(e.what());}});
     update();dialog.exec();
 }
