@@ -254,7 +254,7 @@ namespace reloadmaker {
             }
             const QSignalBlocker blocker(_workshopPose);_workshopPose->setCurrentIndex(0);
         }
-        {const QSignalBlocker blocker(_gripReferenceCombo);_gripReferenceCombo->setCurrentIndex(index);}
+        _gripAnchor=index;showGripAnchor();
         displayMechanism();refreshWorkshopChoices();
         if(_partGripDraft){
             QString key="grip:"+_partGripDraft->pose.id;int choice=_workshopPose->findData(key);
@@ -300,8 +300,8 @@ namespace reloadmaker {
         }
         if(_partGripDraft){
             _partGripDraft->mechanismId=_mechanismDraft->id;
-            {const QSignalBlocker a(_gripPoseCombo),b(_gripReferenceCombo);_gripPoseCombo->setCurrentIndex(_gripPoseCombo->findData(_partGripDraft->sourcePoseId));_gripReferenceCombo->setCurrentIndex(anchor);}
-            _gripName->setText(_partGripDraft->pose.name+" · "+_mechanismDraft->name);
+            followGripInForm(_partGripDraft->sourcePoseId,anchor);
+            setGripDraftName(_partGripDraft->pose.name+" · "+_mechanismDraft->name);
             setArmsShown(true);showPartGripValues();
         }
         if(!applyPose(_playbackTime))return;

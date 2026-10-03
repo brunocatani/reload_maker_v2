@@ -67,13 +67,13 @@ namespace reloadmaker
 
         _commands.add({ "start_grip", CommandAccess::Edit, CommandGate::WhenIdle,
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
-                            const int pose = _gripPoseCombo->findData(params["poseId"].toString());
-                            const int anchor = _gripReferenceCombo->findData(params["anchor"].toInt(-1));
-                            require(pose >= 0 && anchor >= 0, "Unknown saved pose or reference part");
+                            const auto pose = knownHandPoseId(params["poseId"].toString());
+                            const int anchor = params["anchor"].toInt(-1);
+                            require(!pose.isEmpty() && anchor >= 0 && anchor < _handPoseAnchors.size(), "Unknown saved pose or reference part");
                             setWorkspace(2);
                             setHandEditorPage(HandEditorPage::PartGrip);
-                            _gripPoseCombo->setCurrentIndex(pose);
-                            _gripReferenceCombo->setCurrentIndex(anchor);
+                            setGripPose(pose);
+                            setGripAnchor(anchor);
                             startPartGrip(params["captured"].toBool(true));
                             return std::nullopt;
                         } });
@@ -151,8 +151,8 @@ namespace reloadmaker
         const auto previous = _partGripDraft;
         const auto previousPreview = _handPosePreview;
         _partGripDraft = candidate;
-        _gripName->setText(params["name"].toString(candidate.pose.name));
-        _partGripDraft->pose.name = _gripName->text();
+        setGripDraftName(params["name"].toString(candidate.pose.name));
+        _partGripDraft->pose.name = _gripDraftName;
         if (!applyPose(_playbackTime)) {
             const QString failure = _poseError;
             _partGripDraft = previous;

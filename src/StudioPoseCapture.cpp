@@ -2,22 +2,11 @@
 #include "ReloadBundle.h"
 #include <QComboBox>
 #include <QDateTime>
-#include <QLineEdit>
-#include <QPushButton>
 #include <QSignalBlocker>
 #include <QUuid>
 #include <algorithm>
 
 namespace reloadmaker {
-void ReloadMakerController::applySavedPoseToPart() {
-    _editingMagazine=false;
-    const auto* pose=selectedHandPose();
-    if(!pose){setStatus("Select a saved hand pose first.",true);return;}
-    const auto name=pose->name;
-    restoreHandPosePreview();openPartGripEditor();_gripName->setText(name);
-    beginGripSurfacePick();
-}
-
 int ReloadMakerController::magazineGrabAnchor(const HandPosePlacement& placement)const {
     if(isRifleConfiguration()||_authoringRoadmaps.value(roadmapKey()).toObject().contains("magazineReference")) {
         const int index=currentMagazineAnchor();
@@ -37,7 +26,7 @@ bool ReloadMakerController::useMagazineGrabGrip(bool allMagazines) {
     if(anchor<0) {
         setStatus("Place the hand on the selected magazine before saving.",true);return false;
     }
-    updatePartGripControls();if(!_gripSave->isEnabled()){setStatus("Place the hand within reach and name the grip before assigning it.",true);return false;}
+    updatePartGripControls();if(!canSavePartGrip()){setStatus("Place the hand within reach and name the grip before assigning it.",true);return false;}
     PartGrip grip=*_partGripDraft;
     if(isGlockConfiguration()&&grip.pose.hand!=PoseHand::Left){setStatus("Glock magazines use the left hand.",true);return false;}
     _interactionHand=grip.pose.hand;
@@ -63,7 +52,7 @@ bool ReloadMakerController::useMagazineGrabGrip(bool allMagazines) {
     }
     grip.pose.id=QUuid::createUuid().toString(QUuid::WithoutBraces);
     grip.pose.placement.handInWeapon=handInWeapon;
-    grip.pose.name=_gripName->text().trimmed();grip.pose.createdUtc=QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
+    grip.pose.name=_gripDraftName.trimmed();grip.pose.createdUtc=QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
     grip.pose.source=currentPoseSource();
     QString error;if(!_partGripLibrary.save(grip,error)){setStatus(error,true);return false;}
     const auto previousAssignments=_magazineGrabGrips,previousDefaults=_magazineGrabDefaults;

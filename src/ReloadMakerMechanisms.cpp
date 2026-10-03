@@ -45,7 +45,7 @@ namespace reloadmaker {
         refreshWorkshopChoices();
         updateMechanismControls();
     }
-    void ReloadMakerController::openMechanismForPart(){selectWorkshopPart(_gripReferenceCombo->currentData().toInt());}
+    void ReloadMakerController::openMechanismForPart(){selectWorkshopPart(std::max(_gripAnchor,0));}
     void ReloadMakerController::loadMechanism(){
         for(const auto& p:_mechanisms)if(p.id==_mechanismList->currentData().toString()){
             QString error;const int index=resolveMechanismAnchor(p.anchor,error);

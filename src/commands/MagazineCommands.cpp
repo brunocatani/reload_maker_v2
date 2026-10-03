@@ -62,17 +62,17 @@ namespace reloadmaker
                             return std::nullopt;
                         } });
 
-        // Applies a named finger pose through the magazine editor's own control,
-        // so the result matches choosing it in the interface.
+        // Applies a named finger pose the way the magazine editor's "Apply pose"
+        // button does.
         _commands.add({ "apply_magazine_pose", CommandAccess::Edit, CommandGate::WhenIdle,
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
-                            const int index = _gripPoseCombo->findData(params["poseId"].toString());
-                            require(index >= 0, "Unknown named finger pose");
+                            const auto pose = knownHandPoseId(params["poseId"].toString());
+                            require(!pose.isEmpty(), "Unknown named finger pose");
                             require(_workspace == GripsWorkspace && _handEditorPage == HandEditorPage::PartGrip,
                                     "Configure the magazine first");
-                            _gripPoseCombo->setCurrentIndex(index);
-                            require(_gripCurrentStart->isEnabled(), "Wait for the magazine editor");
-                            _gripCurrentStart->click();
+                            setGripPose(pose);
+                            require(canStartPartGrip(), "Wait for the magazine editor");
+                            applyGripPoseToDraft();
                             require(_partGripDraft.has_value(), _lastError);
                             return std::nullopt;
                         } });

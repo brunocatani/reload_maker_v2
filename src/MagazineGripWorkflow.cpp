@@ -32,7 +32,7 @@ bool sameFit(const PartGrip& a,const PartGrip& b,const QString& name) {
 
 void ReloadMakerController::rememberMagazineGrip() {
     if(!_partGripDraft||magazineGrabAnchor(_partGripDraft->pose.placement)<0)return;
-    auto copy=*_partGripDraft;copy.pose.name=_gripName->text().trimmed();
+    auto copy=*_partGripDraft;copy.pose.name=_gripDraftName.trimmed();
     const auto key=handAssignmentKey(magazineGrabKey(copy.weaponRecord,copy.pose.placement.ownerRecord),copy.pose.hand);
     if(magazineEditorState()["unsaved"].toBool())_magazineGripDrafts[key]=copy;
     else _magazineGripDrafts.remove(key);
@@ -69,11 +69,9 @@ bool ReloadMakerController::editMagazineGrip(const QString& savedId) {
         if(!loadGripRecord(*fit))return false;
     } else {
         restoreHandPosePreview();
-        const QSignalBlocker block(_gripReferenceCombo);_gripReferenceCombo->setCurrentIndex(anchor);
-        if(const auto* pose=selectedHandPose()) {
-            const QSignalBlocker poseBlock(_gripPoseCombo);_gripPoseCombo->setCurrentIndex(_gripPoseCombo->findData(pose->id));
-        }
-        _gripName->setText("Magazine hold");
+        _gripAnchor=anchor;showGripAnchor();
+        if(const auto* pose=selectedHandPose()){_gripPoseId=pose->id;showGripPose();}
+        setGripDraftName("Magazine hold");
         (void)applyPose(_playbackTime);updatePartGripControls();
     }
     if(_magazineFitPreview){_magazineViewport->setActive(false);_simulationDrive->setActive(false,false);}
@@ -91,12 +89,12 @@ QJsonObject ReloadMakerController::magazineEditorState() const {
     if(const auto* config=configuration())for(const auto& slot:config->entries())if(const auto* mod=config->mod(config->selected(slot.key)))
         if(poseRecordKey(mod->formId).compare(part.ownerRecord,Qt::CaseInsensitive)==0)name=mod->name;
     const bool editing=_partGripDraft&&magazineGrabAnchor(_partGripDraft->pose.placement)==anchor;
-    const bool dirty=editing&&(!fit||!sameFit(*_partGripDraft,*fit,_gripName->text().trimmed()));
+    const bool dirty=editing&&(!fit||!sameFit(*_partGripDraft,*fit,_gripDraftName.trimmed()));
     const bool custom=_magazineGrabGrips.contains(key)||(fit&&_magazineGrabGrips.value(magazineGrabKey(weapon,part.ownerRecord))==fit->pose.id);
     return {{"magazine",name},{"ownerRecord",part.ownerRecord},{"anchor",anchor},
         {"hand",_interactionHand==PoseHand::Left?"left":"right"},{"assignment",custom?"custom":fit?"default":"none"},
         {"gripId",fit?fit->pose.id:QString()},{"name",fit?fit->pose.name:QString()},
-        {"editing",editing},{"unsaved",dirty},{"canSave",editing&&_gripPreviewValid&&!_gripName->text().trimmed().isEmpty()},
+        {"editing",editing},{"unsaved",dirty},{"canSave",editing&&_gripPreviewValid&&!_gripDraftName.trimmed().isEmpty()},
         {"preview",_magazineFitPreview},{"error",error.isEmpty()&&editing&&!_gripPreviewValid?_gripError:error}};
 }
 

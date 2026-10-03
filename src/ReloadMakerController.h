@@ -793,6 +793,37 @@ namespace reloadmaker
         void showSelectedHandPose();
         [[nodiscard]] bool handPoseListed(const QString& id) const;
         void clearHandPoseSearch();
+        // Part grip form document (src/areas/hands).
+        QString _gripPoseId;
+        int _gripAnchor{ -1 };
+        QString _gripDraftName;
+        QString _selectedGripId;
+        void setGripPose(const QString& id);
+        void setGripAnchor(int anchor);
+        void setGripDraftName(const QString& name);
+        void selectPartGrip(const QString& id);
+        void followGripInForm(const QString& poseId, int anchor);
+        [[nodiscard]] QString knownHandPoseId(const QString& id) const;
+        [[nodiscard]] const HandPose* gripPose() const;
+        [[nodiscard]] bool partGripFrameReady() const;
+        [[nodiscard]] bool canStartPartGrip() const;
+        [[nodiscard]] bool canPickGripSurface() const;
+        [[nodiscard]] bool partGripEditable() const;
+        [[nodiscard]] bool canSavePartGrip() const;
+        [[nodiscard]] bool canLoadPartGrip() const;
+        void applyGripPoseToDraft();
+        void setGripPosition(int axis, float value);
+        void setGripRotation(const QVector3D& eulerDegrees);
+        [[nodiscard]] QVector<int> visibleWeaponShapes() const;
+        void appendAncestorAnchor(QModelIndex node, QVector<int>& candidates) const;
+        // Part grip form views.
+        void showPartGripChoices();
+        void showGripPose();
+        void showGripAnchor();
+        void showGripDraftName();
+        void showSelectedPartGrip();
+        [[nodiscard]] bool partGripListed(const QString& id) const;
+        void showGripStatus(const QString& text);
         void startLibraryLoad();
         void installLibrary(LoadOrderLibrary& library);
         void setLoading(bool loading, const QString& message = {});

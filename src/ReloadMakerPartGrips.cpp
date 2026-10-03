@@ -1,10 +1,7 @@
 #include "ReloadMakerController.h"
 #include "ReloadBundle.h"
-#include "StudioWindow.h"
-#include "model/nifmodel.h"
 #include <QCheckBox>
 #include <QComboBox>
-#include <QDateTime>
 #include <QDesktopServices>
 #include <QDir>
 #include <QDoubleSpinBox>
@@ -18,11 +15,8 @@
 #include <QQuaternion>
 #include <QSignalBlocker>
 #include <QTabWidget>
-#include <QTimer>
 #include <QUrl>
-#include <QUuid>
 #include <QVBoxLayout>
-#include <algorithm>
 
 namespace reloadmaker {
     void ReloadMakerController::createPartGripUi()
@@ -80,21 +74,13 @@ namespace reloadmaker {
                 spin->setKeyboardTracking(false); spin->setMinimumWidth(70);
             }
             grid->addWidget(_gripPosition[axis],1,axis+1); grid->addWidget(_gripAngles[axis],3,axis+1);
-            connect(_gripPosition[axis],qOverload<double>(&QDoubleSpinBox::valueChanged),this,[this,axis](double value){
-                if(!_partGripDraft) return;
-                auto& p=_partGripDraft->pose.placement.handInAnchor.translation;
-                if(axis==0) p.x=float(value); else if(axis==1) p.y=float(value); else p.z=float(value);
-                (void)applyPose(_playbackTime); updatePartGripControls();
-            });
+            connect(_gripPosition[axis],qOverload<double>(&QDoubleSpinBox::valueChanged),this,[this,axis](double value){setGripPosition(axis,float(value));});
             connect(_gripAngles[axis],qOverload<double>(&QDoubleSpinBox::valueChanged),this,[this](){
-                if(!_partGripDraft) return;
-                const auto q=QQuaternion::fromEulerAngles(float(_gripAngles[0]->value()),float(_gripAngles[1]->value()),float(_gripAngles[2]->value()));
-                _partGripDraft->pose.placement.handInAnchor.rotation={q.x(),q.y(),q.z(),q.scalar()};
-                (void)applyPose(_playbackTime); updatePartGripControls();
+                setGripRotation(QVector3D(float(_gripAngles[0]->value()),float(_gripAngles[1]->value()),float(_gripAngles[2]->value())));
             });
         }
         layout->addWidget(offsets);
-        _gripName=new QLineEdit(page); _gripName->setMaxLength(128);
+        _gripName=new QLineEdit(page); _gripName->setMaxLength(kPoseNameLength);
         _gripName->setPlaceholderText(QStringLiteral("Fit name · shown when you grab this magazine")); layout->addWidget(_gripName);
         auto* actions=new QHBoxLayout();
         _gripSave=new QPushButton(QStringLiteral("SAVE PART GRIP"),page); _gripSave->setObjectName("PrimaryButton");
@@ -136,62 +122,27 @@ namespace reloadmaker {
         layout->addStretch(1);
         _handPosePages->addTab(page,QStringLiteral("PART GRIPS"));
         connect(_gripCapturedStart,&QPushButton::clicked,this,[this](){startPartGrip(true);});
-        connect(_gripCurrentStart,&QPushButton::clicked,this,[this](){
-            const auto id=_gripPoseCombo->currentData().toString();
-            const auto selected=std::find_if(_savedHandPoses.cbegin(),_savedHandPoses.cend(),[&](const auto& p){return p.id==id;});
-            if(selected==_savedHandPoses.cend())return;
-            const auto pose=*selected;
-            if(!_partGripDraft)startPartGrip(true);
-            if(!_partGripDraft)return;
-            _partGripDraft->pose.hand=pose.hand;_partGripDraft->pose.fingers=pose.fingers;_partGripDraft->sourcePoseId=pose.id;
-            _partGripDraft->pose.placement.handInAnchor.rotation=pose.placement.handInAnchor.rotation;
-            showPartGripValues();(void)applyPose(_playbackTime);rememberMagazineGrip();updatePartGripControls();
-        });
+        connect(_gripCurrentStart,&QPushButton::clicked,this,&ReloadMakerController::applyGripPoseToDraft);
         connect(_gripSave,&QPushButton::clicked,this,&ReloadMakerController::savePartGrip);
         connect(_gripLoad,&QPushButton::clicked,this,&ReloadMakerController::loadPartGrip);
         connect(_gripEnd,&QPushButton::clicked,this,&ReloadMakerController::restoreHandPosePreview);
         connect(refresh,&QPushButton::clicked,this,&ReloadMakerController::refreshPartGripLibrary);
-        connect(_gripName,&QLineEdit::textChanged,this,&ReloadMakerController::updatePartGripControls);
-        connect(_gripList,&QListWidget::currentItemChanged,this,&ReloadMakerController::updatePartGripControls);
+        connect(_gripName,&QLineEdit::textChanged,this,&ReloadMakerController::setGripDraftName);
+        connect(_gripList,&QListWidget::currentItemChanged,this,[this](QListWidgetItem* item){
+            selectPartGrip(item?item->data(Qt::UserRole).toString():QString());
+        });
         connect(_gripList,&QListWidget::itemActivated,this,[this](){loadPartGrip();});
-        connect(_gripPoseCombo,qOverload<int>(&QComboBox::currentIndexChanged),this,[this](){
-            updatePartGripControls();
+        connect(_gripPoseCombo,qOverload<int>(&QComboBox::currentIndexChanged),this,[this](int index){
+            setGripPose(_gripPoseCombo->itemData(index).toString());
         });
-        connect(_gripReferenceCombo,qOverload<int>(&QComboBox::currentIndexChanged),this,[this](int index){
-            if(_partGripDraft && index>=0){
-                QString error;
-                if(!assignGripPart(index,error)) {
-                    const QSignalBlocker blocker(_gripReferenceCombo);
-                    for(int i=0;i<_handPoseAnchors.size();++i)
-                        if(sameGripAnchor(_handPoseAnchors[i].description,_partGripDraft->pose.placement))
-                            _gripReferenceCombo->setCurrentIndex(i);
-                    setStatus(error,true);
-                } else showPartGripValues();
-            }
-            updatePartGripControls();
-        });
+        connect(_gripReferenceCombo,qOverload<int>(&QComboBox::currentIndexChanged),this,&ReloadMakerController::setGripAnchor);
         connect(folder,&QPushButton::clicked,this,[this](){
             const auto path=PartGripLibrary::defaultDirectory();
             if(!QDir().mkpath(path) || !QDesktopServices::openUrl(QUrl::fromLocalFile(path))) setStatus(QStringLiteral("Cannot open the part-grip folder"),true);
         });
     }
-    void ReloadMakerController::openPartGripEditor()
+    void ReloadMakerController::showPartGripChoices()
     {
-        const auto* pose=selectedHandPose();
-        if(pose) _gripPoseCombo->setCurrentIndex(_gripPoseCombo->findData(pose->id));
-        _gripReferenceCombo->setCurrentIndex(_handCaptureAnchor);
-        setHandEditorPage(HandEditorPage::PartGrip);
-    }
-    void ReloadMakerController::refreshPartGripLibrary()
-    {
-        QStringList diagnostics; _partGrips=_partGripLibrary.load(diagnostics);
-        for(const auto& error:diagnostics) appendDiagnostic("PART GRIP FILE "+error);
-        if(!diagnostics.isEmpty()) setStatus(QStringLiteral("Some part-grip files could not be loaded; see Diagnostics. Files were left untouched."),true);
-        refreshPartGripChoices(); refreshPartGripList();
-    }
-    void ReloadMakerController::refreshPartGripChoices()
-    {
-        const auto poseId=_gripPoseCombo->currentData(); const int anchor=_gripReferenceCombo->currentData().toInt();
         const QSignalBlocker a(_gripPoseCombo), b(_gripReferenceCombo);
         _gripPoseCombo->clear(); _gripReferenceCombo->clear();
         for(const auto& pose:_savedHandPoses) _gripPoseCombo->addItem(QStringLiteral("%1 · %2 hand").arg(pose.name,pose.hand==PoseHand::Left?"Left":"Right"),pose.id);
@@ -199,19 +150,45 @@ namespace reloadmaker {
             _gripReferenceCombo->addItem(_handPoseAnchors[i].label,i);
             _gripReferenceCombo->setItemData(i,_handPoseAnchors[i].tooltip,Qt::ToolTipRole);
         }
-        const int found=_gripPoseCombo->findData(poseId); if(found>=0) _gripPoseCombo->setCurrentIndex(found);
-        if(anchor>=0 && anchor<_gripReferenceCombo->count()) _gripReferenceCombo->setCurrentIndex(anchor);
-        updatePartGripControls();
+        _gripPoseCombo->setCurrentIndex(_gripPoseCombo->findData(_gripPoseId));
+        _gripReferenceCombo->setCurrentIndex(_gripAnchor);
     }
-    const PartGrip* ReloadMakerController::selectedPartGrip() const
+    void ReloadMakerController::showGripPose()
     {
-        const auto* item=_gripList->currentItem(); if(!item) return nullptr;
-        for(const auto& grip:_partGrips) if(grip.pose.id==item->data(Qt::UserRole).toString()) return &grip;
-        return nullptr;
+        const QSignalBlocker blocker(_gripPoseCombo);
+        _gripPoseCombo->setCurrentIndex(_gripPoseCombo->findData(_gripPoseId));
     }
+    void ReloadMakerController::showGripAnchor()
+    {
+        const QSignalBlocker blocker(_gripReferenceCombo);
+        _gripReferenceCombo->setCurrentIndex(_gripAnchor);
+    }
+    void ReloadMakerController::showGripDraftName()
+    {
+        if(_gripName->text()==_gripDraftName) return;
+        const QSignalBlocker blocker(_gripName);
+        _gripName->setText(_gripDraftName);
+    }
+    void ReloadMakerController::showSelectedPartGrip()
+    {
+        const QSignalBlocker blocker(_gripList);
+        for(int row=0;row<_gripList->count();++row) if(_gripList->item(row)->data(Qt::UserRole).toString()==_selectedGripId) { _gripList->setCurrentRow(row); return; }
+        _gripList->setCurrentRow(-1);
+    }
+    bool ReloadMakerController::partGripListed(const QString& id) const
+    {
+        for(int row=0;row<_gripList->count();++row) if(_gripList->item(row)->data(Qt::UserRole).toString()==id) return true;
+        return false;
+    }
+    void ReloadMakerController::showGripStatus(const QString& text)
+    {
+        _gripStatus->setText(text);
+    }
+    // This weapon's saved grips; older snapshots and unassigned magazine
+    // copies only when history is shown. The selection stays on the selected
+    // grip while it is listed, else moves to the first listed grip.
     void ReloadMakerController::refreshPartGripList()
     {
-        const auto* current=_gripList->currentItem(); const auto id=current?current->data(Qt::UserRole).toString():QString();
         const QSignalBlocker blocker(_gripList); _gripList->clear();
         const auto* weapon=currentWeapon(); const auto record=weapon?poseRecordKey(weapon->formId):QString();
         for(const auto& grip:_partGrips) {
@@ -221,24 +198,26 @@ namespace reloadmaker {
             auto* item=new QListWidgetItem(QStringLiteral("%1\n%2 hand · %3").arg(grip.pose.name,grip.pose.hand==PoseHand::Left?"Left":"Right",grip.pose.placement.anchorName),_gripList);
             item->setData(Qt::UserRole,grip.pose.id);
             item->setToolTip(QStringLiteral("%1\n%2\n%3").arg(grip.pose.placement.ownerModel,grip.pose.placement.ownerRecord,grip.pose.createdUtc));
-            if(grip.pose.id==id) _gripList->setCurrentItem(item);
+            if(grip.pose.id==_selectedGripId) _gripList->setCurrentItem(item);
         }
         if(!_gripList->currentItem() && _gripList->count()) _gripList->setCurrentRow(0);
+        // Filtering is not a user selection; the document follows the list.
+        const auto* current=_gripList->currentItem();
+        _selectedGripId=current?current->data(Qt::UserRole).toString():QString();
         updatePartGripControls();
     }
     void ReloadMakerController::updatePartGripControls()
     {
         if(!_gripPoseCombo) return;
-        const bool frame=!_loadThread && !_rebuildTimer->isActive() && _clip.valid() && !_geometrySignature.isEmpty() &&
-            _renderedWeapon>=0 && _renderedWeapon==_selectedWeapon;
-        const bool start=frame && _gripPoseCombo->currentIndex()>=0 && _gripReferenceCombo->currentIndex()>=0;
+        const bool frame=partGripFrameReady();
+        const bool start=canStartPartGrip();
         _gripCapturedStart->setEnabled(start); _gripCurrentStart->setEnabled(start);
-        _gripPick->setEnabled(frame && (_partGripDraft.has_value() || start));
-        const bool editing=frame && _partGripDraft.has_value() && !_mechanismPreview;
+        _gripPick->setEnabled(canPickGripSurface());
+        const bool editing=partGripEditable();
         _gripReferenceCombo->setEnabled(!_editingMagazine);
         for(auto* spin:_gripPosition) spin->setEnabled(editing);
         for(auto* spin:_gripAngles) spin->setEnabled(editing);
-        _gripSave->setEnabled(editing && _gripPreviewValid && !_gripName->text().trimmed().isEmpty());
+        _gripSave->setEnabled(canSavePartGrip());
         const bool magazine=editing&&magazineGrabAnchor(_partGripDraft->pose.placement)>=0;
         if(_useMagazineGrip)_useMagazineGrip->setEnabled(_gripSave->isEnabled()&&magazine);
         if(_saveAllMagazineGrips)_saveAllMagazineGrips->setEnabled(_useMagazineGrip->isEnabled());
@@ -246,7 +225,7 @@ namespace reloadmaker {
         _gripEnd->setVisible(!_editingMagazine);
         updateMagazineGripUi();updateInteractionGripUi();
         _gripEnd->setEnabled(editing);
-        _gripLoad->setEnabled(frame && selectedPartGrip());
+        _gripLoad->setEnabled(canLoadPartGrip());
         if(editing) {
             _gripStatus->setText(_gripPreviewValid
                 ? QStringLiteral("%1 hand · elbow solved. Move / Rotate adjusts the hand only. Save for this magazine updates its active fit and project.").arg(_partGripDraft->pose.hand==PoseHand::Left?"Left":"Right")
@@ -257,25 +236,6 @@ namespace reloadmaker {
         }
         updateGripViewport();
         updateMechanismControls();
-    }
-    bool ReloadMakerController::preparePartGripFrame(int anchorIndex,QString& error)
-    {
-        if(anchorIndex<0 || anchorIndex>=_handPoseAnchors.size()) { error="Choose a reference part"; return false; }
-        const auto& anchor=_handPoseAnchors[anchorIndex];
-        if(anchor.description.anchorKind=="weapon") { _partGripFrame={true,-1,{}}; return true; }
-        Transformf world;
-        if(!sceneNodeWorld(anchor.node,world,error)) return false;
-        const auto* model=activeModel(); QModelIndex node=anchor.node;
-        for(int depth=0;node.isValid() && depth<model->getBlockCount();++depth) {
-            for(int i=0;i<_nodeBindings.size();++i) {
-                if(_sceneNodes[_nodeBindings[i].nodeIndex]!=node) continue;
-                Transformf inverse;
-                if(!invertUniformTransform(_boundGlobalPose[i],inverse)) { error="Reference part has a zero-scaled animated parent"; return false; }
-                _partGripFrame={false,i,composed(inverse,world),int(_sceneNodes.indexOf(anchor.node))}; return true;
-            }
-            node=model->getBlockIndex(model->getParent(node));
-        }
-        error="Reference part has no animated assembly frame"; return false;
     }
     void ReloadMakerController::showPartGripValues()
     {
@@ -289,100 +249,5 @@ namespace reloadmaker {
         }
         // Merely displaying rounded Euler values never overwrites the saved matrix.
         updatePartGripControls();
-    }
-    void ReloadMakerController::startPartGrip(bool capturedOffset)
-    {
-        updatePartGripControls(); if(!_gripCapturedStart->isEnabled()) return;
-        const HandPose* selected=nullptr;
-        for(const auto& pose:_savedHandPoses) if(pose.id==_gripPoseCombo->currentData().toString()) selected=&pose;
-        if(!selected) return;
-        if(_editingMagazine&&selected->hand!=_interactionHand){setStatus("Choose a saved pose for the selected reload hand.",true);return;}
-        const bool sameSource=_partGripDraft&&_partGripDraft->sourcePoseId==selected->id;
-        const int anchor=_gripReferenceCombo->currentData().toInt();
-        _editingMagazine=anchor>=0&&anchor<_handPoseAnchors.size()&&magazineGrabAnchor(_handPoseAnchors[anchor].description)>=0;
-        restoreHandPosePreview();
-        stopPlayback();
-        if(!applyPose(_playbackTime)) return;
-        QString error;
-        if(!preparePartGripFrame(anchor,error)) { setStatus(error,true); return; }
-        PartGrip draft{*selected,poseRecordKey(currentWeapon()->formId),selected->id};
-        draft.pose.placement=_handPoseAnchors[anchor].description;
-        draft.pose.placement.handInAnchor=selected->placement.handInAnchor;
-        if(!capturedOffset) {
-            const auto reference=_partGripFrame.weapon?_globalPose[_weaponBoneIndex]:composed(_boundGlobalPose[_partGripFrame.binding],_partGripFrame.bridge);
-            if(!captureHandPose(_skeleton,_localPose,_globalPose,reference,draft.pose,error)) { setStatus(error,true); return; }
-            draft.pose.fingers=selected->fingers;
-        }
-        _partGripDraft=std::move(draft);
-        if(!assignGripPart(anchor,error)) {setStatus(error,true);_partGripDraft.reset();return;}
-        if(!sameSource||_gripName->text().trimmed().isEmpty()) _gripName->setText(selected->name+" · "+_handPoseAnchors[anchor].description.anchorName);
-        setArmsShown(true);
-        showPartGripValues(); (void)applyPose(_playbackTime); updateHandPoseControls();
-    }
-    bool ReloadMakerController::applyPartGripPreview()
-    {
-        const auto reference=gripReferenceWorld();
-        const auto target=composed(reference,_partGripDraft->pose.placement.handInAnchor);
-        _gripPreviewValid=solvePartGrip(_skeleton,_localPose,_globalPose,_partGripDraft->pose,target,_localPose,_globalPose,_gripError,magazineGrabAnchor(_partGripDraft->pose.placement)>=0?GripReach::FollowTarget:GripReach::FixedShoulder);
-        if(!_gripPreviewValid) { updatePartGripControls(); return true; }
-        return evaluateSceneBindings(_skeleton,_nodeBindings,_sourceLocalPose,_stateBaselineLocalPose,
-                                     _globalPose,_boundLocalPose,_boundGlobalPose,_poseError)&&applySimulationPose();
-    }
-    bool ReloadMakerController::savePartGrip()
-    {
-        if(_partGripDraft&&magazineGrabAnchor(_partGripDraft->pose.placement)>=0)return useMagazineGrabGrip();
-        updatePartGripControls(); if(!_gripSave->isEnabled()) return false;
-        PartGrip grip=*_partGripDraft;
-        grip.pose.id=QUuid::createUuid().toString(QUuid::WithoutBraces);
-        grip.pose.name=_gripName->text().trimmed(); grip.pose.createdUtc=QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
-        grip.pose.source=currentPoseSource();
-        Transformf inverse; QString error;
-        const int hand=_skeleton.boneIndex(grip.pose.hand==PoseHand::Left?"LArm_Hand":"RArm_Hand");
-        if(!invertUniformTransform(_globalPose[_weaponBoneIndex],inverse) || hand<0) { setStatus("Cannot capture grip placement",true); return false; }
-        grip.pose.placement.handInWeapon=composed(inverse,_globalPose[hand]);
-        if(!_partGripLibrary.save(grip,error)) { setStatus("Part grip was not saved: "+error,true); return false; }
-        _partGripDraft=grip;
-        refreshPartGripLibrary();
-        for(int row=0;row<_gripList->count();++row) if(_gripList->item(row)->data(Qt::UserRole).toString()==grip.pose.id) _gripList->setCurrentRow(row);
-        appendDiagnostic(QStringLiteral("SAVED PART GRIP %1 · %2 · reference=%3").arg(grip.pose.name,grip.pose.id,grip.pose.placement.anchorName));
-        setStatus(QStringLiteral("Saved part grip “%1”: fingers, position and angle. Source pose unchanged.").arg(grip.pose.name));
-        return true;
-    }
-    void ReloadMakerController::loadPartGrip()
-    {
-        updatePartGripControls(); const auto* selected=selectedPartGrip(); if(!_gripLoad->isEnabled() || !selected) return;
-        (void)loadGripRecord(*selected);
-    }
-    bool ReloadMakerController::loadGripRecord(const PartGrip& selected)
-    {
-        const PartGrip copy=selected;
-        _editingMagazine=magazineGrabAnchor(copy.pose.placement)>=0;
-        QVector<HandPosePlacement> anchors; for(const auto& anchor:_handPoseAnchors) anchors.append(anchor.description);
-        QString error; const int anchor=resolveGripAnchor(copy,poseRecordKey(currentWeapon()->formId),anchors,error);
-        if(anchor<0) { setStatus(error,true); return false; }
-        if(!copy.mechanismId.isEmpty()) {
-            const auto definition=std::find_if(_mechanisms.cbegin(),_mechanisms.cend(),[&](const auto& p){return p.id==copy.mechanismId;});
-            if(definition==_mechanisms.cend() || definition->weaponRecord.compare(copy.weaponRecord,Qt::CaseInsensitive)!=0 || !sameMechanismPart(definition->anchor,copy.pose.placement)) {
-                setStatus(QStringLiteral("The grip's shared part definition is missing or does not match this part."),true);return false;
-            }
-        }
-        restoreHandPosePreview(); stopPlayback();
-        if(!applyPose(_playbackTime)) return false;
-        if(!preparePartGripFrame(anchor,error)) { setStatus(error,true); return false; }
-        {
-            const QSignalBlocker a(_gripPoseCombo),b(_gripReferenceCombo);
-            _gripReferenceCombo->setCurrentIndex(anchor);
-            _gripPoseCombo->setCurrentIndex(_gripPoseCombo->findData(copy.sourcePoseId));
-        }
-        _partGripDraft=copy; _gripName->setText(copy.pose.name);
-        if(copy.mechanismId.isEmpty() && !assignGripPart(anchor,error)) {
-            _partGripDraft.reset();setStatus(error,true);return false;
-        }
-        // Loading an already-qualified frame is not an edit. Keep exact stored
-        // matrices instead of a world -> local floating-point round trip.
-        _partGripDraft->pose.placement=copy.pose.placement;
-        _partGripDraft->surfaceContact=copy.surfaceContact;
-        setArmsShown(true); showPartGripValues();
-        (void)applyPose(_playbackTime); updateHandPoseControls();return _gripPreviewValid;
     }
 }

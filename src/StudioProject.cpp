@@ -334,10 +334,8 @@ void ReloadMakerController::restoreSessionSelection() {
             QVector<HandPosePlacement> anchors; for (const auto& a : _handPoseAnchors) anchors.append(a.description);
             const int anchor = resolveGripAnchor(grip,poseRecordKey(currentWeapon()->formId),anchors,error);
             if (anchor >= 0 && preparePartGripFrame(anchor,error)) {
-                _partGripDraft=grip;_gripName->setText(grip.pose.name);
-                const QSignalBlocker poseBlock(_gripPoseCombo),partBlock(_gripReferenceCombo);
-                _gripPoseCombo->setCurrentIndex(_gripPoseCombo->findData(grip.sourcePoseId));
-                _gripReferenceCombo->setCurrentIndex(anchor);
+                _partGripDraft=grip;setGripDraftName(grip.pose.name);
+                followGripInForm(grip.sourcePoseId,anchor);
                 _editingMagazine=magazineGrabAnchor(grip.pose.placement)>=0;
                 if(record["workspace"].toInt()==GripsWorkspace)setHandEditorPage(HandEditorPage::PartGrip);
                 showPartGripValues();
