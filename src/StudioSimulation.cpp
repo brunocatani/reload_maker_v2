@@ -76,7 +76,7 @@ void ReloadMakerController::createSimulationUi() {
     connect(configureMagazine,&QPushButton::clicked,this,[this]{(void)editMagazineGrip();});
     auto* guide=new QPushButton("CONFIGURE INSERTION GUIDE",panel);layout->addWidget(guide);connect(guide,&QPushButton::clicked,this,&ReloadMakerController::showMagazineGuide);
     auto* presentation=new QPushButton("MAGAZINE MODELS AND PAYLOAD",panel);layout->addWidget(presentation);connect(presentation,&QPushButton::clicked,this,&ReloadMakerController::showMagazineSetup);
-    _simulationMagazineGrip->setToolTip("Saved hand grip for this magazine, used by GRAB. Create one in Hands & grips by selecting a pose and clicking its contact point.");
+    _simulationMagazineGrip->setToolTip("Saved hand grip for this magazine, used by GRAB. Create one in Reload builder > Part grips by selecting a pose and clicking its contact point.");
     connect(_simulationMagazineGrip,qOverload<int>(&QComboBox::activated),this,[this](int index) {
         if(!_simulationRig||!_reloadRecipe)return;
         const auto anchor=simulationMagazineAnchor();

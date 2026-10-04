@@ -161,12 +161,24 @@ namespace reloadmaker
         // Stable ids: persisted in projects and used by MCP clients (DIAMOND's
         // importer uses OperateWorkspace = 5). Retired ids (0 Source, 1 Preview,
         // 3 Mechanisms) are rejected; projects saved on them reopen in Operate.
-        enum Workspace : int { GripsWorkspace = 2, PhasesWorkspace = 4, OperateWorkspace = 5, SoundsWorkspace = 6, CollisionsWorkspace = 7, ScopesWorkspace = 8 };
+        // CollisionsWorkspace is the builder's loose magazine world models;
+        // WeaponCollisionWorkspace the whole weapon and its installed parts.
+        enum Workspace : int { GripsWorkspace = 2, PhasesWorkspace = 4, OperateWorkspace = 5, SoundsWorkspace = 6, CollisionsWorkspace = 7, ScopesWorkspace = 8, WeaponCollisionWorkspace = 9 };
         static bool simulationWorkspace(int value) { return value==OperateWorkspace||value==SoundsWorkspace; }
+        static bool collisionWorkspace(int value) { return value == CollisionsWorkspace || value == WeaponCollisionWorkspace; }
         static constexpr int kLoadoutPage = 0, kReloadPage = 1;
         static constexpr int kMaximumDiagnosticLines = 3000;
         // Hands editor pages, in tab order; saved in projects as handsPage.
         enum class HandEditorPage : int { FingerPoses = 0, PartGrip = 1, Mechanism = 2, GrabLocations = 3 };
+        // Rail pages and Reload builder steps, derived from the workspace and
+        // hand editor page (src/areas/shell/RailPages.cpp).
+        enum class RailPage : int { Operate, Builder, Poses, Sounds, Scopes };
+        enum class BuilderStep : int { Reload, PartGrips, Mechanisms, GrabPoints, Magazines };
+        [[nodiscard]] std::optional<RailPage> railPage() const;
+        [[nodiscard]] std::optional<BuilderStep> builderStep() const;
+        void showRailPage(RailPage page);
+        void showBuilderStep(BuilderStep step);
+        void syncRail();
         static constexpr int kPoseNameLength = 128;
         void createSourceBar(QToolBar* bar);
         void refreshSourceBar();
@@ -204,6 +216,7 @@ namespace reloadmaker
         GripViewport* _scopeViewport{};
         bool _editingScopeUi{false};
         void refreshCollisions();
+        void showCollisionSubject();
         void invalidateCollisions();
         CollisionProfile collisionSnapshot(int target,bool referenceOnly,bool captureRender=false);
         void paintCollisions();
@@ -593,7 +606,10 @@ namespace reloadmaker
         QHash<QString,QString> _referenceNames;
         QPushButton* _simulationSlideRelease{nullptr};
         QVector<std::pair<QPersistentModelIndex,int>> _simulationVisibility;
-        QButtonGroup* _workspaceButtons{nullptr};
+        QButtonGroup* _railButtons{nullptr};
+        QButtonGroup* _builderStepButtons{nullptr};
+        QAction* _builderStepsAction{nullptr};
+        BuilderStep _lastBuilderStep{ BuilderStep::Reload }; // view memory, not saved
         int _workspace{0};
         bool _showPartLabels{false};
         quint64 _revision{0};
@@ -762,7 +778,7 @@ namespace reloadmaker
         [[nodiscard]] bool sceneNodeWorld(const QModelIndex& node, Transformf& world, QString& error) const;
         [[nodiscard]] QString poseRecordKey(std::uint32_t formId) const;
         // Hands editor document (src/areas/hands).
-        // Hands & grips opens on the part workshop, the page the assembled
+        // The hand editor opens on the part workshop (Mechanisms), the page the assembled
         // tabs have always left current.
         HandEditorPage _handEditorPage{ HandEditorPage::Mechanism };
         PoseHand _editedHand{ PoseHand::Right };

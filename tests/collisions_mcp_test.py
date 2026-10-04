@@ -50,7 +50,7 @@ try:
     edit('save_project', path=original)
     edit('testbed', name='glock')
     canonical = ready()['project']
-    edit('workspace', index=7)
+    edit('workspace', index=9)
     ready()
     before_pose = command('pose')
     collision('defaults', target=0)

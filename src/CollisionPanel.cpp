@@ -17,8 +17,8 @@ namespace reloadmaker {
 CollisionPanel::CollisionPanel(CollisionWorkshop& workshop,QWidget* parent):QWidget(parent),_workshop(workshop){
     auto* layout=new QVBoxLayout(this);layout->setContentsMargins(14,14,14,14);
     auto label=[&](const QString& text){auto* w=new QLabel(text);w->setWordWrap(true);layout->addWidget(w);return w;};
-    label("Collision workshop")->setObjectName("Section");
-    label("Choose a weapon part, then generate its convex shapes. Orbit the model to inspect gaps and overlaps.");
+    _title=label("Collision workshop");_title->setObjectName("Section");
+    _intro=label({});
     _target=new QComboBox;layout->addWidget(_target);
     auto button=[&](const QString& title,const QString& operation){auto* b=new QPushButton(title);layout->addWidget(b);connect(b,&QPushButton::clicked,&_workshop,[this,operation]{run(operation);});return b;};
     button("GENERATE · ROCK DEFAULTS","defaults")->setObjectName("PrimaryButton");
@@ -52,6 +52,9 @@ CollisionPanel::CollisionPanel(CollisionWorkshop& workshop,QWidget* parent):QWid
     connect(_mass,qOverload<double>(&QDoubleSpinBox::valueChanged),&_workshop,&CollisionWorkshop::setMass);
     connect(_radius,qOverload<double>(&QDoubleSpinBox::valueChanged),&_workshop,&CollisionWorkshop::setRadius);
     connect(&_workshop,&CollisionWorkshop::updated,this,[this]{showWorkshop();});
+}
+void CollisionPanel::setSubject(const QString& title,const QString& intro){
+    _title->setText(title);_intro->setText(intro+" Orbit the model to inspect gaps and overlaps.");
 }
 void CollisionPanel::run(const QString& operation){
     try{_workshop.command({{"operation",operation}});}catch(const std::exception& e){_workshop.reportError(QString::fromUtf8(e.what()));}

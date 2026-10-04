@@ -50,7 +50,7 @@ def main(names):
             project=Path(ready()['project']);saved=project.read_bytes()
             folder=work/name;folder.mkdir()
             try:
-                edit('workspace',{'index':7});state=command('collision_state')
+                edit('workspace',{'index':9});state=command('collision_state')
                 target=next(t['index'] for t in state['targets'] if t['name'].startswith('Magazine '))
                 edit('collisions',{'operation':'select','target':target})
                 prepared=finish(edit('capture_prepared_part',{'output':str(folder/'prepared.nif')}))

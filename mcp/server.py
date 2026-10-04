@@ -70,7 +70,7 @@ def get_collision_state() -> dict:
 
 @mcp.tool()
 def configure_collisions(changes: dict, expected_revision: int) -> dict:
-    """Workspace 7: select target index; defaults/generate (gapGame, supportErrorGame, targetPoints); open saved profile; hull index/enabled; piece index/included controls prepared-world geometry and associated collision; view overlay/compare/isolated; save replaces this weapon/loadout/target profile; export to a local path; export-hulls converts enabled points into the selected magazine root for cooking; cancel worker. Saved profiles use source-local game units, not cooked Havok shapes."""
+    """Workspace 7 (Reload builder > Magazines: the captured loose magazine world object) or 9 (Weapon collision: the whole weapon and its installed parts): select target index; defaults/generate (gapGame, supportErrorGame, targetPoints); open saved profile; hull index/enabled; piece index/included controls prepared-world geometry and associated collision; view overlay/compare/isolated; save replaces this weapon/loadout/target profile; export to a local path; export-hulls converts enabled points into the selected magazine root for cooking; cancel worker. Saved profiles use source-local game units, not cooked Havok shapes."""
     return command('collisions', changes, expected_revision)
 
 @mcp.tool()
@@ -130,7 +130,7 @@ def control_playback(changes: dict, expected_revision: int) -> dict:
 
 @mcp.tool()
 def set_workspace(index: int, expected_revision: int) -> dict:
-    """Choose 2 Hands/grips, 4 Reload, 5 Operate, 6 Sounds, 7 Collisions or 8 Scopes."""
+    """Choose 2 hand editor (Poses library, or the Reload builder Part grips / Mechanisms / Grab points steps by its page), 4 Reload builder > Reload, 5 Operate, 6 Sounds, 7 Reload builder > Magazines, 8 Scopes or 9 Weapon collision."""
     return command('workspace',{'index':index},expected_revision)
 
 @mcp.tool()
@@ -306,7 +306,7 @@ def use_operating_fingers(id: str, expected_revision: int) -> dict:
 
 @mcp.tool()
 def capture_prepared_part(output: str, expected_revision: int) -> dict:
-    """In Collisions, freeze the selected part's currently visible rigid geometry,
+    """In Magazines or Weapon collision, freeze the selected target's currently visible rigid geometry,
     UVs, normals, tangents, colors, materials and exact root frame into a prepared
     world NIF. Pick the correct full/empty presentation first; hidden shapes are
     excluded. Uses bundled native import, leaves source assets untouched, and
@@ -434,7 +434,7 @@ def save_configured_reload(project: str, expected_revision: int, expected_projec
 def capture_magazine_world(empty: bool, expected_revision: int) -> dict:
     """Capture the current full/empty loose-magazine presentation from Operate.
     Uses its actual carrier frame, pre-feed payload and native visibility; excludes
-    hands, receiver and parked spares. Opens Collisions and starts bounded hull
+    hands, receiver and parked spares. Opens Reload builder > Magazines and starts bounded hull
     generation. Review pieces, then capture_prepared_part and cook_world_object.
     """
     return command('capture_magazine_world', dict(empty=empty), expected_revision)

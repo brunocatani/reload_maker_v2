@@ -171,7 +171,7 @@ namespace reloadmaker {
                 .arg(_handPosePreview->name, _handPosePreview->hand == PoseHand::Left ? "left" : "right")
             : (frame ? QStringLiteral("%1 saved poses · capture pauses at the current frame. Placement is stored, not applied by finger preview.").arg(_savedHandPoses.size())
                      : QStringLiteral("%1 saved poses · load a weapon and animation to capture or preview.").arg(_savedHandPoses.size()));
-        _handPoseStatus->setText(gripActive?QStringLiteral("Part-grip preview is active. Edit it in Part grip or restore the animation here."):status);
+        _handPoseStatus->setText(gripActive?QStringLiteral("Part-grip preview is active. Edit it in Reload builder > Part grips or restore the animation here."):status);
         updatePartGripControls();
         if (!selected) { _handPoseDetails->setPlainText(QStringLiteral("Saved poses appear here and remain available after restarting Reload Maker.")); return; }
         const auto& p = selected->placement.handInAnchor;

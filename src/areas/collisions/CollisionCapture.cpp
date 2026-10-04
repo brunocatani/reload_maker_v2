@@ -2,6 +2,7 @@
 // the collision workshop, the visible geometry under a target, and the
 // prepared world model of a part.
 #include "ReloadMakerController.h"
+#include "CollisionPanel.h"
 #include "StudioPaths.h"
 #include "StudioWindow.h"
 #include "areas/collisions/CollisionFrames.h"
@@ -12,6 +13,7 @@
 #include "physics-interaction/weapon/WeaponEffectGeometryPolicy.h"
 
 #include <QCryptographicHash>
+#include <QDockWidget>
 #include <QJsonDocument>
 #include <QTimer>
 
@@ -63,8 +65,10 @@ namespace reloadmaker
         }
     }
 
-    // The whole weapon, its installed parts, the magazine anchor, and the
-    // captured magazine world object when there is one.
+    // Weapon collision lists the whole weapon, its installed parts (the
+    // mounted magazine included) and the magazine anchor; nothing consumes
+    // them yet. Everywhere else the list is the reload's magazine: the
+    // captured loose world object, the only capture a pack accepts.
     void ReloadMakerController::refreshCollisions()
     {
         if (!_collisions) {
@@ -72,18 +76,31 @@ namespace reloadmaker
         }
         QStringList names;
         _collisionTargets.clear();
-        for (int i = 0; i < _handPoseAnchors.size(); ++i) {
-            const auto& description = _handPoseAnchors[i].description;
-            if (i == 0 || description.anchorKind == "installed-part" || description.anchorName == "WeaponMagazine") {
-                names << _handPoseAnchors[i].label;
-                _collisionTargets.append(i);
+        if (_workspace == WeaponCollisionWorkspace) {
+            for (int i = 0; i < _handPoseAnchors.size(); ++i) {
+                const auto& description = _handPoseAnchors[i].description;
+                if (i == 0 || description.anchorKind == "installed-part" || description.anchorName == "WeaponMagazine") {
+                    names << _handPoseAnchors[i].label;
+                    _collisionTargets.append(i);
+                }
             }
-        }
-        if (_magazineWorldSnapshot) {
+        } else if (_magazineWorldSnapshot) {
             names << (_magazineWorldSnapshot->referencePose["presentation"].toString() + " magazine world object");
             _collisionTargets.append(-1);
         }
         _collisionWorkshop.setTargets(names);
+    }
+
+    void ReloadMakerController::showCollisionSubject()
+    {
+        const bool weapon = _workspace == WeaponCollisionWorkspace;
+        _collisionsDock->setWindowTitle(weapon ? QStringLiteral("WEAPON COLLISION") : QStringLiteral("MAGAZINES"));
+        _collisions->setSubject(weapon ? QStringLiteral("Weapon collision") : QStringLiteral("Magazine world models"),
+                                weapon ? QStringLiteral("The whole weapon and its installed parts, the mounted magazine included. Nothing uses these yet: "
+                                                        "ROCK generates weapon collision in game.")
+                                       : QStringLiteral("The full and empty loose magazines a pack ships, in the magazine carrier frame. Capture each in "
+                                                        "Operate with FULL WORLD MODEL or EMPTY WORLD MODEL, then generate its hulls, capture the visible "
+                                                        "model and cook it."));
     }
 
     void ReloadMakerController::invalidateCollisions()
@@ -103,7 +120,7 @@ namespace reloadmaker
     // mesh for the prepared world model.
     CollisionProfile ReloadMakerController::collisionSnapshot(int target, bool referenceOnly, bool captureRender)
     {
-        require(_workspace == CollisionsWorkspace, "Open the Collisions tab first");
+        require(collisionWorkspace(_workspace), "Open Reload builder > Magazines or Weapon collision first");
         require(!_loadThread && !_reloadCapturing && !_rebuildTimer->isActive(), "Wait for assembly and reload capture");
         const auto* weapon = currentWeapon();
         auto* model = activeModel();

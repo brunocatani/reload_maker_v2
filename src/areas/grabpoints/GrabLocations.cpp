@@ -267,7 +267,7 @@ namespace reloadmaker
         if (operation == "use_palm") {
             const auto a = operatingAnchor();
             if (a < 0 || !_partGripDraft || !_partGripDraft->surfaceContact || !sameGripAnchor(_partGripDraft->pose.placement, _handPoseAnchors[a].description)) {
-                fail("Pick a palm contact on this operating part in Part grip first.");
+                fail("Pick a palm contact on this operating part in Reload builder > Part grips first.");
             }
             g.points.append({ QUuid::createUuid().toString(QUuid::WithoutBraces), "Picked palm contact", _partGripDraft->surfaceContact->pointInAnchor, 3, 3 });
             i = g.points.size() - 1;

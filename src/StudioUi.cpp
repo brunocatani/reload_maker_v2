@@ -84,23 +84,39 @@ void ReloadMakerController::createUi() {
     _sourceMenu->addSeparator();
     connect(_sourceMenu->addAction("Reload source files"),&QAction::triggered,this,[this]{if(_libraryMode)startLibraryLoad();else openPackage(_packageText);});
     connect(_sourceMenu,&QMenu::aboutToShow,this,[this,dynamicSource,developmentSource]{dynamicSource->setChecked(_libraryMode);developmentSource->setChecked(!_libraryMode&&!_package.sourcePath.isEmpty());});
-    _workspaceButtons = new QButtonGroup(this);
-    // Stable workspace ids are persisted in projects and used by MCP clients;
-    // display order is independent of the id.
-    const std::pair<QString, int> workspaces[]{{"Operate", OperateWorkspace},
-        {"Hands && grips", GripsWorkspace}, {"Reload", PhasesWorkspace},{"Sounds",SoundsWorkspace},{"Collisions",CollisionsWorkspace},{"Scopes",ScopesWorkspace}};
-    for (const auto& [title, id] : workspaces) {
+    // The rail shows pages; each page or builder step opens a stable,
+    // persisted workspace id (src/areas/shell/RailPages.cpp).
+    _railButtons = new QButtonGroup(this);
+    const std::pair<QString, RailPage> pages[]{{"Operate", RailPage::Operate}, {"Reload builder", RailPage::Builder},
+        {"Poses library", RailPage::Poses}, {"Sounds", RailPage::Sounds}, {"Scopes", RailPage::Scopes}};
+    for (const auto& [title, page] : pages) {
         auto* button = new QPushButton(title, header);
         button->setCheckable(true);
         button->setObjectName("WorkspaceButton");
-        _workspaceButtons->addButton(button, id);
+        _railButtons->addButton(button, int(page));
         header->addWidget(button);
     }
+    _builderStepButtons = new QButtonGroup(this);
+    auto* builderSteps = new QWidget(header);
+    auto* builderLayout = new QHBoxLayout(builderSteps);
+    builderLayout->setContentsMargins(12, 0, 0, 0);
+    builderLayout->setSpacing(2);
+    const std::pair<QString, BuilderStep> steps[]{{"Reload", BuilderStep::Reload}, {"Part grips", BuilderStep::PartGrips},
+        {"Mechanisms", BuilderStep::Mechanisms}, {"Grab points", BuilderStep::GrabPoints}, {"Magazines", BuilderStep::Magazines}};
+    for (const auto& [title, step] : steps) {
+        auto* button = new QPushButton(title, builderSteps);
+        button->setCheckable(true);
+        button->setObjectName("BuilderStepButton");
+        _builderStepButtons->addButton(button, int(step));
+        builderLayout->addWidget(button);
+    }
+    _builderStepsAction = header->addWidget(builderSteps);
     auto* spacer = new QWidget(header);
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     header->addWidget(spacer);
     mainMenu->addSeparator();
     connect(mainMenu->addAction("Setup && tools…"),&QAction::triggered,this,&ReloadMakerController::showSetup);
+    connect(mainMenu->addAction("Weapon collision…"),&QAction::triggered,this,[this]{setWorkspace(WeaponCollisionWorkspace);});
     connect(mainMenu->addAction("Home"),&QAction::triggered,this,&ReloadMakerController::showHome);
     connect(mainMenu->addAction("Author reload…"),&QAction::triggered,this,&ReloadMakerController::showAuthoringRoadmap);
     connect(mainMenu->addAction("Reload library…"),&QAction::triggered,this,&ReloadMakerController::showPackCoverage);
@@ -180,7 +196,7 @@ void ReloadMakerController::createUi() {
     _partList->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     setupLayout->addWidget(_partList, 1);
     _pages->addTab(setup, "Loadout");
-    // One native clip list; Reload phases shows it, Hands & grips uses the
+    // One native clip list; Reload phases shows it, the hand editor uses the
     // transport's clip picker over the same model.
     _animationList = new QListWidget(_window);
     _animationList->hide();
@@ -306,10 +322,6 @@ void ReloadMakerController::createUi() {
     _handPoseDock->setMaximumWidth(480);
     _window->removeDockWidget(_handPoseDock);
     _window->addDockWidget(Qt::RightDockWidgetArea, _handPoseDock);
-    _handPoseDock->setWindowTitle("HANDS && GRIPS");
-    _handPosePages->setTabText(0, "Finger poses");
-    _handPosePages->setTabText(1, "Part grip");
-    _handPosePages->setTabText(2, "Mechanism");
     createFingerEditor();
     // Short controls and scrollable inspectors remain usable on smaller screens.
     for (int page : {0, 1, 3}) {
@@ -321,6 +333,8 @@ void ReloadMakerController::createUi() {
         scroll->setWidget(content);
         _handPosePages->insertTab(page, scroll, title);
     }
+    // The rail's Poses library page and Reload builder steps choose the page.
+    _handPosePages->tabBar()->hide();
     _reloadGraphDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
     _reloadGraphDock->setMinimumHeight(170);
     _reloadGraphDock->setMaximumHeight(360);
@@ -356,7 +370,8 @@ void ReloadMakerController::createUi() {
     connect(labels,&QCheckBox::toggled,this,[this](bool show) {
         _showPartLabels=show;if(_slotOverlay)_slotOverlay->setActive(show&&loadoutPageActive());
     });
-    connect(_workspaceButtons, &QButtonGroup::idClicked, this, &ReloadMakerController::setWorkspace);
+    connect(_railButtons, &QButtonGroup::idToggled, this, [this](int page, bool checked) { if (checked) showRailPage(RailPage(page)); });
+    connect(_builderStepButtons, &QButtonGroup::idToggled, this, [this](int step, bool checked) { if (checked) showBuilderStep(BuilderStep(step)); });
     connect(diagnostics, &QAction::toggled, _detailsDock, &QWidget::setVisible);
     connect(_detailsDock,&QDockWidget::visibilityChanged,diagnostics,&QAction::setChecked);
     connect(saveProject, &QAction::triggered, this, [this] { saveSession(); });
@@ -368,14 +383,14 @@ void ReloadMakerController::createUi() {
     connect(saveShortcut, &QShortcut::activated, this, [this] { saveSession(); });
     auto* fitShortcut = new QShortcut(QKeySequence("F"), _window);
     connect(fitShortcut, &QShortcut::activated, this, [this] { (void)fitWeapon(); });
-    for (int i = 0; i < int(std::size(workspaces)); ++i) {
+    for (int i = 0; i < int(std::size(pages)); ++i) {
         auto* shortcut = new QShortcut(QKeySequence(QString("Ctrl+%1").arg(i+1)), _window);
-        connect(shortcut, &QShortcut::activated, this, [this, id = workspaces[i].second] { setWorkspace(id); });
+        connect(shortcut, &QShortcut::activated, this, [this, page = pages[i].second] { showRailPage(page); });
     }
 }
 
 bool ReloadMakerController::validWorkspace(int workspace) {
-    return workspace == GripsWorkspace || workspace == PhasesWorkspace || workspace == CollisionsWorkspace || workspace == ScopesWorkspace || simulationWorkspace(workspace);
+    return workspace == GripsWorkspace || workspace == PhasesWorkspace || collisionWorkspace(workspace) || workspace == ScopesWorkspace || simulationWorkspace(workspace);
 }
 
 bool ReloadMakerController::mechanismPageActive() const {
@@ -406,21 +421,21 @@ void ReloadMakerController::setWorkspace(int workspace) {
     }
     _workspace = workspace;
     if(workspace!=GripsWorkspace)_magazineFitPreview=false;
-    _workspaceButtons->button(workspace)->setChecked(true);
+    syncRail();
     // Reload replaces the loadout rail with the reload page and the native
-    // clip list; Operate and Hands & grips keep the loadout.
+    // clip list; Operate and the hand editor keep the loadout.
     const bool phases = workspace == PhasesWorkspace;
     _pages->setCurrentIndex(phases ? kReloadPage : kLoadoutPage);
     _packageDock->setWindowTitle(phases ? "RELOAD" : "LOADOUT");
     _simulationDock->setVisible(workspace == OperateWorkspace);
     _soundsDock->setVisible(workspace==SoundsWorkspace);
-    _collisionsDock->setVisible(workspace==CollisionsWorkspace);
+    _collisionsDock->setVisible(collisionWorkspace(workspace));
     _scopesDock->setVisible(workspace==ScopesWorkspace);
     if(workspace==ScopesWorkspace){if(_playing)togglePlayback();_reloadPlaying=false;_reloadPreviewTimer->stop();refreshScopeTargets();}
-    if(workspace==CollisionsWorkspace){if(_playing)togglePlayback();_reloadPlaying=false;_reloadPreviewTimer->stop();refreshCollisions();}
+    if(collisionWorkspace(workspace)){if(_playing)togglePlayback();_reloadPlaying=false;_reloadPreviewTimer->stop();showCollisionSubject();refreshCollisions();}
     _reloadGraphDock->setVisible(phases);
     _handPoseDock->setVisible(workspace == GripsWorkspace);
-    // Hands & grips needs a frame to capture from; Reload shows the transport
+    // The hand editor needs a frame to capture from; Reload shows the transport
     // only while a non-reload clip is being previewed.
     _timelineDock->setVisible(workspace == GripsWorkspace && !_magazineFitPreview);
     if (_slotOverlay) _slotOverlay->setActive(loadoutPageActive() && _showPartLabels);
@@ -487,6 +502,8 @@ void ReloadMakerController::applyStyle() {
         QPushButton:checked, QPushButton#PrimaryButton { color:#efffff; background:#235854; border-color:#4c928b; }
         QPushButton#WorkspaceButton { min-width:96px; padding:10px; border-color:transparent; background:transparent; }
         QPushButton#WorkspaceButton:checked { background:#26423f; color:#91ddd0; border-bottom:2px solid #74c4b3; }
+        QPushButton#BuilderStepButton { padding:6px 10px; border-color:transparent; background:transparent; color:#a9b8b5; }
+        QPushButton#BuilderStepButton:checked { color:#91ddd0; border-bottom:2px solid #74c4b3; }
         QTabWidget::pane { border:0; }
         QTabBar::tab { background:#1d2931; color:#98adb8; padding:10px 14px; }
         QTabBar::tab:selected { background:#2a4646; color:#d8fff5; }

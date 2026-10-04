@@ -376,7 +376,7 @@ namespace reloadmaker
             return;
         }
         // The normal selector is the active assignment. Historical snapshots are
-        // available explicitly in Hands & grips, not mixed with the current fit.
+        // available explicitly in the hand editor, not mixed with the current fit.
         showMagazineGrabGrip(&*selected);
         _magazineGrabBridge = {};
         for (int i = 0; i < _nodeBindings.size(); ++i) {

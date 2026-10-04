@@ -21,6 +21,7 @@ namespace reloadmaker
         showHandEditorPage();
         handEditorPageChanged();
         noteDocumentChange("hand editor page");
+        syncRail();
     }
 
     // Leaving a page ends its picking and previews; finger, grip and

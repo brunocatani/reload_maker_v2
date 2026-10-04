@@ -27,7 +27,7 @@ void ReloadMakerController::createCollisionsUi(){
     connect(_window->getGLView(),&GLView::paintUpdate,this,[this]{paintCollisions();});
 }
 void ReloadMakerController::paintCollisions(){
-    if(_workspace!=CollisionsWorkspace||!_collisions||!_collisionWorkshop.overlay())return;
+    if(!collisionWorkspace(_workspace)||!_collisions||!_collisionWorkshop.overlay())return;
     auto* view=_window->getGLView();const auto size=QSizeF(view->width(),view->height());const auto dpr=view->devicePixelRatio();QOpenGLPaintDevice device(QSize(qRound(size.width()*dpr),qRound(size.height()*dpr)));device.setDevicePixelRatio(dpr);QPainter painter(&device);painter.setRenderHint(QPainter::Antialiasing);
     const auto camera=view->reloadMakerWorldToClip();
     auto draw=[&](const CollisionProfile& profile,bool baseline){QHash<QString,QMatrix4x4> frames;for(const auto& s:profile.sources)frames.insert(s.key,camera*s.frame);
