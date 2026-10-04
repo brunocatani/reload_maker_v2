@@ -1,0 +1,16 @@
+{
+    "format": 1,
+    "id": "rifle.reciprocating-detachable.v1",
+    "label": "Semi-auto rifle / sniper — reciprocating bolt",
+    "category": "Rifle / Sniper",
+    "model": {
+        "feed": {
+            "container": "detachable",
+            "loadingPoints": [ { "id": "magwell", "unit": "container", "destination": "container" } ]
+        },
+        "mechanisms": [
+            { "id": "bolt", "kind": "reciprocating-bolt", "roles": [ "extract", "eject", "cock", "chamber" ], "return": "spring" }
+        ],
+        "fire": { "motion": "native-clip", "afterShot": "automatic-cycle", "ejection": "on-fire" }
+    }
+}

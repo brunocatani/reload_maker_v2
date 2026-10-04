@@ -1,0 +1,16 @@
+{
+    "format": 1,
+    "id": "pistol.slide-detachable.v1",
+    "label": "Pistol — slide and magazine",
+    "category": "Pistol",
+    "model": {
+        "feed": {
+            "container": "detachable",
+            "loadingPoints": [ { "id": "magwell", "unit": "container", "destination": "container" } ]
+        },
+        "mechanisms": [
+            { "id": "slide", "kind": "slide", "roles": [ "extract", "eject", "cock", "chamber" ], "return": "spring", "locksOpen": true }
+        ],
+        "fire": { "motion": "native-clip", "afterShot": "automatic-cycle", "ejection": "on-fire", "lockOpen": "slide" }
+    }
+}

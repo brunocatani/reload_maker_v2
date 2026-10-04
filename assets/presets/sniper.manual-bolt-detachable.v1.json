@@ -1,0 +1,16 @@
+{
+    "format": 1,
+    "id": "sniper.manual-bolt-detachable.v1",
+    "label": "Bolt-action sniper — detachable magazine",
+    "category": "Sniper",
+    "model": {
+        "feed": {
+            "container": "detachable",
+            "loadingPoints": [ { "id": "magwell", "unit": "container", "destination": "container" } ]
+        },
+        "mechanisms": [
+            { "id": "bolt", "kind": "turn-bolt", "roles": [ "extract", "eject", "cock", "chamber" ], "return": "stays" }
+        ],
+        "fire": { "motion": "nothing", "afterShot": "manual-cycle", "ejection": "on-manual-cycle", "manualCycle": "bolt" }
+    }
+}

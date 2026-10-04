@@ -1,7 +1,14 @@
 // The general weapon model must describe every weapon of the model probe
 // (rework 12 §1) plus two existing families, and reject broken descriptions.
+// The bundled presets must load and each be one DIAMOND behavior; any other
+// combination must map to a preset's behavior or be refused with a reason.
+#include "domain/presets/WeaponPresets.h"
 #include "domain/weapon/WeaponModel.h"
 
+#include <QDir>
+#include <QFile>
+#include <QSet>
+#include <QTemporaryDir>
 #include <QTextStream>
 #include <functional>
 #include <stdexcept>
@@ -188,13 +195,119 @@ namespace
                                                       m.feed.loadingPoints[0].destination = LoadDestination::Chamber; },
                 "clip without a container");
     }
+
+    // DIAMOND accepts exactly these template ids (ContentCatalog.cpp mechanism()).
+    const QSet<QString> diamondTemplates{ "pistol.slide-detachable.v1", "rifle.ar15-detachable.v1",
+                                          "rifle.operating-handle-rocking.v1", "rifle.reciprocating-detachable.v1",
+                                          "sniper.manual-bolt-detachable.v1" };
+
+    QVector<WeaponPreset> bundledPresets(const QString& directory)
+    {
+        QVector<WeaponPreset> presets;
+        QString error;
+        check(loadWeaponPresets(directory, presets, error), error);
+        return presets;
+    }
+
+    void loadsBundledPresets(const QString& directory)
+    {
+        const QVector<WeaponPreset> presets = bundledPresets(directory);
+        QSet<QString> ids;
+        for (const WeaponPreset& preset : presets) {
+            ids.insert(preset.id);
+            check(diamondSupport(preset.model).action.has_value(), preset.id + " is not a DIAMOND behavior");
+        }
+        check(ids == diamondTemplates, "Bundled presets differ from the template ids DIAMOND accepts");
+    }
+
+    // "Fully custom": every combination either maps to the behavior of one
+    // bundled preset, so a template id exists, or is refused with a reason.
+    void mapsOrRefusesEveryCombination(const QString& directory)
+    {
+        QSet<int> presetActions;
+        for (const WeaponPreset& preset : bundledPresets(directory)) {
+            presetActions.insert(static_cast<int>(*diamondSupport(preset.model).action));
+        }
+        int supported = 0;
+        for (const ContainerKind container : { ContainerKind::None, ContainerKind::Detachable, ContainerKind::Fixed }) {
+            for (int kind = 0; kind <= static_cast<int>(MechanismKind::Latch); ++kind) {
+                for (const AfterShot afterShot : { AfterShot::AutomaticCycle, AfterShot::ManualCycle, AfterShot::OpenBolt }) {
+                    WeaponModel model;
+                    model.feed.container = container;
+                    if (container == ContainerKind::Detachable) {
+                        model.feed.loadingPoints = { magwell() };
+                    } else if (container == ContainerKind::Fixed) {
+                        model.feed.loadingPoints = { point("port", UnitKind::Round, LoadDestination::Container, 5) };
+                    }
+                    model.mechanisms = { byHand("action", static_cast<MechanismKind>(kind), fullCycle, MechanismReturn::Stays) };
+                    model.fire = afterShot == AfterShot::ManualCycle ? manualFire("action")
+                               : Fire{ FireMotion::NativeClip, afterShot, CaseEjection::OnFire, {}, {} };
+                    const DiamondSupport support = diamondSupport(model);
+                    check(support.action.has_value() != !support.refusal.isEmpty(), "A combination was both mapped and refused");
+                    if (support.action) {
+                        check(presetActions.contains(static_cast<int>(*support.action)), "A combination mapped to no bundled preset");
+                        ++supported;
+                    }
+                }
+            }
+        }
+        check(supported == 5, QStringLiteral("Expected the five DIAMOND actions to map, got %1").arg(supported));
+    }
+
+    void probeWeaponsMapToDiamondOrWait()
+    {
+        const QSet<QString> runnable{ "Glock", "M1A", "P90" };
+        for (const Described& described : probeWeapons()) {
+            const QString name = QString::fromLatin1(described.weapon).section(' ', 0, 0);
+            const DiamondSupport support = diamondSupport(described.model);
+            check(support.action.has_value() == runnable.contains(name),
+                  QStringLiteral("%1: DIAMOND support %2 (%3)").arg(described.weapon).arg(support.action.has_value()).arg(support.refusal));
+        }
+    }
+
+    void refusesBrokenPresetFiles(const QString& directory)
+    {
+        QFile source(QDir(directory).filePath("pistol.slide-detachable.v1.json"));
+        check(source.open(QIODevice::ReadOnly), "Missing pistol preset");
+        const QByteArray pistol = source.readAll();
+        WeaponPreset preset;
+        QString error;
+        check(decodeWeaponPreset(pistol, preset, error), error);
+        QByteArray future = pistol;
+        future.replace("\"format\": 1", "\"format\": 2");
+        check(!decodeWeaponPreset(future, preset, error), "Unknown preset format accepted");
+        QByteArray unknownKind = pistol;
+        unknownKind.replace("\"kind\": \"slide\"", "\"kind\": \"laser\"");
+        check(!decodeWeaponPreset(unknownKind, preset, error), "Unknown mechanism kind accepted");
+        QByteArray inconsistent = pistol;
+        inconsistent.replace("\"lockOpen\": \"slide\"", "\"lockOpen\": \"magwell\"");
+        check(!decodeWeaponPreset(inconsistent, preset, error) && error.contains("cannot be held open"),
+              "Inconsistent preset accepted: " + error);
+
+        QTemporaryDir twice;
+        check(twice.isValid(), "No temporary folder");
+        for (const char* name : { "a.json", "b.json" }) {
+            QFile copy(twice.filePath(name));
+            check(copy.open(QIODevice::WriteOnly) && copy.write(pistol) == pistol.size(), "Cannot write preset copy");
+        }
+        QVector<WeaponPreset> presets;
+        check(!loadWeaponPresets(twice.path(), presets, error), "Two presets with one id and behavior accepted");
+    }
 }
 
-int main()
+int main(int argc, char** argv)
 {
     try {
+        if (argc < 2) {
+            throw std::runtime_error("usage: WeaponModelTests <assets/presets>");
+        }
+        const QString presets = QString::fromLocal8Bit(argv[1]);
         describesProbeWeapons();
         refusesBrokenModels();
+        loadsBundledPresets(presets);
+        mapsOrRefusesEveryCombination(presets);
+        probeWeaponsMapToDiamondOrWait();
+        refusesBrokenPresetFiles(presets);
         QTextStream(stdout) << "WeaponModel tests passed\n";
         return 0;
     } catch (const std::exception& e) {

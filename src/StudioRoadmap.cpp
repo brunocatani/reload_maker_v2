@@ -100,7 +100,7 @@ QJsonObject ReloadMakerController::auditSources(const QJsonObject& evidence) con
 }
 QJsonObject ReloadMakerController::roadmapState() const {
     const auto key=roadmapKey();const auto saved=_authoringRoadmaps[key].toObject();QJsonArray steps;
-    QJsonArray templates;for(const auto& item:reloadTemplates)templates.append(QJsonObject{{"id",item.id},{"label",item.label},{"category",item.category}});
+    QJsonArray templates;for(const auto& item:reloadPresets())templates.append(QJsonObject{{"id",item.id},{"label",item.label},{"category",item.category}});
     steps=roadmapProgress();for(int i=0;i<titles.size();++i){auto step=steps[i].toObject();step["title"]=titles[i];step["instruction"]=instructions[i];steps[i]=step;}
     return {{"key",key},{"weapon",currentWeapon()?poseRecordKey(currentWeapon()->formId):QString()},
         {"template",currentWeapon()?templateIdentity(simulationMechanism()):QString()},{"templates",templates},{"templateAssigned",!assignedTemplate().isEmpty()},
@@ -141,11 +141,11 @@ void ReloadMakerController::showAuthoringRoadmap() {
     auto* templates=new QComboBox;templateRow->addWidget(templates,1);auto* assign=new QPushButton("Use this template");templateRow->addWidget(assign);
     auto* familyInfo=new QLabel;familyInfo->setWordWrap(true);layout->addWidget(familyInfo);
     const auto currentTemplate=roadmapState()["template"].toString();
-    for(const auto& item:reloadTemplates)if(currentTemplate==item.id){family->setCurrentText(QString(item.category).section(" / ",0,0));break;}
-    const auto filterTemplates=[&]{templates->clear();for(const auto& item:reloadTemplates)if(QString(item.category).split(" / ").contains(family->currentText()))templates->addItem(item.label,item.id);
+    for(const auto& item:reloadPresets())if(currentTemplate==item.id){family->setCurrentText(item.category.section(" / ",0,0));break;}
+    const auto filterTemplates=[&]{templates->clear();for(const auto& item:reloadPresets())if(item.category.split(" / ").contains(family->currentText()))templates->addItem(item.label,item.id);
         const int active=templates->findData(currentTemplate);if(active>=0)templates->setCurrentIndex(active);
         assign->setEnabled(currentWeapon()&&templates->count()>0);
-        familyInfo->setText(templates->count()>0?"Choose the mechanism that matches the source weapon.":"This family has no implemented template yet. It requires a new behavior before it can be authored and exported.");};
+        familyInfo->setText(reloadPresets().isEmpty()?"Behavior templates are unavailable: "+reloadPresetsError():templates->count()>0?"Choose the mechanism that matches the source weapon.":"This family has no implemented template yet. It requires a new behavior before it can be authored and exported.");};
     connect(family,qOverload<int>(&QComboBox::currentIndexChanged),&dialog,[&](int){filterTemplates();});filterTemplates();
     auto* body=new QHBoxLayout;layout->addLayout(body,1);auto* list=new QListWidget;list->setMinimumWidth(320);body->addWidget(list);
     for(int i=0;i<titles.size();++i)list->addItem(QString("%1  %2").arg(i+1,2,10,QChar('0')).arg(titles[i]));

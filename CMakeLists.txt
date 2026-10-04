@@ -57,6 +57,8 @@ foreach(suite IN LISTS reloadmaker_suites)
         "${simulation_fixtures}/ru556-reload-recipe.json" "${simulation_fixtures}/m1a-reload-recipe.json")
   elseif(suite STREQUAL "Ammunition")
     set(suite_arguments "${RELOADMAKER_GLOCK_PACKAGE}/Glock19x.esp")
+  elseif(suite STREQUAL "WeaponModel")
+    set(suite_arguments "${CMAKE_SOURCE_DIR}/assets/presets")
   endif()
   add_test(NAME ${suite}
     COMMAND powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_SOURCE_DIR}/tools/Invoke-Tests.ps1"
