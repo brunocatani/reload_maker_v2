@@ -25,7 +25,7 @@ void ReloadMakerController::createScopesUi() {
     auto* panel=new QWidget;auto* layout=new QVBoxLayout(panel);layout->setContentsMargins(14,14,14,14);
     auto* hint=new QLabel("Select the installed optic. Pick the rear lens, fit the green ring to its clear opening, and point the camera arrow down the tube.");hint->setWordWrap(true);layout->addWidget(hint);
     _scopePart=new QComboBox;layout->addWidget(_scopePart);
-    auto* pick=new QPushButton("PICK REAR LENS");pick->setObjectName("PrimaryButton");layout->addWidget(pick);
+    auto* pick=new QPushButton("Pick rear lens");pick->setObjectName("PrimaryButton");layout->addWidget(pick);
     auto* form=new QFormLayout;_scopeName=new QLineEdit;_scopeName->setMaxLength(128);form->addRow("Profile name",_scopeName);
     const auto spin=[&](const QString& label,double low,double high,int decimals){auto* value=new QDoubleSpinBox;value->setRange(low,high);value->setDecimals(decimals);value->setSingleStep(.1);value->setKeyboardTracking(false);form->addRow(label,value);return value;};
     _scopeRadius=spin("Lens radius",.02,32,3);_scopeAspect=spin("Height / width",.1,1,3);
@@ -34,8 +34,8 @@ void ReloadMakerController::createScopesUi() {
     for(int i=0;i<3;++i)_scopePosition[i]=spin(QString("Local %1").arg(QChar("XYZ"[i])),-10000,10000,4);
     for(int i=0;i<3;++i)_scopeRotation[i]=spin(QString("Rotation %1").arg(QChar("XYZ"[i])),-360,360,3);
     layout->addLayout(form);
-    auto* save=new QPushButton("SAVE SCOPE");auto* exportButton=new QPushButton("EXPORT FOR TRUE SCOPES");
-    auto* importButton=new QPushButton("IMPORT SCOPE PROFILE");auto* remove=new QPushButton("REMOVE CURRENT PROFILE");
+    auto* save=new QPushButton("Save scope");auto* exportButton=new QPushButton("Export for True Scopes");
+    auto* importButton=new QPushButton("Import scope profile");auto* remove=new QPushButton("Remove current profile");
     for(auto* b:{save,exportButton,importButton,remove})layout->addWidget(b);
     _scopeStatus=new QLabel;_scopeStatus->setWordWrap(true);_scopeStatus->setObjectName("Hint");layout->addWidget(_scopeStatus);layout->addStretch();
     auto* scroll=new QScrollArea;scroll->setWidgetResizable(true);scroll->setWidget(panel);_scopesDock->setWidget(scroll);_window->addDockWidget(Qt::RightDockWidgetArea,_scopesDock);_scopesDock->hide();

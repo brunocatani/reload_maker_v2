@@ -1,5 +1,5 @@
 // Which weapon and arms body are being authored. Both are document fields:
-// the source bar, the coverage dialog and MCP change the weapon through
+// the weapon picker, the coverage dialog and MCP change the weapon through
 // selectWeapon(); session restores assign the fields directly.
 #include "ReloadMakerController.h"
 #include "areas/loadout/LoadoutNames.h"

@@ -5,9 +5,12 @@
 #include "ReloadMakerController.h"
 #include "PoseEvaluator.h"
 #include "areas/operate/PlaybackTimeline.h"
+#include "design/Icons.h"
+#include "design/Theme.h"
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
 #include <QScopeGuard>
@@ -137,6 +140,10 @@ namespace reloadmaker
             const QSignalBlocker block(_clipCombo);
             _clipCombo->setCurrentIndex(_selectedAction);
         }
+        if (_clipPathLabel) {
+            const bool valid = _selectedAction >= 0 && _selectedAction < _animationActions.size();
+            _clipPathLabel->setText(valid ? _animationActions[_selectedAction].resourcePath : QString());
+        }
     }
 
     void ReloadMakerController::togglePlayback()
@@ -167,7 +174,9 @@ namespace reloadmaker
 
     void ReloadMakerController::showPlaybackState()
     {
-        _playButton->setText(_playing ? QStringLiteral("PAUSE") : QStringLiteral("PLAY"));
+        _playButton->setIcon(design::icon(_playing ? design::Icon::Pause : design::Icon::Play, design::color::onPrimary));
+        _playButton->setToolTip(_playing ? QStringLiteral("Pause") : QStringLiteral("Play"));
+        _playButton->setAccessibleName(_playButton->toolTip());
     }
 
     void ReloadMakerController::replay()

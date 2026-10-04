@@ -360,7 +360,7 @@ namespace reloadmaker
         settings.setValue("paths/mo2Instance", _launchSnapshot.instancePath);
         settings.setValue("paths/gameData", _gameData);
         restoreSessionSelection();
-        setStatus("MO2 profile indexed. Choose a plugin, then its weapon, in the source bar.");
+        setStatus("MO2 profile indexed. Choose a plugin, then its weapon, with the weapon button.");
         if (_selectedWeapon < 0) {
             offerPluginChoice();
         }

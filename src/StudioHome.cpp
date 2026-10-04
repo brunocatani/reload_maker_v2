@@ -17,7 +17,7 @@ namespace reloadmaker {
 void ReloadMakerController::showHome() {
     if(auto* existing=_window->findChild<QDialog*>("MakerHome")){existing->show();existing->raise();return;}
     auto* dialog=new QDialog(_window);dialog->setObjectName("MakerHome");dialog->setAttribute(Qt::WA_DeleteOnClose);dialog->setWindowTitle("Reload Maker");dialog->resize(780,470);
-    auto* layout=new QVBoxLayout(dialog);auto* heading=new QLabel("Physical reloads · create, share and use");heading->setObjectName("Section");layout->addWidget(heading);
+    auto* layout=new QVBoxLayout(dialog);auto* heading=new QLabel("PHYSICAL RELOADS · CREATE, SHARE AND USE");heading->setObjectName("Section");layout->addWidget(heading);
     auto* workspace=new QLabel("Workspace: "+QDir::toNativeSeparators(studioRoot()));workspace->setWordWrap(true);workspace->setTextInteractionFlags(Qt::TextSelectableByMouse);layout->addWidget(workspace);
     auto* routes=new QHBoxLayout;layout->addLayout(routes,1);
     const auto card=[&](const QString& title,const QString& description,const QString& action){auto* box=new QGroupBox(title);auto* content=new QVBoxLayout(box);auto* text=new QLabel(description);text->setWordWrap(true);content->addWidget(text,1);auto* button=new QPushButton(action);button->setMinimumHeight(42);content->addWidget(button);routes->addWidget(box,1);return button;};

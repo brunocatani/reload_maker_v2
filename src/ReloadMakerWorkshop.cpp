@@ -1,10 +1,15 @@
 #include "ReloadMakerController.h"
+#include "design/DesignWidgets.h"
+#include "design/Icons.h"
+#include "design/Theme.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDesktopServices>
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
+#include <QFrame>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -19,65 +24,67 @@
 #include <algorithm>
 
 namespace reloadmaker {
+    // The Mechanisms inspector, in the order a part is authored: the part,
+    // how it moves, the parts that move with it, an optional hand, then save.
+    // Exact numbers and saved files stay folded away.
     void ReloadMakerController::createMechanismUi()
     {
+        using namespace design;
         auto* scroll=new QScrollArea(_handPosePages);
         scroll->setWidgetResizable(true);
+        scroll->setFrameShape(QFrame::NoFrame);
         auto* page=new QWidget(scroll);
         auto* layout=new QVBoxLayout(page);
-        layout->setContentsMargins(12,12,12,12);
-        layout->setSpacing(9);
-        const auto heading=[page,layout](const QString& title){
-            auto* label=new QLabel(title,page);
-            label->setStyleSheet("color:#e6bd7d;font-weight:700;padding-top:5px;");
-            layout->addWidget(label);
+        layout->setContentsMargins(16,10,16,16);
+        layout->setSpacing(8);
+        const auto section=[page,layout](const QString& title,const QString& hint){
+            layout->addSpacing(8);
+            layout->addWidget(sectionLabel(title,page));
+            if(!hint.isEmpty())layout->addWidget(hintLabel(hint,page));
         };
-        heading("01   CHOOSE THE PART");
-        _workshopPick=new QPushButton("PICK PART IN 3D",page);
-        _workshopPick->setObjectName("PrimaryButton");
-        layout->addWidget(_workshopPick);
+        const auto row=[layout](std::initializer_list<QWidget*> widgets){
+            auto* line=new QHBoxLayout();line->setSpacing(6);
+            for(auto* widget:widgets)line->addWidget(widget,widget?1:0);
+            layout->addLayout(line);
+            return line;
+        };
+
+        section("Part","Choose the moving part, or pick it on the model.");
         _workshopPart=new QComboBox(page);
-        _workshopPart->setMinimumContentsLength(18);
+        _workshopPart->setMinimumContentsLength(14);
         _workshopPart->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-        layout->addWidget(_workshopPart);
+        _workshopPick=new QPushButton("Pick in 3D",page);
+        _workshopPick->setToolTip("Click the part on the model");
+        auto* partRow=row({_workshopPart});partRow->addWidget(_workshopPick);
 
-        heading("02   HAND POSE  /  OPTIONAL");
-        _workshopPose=new QComboBox(page);
-        _workshopPose->setMinimumContentsLength(18);
-        _workshopPose->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-        layout->addWidget(_workshopPose);
-        auto* handRow=new QHBoxLayout();
-        _workshopContact=new QPushButton("PLACE PALM",page);
-        _workshopHand=new QPushButton("ADJUST HAND",page);
-        _workshopHand->setCheckable(true);
-        handRow->addWidget(_workshopContact);handRow->addWidget(_workshopHand);
-        layout->addLayout(handRow);
-
-        heading("03   MOVEMENT STEPS");
+        section("Movement","Each step moves the part along one axis or turns it around one pivot.");
         _mechanismStages=new QListWidget(page);
-        _mechanismStages->setMaximumHeight(105);
-        _mechanismStages->setMinimumHeight(65);
+        _mechanismStages->setMaximumHeight(120);
+        _mechanismStages->setMinimumHeight(70);
         layout->addWidget(_mechanismStages);
-        auto* sequence=new QHBoxLayout();
-        _workshopAddStage=new QPushButton("+ NEXT STEP",page);
-        auto* remove=new QPushButton("REMOVE",page);
-        auto* up=new QPushButton("↑",page);auto* down=new QPushButton("↓",page);
-        up->setToolTip("Move selected step earlier");down->setToolTip("Move selected step later");
-        up->setMaximumWidth(36);down->setMaximumWidth(36);
-        for(auto* button:{_workshopAddStage,remove,up,down})sequence->addWidget(button);
-        layout->addLayout(sequence);
-        auto* mode=new QHBoxLayout();
-        _workshopTeach=new QPushButton("EDIT MOVEMENT",page);_workshopTeach->setCheckable(true);
-        _mechanismStart=new QPushButton("TEST GRAB",page);_mechanismStart->setCheckable(true);
-        mode->addWidget(_workshopTeach);mode->addWidget(_mechanismStart);layout->addLayout(mode);
+        _workshopAddStage=new QPushButton("Add step",page);
+        auto* remove=new QPushButton("Remove",page);
+        auto* up=new QPushButton(page);auto* down=new QPushButton(page);
+        up->setObjectName("IconButton");down->setObjectName("IconButton");
+        up->setIcon(icon(Icon::ChevronUp,color::textSecondary));down->setIcon(icon(Icon::ChevronDown,color::textSecondary));
+        up->setToolTip("Move the selected step earlier");down->setToolTip("Move the selected step later");
+        up->setAccessibleName("Step earlier");down->setAccessibleName("Step later");
+        auto* sequence=row({});
+        sequence->addWidget(_workshopAddStage);sequence->addWidget(remove);sequence->addStretch(1);
+        sequence->addWidget(up);sequence->addWidget(down);
+        _workshopTeach=new QPushButton("Edit movement",page);_workshopTeach->setCheckable(true);
+        _workshopTeach->setToolTip("Drag the part's arrows and rings to set where each step ends");
+        _mechanismStart=new QPushButton("Test grab",page);_mechanismStart->setCheckable(true);
+        _mechanismStart->setToolTip("Grab and pull the part to check its limits and release rules");
+        row({_workshopTeach,_mechanismStart});
         _workshopStageFields=new QWidget(page);
-        auto* stageLayout=new QVBoxLayout(_workshopStageFields);stageLayout->setContentsMargins(0,0,0,0);
-        auto* tools=new QHBoxLayout();
-        _workshopMove=new QPushButton("MOVE  ↔",page);_workshopRotate=new QPushButton("ROTATE  ↻",page);
+        auto* stageLayout=new QVBoxLayout(_workshopStageFields);stageLayout->setContentsMargins(0,0,0,0);stageLayout->setSpacing(8);
+        auto* tools=new QHBoxLayout();tools->setSpacing(6);
+        _workshopMove=new QPushButton("Move",page);_workshopRotate=new QPushButton("Rotate",page);
         _workshopMove->setCheckable(true);_workshopRotate->setCheckable(true);
         tools->addWidget(_workshopMove);tools->addWidget(_workshopRotate);stageLayout->addLayout(tools);
-        _workshopPivot=new QPushButton("PICK ROTATION PIVOT IN 3D",page);stageLayout->addWidget(_workshopPivot);
-        _stageForward=new QLineEdit(page);_stageForward->setPlaceholderText("Step name · e.g. Lift / Pull");
+        _workshopPivot=new QPushButton("Pick rotation pivot in 3D",page);stageLayout->addWidget(_workshopPivot);
+        _stageForward=new QLineEdit(page);_stageForward->setPlaceholderText("Step name, e.g. Pull slide");
         stageLayout->addWidget(_stageForward);
         _stageRelease=new QComboBox(page);
         _stageRelease->addItems({"On release: stay where released","On release: return to this step's start","On release: return all the way to rest"});
@@ -85,26 +92,55 @@ namespace reloadmaker {
         layout->addWidget(_workshopStageFields);
 
         _workshopTestControls=new QWidget(page);
-        auto* sim=new QVBoxLayout(_workshopTestControls);sim->setContentsMargins(0,0,0,0);
-        _mechanismPoseOnGrab=new QCheckBox("Show chosen hand while grabbing",page);
+        auto* sim=new QVBoxLayout(_workshopTestControls);sim->setContentsMargins(0,0,0,0);sim->setSpacing(8);
+        _mechanismPoseOnGrab=new QCheckBox("Show the chosen hand while grabbing",page);
         _mechanismPoseOnGrab->setChecked(true);sim->addWidget(_mechanismPoseOnGrab);
         _mechanismSlider=new QSlider(Qt::Horizontal,page);_mechanismSlider->setRange(0,10000);sim->addWidget(_mechanismSlider);
-        auto* phase=new QHBoxLayout();
-        auto* previous=new QPushButton("← STEP",page);auto* next=new QPushButton("STEP →",page);auto* release=new QPushButton("RELEASE",page);
+        auto* phase=new QHBoxLayout();phase->setSpacing(6);
+        auto* previous=new QPushButton("Previous step",page);auto* next=new QPushButton("Next step",page);auto* release=new QPushButton("Release",page);
         phase->addWidget(previous);phase->addWidget(next);phase->addWidget(release);sim->addLayout(phase);
-        auto* stop=new QPushButton("STOP TEST / RESTORE ANIMATION",page);sim->addWidget(stop);
+        auto* stop=new QPushButton("Stop test",page);stop->setToolTip("Stop testing and restore the animation");sim->addWidget(stop);
         layout->addWidget(_workshopTestControls);
-        _workshopHint=new QLabel(page);_workshopHint->setWordWrap(true);_workshopHint->setTextFormat(Qt::PlainText);
-        _workshopHint->setStyleSheet("background:#25221d;color:#f1cf99;padding:10px;border-left:3px solid #b98748;");
+        _workshopHint=new QLabel(page);_workshopHint->setObjectName("Callout");
+        _workshopHint->setWordWrap(true);_workshopHint->setTextFormat(Qt::PlainText);
         layout->addWidget(_workshopHint);
-        _mechanismSave=new QPushButton("SAVE PART + HAND",page);_mechanismSave->setObjectName("PrimaryButton");layout->addWidget(_mechanismSave);
 
-        auto* advancedToggle=new QPushButton("PART DETAILS / EXACT VALUES / LINKED PARTS",page);
-        advancedToggle->setCheckable(true);layout->addWidget(advancedToggle);
-        auto* advanced=new QWidget(page);auto* details=new QVBoxLayout(advanced);details->setContentsMargins(0,0,0,0);
+        // The suggestion sits on the section heading so it is seen with the list.
+        layout->addSpacing(8);
+        auto* linkedHeader=new QHBoxLayout();linkedHeader->setSpacing(6);
+        linkedHeader->addWidget(sectionLabel("Linked parts",page),1,Qt::AlignBottom);
+        _mechanismSuggest=new QPushButton("Suggest from animation",page);
+        _mechanismSuggest->setObjectName("ViewChip");
+        _mechanismSuggest->setToolTip("Samples the current clip and marks the parts that moved with this part. A hint only; the ticks stay yours.");
+        linkedHeader->addWidget(_mechanismSuggest);
+        layout->addLayout(linkedHeader);
+        layout->addWidget(hintLabel("Parts that move with this one, like sights on a slide. Tick each linked part.",page));
+        _mechanismFollowers=new QListWidget(page);
+        _mechanismFollowers->setMinimumHeight(90);_mechanismFollowers->setMaximumHeight(180);
+        layout->addWidget(_mechanismFollowers);
+
+        section("Hand · optional","Show a hand on the part while you edit and test it.");
+        _workshopPose=new QComboBox(page);
+        _workshopPose->setMinimumContentsLength(14);
+        _workshopPose->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        layout->addWidget(_workshopPose);
+        _workshopContact=new QPushButton("Place palm",page);
+        _workshopHand=new QPushButton("Adjust hand",page);
+        _workshopHand->setCheckable(true);
+        row({_workshopContact,_workshopHand});
+
+        layout->addSpacing(8);
+        _mechanismSave=new QPushButton("Save part and hand",page);_mechanismSave->setObjectName("PrimaryButton");layout->addWidget(_mechanismSave);
+        _mechanismStatus=hintLabel({},page);_mechanismStatus->setTextFormat(Qt::PlainText);layout->addWidget(_mechanismStatus);
+
+        layout->addSpacing(4);
+        auto* advancedToggle=new QPushButton("Exact values and saved files",page);
+        advancedToggle->setObjectName("Disclosure");advancedToggle->setCheckable(true);
+        advancedToggle->setIcon(icon(Icon::ChevronRight,color::textMuted));layout->addWidget(advancedToggle);
+        auto* advanced=new QWidget(page);auto* details=new QVBoxLayout(advanced);details->setContentsMargins(0,0,0,0);details->setSpacing(8);
         _mechanismName=new QLineEdit(page);_mechanismName->setMaxLength(128);_mechanismName->setPlaceholderText("Saved part name");details->addWidget(_mechanismName);
-        auto* rest=new QPushButton("USE CURRENT ANIMATION FRAME AS REST",page);details->addWidget(rest);
-        auto* form=new QFormLayout();_stageReverse=new QLineEdit(page);_stageMotion=new QComboBox(page);
+        auto* rest=new QPushButton("Use current animation frame as rest",page);details->addWidget(rest);
+        auto* form=new QFormLayout();form->setSpacing(8);_stageReverse=new QLineEdit(page);_stageMotion=new QComboBox(page);
         _stageMotion->addItems({"Slide X","Slide Y","Slide Z","Rotate X","Rotate Y","Rotate Z"});
         _stageFrom=new QDoubleSpinBox(page);_stageTo=new QDoubleSpinBox(page);_stageRate=new QDoubleSpinBox(page);
         for(auto* spin:{_stageFrom,_stageTo}){spin->setRange(-10000,10000);spin->setDecimals(3);spin->setKeyboardTracking(false);}
@@ -113,17 +149,17 @@ namespace reloadmaker {
         form->addRow("Start value",_stageFrom);form->addRow("End value",_stageTo);form->addRow("Return units/s or °/s",_stageRate);
         auto* pivot=new QHBoxLayout();for(auto& spin:_stagePivot){spin=new QDoubleSpinBox(page);spin->setRange(-10000,10000);spin->setDecimals(3);spin->setKeyboardTracking(false);pivot->addWidget(spin);}
         form->addRow("Rotation pivot XYZ",pivot);details->addLayout(form);
-        auto* explanation=new QLabel("Each step uses the part's axes after the previous step. Rotation pivot is local to the step start, not the hand's grab point.",page);explanation->setWordWrap(true);details->addWidget(explanation);
-        details->addWidget(new QLabel("ADDITIONAL PARTS THAT MOVE WITH THIS PART",page));
-        _mechanismFollowers=new QListWidget(page);_mechanismFollowers->setMaximumHeight(140);details->addWidget(_mechanismFollowers);
-        auto* analyze=new QPushButton("SUGGEST LINKED PARTS FROM ANIMATION",page);details->addWidget(analyze);
+        details->addWidget(hintLabel("Each step uses the part's axes after the previous step. The rotation pivot is local to the step start, not the hand's grab point.",page));
+        details->addWidget(sectionLabel("Saved definitions",page));
         _mechanismList=new QComboBox(page);details->addWidget(_mechanismList);
-        auto* files=new QHBoxLayout();auto* load=new QPushButton("LOAD DEFINITION",page);auto* folder=new QPushButton("FILES",page);auto* refresh=new QPushButton("REFRESH",page);
+        auto* files=new QHBoxLayout();files->setSpacing(6);auto* load=new QPushButton("Load definition",page);auto* folder=new QPushButton("Open folder",page);auto* refresh=new QPushButton("Refresh",page);
         files->addWidget(load);files->addWidget(folder);files->addWidget(refresh);details->addLayout(files);
-        _mechanismStatus=new QLabel(page);_mechanismStatus->setWordWrap(true);_mechanismStatus->setTextFormat(Qt::PlainText);details->addWidget(_mechanismStatus);
         layout->addWidget(advanced);advanced->hide();layout->addStretch();scroll->setWidget(page);
-        _handPosePages->addTab(scroll,"PART WORKSHOP");
-        connect(advancedToggle,&QPushButton::toggled,advanced,&QWidget::setVisible);
+        _handPosePages->addTab(scroll,"Mechanisms");
+        connect(advancedToggle,&QPushButton::toggled,advanced,[advanced,advancedToggle](bool open){
+            advanced->setVisible(open);
+            advancedToggle->setIcon(icon(open?Icon::ChevronDown:Icon::ChevronRight,color::textMuted));
+        });
 
         _mechanismTimer=new QTimer(this);_mechanismTimer->setTimerType(Qt::PreciseTimer);_mechanismTimer->setInterval(16);
         connect(_mechanismTimer,&QTimer::timeout,this,&ReloadMakerController::advanceMechanismPreview);
@@ -158,7 +194,7 @@ namespace reloadmaker {
         connect(remove,&QPushButton::clicked,this,&ReloadMakerController::removeMechanismStage);
         connect(up,&QPushButton::clicked,this,[this](){moveMechanismStage(-1);});connect(down,&QPushButton::clicked,this,[this](){moveMechanismStage(1);});
         connect(rest,&QPushButton::clicked,this,&ReloadMakerController::captureMechanismRest);
-        connect(analyze,&QPushButton::clicked,this,&ReloadMakerController::suggestMechanismFollowers);
+        connect(_mechanismSuggest,&QPushButton::clicked,this,&ReloadMakerController::suggestMechanismFollowers);
         connect(load,&QPushButton::clicked,this,&ReloadMakerController::loadMechanism);
         connect(refresh,&QPushButton::clicked,this,&ReloadMakerController::refreshHandPoseLibrary);
         connect(folder,&QPushButton::clicked,this,[](){const auto path=MechanismLibrary::defaultDirectory();if(QDir().mkpath(path))QDesktopServices::openUrl(QUrl::fromLocalFile(path));});
@@ -175,7 +211,7 @@ namespace reloadmaker {
         if(!_workshopPart||_workshopRefreshing)return;
         _workshopRefreshing=true;
         const QSignalBlocker a(_workshopPart),b(_workshopPose);
-        _workshopPart->clear();_workshopPart->addItem("Choose a part — or click PICK PART IN 3D",-1);
+        _workshopPart->clear();_workshopPart->addItem("Choose a part…",-1);
         QVector<int> listed;
         for(int i=1;i<_handPoseAnchors.size();++i){
             if(std::any_of(listed.cbegin(),listed.cend(),[&](int old){return sameMechanismPart(_handPoseAnchors[old].description,_handPoseAnchors[i].description);}))continue;

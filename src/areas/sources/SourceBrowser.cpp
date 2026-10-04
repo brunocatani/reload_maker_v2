@@ -1,4 +1,4 @@
-// Source browser logic: which plugin the source bar has selected, which
+// Source browser logic: which plugin the weapon picker has selected, which
 // weapons it lists, and the projection MCP reads. The picker widgets in
 // StudioSourceBrowser.cpp only render this state.
 #include "ReloadMakerController.h"

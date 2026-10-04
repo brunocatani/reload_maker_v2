@@ -40,7 +40,7 @@ void ReloadMakerController::createFingerEditor() {
     form->addRow(restore);
     auto* help = new QLabel("Edits preserve bone lengths and the other hand. Save the current hand above to keep this finger pose in the library.", section);
     help->setWordWrap(true); help->setObjectName("Hint"); form->addRow(help);
-    auto* edit=new QPushButton("EDIT FINGER JOINTS",page);edit->setCheckable(true);
+    auto* edit=new QPushButton("Edit finger joints",page);edit->setCheckable(true);
     section->setVisible(false);connect(edit,&QPushButton::toggled,section,&QWidget::setVisible);
     static_cast<QVBoxLayout*>(page->layout())->insertWidget(2,edit);
     static_cast<QVBoxLayout*>(page->layout())->insertWidget(3,section);

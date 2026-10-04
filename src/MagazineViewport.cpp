@@ -1,5 +1,6 @@
 #include "MagazineViewport.h"
 #include "glview.h"
+#include "design/Theme.h"
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QWheelEvent>
@@ -56,11 +57,11 @@ void MagazineViewport::paint() {
     if(projectGripPoint(camera,size,r->handle,seated)&&projectGripPoint(camera,size,r->handle+magazineInputOffset(*r,r->travel),entrance)) {
         painter.setPen(QPen(QColor("#84d9c2"),2,Qt::DashLine));painter.drawLine(seated,entrance);
         painter.setBrush(Qt::NoBrush);painter.drawEllipse(entrance,12,12);painter.drawEllipse(seated,5,5);
-        painter.drawText(entrance+QPointF(18,0),s.phase==MagazinePhase::Rail?"GUIDED · move straight toward the weapon":"Align anywhere along this line");
+        design::paintViewportHint(painter,entrance+QPointF(18,-12),280,s.phase==MagazinePhase::Rail?QStringLiteral("Guided · move straight toward the weapon"):QStringLiteral("Align anywhere along this line"));
     }
     if(s.carried()) {
-        painter.fillRect(QRectF(12,8,_view->width()-24,38),QColor("#263a36"));painter.setPen(QColor("#c3f3e3"));
-        painter.drawText(QRectF(20,12,_view->width()-40,30),Qt::AlignVCenter,s.phase==MagazinePhase::Free?"MAGAZINE IN HAND · move mouse · wheel adjusts depth · Esc cancels":"ON RAIL · move toward the weapon to seat · pull beyond the entrance to disengage · Esc cancels");
+        design::paintViewportHint(painter,{16,14},_view->width()-32,s.phase==MagazinePhase::Free?QStringLiteral("Magazine in hand · move the mouse · the wheel adjusts depth · Esc cancels")
+            :QStringLiteral("On the rail · move toward the weapon to seat it · pull past the entrance to let go · Esc cancels"),true);
     }
 }
 }

@@ -1,4 +1,5 @@
 #include "GripViewport.h"
+#include "design/Theme.h"
 #include "glview.h"
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -153,24 +154,26 @@ namespace reloadmaker {
         const auto camera=_view->reloadMakerWorldToClip(); const auto dpr=_view->devicePixelRatioF();
         QOpenGLPaintDevice device(QSize(qRound(size.width()*dpr),qRound(size.height()*dpr))); device.setDevicePixelRatio(dpr);
         QPainter painter(&device); painter.setRenderHint(QPainter::Antialiasing);
-        QFont font=painter.font(); font.setPixelSize(12); painter.setFont(font);
-        const QString labels[]{_lensAuthoring?"PICK LENS":_teaching?"PICK PART":_simulating?"RESET":_workshop?(_workshopHand?"PLACE PALM":"PICK PART"):"PICK POINT",
-            _simulating&&!_teaching?"DRAG PART":"MOVE",_simulating&&!_teaching?"STAGED":"ROTATE",
-            _lensAuthoring?"SAVE SCOPE":_simulating&&!_teaching?"RELEASE":_pointAuthoring?"SAVE POINTS":_workshop?"SAVE":"SAVE GRIP",_teaching?"TEST":_simulating?"EDIT":"END"};
+        painter.setFont(design::uiFont(design::kSmallPx, QFont::Medium));
+        const QString labels[]{_lensAuthoring?"Pick lens":_teaching?"Pick part":_simulating?"Reset":_workshop?(_workshopHand?"Place palm":"Pick part"):"Pick point",
+            _simulating&&!_teaching?"Drag part":"Move",_simulating&&!_teaching?"Staged":"Rotate",
+            _lensAuthoring?"Save scope":_simulating&&!_teaching?"Release":_pointAuthoring?"Save points":_workshop?"Save":"Save grip",_teaching?"Test":_simulating?"Edit":"End"};
+        // Canvas viewport chips: translucent dark, amber when active.
         qreal x=16;
         for(int i=0;i<5;++i) {
             const bool selected=(i==0 && _picking) || (i==1 && !_picking && !_rotate) || (i==2 && !_picking && _rotate);
             const bool enabled=_simulating&&!_teaching?true:i==0?_canPick:i==3?_canSave:!(i==2&&_pointAuthoring);
             const qreal width=painter.fontMetrics().horizontalAdvance(labels[i])+24;
-            const QRectF rect(x,16,width,30); _buttons.append(rect); x+=width+6;
-            painter.setPen(QColor(selected?"#f0c785":"#59646a")); painter.setBrush(QColor(selected?"#443522":"#1b2023")); painter.drawRoundedRect(rect,3,3);
-            painter.setPen(QColor(enabled?"#eee8df":"#67777d")); painter.drawText(rect,Qt::AlignCenter,labels[i]);
+            const QRectF rect(x,14,width,30); _buttons.append(rect); x+=width+6;
+            painter.setPen(QPen(design::qcolor(selected?design::color::selection:design::color::borderStrong),selected?1.5:1));
+            painter.setBrush(selected?design::qcolor(design::color::selectionFill):design::qcolor(design::color::header,217)); painter.drawRoundedRect(rect,6,6);
+            painter.setPen(design::qcolor(!enabled?design::color::textDisabled:selected?0xfff6e4c6:design::color::textSecondary)); painter.drawText(rect,Qt::AlignCenter,labels[i]);
         }
-        painter.setPen(QColor("#f0c785"));
-        painter.drawText(QRectF(16,52,size.width()-32,40),Qt::AlignLeft|Qt::TextWordWrap,
-            _teaching?QStringLiteral("PART: %1 · Drag arrows to SET travel, rings to SET rotation · SAVE keeps the part + hand · TEST checks grab/release").arg(_partName):
-            _simulating?QStringLiteral("TESTING PART: %1 · Grab or drag its handle · release tests its rule · EDIT returns to endpoint authoring").arg(_partName):_picking?QStringLiteral("Click the weapon surface · Esc cancels"):
-            QStringLiteral("Arrows move · rings rotate · center square moves in screen plane · Shift+drag for precision · background drag orbits"));
+        const QString hint=_teaching?QStringLiteral("Part: %1 · drag arrows to set travel, rings to set rotation · Save keeps the part and hand · Test checks grab and release").arg(_partName):
+            _simulating?QStringLiteral("Testing %1 · grab or drag its handle · releasing tests its rule · Edit returns to its endpoints").arg(_partName):_picking?QStringLiteral("Click the weapon surface · Esc cancels"):
+            QStringLiteral("Arrows move · rings rotate · the centre square moves in the screen plane · Shift+drag for precision · background drag orbits");
+        design::paintViewportHint(painter,{16,52},size.width()-32,hint);
+        painter.setFont(design::uiFont(design::kSmallPx));
         if(!_hasGrip&&!_simulating) return;
         const auto pivot=_simulating?_simulationPivot:palmWorld(_hand,_palm); QPointF center; float depth=0;
         if(!projectGripPoint(camera,size,pivot,center,&depth)) return;

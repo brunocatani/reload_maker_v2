@@ -23,7 +23,7 @@
 namespace reloadmaker {
     void ReloadMakerController::createHandPoseUi()
     {
-        _handPoseDock = new QDockWidget(QStringLiteral("HAND POSE LIBRARY"), _window);
+        _handPoseDock = new QDockWidget(QStringLiteral("Hand pose library"), _window);
         _handPoseDock->setObjectName(QStringLiteral("ReloadMakerHandPoseDock"));
         _handPoseDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
         _handPoseDock->setMinimumWidth(390);
@@ -35,7 +35,7 @@ namespace reloadmaker {
         auto* intro = new QLabel(QStringLiteral("Capture either hand at the current frame. Exact finger joints and wrist placement are saved separately."), panel);
         intro->setWordWrap(true);
         layout->addWidget(intro);
-        auto* capture = new QGroupBox(QStringLiteral("CAPTURE CURRENT HAND"), panel);
+        auto* capture = new QGroupBox(QStringLiteral("Capture current hand"), panel);
         auto* form = new QFormLayout(capture);
         form->setRowWrapPolicy(QFormLayout::WrapLongRows);
         _handPoseName = new QLineEdit(capture);
@@ -55,7 +55,7 @@ namespace reloadmaker {
         form->addRow(QStringLiteral("Hand"), _handPoseSide);
         form->addRow(QStringLiteral("Reference part"), _handPoseAnchor);
         form->addRow(QStringLiteral("Notes"), _handPoseNotes);
-        _saveHandPose = new QPushButton(QStringLiteral("SAVE CURRENT HAND"), capture);
+        _saveHandPose = new QPushButton(QStringLiteral("Save current hand"), capture);
         _saveHandPose->setObjectName(QStringLiteral("PrimaryButton"));
         _saveHandPose->setToolTip(QStringLiteral("Pauses playback and saves a new snapshot. Existing poses are never overwritten."));
         form->addRow(_saveHandPose);
@@ -72,12 +72,12 @@ namespace reloadmaker {
         _handPoseDetails->setMaximumHeight(150);
         layout->addWidget(_handPoseDetails);
         auto* preview = new QHBoxLayout();
-        _previewHandPose = new QPushButton(QStringLiteral("PREVIEW FINGERS"), panel);
-        _restoreHandPose = new QPushButton(QStringLiteral("RESTORE ANIMATION"), panel);
+        _previewHandPose = new QPushButton(QStringLiteral("Preview fingers"), panel);
+        _restoreHandPose = new QPushButton(QStringLiteral("Restore animation"), panel);
         _previewHandPose->setToolTip(QStringLiteral("Pauses and applies this pose to its original left/right hand at the current wrist. Does not apply saved placement, mirror hands or move weapon parts."));
         preview->addWidget(_previewHandPose); preview->addWidget(_restoreHandPose);
         layout->addLayout(preview);
-        auto* partGrip = new QPushButton(QStringLiteral("USE POSE ON A WEAPON PART…"), panel);
+        auto* partGrip = new QPushButton(QStringLiteral("Use pose on a weapon part…"), panel);
         partGrip->setToolTip(QStringLiteral("Choose a saved pose, then click the magazine or other part where the palm should hold. Adjust the placement and save the grip."));
         layout->addWidget(partGrip);
         connect(partGrip, &QPushButton::clicked, this, &ReloadMakerController::applySavedPoseToPart);
@@ -86,12 +86,12 @@ namespace reloadmaker {
         _handPoseStatus->setWordWrap(true);
         layout->addWidget(_handPoseStatus);
         auto* footer = new QHBoxLayout();
-        auto* refresh = new QPushButton(QStringLiteral("REFRESH LIST"), panel);
-        auto* folder = new QPushButton(QStringLiteral("LIBRARY FOLDER"), panel);
+        auto* refresh = new QPushButton(QStringLiteral("Refresh list"), panel);
+        auto* folder = new QPushButton(QStringLiteral("Library folder"), panel);
         folder->setToolTip(_handPoseLibrary.directory());
         footer->addWidget(refresh); footer->addWidget(folder);
         layout->addLayout(footer);
-        _handPosePages->addTab(panel, QStringLiteral("FINGER POSES"));
+        _handPosePages->addTab(panel, QStringLiteral("Finger poses"));
         _handPoseDock->setWidget(_handPosePages);
         createPartGripUi();
         createMechanismUi();

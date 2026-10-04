@@ -13,12 +13,19 @@
 #include <algorithm>
 
 namespace reloadmaker {
+    namespace {
+        // One movement step as its list row: name, motion and endpoints.
+        template<class Stage> QString stageSummary(int index,const Stage& s){
+            return QStringLiteral("%1  %2 · %3 %4 · %5 → %6").arg(index+1).arg(s.forwardName.isEmpty()?QStringLiteral("Step"):s.forwardName,
+                s.rotation?QStringLiteral("turn"):QStringLiteral("slide"),QStringList{"X","Y","Z"}[s.axis]).arg(s.from,0,'f',2).arg(s.to,0,'f',2);
+        }
+    }
     void ReloadMakerController::displayMechanism(){
         if(_mechanismUpdating){return;}
         _mechanismUpdating=true;const QSignalBlocker a(_mechanismStages),b(_mechanismFollowers);normalizeMechanismStage();_mechanismStages->clear();_mechanismFollowers->clear();
         _mechanismName->setText(_mechanismDraft?_mechanismDraft->name:QString());
         if(_mechanismDraft){
-            for(int i=0;i<_mechanismDraft->stages.size();++i){const auto& s=_mechanismDraft->stages[i];_mechanismStages->addItem(QStringLiteral("%1. %2 ↔ %3 · %4 %5 [%6 → %7]").arg(i+1).arg(s.forwardName,s.reverseName,s.rotation?"Rotate":"Slide",QStringList{"X","Y","Z"}[s.axis]).arg(s.from).arg(s.to));}
+            for(int i=0;i<_mechanismDraft->stages.size();++i){const auto& s=_mechanismDraft->stages[i];_mechanismStages->addItem(stageSummary(i,s));}
             if(!_mechanismDraft->stages.isEmpty())_mechanismStages->setCurrentRow(_mechanismStage);
             QString error;const int master=resolveMechanismAnchor(_mechanismDraft->anchor,error);const int root=master>=0?_sceneNodes.indexOf(_handPoseAnchors[master].node):-1;
             for(int i=1;i<_handPoseAnchors.size();++i){if(i==master)continue;const auto& anchor=_handPoseAnchors[i];auto* item=new QListWidgetItem(_handPoseAnchors[i].label,_mechanismFollowers);item->setData(Qt::UserRole,i);item->setFlags(item->flags()|Qt::ItemIsUserCheckable);item->setCheckState(Qt::Unchecked);
@@ -44,10 +51,10 @@ namespace reloadmaker {
         _workshopContact->setEnabled(hand&&!testing);_workshopHand->setEnabled(hand&&!testing);
         _workshopTeach->setEnabled(part);_mechanismStart->setEnabled(part&&valid&&!_mechanismDraft->stages.isEmpty());
         _mechanismSave->setEnabled(part&&valid&&!testing);
-        _mechanismSave->setText(hand?"SAVE PART + HAND":"SAVE PART");
+        _mechanismSave->setText(hand?"Save part and hand":"Save part");
         _workshopAddStage->setEnabled(part&&valid&&!testing);
         _mechanismName->setEnabled(part&&!testing);
-        _mechanismStages->setEnabled(part&&!testing);_mechanismFollowers->setEnabled(part&&!testing);
+        _mechanismStages->setEnabled(part&&!testing);_mechanismFollowers->setEnabled(part&&!testing);_mechanismSuggest->setEnabled(part&&!testing);
         _workshopStageFields->setVisible(!testing);_workshopTestControls->setVisible(testing);
         _workshopMove->setEnabled(part&&!testing&&!_workshopHandEditing);
         _workshopRotate->setEnabled(part&&!testing&&!_workshopHandEditing);
@@ -63,24 +70,24 @@ namespace reloadmaker {
         for(QWidget* widget:std::initializer_list<QWidget*>{_stageForward,_stageReverse,_stageMotion,_stageRelease,_stageFrom,_stageTo,_stageRate,_stagePivot[0],_stagePivot[1],_stagePivot[2]})widget->setEnabled(step&&!testing);
         _mechanismPoseOnGrab->setEnabled(hand);_mechanismSlider->setEnabled(testing);
         QString hint;
-        if(!part)hint="Pick the weapon part in 3D. Then choose a hand pose here, or leave No hand selected.";
-        else if(_workshopHandEditing)hint="EDITING HAND · arrows move the hand; rings rotate it. The weapon part stays still. Choose EDIT MOVEMENT to drive the part instead.";
+        if(!part)hint="Choose the moving part above, or pick it on the model.";
+        else if(_workshopHandEditing)hint="Editing the hand: arrows move it, rings turn it. The part stays still. Choose Edit movement to move the part instead.";
         else if(testing){
             const int i=std::clamp(_mechanismState.activeStage,0,int(_mechanismDraft->stages.size())-1);
             const auto& stage=_mechanismDraft->stages[i];
             const float fraction=std::clamp(_mechanismState.path-i,0.f,1.f);
             const QSignalBlocker blocker(_mechanismSlider);_mechanismSlider->setValue(qRound(fraction*10000));
-            hint=QStringLiteral("TESTING · step %1 / %2 · %3\n%4 · grab the part or drag its handle. Release tests its rule. EDIT MOVEMENT returns to endpoint editing.")
+            hint=QStringLiteral("Testing step %1 of %2 · %3\n%4 · grab the part or drag its handle. Releasing tests its rule. Edit movement returns to the endpoints.")
                 .arg(i+1).arg(_mechanismDraft->stages.size()).arg(stage.forwardName)
                 .arg(_mechanismState.returning?"Returning":_mechanismHeld?"Grabbed":"Released");
         }else if(_mechanismTeaching){
-            hint=step?QStringLiteral("EDITING PART · step %1\nDrag an arrow or ring to set the endpoint. One axis per step; + NEXT STEP starts from here. TEST GRAB checks limits and release.")
+            hint=step?QStringLiteral("Editing step %1\nDrag an arrow or ring to set where it ends. One axis per step; Add step starts the next one from here. Test grab checks limits and release.")
                 .arg(_mechanismStage+1)
-                :QStringLiteral("EDITING PART · drag any arrow to create the first movement. ROTATE shows the rotation rings. No numeric setup is required.");
-        }else hint="Choose EDIT MOVEMENT for part arrows, or ADJUST HAND for hand arrows.";
+                :QStringLiteral("Drag any arrow to create the first step. Rotate shows the rotation rings. No numbers are needed.");
+        }else hint="Choose Edit movement to drag the part, or Adjust hand to place the hand.";
         if(hand&&(_mechanismTeaching||_workshopHandEditing||_mechanismHeld)&&!_gripPreviewValid)hint+="\nHand cannot reach this target: "+_gripError;
         if(!_workshopPicking)_workshopHint->setText(hint);
-        _mechanismStatus->setText(!part?"No part selected.":valid?"Definition can be saved. Movement rules are shared by this part's hand grips.":error);
+        _mechanismStatus->setText(!part?QString():valid?"Ready to save. This part's hand grips share its movement rules.":error);
     }
     // The definition form as the user left it: name, the selected step's
     // fields and the checked follower parts.
@@ -101,13 +108,13 @@ namespace reloadmaker {
     }
     void ReloadMakerController::showMechanismStageSummary(int i){
         const auto& s=_mechanismDraft->stages[i];
-        _mechanismStages->item(i)->setText(QStringLiteral("%1. %2 ↔ %3 · %4 %5 [%6 → %7]").arg(i+1).arg(s.forwardName,s.reverseName,s.rotation?"Rotate":"Slide",QStringList{"X","Y","Z"}[s.axis]).arg(s.from).arg(s.to));
+        _mechanismStages->item(i)->setText(stageSummary(i,s));
     }
     // A step being taught: its axis, endpoint and list entry.
     void ReloadMakerController::showTaughtStage(int i){
         const auto& stage=_mechanismDraft->stages[i];
         {const QSignalBlocker a(_stageMotion),b(_stageTo);_stageMotion->setCurrentIndex((stage.rotation?3:0)+stage.axis);_stageTo->setValue(stage.to);}
-        _mechanismStages->item(i)->setText(QStringLiteral("%1   %2 · %3 %4 → %5").arg(i+1).arg(stage.forwardName,stage.rotation?"Rotate":"Move",QStringList{"X","Y","Z"}[stage.axis]).arg(stage.to,0,'f',2));
+        _mechanismStages->item(i)->setText(stageSummary(i,stage));
     }
     void ReloadMakerController::showFollowerObservations(const QVector<FollowerObservation>& observations){
         const QSignalBlocker blocker(_mechanismFollowers);

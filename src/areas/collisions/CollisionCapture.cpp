@@ -3,6 +3,7 @@
 // prepared world model of a part.
 #include "ReloadMakerController.h"
 #include "CollisionPanel.h"
+#include "design/DesignWidgets.h"
 #include "StudioPaths.h"
 #include "StudioWindow.h"
 #include "areas/collisions/CollisionFrames.h"
@@ -94,12 +95,14 @@ namespace reloadmaker
     void ReloadMakerController::showCollisionSubject()
     {
         const bool weapon = _workspace == WeaponCollisionWorkspace;
-        _collisionsDock->setWindowTitle(weapon ? QStringLiteral("WEAPON COLLISION") : QStringLiteral("MAGAZINES"));
+        _collisionsDock->setWindowTitle(weapon ? QStringLiteral("Weapon collision") : QStringLiteral("Magazines"));
+        _collisionsHeader->setSection(weapon ? QStringLiteral("Tools") : QStringLiteral("Reload builder"));
+        _collisionsHeader->setTitle(weapon ? QStringLiteral("Weapon collision") : QStringLiteral("Magazines"));
         _collisions->setSubject(weapon ? QStringLiteral("Weapon collision") : QStringLiteral("Magazine world models"),
                                 weapon ? QStringLiteral("The whole weapon and its installed parts, the mounted magazine included. Nothing uses these yet: "
                                                         "ROCK generates weapon collision in game.")
                                        : QStringLiteral("The full and empty loose magazines a pack ships, in the magazine carrier frame. Capture each in "
-                                                        "Operate with FULL WORLD MODEL or EMPTY WORLD MODEL, then generate its hulls, capture the visible "
+                                                        "Operate with Full world model or Empty world model, then generate its hulls, capture the visible "
                                                         "model and cook it."));
     }
 

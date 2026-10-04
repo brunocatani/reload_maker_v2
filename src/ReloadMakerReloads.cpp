@@ -15,24 +15,27 @@
 #include <algorithm>
 
 namespace reloadmaker {
-    // The reload page: the learned base reload, played or scrubbed on its
-    // graph of moving parts, and the native clip list.
+    // The learned reload inspector: the base reload, played or scrubbed on
+    // its graph of moving parts, and the native clip list.
     void ReloadMakerController::createReloadUi()
     {
-        auto* page = new QWidget(_pages);
+        _reloadDock = new QDockWidget("Learned reload", _window);
+        _reloadDock->setObjectName("ReloadDock");
+        _reloadDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
+        _reloadDock->setAllowedAreas(Qt::RightDockWidgetArea);
+        auto* page = new QWidget;
         auto* layout = new QVBoxLayout(page);
-        layout->setContentsMargins(8, 12, 8, 8);
-        auto* title = new QLabel("RELOAD / LEARN", page);
-        title->setStyleSheet("color:#e6bd7d;font-size:19px;font-weight:700;");
-        layout->addWidget(title);
-        auto* intro = new QLabel("Maker learns the weapon's base reload from its source. Play it, or click the graph to see any moment.", page);
+        layout->setContentsMargins(16, 14, 16, 16);
+        layout->setSpacing(10);
+        auto* intro = new QLabel("Maker learns the weapon's base reload from its source. Play it, or click the graph below to see any moment.", page);
+        intro->setObjectName("Hint");
         intro->setWordWrap(true);
         layout->addWidget(intro);
         _reloadSourceLabel = new QLabel("Load a weapon to resolve its base reload.", page);
         _reloadSourceLabel->setWordWrap(true);
         _reloadSourceLabel->setTextFormat(Qt::PlainText);
         layout->addWidget(_reloadSourceLabel);
-        _reloadAnalyze = new QPushButton("LEARN RELOAD AGAIN", page);
+        _reloadAnalyze = new QPushButton("Learn reload again", page);
         layout->addWidget(_reloadAnalyze);
         _reloadProgress = new QProgressBar(page);
         layout->addWidget(_reloadProgress);
@@ -40,12 +43,13 @@ namespace reloadmaker {
         _reloadSummary = new QLabel(page);
         _reloadSummary->setWordWrap(true);
         layout->addWidget(_reloadSummary);
-        _reloadPlay = new QPushButton("PLAY RELOAD", page);
+        _reloadPlay = new QPushButton("Play reload", page);
+        _reloadPlay->setObjectName("PrimaryButton");
         layout->addWidget(_reloadPlay);
         auto* clips = new QLabel("NATIVE CLIPS", page);
         clips->setObjectName("Section");
         layout->addWidget(clips);
-        auto* clipsHint = new QLabel("Inspect other native clips on the timeline. PLAY RELOAD or a click on the graph returns to the reload.", page);
+        auto* clipsHint = new QLabel("Inspect other native clips on the timeline. Play reload or a click on the graph returns to the reload.", page);
         clipsHint->setWordWrap(true);
         clipsHint->setObjectName("Hint");
         layout->addWidget(clipsHint);
@@ -55,9 +59,15 @@ namespace reloadmaker {
         _animationList->show();
         layout->addWidget(_animationList);
         layout->addStretch(1);
-        _pages->addTab(page, "04  RELOAD");
+        auto* pageScroll = new QScrollArea(_reloadDock);
+        pageScroll->setWidgetResizable(true);
+        pageScroll->setFrameShape(QFrame::NoFrame);
+        pageScroll->setWidget(page);
+        _reloadDock->setWidget(pageScroll);
+        _window->addDockWidget(Qt::RightDockWidgetArea, _reloadDock);
+        _reloadDock->hide();
 
-        _reloadGraphDock = new QDockWidget("RELOAD PARTS · when each part moves · click to see that moment", _window);
+        _reloadGraphDock = new QDockWidget("When each part moves", _window);
         _reloadGraphDock->setObjectName("ReloadMakerReloadGraphDock");
         _reloadGraphDock->setAllowedAreas(Qt::BottomDockWidgetArea);
         auto* graphScroll = new QScrollArea(_reloadGraphDock);
@@ -75,7 +85,6 @@ namespace reloadmaker {
         _reloadPreviewTimer->setTimerType(Qt::PreciseTimer);
         connect(_reloadCaptureTimer, &QTimer::timeout, this, &ReloadMakerController::advanceReloadCapture);
         connect(_reloadPreviewTimer, &QTimer::timeout, this, &ReloadMakerController::tickReloadPreview);
-        connect(_pages, &QTabWidget::currentChanged, this, [this](int i) { setReloadWorkspace(i == kReloadPage); });
         connect(_reloadAnalyze, &QPushButton::clicked, this, [this] {
             invalidateReloadCapture();
             startReloadCapture();
@@ -85,7 +94,7 @@ namespace reloadmaker {
             restoreReloadClip();
             _reloadPlaying = false;
             _reloadPreviewTimer->stop();
-            _reloadPlay->setText("PLAY RELOAD");
+            _reloadPlay->setText("Play reload");
             seekReload(seconds);
         };
         invalidateReloadCapture();
@@ -156,7 +165,7 @@ namespace reloadmaker {
         } else {
             _reloadPreviewTimer->stop();
         }
-        _reloadPlay->setText(playing ? "PAUSE RELOAD" : "PLAY RELOAD");
+        _reloadPlay->setText(playing ? "Pause reload" : "Play reload");
     }
 
     void ReloadMakerController::seekReload(float seconds)
@@ -187,7 +196,7 @@ namespace reloadmaker {
         playSourceSounds(_reloadClip, previous, _playbackTime);
         if (_playbackTime >= _reloadRecipe->duration) {
             _reloadPlaying = false;
-            _reloadPlay->setText("PLAY RELOAD");
+            _reloadPlay->setText("Play reload");
             _reloadPreviewTimer->stop();
         }
     }
@@ -200,7 +209,7 @@ namespace reloadmaker {
         }
         _reloadAnalyze->setEnabled(true);
         _reloadPlay->setEnabled(false);
-        _reloadPlay->setText("PLAY RELOAD");
+        _reloadPlay->setText("Play reload");
         _reloadProgress->hide();
         _reloadSummary->setText("Select a configured weapon. Its base Reload is the only motion source for this page.");
     }

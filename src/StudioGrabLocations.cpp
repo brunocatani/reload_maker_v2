@@ -21,16 +21,16 @@ void ReloadMakerController::createGrabLocationsUi(){
     auto* page=new QWidget;auto* layout=new QVBoxLayout(page);layout->setContentsMargins(14,14,14,14);
     auto* hint=new QLabel("Pick the exact places where the operating part can be grabbed in-game. The nearest allowed location wins. Points follow the animated part; hand poses stay independent.");hint->setWordWrap(true);layout->addWidget(hint);
     _grabLocationList=new QListWidget;_grabLocationList->setMinimumHeight(140);layout->addWidget(_grabLocationList);
-    auto* row=new QHBoxLayout;auto* add=new QPushButton("PICK NEW POINT");auto* replace=new QPushButton("REPLACE SELECTED POINT");row->addWidget(add);row->addWidget(replace);layout->addLayout(row);
+    auto* row=new QHBoxLayout;auto* add=new QPushButton("Pick new point");auto* replace=new QPushButton("Replace selected point");row->addWidget(add);row->addWidget(replace);layout->addLayout(row);
     auto* form=new QFormLayout;_grabLocationName=new QLineEdit;_grabLocationName->setMaxLength(128);form->addRow("Name",_grabLocationName);
     for(int i=0;i<3;++i){auto* spin=new QDoubleSpinBox;spin->setRange(-10000,10000);spin->setDecimals(4);spin->setSingleStep(.1);spin->setKeyboardTracking(false);_grabLocationPosition[i]=spin;form->addRow(QString("Local %1").arg(QChar("XYZ"[i])),spin);}
     _grabLocationRadius=new QDoubleSpinBox;_grabLocationRadius->setRange(.1,64);_grabLocationRadius->setDecimals(2);_grabLocationRadius->setSuffix(" game units");_grabLocationRadius->setKeyboardTracking(false);form->addRow("Grab radius",_grabLocationRadius);
     _grabLocationHands=new QComboBox;_grabLocationHands->addItem("Either hand",3);_grabLocationHands->addItem("Left hand",1);_grabLocationHands->addItem("Right hand",2);form->addRow("Allowed hand",_grabLocationHands);layout->addLayout(form);
-    auto* fromPalm=new QPushButton("USE PICKED PALM CONTACT");layout->addWidget(fromPalm);fromPalm->setToolTip("Copy the existing Part grip's explicitly picked contact, keeping its wrist and finger pose unchanged.");
-    auto* remove=new QPushButton("REMOVE SELECTED POINT");layout->addWidget(remove);
-    auto* save=new QPushButton("SAVE GRAB LOCATIONS");save->setObjectName("PrimaryButton");layout->addWidget(save);
+    auto* fromPalm=new QPushButton("Use picked palm contact");layout->addWidget(fromPalm);fromPalm->setToolTip("Copy the existing Part grip's explicitly picked contact, keeping its wrist and finger pose unchanged.");
+    auto* remove=new QPushButton("Remove selected point");layout->addWidget(remove);
+    auto* save=new QPushButton("Save grab locations");save->setObjectName("PrimaryButton");layout->addWidget(save);
     _grabLocationStatus=new QLabel;_grabLocationStatus->setWordWrap(true);layout->addWidget(_grabLocationStatus);layout->addStretch();
-    auto* back=new QPushButton("BACK TO OPERATE");layout->addWidget(back);connect(back,&QPushButton::clicked,this,[this]{_pickingGrabLocation=false;_gripViewport->setPicking(false);setWorkspace(OperateWorkspace);});
+    auto* back=new QPushButton("Back to Operate");layout->addWidget(back);connect(back,&QPushButton::clicked,this,[this]{_pickingGrabLocation=false;_gripViewport->setPicking(false);setWorkspace(OperateWorkspace);});
     _handPosePages->addTab(page,"Grab locations");
     connect(add,&QPushButton::clicked,this,[this]{beginGrabLocationPick();});connect(replace,&QPushButton::clicked,this,[this]{beginGrabLocationPick(true);});
     connect(save,&QPushButton::clicked,this,[this]{saveGrabLocations();});

@@ -1,6 +1,7 @@
 #include "ReloadDriveViewport.h"
 #include "ReloadDriveMath.h"
 #include "glview.h"
+#include "design/Theme.h"
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QOpenGLPaintDevice>
@@ -48,8 +49,8 @@ namespace reloadmaker {
     void ReloadDriveViewport::paint(){
         if(!_active||!_view->glContext)return;
         const auto dpr=_view->devicePixelRatioF();QOpenGLPaintDevice device(QSize(qRound(_view->width()*dpr),qRound(_view->height()*dpr)));device.setDevicePixelRatio(dpr);
-        QPainter p(&device);p.setRenderHint(QPainter::Antialiasing);p.setPen(QColor("#f0c88a"));
-        p.drawText(QRectF(18,14,_view->width()-36,42),Qt::AlignLeft|Qt::TextWordWrap,_instructions);
+        QPainter p(&device);p.setRenderHint(QPainter::Antialiasing);
+        design::paintViewportHint(p,{16,14},_view->width()-32,_instructions);
         const auto camera=_view->reloadMakerWorldToClip();const QSizeF size(_view->width(),_view->height());QPointF previous;bool valid=false;
         p.setPen(QPen(QColor("#87dfce"),2));p.setBrush(QColor(15,45,42,110));
         for(const auto& marker:_markers){QPointF screen;if(projectGripPoint(camera,size,marker,screen)){p.drawEllipse(screen,9,9);p.drawEllipse(screen,2,2);}}

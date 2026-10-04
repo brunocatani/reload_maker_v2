@@ -3,6 +3,7 @@
 #include "StudioWindow.h"
 #include "StudioPaths.h"
 #include "glview.h"
+#include "design/Theme.h"
 #include <QDockWidget>
 #include <QScrollArea>
 #include <QOpenGLPaintDevice>
@@ -39,6 +40,6 @@ void ReloadMakerController::paintCollisions(){
         }};
     if(_collisionWorkshop.compare())draw(_collisionWorkshop.baseline(),true);
     draw(_collisionWorkshop.profile(),false);
-    painter.setPen(QColor(145,221,208));painter.drawText(QPointF(18,28),"COLLISIONS · convex point envelopes · x-ray · drag background to orbit");
+    design::paintViewportHint(painter,{16,14},size.width()-32,QStringLiteral("Convex point envelopes, drawn in x-ray · drag the background to orbit"));
 }
 }

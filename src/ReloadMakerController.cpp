@@ -7,6 +7,7 @@
 #include "LibraryResources.h"
 #include "LoadoutView.h"
 #include "areas/operate/PlaybackTimeline.h"
+#include "design/Theme.h"
 
 #include "data/niftypes.h"
 #include "gamemanager.h"
@@ -80,6 +81,9 @@ namespace reloadmaker
         _rebuildTimer->setSingleShot(true);
         _rebuildTimer->setInterval(60);
         connect(_rebuildTimer, &QTimer::timeout, this, &ReloadMakerController::rebuildWeapon);
+        // The theme comes first so every widget is built with it; it needs the
+        // workspace for its icon cache.
+        applyStyle();
         createUi();
         // Qt runs the most recently installed event filter first. The picker is
         // installed before the slot labels so a click on a label stays the
@@ -93,7 +97,6 @@ namespace reloadmaker
         _slotOverlay->selected = [this](SlotKey slot) { focusSlot(slot); };
         createGripViewport();
         createSimulationViewport();
-        applyStyle();
         setWorkspace(OperateWorkspace);
         startCommandServer();
         _window->prepareClose = [this] { if(_packProcess){setStatus("Finish or cancel the pack build before closing.",true);return false;}return saveSession(); };
@@ -127,7 +130,7 @@ namespace reloadmaker
         const auto* config = configuration();
         const auto* weapon = currentWeapon();
         _loadoutTitle->setText(weapon ? (weapon->name.isEmpty() ? weapon->editorId : weapon->name) : QStringLiteral("No weapon"));
-        if (!config) { _configurationSummary->setText(QStringLiteral("Choose a source and weapon in the bar above.")); return; }
+        if (!config) { _configurationSummary->setText(QStringLiteral("Choose a source and weapon with the weapon button above.")); refreshHeader(); return; }
         if (!config->slot(_focusedSlot) && !config->entries().isEmpty()) { _focusedSlot = config->entries().first().key; }
         const auto available = config->availableSlots();
         const QString query = _partSearch->text().trimmed();
@@ -165,7 +168,8 @@ namespace reloadmaker
                 const auto* installed=config->mod(selected);
                 slotRow->setData(kSelectionRole,installed?partName(*installed):QStringLiteral("Empty"));
                 slotRow->setFlags(enabled ? Qt::ItemIsEnabled | Qt::ItemIsSelectable : Qt::NoItemFlags);
-                slotRow->setToolTip(enabled?QStringLiteral("Choose %1").arg(slot.label):QStringLiteral("Install the required parent part to use this slot."));
+                // The row shows the count only while selected; the tooltip keeps it for every slot.
+                slotRow->setToolTip(enabled?QStringLiteral("Choose %1 · %2 options").arg(slot.label).arg(slot.choices.size()):QStringLiteral("Install the required parent part to use this slot."));
                 if (slot.unverified) { slotRow->setToolTip(QStringLiteral("Partial slot/association metadata; compatibility needs review.")); }
             }
         }
@@ -175,6 +179,7 @@ namespace reloadmaker
             .arg(plugin ? (_libraryMode ? plugin->origins.value(weapon->formId).plugin : plugin->fileName) : QString())
             .arg(config->activeMods().size()));
         if (_slotOverlay) { _slotOverlay->setSelected(_focusedSlot); }
+        refreshHeader();
     }
 
     void ReloadMakerController::showLoadoutChoices(SlotKey key)
@@ -185,7 +190,7 @@ namespace reloadmaker
         const auto weapon=selectionRecordKey(_selectedWeapon);const auto source=_browserSourceKey;
         _focusedSlot=key;if(_slotOverlay)_slotOverlay->setSelected(key);
         QDialog dialog(_window);dialog.setObjectName("LoadoutChoices");dialog.setWindowTitle("Choose "+slot->label);dialog.resize(560,520);
-        auto* layout=new QVBoxLayout(&dialog);auto* title=new QLabel(slot->label,&dialog);title->setObjectName("Section");layout->addWidget(title);
+        auto* layout=new QVBoxLayout(&dialog);auto* title=new QLabel(slot->label.toUpper(),&dialog);title->setObjectName("Section");layout->addWidget(title);
         auto* search=new QLineEdit(&dialog);search->setPlaceholderText("Filter "+slot->label.toLower()+" options…");search->setClearButtonEnabled(true);layout->addWidget(search);
         auto* choices=new QListWidget(&dialog);choices->setObjectName("LoadoutOptions");choices->setItemDelegate(new LoadoutDelegate(choices));layout->addWidget(choices,1);
         const auto add=[&](std::uint32_t id,const QString& text,const QString& tip){
@@ -398,9 +403,8 @@ namespace reloadmaker
     void ReloadMakerController::setStatus(const QString& message, const bool error)
     {
         _lastError = error ? message : QString();
-        _window->statusBar()->setStyleSheet(error
-            ? QStringLiteral("color:#ff8a80")
-            : QStringLiteral("color:#aeb4ba"));
+        // A type selector, so the footer's permanent hint keeps its colour.
+        _window->statusBar()->setStyleSheet(QStringLiteral("QStatusBar{color:%1}").arg(design::hex(error ? design::color::error : design::color::textMuted)));
         _window->statusBar()->showMessage(message);
         if (error) {
             if(_workshopHint&&_handEditorPage==HandEditorPage::Mechanism)_workshopHint->setText(message);

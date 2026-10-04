@@ -36,7 +36,7 @@ namespace reloadmaker {
             if(_reloadCapturing)invalidateReloadCapture();
             else {
                 _reloadPreviewTimer->stop();_reloadPlaying=false;
-                _reloadPlay->setText("PLAY RELOAD");
+                _reloadPlay->setText("Play reload");
             }
             if (_mechanismPreview) {stopMechanismPreview();if(_clip.valid())(void)applyPose(_playbackTime);}
             stopPlayback(); _rebuildTimer->stop();
@@ -45,9 +45,12 @@ namespace reloadmaker {
         if (_weaponPicker) _weaponPicker->setEnabled(!loading && _weaponPicker->count() > 0);
         if (_pluginFilter) _pluginFilter->setEnabled(!loading);
         if (_pluginSearch) _pluginSearch->setEnabled(!loading && _pluginFilter->count() > 0);
-        // The whole rail is disabled: disabling its current tab would move it
-        // to another page, and the page decides the Reload workspace.
+        // Pages stay put while a source loads: the mode switch, the builder
+        // checklist and the panels that edit the weapon are disabled.
         _pages->setEnabled(!loading);
+        if(_modeSwitch)_modeSwitch->setEnabled(!loading);
+        if(_checklistPanel)_checklistPanel->setEnabled(!loading);
+        if(_reloadDock)_reloadDock->setEnabled(!loading);
         if(_reloadGraphDock)_reloadGraphDock->setEnabled(!loading);
         if(_simulationDock)_simulationDock->setEnabled(!loading);
         _playButton->setEnabled(!loading);

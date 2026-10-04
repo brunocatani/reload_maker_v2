@@ -59,6 +59,9 @@ class QTabWidget;
 class QTreeWidget;
 class QThread;
 class QProgressBar;
+class QStackedWidget;
+class QTabBar;
+class QFrame;
 class QGroupBox;
 class QDoubleSpinBox;
 class QButtonGroup;
@@ -77,6 +80,7 @@ namespace reloadmaker
     class GripViewport;
     class MagazineViewport;
     class CollisionPanel;
+    namespace design { class PanelHeader; }
     class ReloadMakerController final : public QObject
     {
         Q_OBJECT
@@ -166,7 +170,6 @@ namespace reloadmaker
         enum Workspace : int { GripsWorkspace = 2, PhasesWorkspace = 4, OperateWorkspace = 5, SoundsWorkspace = 6, CollisionsWorkspace = 7, ScopesWorkspace = 8, WeaponCollisionWorkspace = 9 };
         static bool simulationWorkspace(int value) { return value==OperateWorkspace||value==SoundsWorkspace; }
         static bool collisionWorkspace(int value) { return value == CollisionsWorkspace || value == WeaponCollisionWorkspace; }
-        static constexpr int kLoadoutPage = 0, kReloadPage = 1;
         static constexpr int kMaximumDiagnosticLines = 3000;
         // Hands editor pages, in tab order; saved in projects as handsPage.
         enum class HandEditorPage : int { FingerPoses = 0, PartGrip = 1, Mechanism = 2, GrabLocations = 3 };
@@ -180,8 +183,13 @@ namespace reloadmaker
         void showBuilderStep(BuilderStep step);
         void syncRail();
         static constexpr int kPoseNameLength = 128;
-        void createSourceBar(QToolBar* bar);
+        // The weapon pill's popover: source, plugin and weapon pickers.
+        void createSourcePicker();
+        void showSourcePicker();
         void refreshSourceBar();
+        // Header pill, configuration summary and preset chip.
+        void refreshHeader();
+        void createViewBar();
         void refreshWeaponPicker();
         void offerPluginChoice();
         void restoreReloadClip();
@@ -609,7 +617,19 @@ namespace reloadmaker
         QVector<std::pair<QPersistentModelIndex,int>> _simulationVisibility;
         QButtonGroup* _railButtons{nullptr};
         QButtonGroup* _builderStepButtons{nullptr};
-        QAction* _builderStepsAction{nullptr};
+        QWidget* _modeSwitch{nullptr};
+        QPushButton* _weaponPill{nullptr};
+        QLabel* _headerSummary{nullptr};
+        QLabel* _presetChip{nullptr};
+        QFrame* _sourcePicker{nullptr};
+        // Left panel: Checklist | Loadout tabs in Reload builder, else the loadout.
+        QTabBar* _leftTabs{nullptr};
+        QStackedWidget* _leftStack{nullptr};
+        QWidget* _checklistPanel{nullptr};
+        QDockWidget* _reloadDock{nullptr};
+        design::PanelHeader* _handPoseHeader{nullptr};
+        design::PanelHeader* _collisionsHeader{nullptr};
+        QLabel* _clipPathLabel{nullptr};
         BuilderStep _lastBuilderStep{ BuilderStep::Reload }; // view memory, not saved
         int _workspace{0};
         bool _showPartLabels{false};
@@ -1231,6 +1251,7 @@ namespace reloadmaker
         QDoubleSpinBox* _stageRate{nullptr};
         std::array<QDoubleSpinBox*,3> _stagePivot{};
         QListWidget* _mechanismFollowers{nullptr};
+        QPushButton* _mechanismSuggest{nullptr};
         QLabel* _mechanismStatus{nullptr};
         QPushButton* _mechanismSave{nullptr};
         QPushButton* _mechanismStart{nullptr};

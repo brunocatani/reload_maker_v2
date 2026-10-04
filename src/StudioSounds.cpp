@@ -30,11 +30,11 @@ void ReloadMakerController::createSoundsUi(){
     _soundProgress=new QDoubleSpinBox;_soundProgress->setRange(0,100);_soundProgress->setDecimals(1);_soundProgress->setSuffix(" %");
     _soundGain=new QDoubleSpinBox;_soundGain->setRange(0,200);_soundGain->setDecimals(0);_soundGain->setSuffix(" %");_soundGain->setSingleStep(5);
     auto* form=new QFormLayout;form->addRow("Original sound",_soundChoice);form->addRow("When",_soundTrigger);form->addRow("Movement",_soundProgress);form->addRow("Volume",_soundGain);layout->addLayout(form);
-    auto* buttons=new QHBoxLayout;auto* play=new QPushButton("PLAY SOUND");auto* stop=new QPushButton("STOP");buttons->addWidget(play);buttons->addWidget(stop);layout->addLayout(buttons);
+    auto* buttons=new QHBoxLayout;auto* play=new QPushButton("Play sound");auto* stop=new QPushButton("Stop");buttons->addWidget(play);buttons->addWidget(stop);layout->addLayout(buttons);
     _soundInfo=new QLabel;_soundInfo->setWordWrap(true);_soundInfo->setObjectName("Hint");layout->addWidget(_soundInfo);
     _soundStatus=new QLabel;_soundStatus->setWordWrap(true);_soundStatus->setObjectName("Hint");layout->addWidget(_soundStatus);
-    auto* save=new QPushButton("SAVE SOUNDS");save->setObjectName("PrimaryButton");layout->addWidget(save);
-    auto* test=new QPushButton("TEST IN OPERATE");layout->addWidget(test);
+    auto* save=new QPushButton("Save sounds");save->setObjectName("PrimaryButton");layout->addWidget(save);
+    auto* test=new QPushButton("Test in Operate");layout->addWidget(test);
     _soundMute=new QCheckBox("Mute preview");layout->addWidget(_soundMute);
     auto* collision=new QLabel("Ground and object impacts use the game's collision materials. Releasing a magazine does not play a ground-impact sound.\n\nOpening: 0% closed → 100% rear. Closing runs back to 0%. Magazine insertion: 0% entry → 100% seated.");collision->setWordWrap(true);collision->setObjectName("Hint");layout->addWidget(collision);layout->addStretch();
     auto* scroll=new QScrollArea;scroll->setWidgetResizable(true);scroll->setWidget(panel);_soundsDock->setWidget(scroll);_window->addDockWidget(Qt::RightDockWidgetArea,_soundsDock);_soundsDock->hide();

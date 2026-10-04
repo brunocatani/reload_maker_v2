@@ -7,6 +7,9 @@
 #include "LoadoutView.h"
 #include "MagazineViewport.h"
 #include "areas/operate/PlaybackTimeline.h"
+#include "design/DesignWidgets.h"
+#include "design/Icons.h"
+#include "design/Theme.h"
 #include <QCompleter>
 #include <QAbstractItemModel>
 #include <QDir>
@@ -34,6 +37,7 @@
 #include <QSignalBlocker>
 #include <QSlider>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QStatusBar>
 #include <QTabBar>
 #include <QTabWidget>
@@ -63,13 +67,64 @@ QDockWidget* dock(StudioWindow* window, const QString& title, Qt::DockWidgetArea
 }
 
 void ReloadMakerController::createUi() {
-    auto* header = new QToolBar("Workflow", _window);
+    using namespace design;
+    // Bottom docks span the viewport only; the side panels run full height.
+    _window->setCorner(Qt::BottomLeftCorner, Qt::LeftDockWidgetArea);
+    _window->setCorner(Qt::BottomRightCorner, Qt::RightDockWidgetArea);
+    _window->setDockOptions(QMainWindow::AnimatedDocks);
+
+    // ---- Header: wordmark, weapon, configuration, mode switch, menu ----
+    auto* header = new QToolBar("Header", _window);
     header->setMovable(false);
-    header->setObjectName("WorkflowHeader");
+    header->setFloatable(false);
+    header->setObjectName("AppHeader");
+    header->setContextMenuPolicy(Qt::PreventContextMenu);
     _window->addToolBar(Qt::TopToolBarArea, header);
+    auto* wordmark = new QLabel("Reload Maker", header);
+    wordmark->setObjectName("Wordmark");
+    header->addWidget(wordmark);
+    _weaponPill = new QPushButton("Choose a weapon", header);
+    _weaponPill->setObjectName("WeaponPill");
+    _weaponPill->setIcon(icon(Icon::ChevronDown, color::textMuted));
+    _weaponPill->setLayoutDirection(Qt::RightToLeft);
+    _weaponPill->setToolTip("Source, plugin and weapon");
+    _weaponPill->setCursor(Qt::PointingHandCursor);
+    header->addWidget(_weaponPill);
+    connect(_weaponPill, &QPushButton::clicked, this, &ReloadMakerController::showSourcePicker);
+    _headerSummary = new QLabel(header);
+    _headerSummary->setObjectName("HeaderSummary");
+    header->addWidget(_headerSummary);
+    _presetChip = new QLabel(header);
+    _presetChip->setObjectName("PresetChip");
+    _presetChip->setFixedHeight(24);
+    _presetChip->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
+    header->addWidget(_presetChip);
+    auto* spacer = new QWidget(header);
+    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    header->addWidget(spacer);
+    // The mode switch shows pages; each page or builder step opens a stable,
+    // persisted workspace id (src/areas/shell/RailPages.cpp).
+    auto* modes = new SegmentedControl("ModeSwitch", header);
+    _modeSwitch = modes;
+    _railButtons = modes->group();
+    const std::pair<QString, RailPage> pages[]{{"Reload builder", RailPage::Builder}, {"Operate", RailPage::Operate},
+        {"Poses library", RailPage::Poses}, {"Sounds", RailPage::Sounds}, {"Scopes", RailPage::Scopes}};
+    for (const auto& [title, page] : pages) {
+        modes->addSegment(title, int(page));
+    }
+    header->addWidget(modes);
     auto* menuButton = new QToolButton(header);
-    menuButton->setText("MENU");menuButton->setObjectName("MainMenuButton");menuButton->setPopupMode(QToolButton::InstantPopup);
-    auto* mainMenu=new QMenu(menuButton);mainMenu->setObjectName("MainMenu");menuButton->setMenu(mainMenu);header->addWidget(menuButton);
+    menuButton->setObjectName("MenuButton");
+    menuButton->setIcon(icon(Icon::Menu, color::textSecondary));
+    menuButton->setIconSize(QSize(18, 18));
+    menuButton->setToolTip("Menu");
+    menuButton->setAccessibleName("Menu");
+    menuButton->setPopupMode(QToolButton::InstantPopup);
+    auto* mainMenu = new QMenu(menuButton);
+    mainMenu->setObjectName("MainMenu");
+    menuButton->setMenu(mainMenu);
+    header->addWidget(menuButton);
+
     _sourceMenu=mainMenu->addMenu("Source");_sourceMenu->setObjectName("SourceMenu");
     auto* dynamicSource=_sourceMenu->addAction("Dynamic source · MO2");dynamicSource->setCheckable(true);
     auto* developmentSource=_sourceMenu->addAction("Development source · Testbeds");developmentSource->setCheckable(true);
@@ -84,36 +139,6 @@ void ReloadMakerController::createUi() {
     _sourceMenu->addSeparator();
     connect(_sourceMenu->addAction("Reload source files"),&QAction::triggered,this,[this]{if(_libraryMode)startLibraryLoad();else openPackage(_packageText);});
     connect(_sourceMenu,&QMenu::aboutToShow,this,[this,dynamicSource,developmentSource]{dynamicSource->setChecked(_libraryMode);developmentSource->setChecked(!_libraryMode&&!_package.sourcePath.isEmpty());});
-    // The rail shows pages; each page or builder step opens a stable,
-    // persisted workspace id (src/areas/shell/RailPages.cpp).
-    _railButtons = new QButtonGroup(this);
-    const std::pair<QString, RailPage> pages[]{{"Operate", RailPage::Operate}, {"Reload builder", RailPage::Builder},
-        {"Poses library", RailPage::Poses}, {"Sounds", RailPage::Sounds}, {"Scopes", RailPage::Scopes}};
-    for (const auto& [title, page] : pages) {
-        auto* button = new QPushButton(title, header);
-        button->setCheckable(true);
-        button->setObjectName("WorkspaceButton");
-        _railButtons->addButton(button, int(page));
-        header->addWidget(button);
-    }
-    _builderStepButtons = new QButtonGroup(this);
-    auto* builderSteps = new QWidget(header);
-    auto* builderLayout = new QHBoxLayout(builderSteps);
-    builderLayout->setContentsMargins(12, 0, 0, 0);
-    builderLayout->setSpacing(2);
-    const std::pair<QString, BuilderStep> steps[]{{"Reload", BuilderStep::Reload}, {"Part grips", BuilderStep::PartGrips},
-        {"Mechanisms", BuilderStep::Mechanisms}, {"Grab points", BuilderStep::GrabPoints}, {"Magazines", BuilderStep::Magazines}};
-    for (const auto& [title, step] : steps) {
-        auto* button = new QPushButton(title, builderSteps);
-        button->setCheckable(true);
-        button->setObjectName("BuilderStepButton");
-        _builderStepButtons->addButton(button, int(step));
-        builderLayout->addWidget(button);
-    }
-    _builderStepsAction = header->addWidget(builderSteps);
-    auto* spacer = new QWidget(header);
-    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    header->addWidget(spacer);
     mainMenu->addSeparator();
     connect(mainMenu->addAction("Setup && tools…"),&QAction::triggered,this,&ReloadMakerController::showSetup);
     connect(mainMenu->addAction("Weapon collision…"),&QAction::triggered,this,[this]{setWorkspace(WeaponCollisionWorkspace);});
@@ -161,19 +186,62 @@ void ReloadMakerController::createUi() {
         try {const auto result=executeCommand({{"method","import_records"},{"params",QJsonObject{{"paths",files}}}});setStatus(QString("Imported %1 authored records; originals were preserved.").arg(result["imported"].toInt()));}
         catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}
     });
+    createSourcePicker();
 
-    // ---- Loadout rail: the weapon as a workbench ----
-    _packageDock = dock(_window, "LOADOUT", Qt::LeftDockWidgetArea);
-    _packageDock->setMinimumWidth(320);
-    _packageDock->setMaximumWidth(440);
-    auto* packagePanel = new QWidget(_packageDock);
-    auto* packageLayout = new QVBoxLayout(packagePanel);
-    packageLayout->setContentsMargins(12, 12, 12, 12);
+    // ---- Left panel: the builder checklist and the loadout ----
+    _packageDock = dock(_window, "Left panel", Qt::LeftDockWidgetArea);
+    _packageDock->setTitleBarWidget(new QWidget(_packageDock));
+    _packageDock->setMinimumWidth(300);
+    _packageDock->setMaximumWidth(400);
+    auto* left = new QWidget(_packageDock);
+    auto* leftLayout = new QVBoxLayout(left);
+    leftLayout->setContentsMargins(0, 6, 0, 10);
+    leftLayout->setSpacing(0);
+    _leftTabs = new QTabBar(left);
+    _leftTabs->setExpanding(true);
+    _leftTabs->setDrawBase(false);
+    _leftTabs->addTab("Checklist");
+    _leftTabs->addTab("Loadout");
+    leftLayout->addWidget(_leftTabs);
+    _leftStack = new QStackedWidget(left);
+    leftLayout->addWidget(_leftStack, 1);
+
+    _checklistPanel = new QWidget(_leftStack);
+    auto* checklistLayout = new QVBoxLayout(_checklistPanel);
+    checklistLayout->setContentsMargins(10, 14, 10, 0);
+    checklistLayout->setSpacing(2);
+    auto* checklistTitle = sectionLabel("Reload builder", _checklistPanel);
+    checklistTitle->setContentsMargins(6, 0, 0, 0);
+    checklistLayout->addWidget(checklistTitle);
+    auto* checklistHint = hintLabel("Everything the reload needs except its sounds, step by step.", _checklistPanel);
+    checklistHint->setContentsMargins(6, 0, 0, 10);
+    checklistLayout->addWidget(checklistHint);
+    _builderStepButtons = new QButtonGroup(this);
+    struct StepRow { BuilderStep step; const char* title; const char* subtitle; };
+    const StepRow steps[]{
+        {BuilderStep::Reload, "Learned reload", "Source reload and part timing"},
+        {BuilderStep::PartGrips, "Part grips", "Hands on the magazine and parts"},
+        {BuilderStep::Mechanisms, "Mechanisms", "Moving parts, pulls, linked parts"},
+        {BuilderStep::GrabPoints, "Grab points", "Where hands may grab a part"},
+        {BuilderStep::Magazines, "Magazines", "Full and empty world models"},
+    };
+    for (const auto& row : steps) {
+        auto* button = new ChecklistRow(row.title, _checklistPanel);
+        button->setSubtitle(row.subtitle);
+        button->setMarker(ChecklistRow::Marker::Number, int(row.step) + 1);
+        _builderStepButtons->addButton(button, int(row.step));
+        checklistLayout->addWidget(button);
+    }
+    checklistLayout->addStretch(1);
+    _leftStack->addWidget(_checklistPanel);
+
+    auto* loadoutPanel = new QWidget(_leftStack);
+    auto* packageLayout = new QVBoxLayout(loadoutPanel);
+    packageLayout->setContentsMargins(12, 14, 12, 0);
     packageLayout->setSpacing(8);
-    _pages = new QTabWidget(packagePanel);
+    _pages = new QTabWidget(loadoutPanel);
     _pages->tabBar()->hide();
     packageLayout->addWidget(_pages, 1);
-
     auto* setup = new QWidget(_pages);
     auto* setupLayout = new QVBoxLayout(setup);
     setupLayout->setContentsMargins(0, 0, 0, 0);
@@ -182,7 +250,7 @@ void ReloadMakerController::createUi() {
     _loadoutTitle->setObjectName("LoadoutTitle");
     _loadoutTitle->setWordWrap(true);
     setupLayout->addWidget(_loadoutTitle);
-    _configurationSummary = hint("Choose a source and weapon in the bar above.", setup);
+    _configurationSummary = hint("Choose a source and weapon with the weapon button above.", setup);
     setupLayout->addWidget(_configurationSummary);
     auto* delegate = new LoadoutDelegate(this);
     _partSearch = new QLineEdit(setup);
@@ -196,77 +264,98 @@ void ReloadMakerController::createUi() {
     _partList->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     setupLayout->addWidget(_partList, 1);
     _pages->addTab(setup, "Loadout");
-    // One native clip list; Reload phases shows it, the hand editor uses the
-    // transport's clip picker over the same model.
+    _leftStack->addWidget(loadoutPanel);
+    // One native clip list; the learned reload shows it, the hand editor uses
+    // the transport's clip picker over the same model.
     _animationList = new QListWidget(_window);
     _animationList->hide();
-    _loadingLabel = hint({}, packagePanel);
-    _loadingProgress = new QProgressBar(packagePanel);
-    _cancelLoading = new QPushButton("Cancel load", packagePanel);
-    for (QWidget* w : std::initializer_list<QWidget*>{static_cast<QWidget*>(_loadingLabel), _loadingProgress, _cancelLoading}) { packageLayout->addWidget(w); w->hide(); }
+    _loadingLabel = hint({}, left);
+    _loadingProgress = new QProgressBar(left);
+    _cancelLoading = new QPushButton("Cancel load", left);
+    for (QWidget* w : std::initializer_list<QWidget*>{static_cast<QWidget*>(_loadingLabel), _loadingProgress, _cancelLoading}) { leftLayout->addWidget(w); w->hide(); }
     connect(_cancelLoading, &QPushButton::clicked, this, [this] {
         if (_loadThread) _loadThread->requestInterruption();
         _cancelLoading->setEnabled(false);
         _loadingLabel->setText("Cancelling; keeping the previous source…");
     });
-    _packageDock->setWidget(packagePanel);
-    auto* loadoutToggle=new QPushButton("Loadout",header);loadoutToggle->setObjectName("LoadoutToggle");
-    loadoutToggle->setCheckable(true);loadoutToggle->setChecked(true);loadoutToggle->setToolTip("Show or hide the left loadout / reload panel");header->addWidget(loadoutToggle);
-    connect(loadoutToggle,&QPushButton::toggled,_packageDock,&QWidget::setVisible);
-    connect(_packageDock,&QDockWidget::visibilityChanged,loadoutToggle,[loadoutToggle](bool visible){const QSignalBlocker blocker(loadoutToggle);loadoutToggle->setChecked(visible);});
+    _packageDock->setWidget(left);
+    connect(_leftTabs, &QTabBar::currentChanged, this, [this](int index) { _leftStack->setCurrentIndex(index); });
 
-    _detailsDock = dock(_window, "DIAGNOSTICS", Qt::BottomDockWidgetArea);
+    _detailsDock = dock(_window, "Diagnostics", Qt::BottomDockWidgetArea);
+    _detailsDock->setTitleBarWidget(new PanelHeader("Diagnostics", {}, _detailsDock));
     _details = new QPlainTextEdit(_detailsDock);
     _details->setReadOnly(true);
+    _details->setFont(monoFont(kSmallPx));
     _details->setMaximumBlockCount(kMaximumDiagnosticLines);
     _details->setMaximumHeight(165);
     _detailsDock->setWidget(_details);
     _detailsDock->hide();
 
-    _timelineDock = dock(_window, "PLAYBACK", Qt::BottomDockWidgetArea);
-    _timelineDock->setMaximumHeight(108);
+    // ---- Timeline: the clip under the viewport ----
+    _timelineDock = dock(_window, "Timeline", Qt::BottomDockWidgetArea);
+    _timelineDock->setMaximumHeight(96);
     _timelineDock->setTitleBarWidget(new QWidget(_timelineDock));
     auto* timelinePanel = new QWidget(_timelineDock);
+    timelinePanel->setObjectName("Timeline");
+    timelinePanel->setAttribute(Qt::WA_StyledBackground);
     auto* timelineLayout = new QVBoxLayout(timelinePanel);
-    timelineLayout->setContentsMargins(12, 8, 12, 10);
+    timelineLayout->setContentsMargins(16, 10, 16, 10);
+    timelineLayout->setSpacing(8);
     auto* transport = new QHBoxLayout;
+    transport->setSpacing(10);
+    _playButton = new QPushButton(timelinePanel);
+    _playButton->setObjectName("PlayButton");
+    _playButton->setIcon(icon(Icon::Play, color::onPrimary));
+    _playButton->setToolTip("Play");
+    _playButton->setAccessibleName("Play");
+    auto* replayButton = new QPushButton(timelinePanel);
+    replayButton->setObjectName("IconButton");
+    replayButton->setIcon(icon(Icon::Restart, color::textSecondary));
+    replayButton->setToolTip("Restart");
+    replayButton->setAccessibleName("Restart");
     _clipCombo = new QComboBox(timelinePanel);
     _clipCombo->setModel(_animationList->model());
-    _clipCombo->setMinimumContentsLength(16);
+    _clipCombo->setMinimumContentsLength(18);
     _clipCombo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-    _clipCombo->setToolTip("Native clip shown on the timeline.");
-    _playButton = new QPushButton("Play", timelinePanel);
-    _playButton->setObjectName("PrimaryButton");
-    auto* replayButton = new QPushButton("Restart", timelinePanel);
+    _clipCombo->setToolTip("Native clip shown on the timeline");
+    _clipPathLabel = new QLabel(timelinePanel);
+    _clipPathLabel->setObjectName("ClipPath");
+    _clipPathLabel->setFont(monoFont(kSmallPx));
+    _clipPathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    // A long resource path must never widen the timeline past the viewport.
+    _clipPathLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    _clipPathLabel->setMinimumWidth(40);
     _loopCheck = new QCheckBox("Loop", timelinePanel);
     _loopCheck->setChecked(_loopPlayback);
     _speedCombo = new QComboBox(timelinePanel);
     for (float rate : {.25f, .5f, 1.f, 1.5f, 2.f}) _speedCombo->addItem(QString::number(rate)+"×", rate);
     _speedCombo->setCurrentIndex(2);
+    _speedCombo->setToolTip("Playback speed");
+    _transitionCheck = new QCheckBox("Approximate blends", timelinePanel);
+    _transitionCheck->setChecked(_approximateTransitions);
+    _transitionCheck->setToolTip("Graph-derived entry and exit blends; not full Havok behavior emulation.");
+    _timeLabel = new QLabel("0.000 / 0.000 s", timelinePanel);
+    _timeLabel->setObjectName("TimeLabel");
+    _timeLabel->setFont(monoFont(kBodyPx));
+    transport->addWidget(_playButton); transport->addWidget(replayButton); transport->addWidget(_clipCombo);
+    transport->addWidget(_clipPathLabel, 1); transport->addWidget(_transitionCheck); transport->addWidget(_loopCheck);
+    transport->addWidget(_speedCombo); transport->addWidget(_timeLabel);
+    timelineLayout->addLayout(transport);
     _timeline = new QSlider(Qt::Horizontal, timelinePanel);
     _timeline->setRange(0, kTimelineMaximum);
     _timeline->setEnabled(false);
-    _timeLabel = new QLabel("0.000 / 0.000 s", timelinePanel);
-    transport->addWidget(_clipCombo); transport->addWidget(_playButton); transport->addWidget(replayButton); transport->addWidget(_loopCheck); transport->addWidget(_speedCombo);
-    transport->addWidget(_timeline, 1); transport->addWidget(_timeLabel);
-    timelineLayout->addLayout(transport);
-    auto* viewOptions = new QHBoxLayout;
-    _transitionCheck = new QCheckBox("Approximate entry / exit blends", timelinePanel);
-    _transitionCheck->setChecked(_approximateTransitions);
-    _transitionCheck->setToolTip("Graph-derived transition preview; not full Havok behavior emulation.");
-    viewOptions->addWidget(_transitionCheck); viewOptions->addStretch();
-    viewOptions->addWidget(hint("Drag: orbit   ·   Middle drag: pan   ·   Wheel: zoom", timelinePanel));
-    timelineLayout->addLayout(viewOptions);
+    timelineLayout->addWidget(_timeline);
     _timelineDock->setWidget(timelinePanel);
-    // The motion frame and arm visibility controls live in the always-visible
-    // view toolbar and show the document fields (areas/operate/PreviewSettings.cpp).
+    // The motion frame and arm visibility controls live in the view bar and
+    // show the document fields (areas/operate/PreviewSettings.cpp).
     _motionMode = new QComboBox(_window);
+    _motionMode->setObjectName("ViewChip");
     _motionMode->addItems({"Weapon fixed", "Full native motion"});
     showWeaponFixedMotion();
     _motionMode->setToolTip("Weapon fixed holds the weapon frame still while hands and moving parts keep their native relative motion.");
-    _showArmsCheck = new QCheckBox("Arms && hands", _window);
+    _showArmsCheck = new QCheckBox("Arms", _window);
     _showArmsCheck->setChecked(_armsShown);
-    _bodyCombo = new QComboBox(_window);_bodyCombo->setObjectName("ArmsBodyPicker");_bodyCombo->setAccessibleName("Hand model");
+    _bodyCombo = new QComboBox(_window);_bodyCombo->setObjectName("ViewChip");_bodyCombo->setAccessibleName("Hand model");
     _bodyCombo->addItem("Male arms", "male");_bodyCombo->addItem("Female arms", "female");
 
         connect(_bodyCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int) {
@@ -280,13 +369,6 @@ void ReloadMakerController::createUi() {
         };
         connect(_partList, &QListWidget::itemClicked, this, choosePart);
         connect(_partList, &QListWidget::itemActivated, this, choosePart);
-        connect(_pages, &QTabWidget::currentChanged, this, [this](int index) {
-            if (_playing) { togglePlayback(); }
-            if (_slotOverlay) { _slotOverlay->setActive(index == kLoadoutPage && _showPartLabels); }
-            updateGripViewport();
-            // Both pages share one live scene and one configuration.
-            _window->getGLView()->update();
-        });
         connect(_animationList, &QListWidget::itemActivated,
                 this, [this](QListWidgetItem* item) { previewNativeClip(_animationList->row(item)); });
         connect(_animationList, &QListWidget::itemClicked,
@@ -333,43 +415,27 @@ void ReloadMakerController::createUi() {
         scroll->setWidget(content);
         _handPosePages->insertTab(page, scroll, title);
     }
-    // The rail's Poses library page and Reload builder steps choose the page.
+    // The Poses library page and the Reload builder steps choose the page.
     _handPosePages->tabBar()->hide();
     _reloadGraphDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
     _reloadGraphDock->setMinimumHeight(170);
     _reloadGraphDock->setMaximumHeight(360);
 
-    // ---- Context bar: source, plugin and weapon, then the view controls ----
-    auto* camera = new QToolBar("Context", _window);
-    camera->setMovable(false); _window->addToolBarBreak(); _window->addToolBar(camera);
-    createSourceBar(camera);
-    camera->addSeparator();
-    camera->addWidget(new QLabel("  VIEW  ", camera));
-    const std::pair<const char*, GLView::ViewState> views[]{{"Front",GLView::ViewFront},{"Side",GLView::ViewRight},{"Top",GLView::ViewTop},{"Perspective",GLView::ViewDefault}};
-    for (const auto& [label, view] : views) {
-        auto* action = camera->addAction(label);
-        connect(action, &QAction::triggered, this, [this, view] {
-            _window->getGLView()->setOrientation(view, false);
-            if(view==GLView::ViewDefault)_window->getGLView()->setRotation(-65,0,135);
-        });
+    // Every panel opens with the canvas heading instead of a dock caption.
+    _handPoseHeader = new PanelHeader("Reload builder", {}, _handPoseDock);
+    _handPoseDock->setTitleBarWidget(_handPoseHeader);
+    _collisionsHeader = new PanelHeader("Reload builder", "Magazines", _collisionsDock);
+    _collisionsDock->setTitleBarWidget(_collisionsHeader);
+    _reloadDock->setTitleBarWidget(new PanelHeader("Reload builder", "Learned reload", _reloadDock));
+    _simulationDock->setTitleBarWidget(new PanelHeader("Operate", "Work the weapon", _simulationDock));
+    _soundsDock->setTitleBarWidget(new PanelHeader("Sounds", "Reload sounds", _soundsDock));
+    _scopesDock->setTitleBarWidget(new PanelHeader("Scopes", "Scope profile", _scopesDock));
+    _reloadGraphDock->setTitleBarWidget(new PanelHeader("When each part moves · click a moment to see it", {}, _reloadGraphDock));
+    for (auto* side : {_handPoseDock, _collisionsDock, _reloadDock, _simulationDock, _soundsDock, _scopesDock}) {
+        side->setMinimumWidth(360);
     }
-    connect(camera->addAction("Fit"), &QAction::triggered, this, [this] { (void)fitWeapon(); });
-    auto* grid = new QCheckBox("Grid", camera);
-    camera->addWidget(grid);
-    connect(grid,&QCheckBox::toggled,this,[this](bool show) {
-        auto* view=_window->getGLView();
-        if(show)view->getScene()->options|=Scene::ShowGrid;else view->getScene()->options&=~Scene::ShowGrid;
-        view->update();
-    });
-    auto* labels = new QCheckBox("Part labels", camera);
-    camera->addWidget(labels);
-    camera->addSeparator();
-    camera->addWidget(_motionMode);
-    camera->addWidget(_showArmsCheck);
-    camera->addWidget(_bodyCombo);
-    connect(labels,&QCheckBox::toggled,this,[this](bool show) {
-        _showPartLabels=show;if(_slotOverlay)_slotOverlay->setActive(show&&loadoutPageActive());
-    });
+
+    createViewBar();
     connect(_railButtons, &QButtonGroup::idToggled, this, [this](int page, bool checked) { if (checked) showRailPage(RailPage(page)); });
     connect(_builderStepButtons, &QButtonGroup::idToggled, this, [this](int step, bool checked) { if (checked) showBuilderStep(BuilderStep(step)); });
     connect(diagnostics, &QAction::toggled, _detailsDock, &QWidget::setVisible);
@@ -387,6 +453,59 @@ void ReloadMakerController::createUi() {
         auto* shortcut = new QShortcut(QKeySequence(QString("Ctrl+%1").arg(i+1)), _window);
         connect(shortcut, &QShortcut::activated, this, [this, page = pages[i].second] { showRailPage(page); });
     }
+    refreshHeader();
+}
+
+// ---- View bar: camera, framing and what the viewport shows ----
+// The viewport is a native GL window, so these sit in a bar above it.
+void ReloadMakerController::createViewBar() {
+    using namespace design;
+    auto* bar = new QWidget(_window);
+    bar->setObjectName("ViewBar");
+    bar->setAttribute(Qt::WA_StyledBackground);
+    auto* layout = new QHBoxLayout(bar);
+    layout->setContentsMargins(12, 6, 12, 6);
+    layout->setSpacing(6);
+    const auto chip = [bar, layout](const QString& text, const QString& tip) {
+        auto* button = new QPushButton(text, bar);
+        button->setObjectName("ViewChip");
+        button->setToolTip(tip);
+        layout->addWidget(button);
+        return button;
+    };
+    const std::pair<const char*, GLView::ViewState> views[]{{"Front",GLView::ViewFront},{"Side",GLView::ViewRight},{"Top",GLView::ViewTop},{"3D",GLView::ViewDefault}};
+    for (const auto& [label, view] : views) {
+        auto* button = chip(label, QString("%1 view").arg(label == QString("3D") ? QString("Perspective") : QString(label)));
+        connect(button, &QPushButton::clicked, this, [this, view] {
+            _window->getGLView()->setOrientation(view, false);
+            if(view==GLView::ViewDefault)_window->getGLView()->setRotation(-65,0,135);
+        });
+    }
+    auto* fit = chip("Fit", "Frame the weapon (F)");
+    fit->setIcon(icon(Icon::Fit, color::textSecondary));
+    connect(fit, &QPushButton::clicked, this, [this] { (void)fitWeapon(); });
+    auto* grid = chip("Grid", "Show the ground grid");
+    grid->setCheckable(true);
+    connect(grid,&QPushButton::toggled,this,[this](bool show) {
+        auto* view=_window->getGLView();
+        if(show)view->getScene()->options|=Scene::ShowGrid;else view->getScene()->options&=~Scene::ShowGrid;
+        view->update();
+    });
+    auto* labels = chip("Part labels", "Label the installed parts on the model");
+    labels->setCheckable(true);
+    connect(labels,&QPushButton::toggled,this,[this](bool show) {
+        _showPartLabels=show;if(_slotOverlay)_slotOverlay->setActive(show&&loadoutPageActive());
+    });
+    layout->addStretch(1);
+    layout->addWidget(_motionMode);
+    _showArmsCheck->setParent(bar);
+    layout->addWidget(_showArmsCheck);
+    layout->addWidget(_bodyCombo);
+    _window->setViewportBar(bar);
+    // How to use the viewport stays in the footer, beside the status.
+    auto* navigation = new QLabel("Click a part to select it · double-click to change it · right-click for actions · drag to orbit · middle-drag to pan · wheel to zoom", _window);
+    navigation->setObjectName("ViewHint");
+    _window->statusBar()->addPermanentWidget(navigation);
 }
 
 bool ReloadMakerController::validWorkspace(int workspace) {
@@ -422,11 +541,11 @@ void ReloadMakerController::setWorkspace(int workspace) {
     _workspace = workspace;
     if(workspace!=GripsWorkspace)_magazineFitPreview=false;
     syncRail();
-    // Reload replaces the loadout rail with the reload page and the native
-    // clip list; Operate and the hand editor keep the loadout.
+    // The learned reload opens its inspector and the graph of its moving
+    // parts; every other page keeps the loadout in the left panel.
     const bool phases = workspace == PhasesWorkspace;
-    _pages->setCurrentIndex(phases ? kReloadPage : kLoadoutPage);
-    _packageDock->setWindowTitle(phases ? "RELOAD" : "LOADOUT");
+    setReloadWorkspace(phases);
+    _reloadDock->setVisible(phases);
     _simulationDock->setVisible(workspace == OperateWorkspace);
     _soundsDock->setVisible(workspace==SoundsWorkspace);
     _collisionsDock->setVisible(collisionWorkspace(workspace));
@@ -458,7 +577,7 @@ void ReloadMakerController::previewNativeClip(int row) {
         // clips are inspected on the transport until the graph or PLAY RELOAD
         // returns to the reload.
         const bool reload = _animationActions[row].resourcePath == _reloadExpectedPath;
-        _reloadPreviewTimer->stop(); _reloadPlaying = false; _reloadPlay->setText("PLAY RELOAD");
+        _reloadPreviewTimer->stop(); _reloadPlaying = false; _reloadPlay->setText("Play reload");
         if (reload) { restoreReloadClip(); return; }
         _timelineDock->setVisible(true);
     }
@@ -472,50 +591,6 @@ void ReloadMakerController::restoreReloadClip() {
 }
 
 void ReloadMakerController::applyStyle() {
-    _window->setStyleSheet(R"(
-        QWidget { font-family:'Segoe UI'; font-size:12px; color:#dce7e7; background:#171d23; }
-        QMainWindow, QToolBar { background:#11171c; }
-        QToolBar { border:0; spacing:7px; padding:7px; }
-        QLabel#Brand { font-size:20px; font-weight:700; padding:0 20px 0 5px; }
-        QLabel#Hint { color:#91a4ae; }
-        QLabel#Section { color:#7fb3ac; font-weight:700; letter-spacing:1px; padding-top:6px; }
-        QLabel#LoadoutTitle { font-size:19px; font-weight:700; color:#e6f5f2; }
-        QLabel#SourceLabel { color:#a6c9c4; padding:0 6px; }
-        QToolButton#SourceButton { font-weight:700; color:#91ddd0; }
-        QTreeWidget#Loadout, QListWidget#Loadout { background:transparent; border:0; }
-        QTreeWidget#Loadout::item, QListWidget#Loadout::item { padding:0; }
-        QLabel#StatusCard { padding:10px 12px; background:#1f3533; color:#d3f7ec; border-radius:5px; }
-        QDockWidget::title { background:#202a32; color:#93b8b9; padding:9px 12px; font-weight:600; }
-        QGroupBox { border:1px solid #344149; border-radius:5px; margin-top:12px; padding:10px 6px 5px; }
-        QGroupBox::title { subcontrol-origin:margin; left:10px; color:#a6bdc5; padding:0 4px; }
-        QLineEdit, QComboBox, QDoubleSpinBox, QListWidget, QTreeWidget, QPlainTextEdit { background:#10171d; border:1px solid #35434c; border-radius:4px; padding:5px; selection-background-color:#275452; }
-        QComboBox { min-height:23px; }
-        QComboBox::drop-down { width:20px; border:0; }
-        QAbstractItemView { outline:0; }
-        QListWidget::item, QTreeWidget::item { padding:7px 3px; }
-        QListWidget::item:selected, QTreeWidget::item:selected { background:#254e4d; color:#f0ffff; }
-        QHeaderView::section { background:#25323a; color:#9ab1bc; border:0; padding:7px; }
-        QPushButton, QToolButton { background:#27343d; border:1px solid #3b4d58; border-radius:4px; padding:7px 10px; }
-        QPushButton:hover { background:#324751; border-color:#6ba6a8; }
-        QPushButton:pressed { background:#152c30; }
-        QPushButton:disabled { color:#637078; background:#202830; border-color:#2c3942; }
-        QPushButton:checked, QPushButton#PrimaryButton { color:#efffff; background:#235854; border-color:#4c928b; }
-        QPushButton#WorkspaceButton { min-width:96px; padding:10px; border-color:transparent; background:transparent; }
-        QPushButton#WorkspaceButton:checked { background:#26423f; color:#91ddd0; border-bottom:2px solid #74c4b3; }
-        QPushButton#BuilderStepButton { padding:6px 10px; border-color:transparent; background:transparent; color:#a9b8b5; }
-        QPushButton#BuilderStepButton:checked { color:#91ddd0; border-bottom:2px solid #74c4b3; }
-        QTabWidget::pane { border:0; }
-        QTabBar::tab { background:#1d2931; color:#98adb8; padding:10px 14px; }
-        QTabBar::tab:selected { background:#2a4646; color:#d8fff5; }
-        QSlider::groove:horizontal { height:5px; background:#344751; border-radius:2px; }
-        QSlider::handle:horizontal { width:13px; margin:-5px 0; background:#88c8ba; border-radius:6px; }
-        QCheckBox { spacing:6px; }
-        QProgressBar { border:1px solid #344751; border-radius:3px; text-align:center; }
-        QProgressBar::chunk { background:#467f78; }
-        QScrollBar:vertical { width:10px; background:#161f26; }
-        QScrollBar::handle:vertical { background:#40545f; min-height:30px; border-radius:4px; }
-        QStatusBar { background:#11191f; color:#9bb5bc; border-top:1px solid #2c3a43; }
-        QToolTip { color:#e1eeee; background:#293d44; border:1px solid #62858b; padding:5px; }
-    )");
+    design::applyTheme();
 }
 }

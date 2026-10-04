@@ -17,16 +17,16 @@ namespace reloadmaker {
 CollisionPanel::CollisionPanel(CollisionWorkshop& workshop,QWidget* parent):QWidget(parent),_workshop(workshop){
     auto* layout=new QVBoxLayout(this);layout->setContentsMargins(14,14,14,14);
     auto label=[&](const QString& text){auto* w=new QLabel(text);w->setWordWrap(true);layout->addWidget(w);return w;};
-    _title=label("Collision workshop");_title->setObjectName("Section");
-    _intro=label({});
-    _target=new QComboBox;layout->addWidget(_target);
+    _title=label("COLLISION WORKSHOP");_title->setObjectName("Section");
+    _intro=label({});_intro->setObjectName("Hint");
+    _target=new QComboBox;_target->setPlaceholderText("Nothing captured yet");layout->addWidget(_target);
     auto button=[&](const QString& title,const QString& operation){auto* b=new QPushButton(title);layout->addWidget(b);connect(b,&QPushButton::clicked,&_workshop,[this,operation]{run(operation);});return b;};
-    button("GENERATE · ROCK DEFAULTS","defaults")->setObjectName("PrimaryButton");
+    button("Generate with ROCK defaults","defaults")->setObjectName("PrimaryButton");
     auto* form=new QFormLayout;const auto& values=_workshop.form();
     auto spin=[&](const QString& name,const CollisionFormField& field,double value){auto* s=new QDoubleSpinBox;s->setRange(field.minimum,field.maximum);s->setDecimals(field.decimals);s->setValue(value);form->addRow(name,s);return s;};
     _gap=spin("Gap to preserve · game units",kCollisionGap,values.gap);_error=spin("Maximum support error",kCollisionSupportError,values.supportError);_points=spin("Target points per hull",kCollisionTargetPoints,values.targetPoints);
     _mass=spin("Mass · kg",kCollisionMass,values.mass);_radius=spin("Convex radius · Havok",kCollisionRadius,values.radius);layout->addLayout(form);
-    button("REGENERATE WITH THESE SETTINGS","generate");
+    button("Regenerate with these settings","generate");
     _overlay=new QCheckBox("Show hulls · x-ray");_overlay->setChecked(_workshop.overlay());layout->addWidget(_overlay);
     _compare=new QCheckBox("Compare previous result · blue wireframe");_compare->setChecked(_workshop.compare());layout->addWidget(_compare);
     _isolate=new QCheckBox("Show selected hull only");_isolate->setChecked(_workshop.isolated());layout->addWidget(_isolate);
@@ -35,8 +35,8 @@ CollisionPanel::CollisionPanel(CollisionWorkshop& workshop,QWidget* parent):QWid
     label("Unchecked pieces are excluded from the prepared model and collision. Use separate captures for full and empty presentations. Regenerate hulls after re-including a piece.")->setObjectName("Hint");
     _pieces=new QListWidget;_pieces->setMinimumHeight(160);layout->addWidget(_pieces);
     label("Yellow: selected · teal: ROCK. Uncheck a hull to exclude it from export. Save before changing the source, target or animation.")->setObjectName("Hint");
-    button("SAVE / REPLACE THIS PROFILE","save");button("OPEN SAVED PROFILE…","browse_profile");button("EXPORT COLLISION JSON…","browse_export");button("CANCEL GENERATION","cancel");
-    button("CAPTURE VISIBLE PART MODEL…","prepare");button("COOK PREPARED MAGAZINE…","cook");
+    button("Save or replace this profile","save");button("Open saved profile…","browse_profile");button("Export collision JSON…","browse_export");button("Cancel generation","cancel");
+    button("Capture visible part model…","prepare");button("Cook prepared magazine…","cook");
     _status=label("No collision snapshot yet.");_status->setTextInteractionFlags(Qt::TextSelectableByMouse);
     label("Preview shows convex point envelopes. Cook prepared magazine uses your configured Creation Kit to produce a finished collision model. Live Havok contacts still require an in-game test.")->setObjectName("Hint");layout->addStretch();
     connect(_target,qOverload<int>(&QComboBox::activated),&_workshop,[this](int index){_workshop.chooseTarget(index);});
@@ -54,7 +54,7 @@ CollisionPanel::CollisionPanel(CollisionWorkshop& workshop,QWidget* parent):QWid
     connect(&_workshop,&CollisionWorkshop::updated,this,[this]{showWorkshop();});
 }
 void CollisionPanel::setSubject(const QString& title,const QString& intro){
-    _title->setText(title);_intro->setText(intro+" Orbit the model to inspect gaps and overlaps.");
+    _title->setText(title.toUpper());_intro->setText(intro+" Orbit the model to inspect gaps and overlaps.");
 }
 void CollisionPanel::run(const QString& operation){
     try{_workshop.command({{"operation",operation}});}catch(const std::exception& e){_workshop.reportError(QString::fromUtf8(e.what()));}

@@ -206,7 +206,7 @@ namespace reloadmaker
         setHandEditorPage(HandEditorPage::Mechanism);
         updateGripViewport();
         _gripViewport->setPicking(true);
-        showWorkshopHint(contactOnly ? "Click the contact point on the selected part. Then ADJUST HAND shows its move/rotate handles."
+        showWorkshopHint(contactOnly ? "Click the contact point on the selected part. Then Adjust hand shows its move and rotate handles."
                                      : "Click the part you want to drive. No hand pose is required. If several bones drive the surface, choose the intended part from the menu.");
     }
 

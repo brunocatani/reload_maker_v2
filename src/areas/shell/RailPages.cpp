@@ -12,6 +12,10 @@
 #include <QButtonGroup>
 #include <QDockWidget>
 #include <QSignalBlocker>
+#include <QStackedWidget>
+#include <QTabBar>
+
+#include "design/DesignWidgets.h"
 
 namespace reloadmaker
 {
@@ -140,12 +144,26 @@ namespace reloadmaker
             _lastBuilderStep = *step;
             _builderStepButtons->button(int(*step))->setChecked(true);
         }
-        _builderStepsAction->setVisible(page == RailPage::Builder);
-        if (_handPoseDock) {
-            _handPoseDock->setWindowTitle(page == RailPage::Poses             ? QStringLiteral("POSES LIBRARY")
-                                          : _handEditorPage == HandEditorPage::PartGrip ? QStringLiteral("PART GRIPS")
-                                          : _handEditorPage == HandEditorPage::Mechanism ? QStringLiteral("MECHANISMS")
-                                                                                          : QStringLiteral("GRAB POINTS"));
+        // The builder shows its checklist beside the loadout; it opens on the
+        // checklist whenever the builder is entered.
+        const bool builder = page == RailPage::Builder;
+        if (_leftTabs) {
+            const bool wasBuilder = !_leftTabs->isHidden();
+            const QSignalBlocker tabSignals(_leftTabs);
+            if (builder && !wasBuilder) {
+                _leftTabs->setCurrentIndex(0);
+            }
+            _leftTabs->setVisible(builder);
+            _leftStack->setCurrentIndex(builder ? _leftTabs->currentIndex() : 1);
+        }
+        if (_handPoseHeader) {
+            const QString title = page == RailPage::Poses                          ? QStringLiteral("Capture and reuse hand poses")
+                                  : _handEditorPage == HandEditorPage::PartGrip    ? QStringLiteral("Part grips")
+                                  : _handEditorPage == HandEditorPage::Mechanism   ? QStringLiteral("Mechanisms")
+                                                                                   : QStringLiteral("Grab points");
+            _handPoseHeader->setSection(page == RailPage::Poses ? QStringLiteral("Poses library") : QStringLiteral("Reload builder"));
+            _handPoseHeader->setTitle(title);
+            _handPoseDock->setWindowTitle(title);
         }
     }
 }
