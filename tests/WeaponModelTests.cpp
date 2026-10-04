@@ -81,10 +81,8 @@ namespace
             { { ContainerKind::Fixed, { point("tube-port", UnitKind::Round, LoadDestination::Container, 6) } },
               { byHand("pump", MechanismKind::Pump, fullCycle, stays) },
               manualFire("pump") } });
-        weapons.append({ "Benelli M2 (port load into the chamber, then the tube)",
-            { { ContainerKind::Fixed,
-                { point("ejection-port", UnitKind::Round, LoadDestination::Chamber, 1, "bolt"),
-                  point("loading-port", UnitKind::Round, LoadDestination::Container, 7) } },
+        weapons.append({ "Benelli M2 (every shell into the tube, the bolt chambers)",
+            { { ContainerKind::Fixed, { point("loading-port", UnitKind::Round, LoadDestination::Container, 7) } },
               { byHand("bolt", MechanismKind::ReciprocatingBolt, fullCycle, spring, true),
                 driven("lifter", MechanismKind::Latch, MechanismDriver::Unit, "loading-port") },
               selfLoading(CaseEjection::OnFire, "bolt") } });
@@ -99,7 +97,7 @@ namespace
               { byHand("crane", MechanismKind::Crane, CycleRole::OpenAccess | CycleRole::Extract | CycleRole::Eject, stays) },
               selfLoading(CaseEjection::OnOpening) } });
         weapons.append({ "Double-barrel (hinge, two chambers)",
-            { { ContainerKind::Fixed, { point("chambers", UnitKind::Round, LoadDestination::Chamber, 2, "hinge") } },
+            { { ContainerKind::Fixed, { point("chambers", UnitKind::Round, LoadDestination::Container, 2, "hinge") } },
               { byHand("hinge", MechanismKind::Hinge, CycleRole::OpenAccess | CycleRole::Extract, stays) },
               selfLoading(CaseEjection::OnOpening) } });
         weapons.append({ "Lever-action (loading gate moved by each round)",
@@ -176,7 +174,9 @@ namespace
         rejects("Remington", [](WeaponModel& m) { m.feed.loadingPoints[0].capacity = 0; }, "has no capacity");
         rejects("Remington", [](WeaponModel& m) { m.fire.manualCycleMechanism.clear(); }, "must be set together");
         rejects("Remington", [](WeaponModel& m) { m.mechanisms[0].roles = CycleRole::OpenAccess; }, "neither cocks nor chambers");
-        rejects("Benelli", [](WeaponModel& m) { m.mechanisms[0].locksOpen = false; }, "never stays open");
+        rejects(".44 single", [](WeaponModel& m) { m.mechanisms[0].roles = CycleRole::Extract | CycleRole::Eject;
+                                                     m.mechanisms[0].returnKind = MechanismReturn::Spring; },
+                "never stays open");
         rejects("Benelli", [](WeaponModel& m) { m.mechanisms[1].drivenBy = "missing-port"; }, "missing loading point");
         rejects("Benelli", [](WeaponModel& m) { m.fire.lockOpenMechanism = "lifter"; }, "cannot be held open");
         rejects(".44 single", [](WeaponModel& m) { m.feed.container = ContainerKind::Detachable; }, "indexes a container that is not fixed");
@@ -188,11 +188,11 @@ namespace
         rejects("MP5", [](WeaponModel& m) { m.mechanisms[0].roles = {}; }, "does nothing in the cycle");
         rejects("MP5", [](WeaponModel& m) { m.fire.ejection = CaseEjection::OnManualCycle; }, "manual cycle the weapon does not have");
         rejects("AEP-7", [](WeaponModel& m) { m.feed.container = ContainerKind::None; }, "without a feed has loading points");
-        rejects("MG42", [](WeaponModel& m) { m.feed.loadingPoints[1].destination = LoadDestination::Chamber; },
+        rejects("MG42", [](WeaponModel& m) { m.feed.loadingPoints[1].destination = LoadDestination::Container; },
                 "mixes a belt lead and a feed tray");
         rejects("MG42", [](WeaponModel& m) { m.feed.loadingPoints[1].unit = UnitKind::Clip; }, "mixes a belt lead and a feed tray");
         rejects("Lee Enfield", [](WeaponModel& m) { m.feed.loadingPoints[0].unit = UnitKind::Clip;
-                                                      m.feed.loadingPoints[0].destination = LoadDestination::Chamber; },
+                                                      m.feed.loadingPoints[0].destination = LoadDestination::FeedTray; },
                 "clip without a container");
     }
 

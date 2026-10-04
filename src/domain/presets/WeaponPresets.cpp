@@ -36,8 +36,7 @@ namespace reloadmaker
             { "container", UnitKind::Container }, { "round", UnitKind::Round }, { "clip", UnitKind::Clip },
             { "projectile", UnitKind::Projectile }, { "belt-lead", UnitKind::BeltLead } };
         constexpr std::pair<const char*, LoadDestination> destinationNames[] = {
-            { "container", LoadDestination::Container }, { "chamber", LoadDestination::Chamber },
-            { "feed-tray", LoadDestination::FeedTray } };
+            { "container", LoadDestination::Container }, { "feed-tray", LoadDestination::FeedTray } };
         constexpr std::pair<const char*, MechanismKind> kindNames[] = {
             { "slide", MechanismKind::Slide }, { "charging-handle", MechanismKind::ChargingHandle },
             { "operating-handle", MechanismKind::OperatingHandle }, { "reciprocating-bolt", MechanismKind::ReciprocatingBolt },

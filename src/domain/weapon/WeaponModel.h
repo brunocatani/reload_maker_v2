@@ -32,10 +32,14 @@ namespace reloadmaker
         BeltLead,   // the free end of a belt, laid into the feed tray
     };
 
+    // Rounds always load into the weapon's regular container (tube, box,
+    // cylinder, a double-barrel's chambers); the action then chambers them by
+    // releasing a held-open bolt or by pulling a closed one. There is no
+    // straight-to-chamber loading point even when a source clip shows one,
+    // such as the Benelli M2's ejection-port load (owner, 2026-10-04).
     enum class LoadDestination
     {
-        Container, // the magazine, tube, box or cylinder
-        Chamber,   // straight into the chamber (Benelli ejection port, double-barrel)
+        Container, // the magazine, tube, box, cylinder or barrel chambers
         FeedTray,  // belt-fed weapons, under the top cover
     };
 
