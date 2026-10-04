@@ -129,9 +129,11 @@ def control_playback(changes: dict, expected_revision: int) -> dict:
     return command('playback',changes,expected_revision)
 
 @mcp.tool()
-def set_workspace(index: int, expected_revision: int) -> dict:
-    """Choose 2 hand editor (Poses library, or the Reload builder Part grips / Mechanisms / Grab points steps by its page), 4 Reload builder > Reload, 5 Operate, 6 Sounds, 7 Reload builder > Magazines, 8 Scopes or 9 Weapon collision."""
-    return command('workspace',{'index':index},expected_revision)
+def set_workspace(index: int, expected_revision: int, hands_page: int | None = None) -> dict:
+    """Choose 2 hand editor (hands_page 0 Poses library, 1 Part grips, 2 Mechanisms, 3 Grab points), 4 Reload builder > Reload, 5 Operate, 6 Sounds, 7 Reload builder > Magazines, 8 Scopes or 9 Weapon collision."""
+    args={'index':index}
+    if hands_page is not None: args['handsPage']=hands_page
+    return command('workspace',args,expected_revision)
 
 @mcp.tool()
 def render_view(view: str = 'current', fit: bool = False, zoom: float | None = None, preserve_camera: bool = False) -> Image:
@@ -140,6 +142,11 @@ def render_view(view: str = 'current', fit: bool = False, zoom: float | None = N
     if zoom is not None: args['zoom']=zoom
     result=command('render',args)
     return Image(path=result['path'])
+
+@mcp.tool()
+def capture_window() -> Image:
+    """Return an image of the whole editor window as the user sees it: panels, controls and the native viewport."""
+    return Image(path=command('window_capture')['path'])
 
 @mcp.tool()
 def edit_finger_joints(hand: str, joints: list[dict], expected_revision: int) -> dict:

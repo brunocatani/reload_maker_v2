@@ -72,7 +72,15 @@ namespace reloadmaker
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
                             const int index = params["index"].toInt(-1);
                             require(validWorkspace(index), "Unknown workspace");
+                            // handsPage picks the hand editor page, as the rail does:
+                            // 0 Poses library, 1 Part grips, 2 Mechanisms, 3 Grab points.
+                            const int page = params["handsPage"].toInt(-1);
+                            require(!params.contains("handsPage") || (index == GripsWorkspace && page >= 0 && page <= 3),
+                                    "handsPage needs workspace 2 and a page from 0 to 3");
                             setWorkspace(index);
+                            if (params.contains("handsPage") && _workspace == GripsWorkspace) {
+                                setHandEditorPage(HandEditorPage(page));
+                            }
                             return std::nullopt;
                         } });
 

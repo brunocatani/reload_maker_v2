@@ -339,6 +339,7 @@ namespace reloadmaker
         void controlPlayback(const QJsonObject& params);
         void arrangeView(const QJsonObject& params);
         QJsonObject renderView(const QJsonObject& params);
+        QJsonObject captureWindow();
         QJsonObject simulateOperation(const QJsonObject& params);
         void moveSimulatedMagazine(const QJsonObject& params);
         void editFingerJoints(const QJsonObject& params);

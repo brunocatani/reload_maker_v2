@@ -8,6 +8,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QListWidget>
+#include <QPainter>
 #include <QPushButton>
 #include <QScopeGuard>
 #include <QTimer>
@@ -61,6 +62,9 @@ namespace reloadmaker
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
                             return renderView(params);
                         } });
+
+        _commands.add({ "window_capture", CommandAccess::Read, CommandGate::WhenIdle,
+                        [this](const QJsonObject&) -> std::optional<QJsonObject> { return captureWindow(); } });
 
         // Which installed part a click at this viewport point would select.
         _commands.add({ "part_at", CommandAccess::Read, CommandGate::WhenIdle,
@@ -200,6 +204,23 @@ namespace reloadmaker
         const auto image = viewport->studioCaptureFrame();
         require(!image.isNull() && image.save(path), "Cannot capture current native frame");
         return { { "path", path }, { "seconds", _playbackTime }, { "width", image.width() }, { "height", image.height() } };
+    }
+
+    // The whole window as the user sees it. A widget grab leaves the native GL
+    // window blank, so its frame is drawn into the container's place.
+    QJsonObject ReloadMakerController::captureWindow()
+    {
+        QImage image = _window->grab().toImage();
+        require(!image.isNull(), "Cannot capture the window");
+        auto* container = _window->viewportContainer();
+        const auto frame = _window->getGLView()->studioCaptureFrame();
+        if (!frame.isNull() && container->isVisible()) {
+            QPainter painter(&image);
+            painter.drawImage(QRect(container->mapTo(_window, QPoint(0, 0)), container->size()), frame);
+        }
+        const QString path = studioDataPath("evidence/window-" + QString::number(_revision) + ".png");
+        require(image.save(path), "Cannot save the window capture");
+        return { { "path", path }, { "width", _window->width() }, { "height", _window->height() } };
     }
 
     // Points are logical viewport pixels, the same space as mouse events.

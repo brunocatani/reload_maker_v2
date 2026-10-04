@@ -5,6 +5,7 @@
 #include <QJsonArray>
 #include <QPainter>
 #include <QScreen>
+#include <QVBoxLayout>
 #include <algorithm>
 #include "gl/glshape.h"
 
@@ -16,7 +17,13 @@ StudioWindow::StudioWindow(QWidget* parent) : QMainWindow(parent) {
     setMinimumSize(std::min(1120, available.width() - 40), std::min(700, available.height() - 60));
     _model = new NifModel(this);
     _view = new GLView(nullptr);
-    setCentralWidget(_view->createWindowContainer(this));
+    auto* area = new QWidget(this);
+    _viewportLayout = new QVBoxLayout(area);
+    _viewportLayout->setContentsMargins(0, 0, 0, 0);
+    _viewportLayout->setSpacing(0);
+    _container = _view->createWindowContainer(area);
+    _viewportLayout->addWidget(_container, 1);
+    setCentralWidget(area);
     _view->setNif(_model);
     _view->getScene()->options &= ~(Scene::ShowGrid | Scene::ShowAxes);
     _view->setRotation(-65,0,135);
@@ -25,6 +32,9 @@ StudioWindow::StudioWindow(QWidget* parent) : QMainWindow(parent) {
     painter.setBrush(QColor("#235854"));painter.setPen(Qt::NoPen);painter.drawRoundedRect(1,1,62,62,12,12);
     painter.setPen(QColor("#d8fff5"));painter.setFont(QFont("Segoe UI",32,QFont::Bold));painter.drawText(icon.rect(),Qt::AlignCenter,"R");painter.end();
     setWindowIcon(QIcon(icon));
+}
+void StudioWindow::setViewportBar(QWidget* bar) {
+    _viewportLayout->insertWidget(0, bar);
 }
 void StudioWindow::closeEvent(QCloseEvent* event) {
     if (prepareClose && !prepareClose()) { event->ignore(); return; }
