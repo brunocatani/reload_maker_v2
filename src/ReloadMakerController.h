@@ -751,6 +751,9 @@ namespace reloadmaker
         void createGrabLocationsUi();
         bool openGrabLocations();
         void prepareGrabLocationFrame();
+        // The learned reload and the operating rig, built without Operate's
+        // simulation; false (with the reason in the status) while unavailable.
+        bool ensureOperatingRig();
         std::optional<std::pair<QString,float>> _grabLocationCapturePreview;
         OperatingGrabLocations currentGrabLocations() const;
         void refreshGrabLocationsUi();
@@ -1252,6 +1255,8 @@ namespace reloadmaker
         std::array<QDoubleSpinBox*,3> _stagePivot{};
         QListWidget* _mechanismFollowers{nullptr};
         QPushButton* _mechanismSuggest{nullptr};
+        QComboBox* _operatingHandPicker{nullptr};
+        QWidget* _magazineSetupPanel{nullptr};
         QLabel* _mechanismStatus{nullptr};
         QPushButton* _mechanismSave{nullptr};
         QPushButton* _mechanismStart{nullptr};

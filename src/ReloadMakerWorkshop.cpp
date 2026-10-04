@@ -49,6 +49,12 @@ namespace reloadmaker {
             return line;
         };
 
+        section("Operating setup","Which native parts the hand operates, the bolt, the magazine carrier, followers and the motion source.");
+        auto* operatingSetup=new QPushButton("Operating parts and movement…",page);
+        operatingSetup->setToolTip("Opens with the weapon prepared in Operate, so every change previews live");
+        layout->addWidget(operatingSetup);
+        connect(operatingSetup,&QPushButton::clicked,this,[this]{setWorkspace(OperateWorkspace);showOperatingSetup();});
+
         section("Part","Choose the moving part, or pick it on the model.");
         _workshopPart=new QComboBox(page);
         _workshopPart->setMinimumContentsLength(14);

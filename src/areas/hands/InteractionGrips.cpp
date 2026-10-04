@@ -69,7 +69,7 @@ namespace reloadmaker
     // and saves the project; a failure restores the previous assignment.
     bool ReloadMakerController::useOperatingFingers(const QString& id)
     {
-        if (!_simulationActive || operatingAnchor() < 0 || _simulation.action != SimulationAction::Idle || _simulation.magazine.carried()) {
+        if (operatingAnchor() < 0 || (_simulationActive && (_simulation.action != SimulationAction::Idle || _simulation.magazine.carried()))) {
             setStatus("Release the operating part and magazine before selecting a finger pose.", true);
             return false;
         }

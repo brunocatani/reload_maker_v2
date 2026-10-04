@@ -98,12 +98,12 @@ namespace reloadmaker
         _collisionsDock->setWindowTitle(weapon ? QStringLiteral("Weapon collision") : QStringLiteral("Magazines"));
         _collisionsHeader->setSection(weapon ? QStringLiteral("Tools") : QStringLiteral("Reload builder"));
         _collisionsHeader->setTitle(weapon ? QStringLiteral("Weapon collision") : QStringLiteral("Magazines"));
+        _magazineSetupPanel->setVisible(!weapon);
         _collisions->setSubject(weapon ? QStringLiteral("Weapon collision") : QStringLiteral("Magazine world models"),
                                 weapon ? QStringLiteral("The whole weapon and its installed parts, the mounted magazine included. Nothing uses these yet: "
                                                         "ROCK generates weapon collision in game.")
-                                       : QStringLiteral("The full and empty loose magazines a pack ships, in the magazine carrier frame. Capture each in "
-                                                        "Operate with Full world model or Empty world model, then generate its hulls, capture the visible "
-                                                        "model and cook it."));
+                                       : QStringLiteral("The full and empty loose magazines a pack ships, in the magazine carrier frame. Capture each "
+                                                        "above, then generate its hulls, capture the visible model and cook it."));
     }
 
     void ReloadMakerController::invalidateCollisions()

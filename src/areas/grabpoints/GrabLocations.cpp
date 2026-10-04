@@ -72,26 +72,37 @@ namespace reloadmaker
         return true;
     }
 
-    // The operating part needs the learned reload and its rig.
-    void ReloadMakerController::prepareGrabLocationFrame()
+    bool ReloadMakerController::ensureOperatingRig()
     {
         if (_loadThread || _reloadCapturing || _reloadCaptureQueued) {
-            return;
+            setStatus("Wait for the reload to finish learning.", true);
+            return false;
         }
         if (!_reloadRecipe) {
             startReloadCapture();
-            return;
+            setStatus("Learning the reload first; try again when it finishes.", true);
+            return false;
         }
         if (!_simulationRig) {
             SimulationRig rig;
             QString error;
             if (!buildCurrentSimulationRig(rig, error)) {
                 setStatus(error, true);
-                return;
+                return false;
             }
             _simulationRig = rig;
+            resolveOperatingFingers();
         }
-        refreshGrabLocationsUi();
+        return true;
+    }
+
+    // The operating part needs the learned reload and its rig.
+    void ReloadMakerController::prepareGrabLocationFrame()
+    {
+        if (!ensureOperatingRig()) {
+            return;
+        }
+        updateInteractionGripUi();
         updateGripViewport();
     }
 

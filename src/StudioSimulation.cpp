@@ -39,8 +39,8 @@ void ReloadMakerController::createSimulationUi() {
     _simulationDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
     _simulationDock->setMinimumWidth(300);_simulationDock->setMaximumWidth(400);
     // The Operate inspector follows the canvas Test board: the weapon's state,
-    // the actions used repeatedly, then the magazine, the operating hand and
-    // the capture tools that feed the Reload builder.
+    // the actions, and how the magazine is handled. It only operates the
+    // weapon; setting it up belongs to the Reload builder (owner, 2026-10-04).
     auto* panel=new QWidget(_simulationDock);auto* layout=new QVBoxLayout(panel);
     layout->setContentsMargins(16,10,16,16);layout->setSpacing(8);
     const auto section=[panel,layout](const QString& title){layout->addSpacing(8);layout->addWidget(design::sectionLabel(title,panel));};
@@ -77,19 +77,12 @@ void ReloadMakerController::createSimulationUi() {
     connect(_simulationNoExtender,&QCheckBox::toggled,this,[this](bool enabled){setGlockNoExtender(enabled);rebuildWeapon();});
 
     section("Magazine");
+    layout->addWidget(design::hintLabel("The reload hand, and the hand fit Grab magazine uses. Fits are set up in Reload builder › Part grips.",panel));
     _interactionHandPicker=new QComboBox(panel);
     _interactionHandPicker->addItem("Left hand · right firing grip");_interactionHandPicker->addItem("Right hand · left support grip");
     layout->addWidget(_interactionHandPicker);
     connect(_interactionHandPicker,qOverload<int>(&QComboBox::activated),this,[this](int i){(void)setInteractionHand(PoseHand(i));updateInteractionGripUi();});
     _simulationMagazineGrip=new QComboBox(panel);layout->addWidget(_simulationMagazineGrip);
-    auto* configureMagazine=new QPushButton("Configure selected magazine",panel);layout->addWidget(configureMagazine);
-    configureMagazine->setToolTip("Edit this magazine's hand fit with Move / Rotate. Save replaces its assignment and saves the project.");
-    connect(configureMagazine,&QPushButton::clicked,this,[this]{(void)editMagazineGrip();});
-    auto* guide=new QPushButton("Insertion guide…",panel);guide->setToolTip("Configure the line the magazine follows into the weapon");
-    auto* presentation=new QPushButton("Models and payload…",panel);presentation->setToolTip("Magazine models, rounds and payload");
-    auto* magazineSetup=new QHBoxLayout;magazineSetup->setSpacing(6);magazineSetup->addWidget(guide);magazineSetup->addWidget(presentation);layout->addLayout(magazineSetup);
-    connect(guide,&QPushButton::clicked,this,&ReloadMakerController::showMagazineGuide);
-    connect(presentation,&QPushButton::clicked,this,&ReloadMakerController::showMagazineSetup);
     _simulationMagazineGrip->setToolTip("Saved hand grip for this magazine, used by Grab magazine. Create one in Reload builder › Part grips by selecting a pose and clicking its contact point.");
     connect(_simulationMagazineGrip,qOverload<int>(&QComboBox::activated),this,[this](int index) {
         if(!_simulationRig||!_reloadRecipe)return;
@@ -98,32 +91,13 @@ void ReloadMakerController::createSimulationUi() {
         const auto id=_simulationMagazineGrip->itemData(index).toString();
         if(index>0)return; // This entry displays the resolved fit, including inherited defaults.
         if(_magazineGrabDefaults.contains(poseRecordKey(currentWeapon()->formId).toLower())) {
-            setStatus("This weapon has a default hand fit. Configure the selected magazine to change it.");resolveMagazineGrabGrip();return;
+            setStatus("This weapon has a default hand fit. Change it in Reload builder › Part grips.");resolveMagazineGrabGrip();return;
         }
         if(id.isEmpty())_magazineGrabGrips.remove(key);else _magazineGrabGrips[key]=id;
         _magazineGripDrafts.remove(key);noteDocumentChange("magazine grip");resolveMagazineGrabGrip();(void)applyPose(_simulation.seconds);updateSimulationControls();(void)saveSession();
     });
 
-    section("Operating hand");
-    _operatingGripStatus=hint({},panel);layout->addWidget(_operatingGripStatus);
-    _operatingGripStatus->setToolTip("Saved finger shape only. In game your wrist follows your approach. Mouse preview applies the fingers to the native wrist; it does not run the VR contact solver.");
-    _operatingFingerPicker=new QComboBox(panel);layout->addWidget(_operatingFingerPicker);
-    _operatingFingerPicker->setToolTip("Replace this hand's operating finger pose. If the other hand is unassigned it uses a skeleton-aware mirror. Saved wrist placement is never applied.");
-    connect(_operatingFingerPicker,qOverload<int>(&QComboBox::activated),this,[this](int index){if(index>0)(void)useOperatingFingers(_operatingFingerPicker->itemData(index).toString());});
-    auto* grabLocations=new QPushButton("Grab points…",panel);grabLocations->setToolTip("Configure where a hand may grab the operating part");
-    connect(grabLocations,&QPushButton::clicked,this,[this]{(void)openGrabLocations();});
-    auto* operatingSetup=new QPushButton("Parts and movement…",panel);operatingSetup->setToolTip("Operating parts and their movement");
-    connect(operatingSetup,&QPushButton::clicked,this,&ReloadMakerController::showOperatingSetup);
-    auto* operating=new QHBoxLayout;operating->setSpacing(6);operating->addWidget(grabLocations);operating->addWidget(operatingSetup);layout->addLayout(operating);
-
-    section("Capture for the Reload builder");
-    auto* authorGrips=new QPushButton("Author reload grips at this moment",panel);layout->addWidget(authorGrips);
-    authorGrips->setToolTip("Pause at this reload moment and open the hand editor with the weapon fixed and the magazine selected.");
-    connect(authorGrips,&QPushButton::clicked,this,[this]{(void)authorReloadGrips();});
-    auto* worldModels=new QHBoxLayout;worldModels->setSpacing(6);layout->addLayout(worldModels);
-    for(bool empty:{false,true}){auto* model=new QPushButton(empty?"Empty world model":"Full world model",panel);worldModels->addWidget(model);
-        model->setToolTip(empty?"Capture the loose empty magazine for Reload builder › Magazines":"Capture the loose full magazine for Reload builder › Magazines");
-        connect(model,&QPushButton::clicked,this,[this,empty]{try{captureMagazineWorld(empty);}catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}});}
+    section("Details");
     _simulationSource=hint({},panel);layout->addWidget(_simulationSource);
     _simulationParts=hint({},panel);layout->addWidget(_simulationParts);
     layout->addStretch(1);
@@ -206,14 +180,14 @@ void ReloadMakerController::updateSimulationControls() {
 }
 void ReloadMakerController::updateInteractionGripUi() {
     const bool free=_simulation.action==SimulationAction::Idle&&!_simulation.magazine.carried();
-    for(auto* picker:{_interactionHandPicker,_magazineHandPicker})if(picker){const QSignalBlocker block(picker);picker->setCurrentIndex(int(_interactionHand));picker->setEnabled(!isGlockConfiguration()&&free&&!_loadThread&&!_reloadCapturing);}
+    for(auto* picker:{_interactionHandPicker,_magazineHandPicker,_operatingHandPicker})if(picker){const QSignalBlocker block(picker);picker->setCurrentIndex(int(_interactionHand));picker->setEnabled(!isGlockConfiguration()&&free&&!_loadThread&&!_reloadCapturing);}
     const auto& fingers=_operatingFingers[int(_interactionHand)];
     if(_operatingGripStatus)_operatingGripStatus->setText(!_operatingFingerError.isEmpty()?_operatingFingerError:fingers?
         "Fingers only · "+fingers->name+(fingers->source["operatingMirrored"].toBool()?" · mirrored for this hand":"")+"\nWrist position and angle stay live.":"No operating finger pose assigned. Select a saved pose below.");
     if(_operatingFingerPicker) {
         const QSignalBlocker block(_operatingFingerPicker);
         _operatingFingerPicker->setCurrentIndex(fingers?_operatingFingerPicker->findData(fingers->id):0);
-        _operatingFingerPicker->setEnabled(free&&_simulationActive);
+        _operatingFingerPicker->setEnabled(free&&operatingAnchor()>=0);
     }
     _operatingHover=false;if(_simulationDrive)_simulationDrive->setMarkers({});refreshGrabLocationsUi();
 }

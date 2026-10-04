@@ -59,6 +59,10 @@ namespace reloadmaker {
         _gripCapturedStart->setToolTip(QStringLiteral("Apply the saved position AND angle relative to the selected reference part. Different part origins may require adjustment; this is not automatic grip fitting."));
         _gripCurrentStart->setToolTip(QStringLiteral("Use the named pose's exact fingers and saved wrist rotation. Keep the current hand position; use Move to fit it to this magazine."));
         layout->addWidget(_gripCurrentStart);
+        auto* capture=new QPushButton(QStringLiteral("Capture poses on the reload clip"),page);
+        capture->setToolTip(QStringLiteral("Open the Poses library on the reload clip with the weapon fixed and the magazine as the reference part."));
+        layout->addWidget(capture);
+        connect(capture,&QPushButton::clicked,this,[this]{if(ensureOperatingRig())(void)authorReloadGrips();});
 
         section(QStringLiteral("Placement"),QStringLiteral("Pick where the palm touches, then drag the arrows and rings on the model."));
         _gripPick=new QPushButton(QStringLiteral("Pick palm point on the model"),page);
