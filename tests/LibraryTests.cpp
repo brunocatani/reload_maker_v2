@@ -194,7 +194,7 @@ namespace {
         dependencies.set("Addon.esm", { "Base.esm" });
         const auto rows = buildSourcePluginRows({ kAllWeaponsSource, "Base.esm", "Addon.esm", "Patch.esl", "Other.esp" },
                                                 "patch.esl", dependencies, { { "*", 7 }, { "patch.esl", 2 } });
-        require(rows.size() == 5 && rows[0].label == "LOAD ALL WEAPONS" && rows[0].weaponCount == 7, "all-weapons entry changed");
+        require(rows.size() == 5 && rows[0].label == "Load all weapons" && rows[0].weaponCount == 7, "all-weapons entry changed");
         require(rows[1].role == SourcePluginRole::Master && rows[1].label == "Base.esm  · master", "required master not marked");
         require(rows[3].role == SourcePluginRole::Selected && rows[3].label == "Patch.esl" && rows[3].weaponCount == 2, "selected plugin not marked");
         require(rows[4].role == SourcePluginRole::Available && rows[4].masters == QStringList({ "loop.esp" }), "unrelated plugin marked");

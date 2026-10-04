@@ -1,4 +1,5 @@
 #include "ReloadMakerController.h"
+#include "design/DesignWidgets.h"
 #include "StudioWindow.h"
 #include "StudioPaths.h"
 #include "GripViewport.h"
@@ -12,6 +13,7 @@
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <QFormLayout>
+#include <QHBoxLayout>
 #include <QSignalBlocker>
 #include <QQuaternion>
 #include <QFileDialog>
@@ -22,23 +24,31 @@ namespace reloadmaker {
 void ReloadMakerController::createScopesUi() {
     _scopesDock=new QDockWidget("SCOPES",_window);_scopesDock->setObjectName("ScopesDock");
     _scopesDock->setFeatures(QDockWidget::NoDockWidgetFeatures);_scopesDock->setMinimumWidth(340);_scopesDock->setMaximumWidth(430);
-    auto* panel=new QWidget;auto* layout=new QVBoxLayout(panel);layout->setContentsMargins(14,14,14,14);
-    auto* hint=new QLabel("Select the installed optic. Pick the rear lens, fit the green ring to its clear opening, and point the camera arrow down the tube.");hint->setWordWrap(true);layout->addWidget(hint);
+    // The optic, its lens, the exact frame (folded), then the profile.
+    auto* panel=new QWidget;auto* layout=new QVBoxLayout(panel);layout->setContentsMargins(16,10,16,16);layout->setSpacing(8);
+    const auto section=[panel,layout](const QString& title){layout->addSpacing(8);layout->addWidget(design::sectionLabel(title,panel));};
+    layout->addWidget(design::hintLabel("Select the installed optic. Pick the rear lens, fit the green ring to its clear opening, and point the camera arrow down the tube.",panel));
+    section("Optic");
     _scopePart=new QComboBox;layout->addWidget(_scopePart);
-    auto* pick=new QPushButton("Pick rear lens");pick->setObjectName("PrimaryButton");layout->addWidget(pick);
-    auto* form=new QFormLayout;_scopeName=new QLineEdit;_scopeName->setMaxLength(128);form->addRow("Profile name",_scopeName);
-    const auto spin=[&](const QString& label,double low,double high,int decimals){auto* value=new QDoubleSpinBox;value->setRange(low,high);value->setDecimals(decimals);value->setSingleStep(.1);value->setKeyboardTracking(false);form->addRow(label,value);return value;};
-    _scopeRadius=spin("Lens radius",.02,32,3);_scopeAspect=spin("Height / width",.1,1,3);
-    _scopeRelief=spin("Eye relief",1,99,2);_scopeCamera=spin("Camera forward",0,256,3);
+    auto* pick=new QPushButton("Pick rear lens");layout->addWidget(pick);
+    section("Lens");
+    auto* form=new QFormLayout;form->setSpacing(8);_scopeName=new QLineEdit;_scopeName->setMaxLength(128);form->addRow("Profile name",_scopeName);
+    const auto spin=[](QFormLayout* into,const QString& label,double low,double high,int decimals){auto* value=new QDoubleSpinBox;value->setRange(low,high);value->setDecimals(decimals);value->setSingleStep(.1);value->setKeyboardTracking(false);into->addRow(label,value);return value;};
+    _scopeRadius=spin(form,"Lens radius",.02,32,3);_scopeAspect=spin(form,"Height / width",.1,1,3);
+    _scopeRelief=spin(form,"Eye relief",1,99,2);_scopeCamera=spin(form,"Camera forward",0,256,3);
     _scopeCamera->setToolTip("Distance from the rear lens to the rendering camera along the green forward axis, in this shape's model units.");
-    for(int i=0;i<3;++i)_scopePosition[i]=spin(QString("Local %1").arg(QChar("XYZ"[i])),-10000,10000,4);
-    for(int i=0;i<3;++i)_scopeRotation[i]=spin(QString("Rotation %1").arg(QChar("XYZ"[i])),-360,360,3);
     layout->addLayout(form);
-    auto* save=new QPushButton("Save scope");auto* exportButton=new QPushButton("Export for True Scopes");
-    auto* importButton=new QPushButton("Import scope profile");auto* remove=new QPushButton("Remove current profile");
-    for(auto* b:{save,exportButton,importButton,remove})layout->addWidget(b);
+    auto* exact=new QWidget(panel);auto* exactForm=new QFormLayout(exact);exactForm->setContentsMargins(0,0,0,0);exactForm->setSpacing(8);
+    for(int i=0;i<3;++i)_scopePosition[i]=spin(exactForm,QString("Local %1").arg(QChar("XYZ"[i])),-10000,10000,4);
+    for(int i=0;i<3;++i)_scopeRotation[i]=spin(exactForm,QString("Rotation %1").arg(QChar("XYZ"[i])),-360,360,3);
+    layout->addWidget(design::disclosure("Exact lens frame",exact,panel));layout->addWidget(exact);
+    section("Profile");
+    auto* save=new QPushButton("Save scope");save->setObjectName("PrimaryButton");layout->addWidget(save);
+    auto* exportButton=new QPushButton("Export for True Scopes");auto* importButton=new QPushButton("Import profile…");
+    auto* files=new QHBoxLayout;files->setSpacing(6);files->addWidget(exportButton);files->addWidget(importButton);layout->addLayout(files);
+    auto* remove=new QPushButton("Remove current profile");layout->addWidget(remove);
     _scopeStatus=new QLabel;_scopeStatus->setWordWrap(true);_scopeStatus->setObjectName("Hint");layout->addWidget(_scopeStatus);layout->addStretch();
-    auto* scroll=new QScrollArea;scroll->setWidgetResizable(true);scroll->setWidget(panel);_scopesDock->setWidget(scroll);_window->addDockWidget(Qt::RightDockWidgetArea,_scopesDock);_scopesDock->hide();
+    auto* scroll=new QScrollArea;scroll->setWidgetResizable(true);scroll->setFrameShape(QFrame::NoFrame);scroll->setWidget(panel);_scopesDock->setWidget(scroll);_window->addDockWidget(Qt::RightDockWidgetArea,_scopesDock);_scopesDock->hide();
     const auto command=[this](const QJsonObject& p){try{(void)configureScope(p);}catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}};
     _scopeViewport=new GripViewport(_window->getGLView(),this);
     _scopeViewport->setLensAuthoring(1,1,10);

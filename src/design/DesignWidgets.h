@@ -74,5 +74,8 @@ namespace reloadmaker::design
     };
 
     [[nodiscard]] QLabel* sectionLabel(const QString& text, QWidget* parent = nullptr);
+    // A fold-out heading: a chevron button that shows or hides content,
+    // which starts hidden.
+    QPushButton* disclosure(const QString& text, QWidget* content, QWidget* parent);
     [[nodiscard]] QLabel* hintLabel(const QString& text, QWidget* parent = nullptr);
 }

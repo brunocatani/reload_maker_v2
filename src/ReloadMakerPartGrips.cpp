@@ -1,13 +1,13 @@
 #include "ReloadMakerController.h"
+#include "design/DesignWidgets.h"
 #include "ReloadBundle.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDesktopServices>
 #include <QDir>
 #include <QDoubleSpinBox>
-#include <QFormLayout>
 #include <QGridLayout>
-#include <QGroupBox>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -21,51 +21,60 @@
 namespace reloadmaker {
     void ReloadMakerController::createPartGripUi()
     {
+        using namespace design;
+        // The Part grips inspector in authoring order: what is held, which
+        // hand, its fingers, where the palm sits, then save. Exact numbers
+        // and other parts stay folded.
         auto* page=new QWidget(_handPosePages);
         auto* layout=new QVBoxLayout(page);
-        layout->setContentsMargins(14,14,14,14); layout->setSpacing(10);
-        auto* intro=new QLabel(QStringLiteral("Select a magazine or part in the loadout, place its hand, then save. The part stays fixed while you move and rotate the hand."),page);
-        intro->setObjectName("Hint");intro->setWordWrap(true); layout->addWidget(intro);
+        layout->setContentsMargins(16,10,16,16); layout->setSpacing(8);
+        const auto section=[page,layout](const QString& title,const QString& hint){
+            layout->addSpacing(8);
+            layout->addWidget(sectionLabel(title,page));
+            if(!hint.isEmpty())layout->addWidget(hintLabel(hint,page));
+        };
+        layout->addWidget(hintLabel(QStringLiteral("Select a magazine or part in the loadout, place its hand, then save. The part stays fixed while you move and rotate the hand."),page));
         _magazineFitStatus=new QLabel(page);_magazineFitStatus->setWordWrap(true);_magazineFitStatus->setObjectName("StatusCard");layout->addWidget(_magazineFitStatus);
-        _magazineHandPicker=new QComboBox(page);_magazineHandPicker->addItem("Left reload hand");_magazineHandPicker->addItem("Right reload hand");layout->addWidget(_magazineHandPicker);
-        connect(_magazineHandPicker,qOverload<int>(&QComboBox::activated),this,[this](int i){(void)setInteractionHand(PoseHand(i));updateInteractionGripUi();});
-        auto* mirrorMagazine=new QPushButton("Create opposite-hand magazine fit",page);layout->addWidget(mirrorMagazine);
-        connect(mirrorMagazine,&QPushButton::clicked,this,[this]{(void)mirrorMagazineGrip();});
         _editMagazineGrip=new QPushButton("Configure selected magazine",page);layout->addWidget(_editMagazineGrip);
         connect(_editMagazineGrip,&QPushButton::clicked,this,[this]{(void)editMagazineGrip();});
-        auto* form=new QFormLayout();
-        form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+
+        section(QStringLiteral("Hand"),QStringLiteral("The hand that holds it during the reload."));
+        _magazineHandPicker=new QComboBox(page);_magazineHandPicker->addItem("Left reload hand");_magazineHandPicker->addItem("Right reload hand");
+        auto* mirrorMagazine=new QPushButton("Mirror to other hand",page);
+        mirrorMagazine->setToolTip(QStringLiteral("Create the opposite hand's fit for this magazine by mirroring this one."));
+        auto* handRow=new QHBoxLayout();handRow->setSpacing(6);handRow->addWidget(_magazineHandPicker,1);handRow->addWidget(mirrorMagazine);layout->addLayout(handRow);
+        connect(_magazineHandPicker,qOverload<int>(&QComboBox::activated),this,[this](int i){(void)setInteractionHand(PoseHand(i));updateInteractionGripUi();});
+        connect(mirrorMagazine,&QPushButton::clicked,this,[this]{(void)mirrorMagazineGrip();});
+
+        section(QStringLiteral("Fingers"),QStringLiteral("A saved pose from the Poses library."));
         _gripPoseCombo=new QComboBox(page);
         _gripReferenceCombo=new QComboBox(page);
         for(auto* combo:{_gripPoseCombo,_gripReferenceCombo}) {
             combo->setMinimumContentsLength(12); combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
         }
-        _gripReferenceCombo->setToolTip(QStringLiteral("The part's coordinate frame, not an automatic contact point. Position and angles below define where the wrist sits relative to it."));
-        form->addRow(QStringLiteral("Saved pose"),_gripPoseCombo);
-        layout->addLayout(form);
-        auto* starts=new QVBoxLayout();
+        _gripReferenceCombo->setToolTip(QStringLiteral("The part's coordinate frame, not an automatic contact point. Position and angles define where the wrist sits relative to it."));
+        layout->addWidget(_gripPoseCombo);
         _gripCapturedStart=new QPushButton(QStringLiteral("Use captured offset"),page);
-        _gripCurrentStart=new QPushButton(QStringLiteral("Use current wrist"),page);
+        _gripCurrentStart=new QPushButton(QStringLiteral("Apply pose and hand rotation"),page);
         _gripCapturedStart->setToolTip(QStringLiteral("Apply the saved position AND angle relative to the selected reference part. Different part origins may require adjustment; this is not automatic grip fitting."));
-        _gripCurrentStart->setToolTip(QStringLiteral("Keep the animated wrist's current position and angle, apply the selected fingers, then adjust the grip below."));
-        _gripCurrentStart->setText("Apply pose and hand rotation");
-        _gripCurrentStart->setToolTip("Use the named pose's exact fingers and saved wrist rotation. Keep the current hand position; use Move to fit it to this magazine.");
-        starts->addWidget(_gripCurrentStart); layout->addLayout(starts);
-        _gripPick=new QPushButton(QStringLiteral("Pick palm point in viewport"),page);
-        _gripPick->setObjectName("PrimaryButton");
+        _gripCurrentStart->setToolTip(QStringLiteral("Use the named pose's exact fingers and saved wrist rotation. Keep the current hand position; use Move to fit it to this magazine."));
+        layout->addWidget(_gripCurrentStart);
+
+        section(QStringLiteral("Placement"),QStringLiteral("Pick where the palm touches, then drag the arrows and rings on the model."));
+        _gripPick=new QPushButton(QStringLiteral("Pick palm point on the model"),page);
         _gripPick->setToolTip(QStringLiteral("Click a weapon surface. A uniquely identified part becomes the reference automatically; multi-bone surfaces require an explicit reference choice. Use viewport arrows and rings to fine-tune the generic palm placement."));
         layout->addWidget(_gripPick);
         connect(_gripPick,&QPushButton::clicked,this,&ReloadMakerController::beginGripSurfacePick);
-        auto* mechanism=new QPushButton(QStringLiteral("Define or edit this part's mechanism"),page);
-        connect(mechanism,&QPushButton::clicked,this,&ReloadMakerController::openMechanismForPart);
-        auto* offsets=new QGroupBox(QStringLiteral("Hand placement · reference-part space"),page);
-        auto* grid=new QGridLayout(offsets);
-        grid->addWidget(new QLabel(QStringLiteral("Game units"),offsets),0,0);
+        auto* offsets=new QWidget(page);
+        auto* offsetLayout=new QVBoxLayout(offsets);offsetLayout->setContentsMargins(0,0,0,0);offsetLayout->setSpacing(6);
+        offsetLayout->addWidget(hintLabel(QStringLiteral("In the reference part's space: game units and degrees."),offsets));
+        auto* grid=new QGridLayout();grid->setHorizontalSpacing(6);grid->setVerticalSpacing(4);
         grid->addWidget(new QLabel(QStringLiteral("Position"),offsets),1,0);
-        grid->addWidget(new QLabel(QStringLiteral("Rotation °"),offsets),3,0);
+        grid->addWidget(new QLabel(QStringLiteral("Rotation"),offsets),3,0);
         for(int axis=0;axis<3;++axis) {
-            grid->addWidget(new QLabel(QStringList{"X","Y","Z"}[axis],offsets),0,axis+1);
-            grid->addWidget(new QLabel(QStringList{"Pitch / X","Yaw / Y","Roll / Z"}[axis],offsets),2,axis+1);
+            auto* positionAxis=hintLabel(QStringList{"X","Y","Z"}[axis],offsets);
+            auto* angleAxis=hintLabel(QStringList{"Pitch · X","Yaw · Y","Roll · Z"}[axis],offsets);
+            grid->addWidget(positionAxis,0,axis+1); grid->addWidget(angleAxis,2,axis+1);
             _gripPosition[axis]=new QDoubleSpinBox(offsets);
             _gripAngles[axis]=new QDoubleSpinBox(offsets);
             _gripPosition[axis]->setRange(-10000,10000); _gripPosition[axis]->setDecimals(4); _gripPosition[axis]->setSingleStep(.1);
@@ -79,45 +88,54 @@ namespace reloadmaker {
                 setGripRotation(QVector3D(float(_gripAngles[0]->value()),float(_gripAngles[1]->value()),float(_gripAngles[2]->value())));
             });
         }
+        offsetLayout->addLayout(grid);
+        layout->addWidget(disclosure(QStringLiteral("Exact placement"),offsets,page));
         layout->addWidget(offsets);
+
+        section(QStringLiteral("Save"),{});
         _gripName=new QLineEdit(page); _gripName->setMaxLength(kPoseNameLength);
-        _gripName->setPlaceholderText(QStringLiteral("Fit name · shown when you grab this magazine")); layout->addWidget(_gripName);
-        auto* actions=new QHBoxLayout();
-        _gripSave=new QPushButton(QStringLiteral("Save part grip"),page); _gripSave->setObjectName("PrimaryButton");
-        _gripEnd=new QPushButton(QStringLiteral("End preview"),page);
-        actions->addWidget(_gripSave); actions->addWidget(_gripEnd); layout->addLayout(actions);
+        _gripName->setPlaceholderText(QStringLiteral("Fit name, shown when you grab this magazine")); layout->addWidget(_gripName);
         _useMagazineGrip=new QPushButton(QStringLiteral("Save for this magazine"),page);
         _useMagazineGrip->setObjectName("PrimaryButton");
         _useMagazineGrip->setToolTip(QStringLiteral("Replace the selected magazine’s active fit and save the project. Older snapshots remain in history, not as additional assignments."));
         layout->addWidget(_useMagazineGrip);
-        _saveAllMagazineGrips=new QPushButton("Save for all magazines",page);layout->addWidget(_saveAllMagazineGrips);
+        _saveAllMagazineGrips=new QPushButton("Save for all magazines",page);
         _saveAllMagazineGrips->setToolTip("Set this weapon's default. Other custom magazine fits stay unchanged. Unconfigured magazines inherit this placement.");
+        _useDefaultMagazineGrip=new QPushButton("Use weapon default",page);
+        auto* scope=new QHBoxLayout();scope->setSpacing(6);scope->addWidget(_saveAllMagazineGrips);scope->addWidget(_useDefaultMagazineGrip);layout->addLayout(scope);
         connect(_saveAllMagazineGrips,&QPushButton::clicked,this,[this]{(void)useMagazineGrabGrip(true);});
-        _useDefaultMagazineGrip=new QPushButton("Use weapon default",page);layout->addWidget(_useDefaultMagazineGrip);
         connect(_useDefaultMagazineGrip,&QPushButton::clicked,this,[this]{(void)useDefaultMagazineGrip();});
-        auto* scopeHint=new QLabel("All magazines = this weapon’s default. Individual fits take priority.",page);scopeHint->setWordWrap(true);scopeHint->setObjectName("Hint");layout->addWidget(scopeHint);
+        layout->addWidget(hintLabel("All magazines sets this weapon’s default. Individual fits take priority.",page));
+        auto* actions=new QHBoxLayout();actions->setSpacing(6);
+        _gripSave=new QPushButton(QStringLiteral("Save part grip"),page); _gripSave->setObjectName("PrimaryButton");
+        _gripEnd=new QPushButton(QStringLiteral("End preview"),page);
+        actions->addWidget(_gripSave); actions->addWidget(_gripEnd); layout->addLayout(actions);
+        connect(_useMagazineGrip,&QPushButton::clicked,this,[this]{(void)useMagazineGrabGrip();});
+        _gripStatus=new QLabel(page); _gripStatus->setObjectName("Callout"); _gripStatus->setTextFormat(Qt::PlainText); _gripStatus->setWordWrap(true); layout->addWidget(_gripStatus);
         auto* back=new QPushButton("Back to Operate",page);layout->addWidget(back);
         connect(back,&QPushButton::clicked,this,[this]{rememberMagazineGrip();(void)saveSession();setWorkspace(OperateWorkspace);});
-        connect(_useMagazineGrip,&QPushButton::clicked,this,[this]{(void)useMagazineGrabGrip();});
-        _gripStatus=new QLabel(page); _gripStatus->setTextFormat(Qt::PlainText); _gripStatus->setWordWrap(true); layout->addWidget(_gripStatus);
-        auto* advancedToggle=new QPushButton("Other parts and saved fit history",page);advancedToggle->setCheckable(true);layout->addWidget(advancedToggle);
-        auto* advanced=new QWidget(page);auto* advancedLayout=new QVBoxLayout(advanced);advancedLayout->setContentsMargins(0,0,0,0);
+
+        layout->addSpacing(4);
+        auto* advanced=new QWidget(page);auto* advancedLayout=new QVBoxLayout(advanced);advancedLayout->setContentsMargins(0,0,0,0);advancedLayout->setSpacing(8);
+        layout->addWidget(disclosure(QStringLiteral("Other parts and saved fit history"),advanced,page));
         auto* otherPart=new QPushButton("Configure another part",advanced);advancedLayout->addWidget(otherPart);
         connect(otherPart,&QPushButton::clicked,this,[this]{
             rememberMagazineGrip();_editingMagazine=false;
             if(_magazineFitPreview)stopSimulation();
             restoreHandPosePreview();updatePartGripControls();
         });
-        advancedLayout->addWidget(new QLabel("Reference part",advanced));advancedLayout->addWidget(_gripReferenceCombo);
+        auto* mechanism=new QPushButton(QStringLiteral("Define or edit this part's mechanism"),advanced);
+        connect(mechanism,&QPushButton::clicked,this,&ReloadMakerController::openMechanismForPart);
+        advancedLayout->addWidget(sectionLabel(QStringLiteral("Reference part"),advanced));advancedLayout->addWidget(_gripReferenceCombo);
         advancedLayout->addWidget(_gripCapturedStart);advancedLayout->addWidget(mechanism);
         _gripHistory=new QCheckBox("Show older snapshots and unassigned copies",advanced);advancedLayout->addWidget(_gripHistory);
         connect(_gripHistory,&QCheckBox::toggled,this,&ReloadMakerController::setShowGripHistory);
-        layout->addWidget(advanced);advanced->hide();connect(advancedToggle,&QPushButton::toggled,advanced,&QWidget::setVisible);
-        _gripList=new QListWidget(page); _gripList->setAlternatingRowColors(true); _gripList->setMinimumHeight(180);advancedLayout->addWidget(_gripList);
-        auto* footer=new QHBoxLayout();
+        layout->addWidget(advanced);
+        _gripList=new QListWidget(page); _gripList->setMinimumHeight(180);advancedLayout->addWidget(_gripList);
+        auto* footer=new QHBoxLayout();footer->setSpacing(6);
         _gripLoad=new QPushButton(QStringLiteral("Load saved grip"),page);
         auto* refresh=new QPushButton(QStringLiteral("Refresh"),page);
-        auto* folder=new QPushButton(QStringLiteral("Grip files"),page);
+        auto* folder=new QPushButton(QStringLiteral("Open folder"),page);
         footer->addWidget(_gripLoad); footer->addWidget(refresh); footer->addWidget(folder); advancedLayout->addLayout(footer);
         layout->addStretch(1);
         _handPosePages->addTab(page,QStringLiteral("Part grips"));
@@ -225,8 +243,8 @@ namespace reloadmaker {
         _gripLoad->setEnabled(canLoadPartGrip());
         if(editing) {
             _gripStatus->setText(_gripPreviewValid
-                ? QStringLiteral("%1 hand · elbow solved. Move / Rotate adjusts the hand only. Save for this magazine updates its active fit and project.").arg(_partGripDraft->pose.hand==PoseHand::Left?"Left":"Right")
-                : QStringLiteral("NOT APPLIED: %1\nNative animation is shown. Adjust the target; saving is disabled.").arg(_gripError));
+                ? QStringLiteral("%1 hand · elbow solved. Move and Rotate adjust the hand only. Save for this magazine updates its active fit and the project.").arg(_partGripDraft->pose.hand==PoseHand::Left?"Left":"Right")
+                : QStringLiteral("Not applied: %1\nThe native animation is shown. Adjust the target; saving is disabled.").arg(_gripError));
         } else {
             _gripStatus->setText(frame?QStringLiteral("Choose a finger pose and reference part, then choose a starting placement. Saved grips include fingers, position and angle.")
                 :QStringLiteral("Load a weapon and animation to configure its part grips."));

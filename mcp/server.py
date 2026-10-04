@@ -504,7 +504,7 @@ def source_browser(operation: str = 'state', plugin: str = '', mode: str = '',
     """Read the actual Plugin -> Weapon pickers, or choose mode/plugin/weapon.
     Modes are dynamic (configured MO2 view) and development (saved testbeds).
     Plugin order follows the current source; master roles identify dependencies.
-    In MO2 mode, plugin='*' selects LOAD ALL WEAPONS and labels each weapon
+    In MO2 mode, plugin='*' selects Load all weapons and labels each weapon
     with its originating plugin. Specific plugins keep their scoped list.
     Development plugin selection may load its saved source asynchronously.
     """

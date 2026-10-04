@@ -46,7 +46,7 @@ namespace reloadmaker
                 row.role = SourcePluginRole::Master;
             }
             if (name == QLatin1String(kAllWeaponsSource)) {
-                row.label = QStringLiteral("LOAD ALL WEAPONS");
+                row.label = QStringLiteral("Load all weapons");
             } else if (row.role == SourcePluginRole::Master) {
                 row.label = name + QStringLiteral("  · master");
             } else {

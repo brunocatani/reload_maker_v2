@@ -184,7 +184,7 @@ namespace reloadmaker {
                 QPointF point;if(projectGripPoint(camera,size,v(world),point))ring.append(point);}
             painter.setPen(QPen(QColor("#65e5d0"),2));painter.setBrush(QColor(70,220,196,28));painter.drawPolygon(ring);
             const auto world=composed(_hand,Transformf{{0,_lensForward,0}}).translation;QPointF tip;
-            if(projectGripPoint(camera,size,v(world),tip)){painter.drawLine(center,tip);painter.drawEllipse(tip,4,4);painter.drawText(tip+QPointF(8,0),"VIEW CAMERA / FORWARD");}
+            if(projectGripPoint(camera,size,v(world),tip)){painter.drawLine(center,tip);painter.drawEllipse(tip,4,4);painter.drawText(tip+QPointF(8,0),"View camera forward");}
         }
         QVector3D edge; GripRay centerRay;
         if(!unprojectGripPoint(camera,size,center+QPointF(76,0),depth,edge) || !gripRay(camera,size,center,centerRay)) return;

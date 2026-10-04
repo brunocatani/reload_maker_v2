@@ -1,4 +1,5 @@
 #include "ReloadMakerController.h"
+#include "design/DesignWidgets.h"
 #include "StudioWindow.h"
 
 #include <QComboBox>
@@ -6,7 +7,6 @@
 #include <QDir>
 #include <QDockWidget>
 #include <QFormLayout>
-#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -28,50 +28,30 @@ namespace reloadmaker {
         _handPoseDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
         _handPoseDock->setMinimumWidth(390);
         _handPosePages = new QTabWidget(_handPoseDock);
+        // The Poses library: browse and reuse saved poses first, then capture
+        // a new one. The finger editor joins the capture section before Save.
         auto* panel = new QWidget(_handPosePages);
         auto* layout = new QVBoxLayout(panel);
-        layout->setContentsMargins(14,14,14,14);
-        layout->setSpacing(10);
-        auto* intro = new QLabel(QStringLiteral("Capture either hand at the current frame. Exact finger joints and wrist placement are saved separately."), panel);
-        intro->setWordWrap(true);
-        layout->addWidget(intro);
-        auto* capture = new QGroupBox(QStringLiteral("Capture current hand"), panel);
-        auto* form = new QFormLayout(capture);
-        form->setRowWrapPolicy(QFormLayout::WrapLongRows);
-        _handPoseName = new QLineEdit(capture);
-        _handPoseName->setMaxLength(kPoseNameLength);
-        _handPoseName->setPlaceholderText(QStringLiteral("e.g. Bolt pinch · relaxed"));
-        _handPoseSide = new QComboBox(capture);
-        _handPoseSide->addItem(QStringLiteral("Right hand"), static_cast<int>(PoseHand::Right));
-        _handPoseSide->addItem(QStringLiteral("Left hand"), static_cast<int>(PoseHand::Left));
-        _handPoseAnchor = new QComboBox(capture);
-        _handPoseAnchor->setMinimumContentsLength(12);
-        _handPoseAnchor->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-        _handPoseAnchor->setToolTip(QStringLiteral("Save the wrist relative to this actual assembled frame, plus a separate weapon-relative reference. Does not move the hand."));
-        _handPoseNotes = new QPlainTextEdit(capture);
-        _handPoseNotes->setPlaceholderText(QStringLiteral("Optional notes / intended use"));
-        _handPoseNotes->setMaximumHeight(65);
-        form->addRow(QStringLiteral("Name"), _handPoseName);
-        form->addRow(QStringLiteral("Hand"), _handPoseSide);
-        form->addRow(QStringLiteral("Reference part"), _handPoseAnchor);
-        form->addRow(QStringLiteral("Notes"), _handPoseNotes);
-        _saveHandPose = new QPushButton(QStringLiteral("Save current hand"), capture);
-        _saveHandPose->setObjectName(QStringLiteral("PrimaryButton"));
-        _saveHandPose->setToolTip(QStringLiteral("Pauses playback and saves a new snapshot. Existing poses are never overwritten."));
-        form->addRow(_saveHandPose);
-        layout->addWidget(capture);
+        layout->setContentsMargins(16,10,16,16);
+        layout->setSpacing(8);
+        layout->addWidget(design::hintLabel(QStringLiteral("Saved hand poses for any weapon. Exact finger joints and wrist placement are saved separately."), panel));
+        layout->addSpacing(8);
+        layout->addWidget(design::sectionLabel(QStringLiteral("Library"), panel));
         _handPoseSearch = new QLineEdit(panel);
         _handPoseSearch->setPlaceholderText(QStringLiteral("Search saved poses, hand, weapon or notes…"));
         _handPoseSearch->setClearButtonEnabled(true);
         layout->addWidget(_handPoseSearch);
         _handPoseList = new QListWidget(panel);
-        _handPoseList->setAlternatingRowColors(true);
-        layout->addWidget(_handPoseList,1);
+        _handPoseList->setMinimumHeight(220);
+        _handPoseList->setWordWrap(true);
+        _handPoseList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        layout->addWidget(_handPoseList);
         _handPoseDetails = new QPlainTextEdit(panel);
         _handPoseDetails->setReadOnly(true);
-        _handPoseDetails->setMaximumHeight(150);
+        _handPoseDetails->setMaximumHeight(130);
         layout->addWidget(_handPoseDetails);
         auto* preview = new QHBoxLayout();
+        preview->setSpacing(6);
         _previewHandPose = new QPushButton(QStringLiteral("Preview fingers"), panel);
         _restoreHandPose = new QPushButton(QStringLiteral("Restore animation"), panel);
         _previewHandPose->setToolTip(QStringLiteral("Pauses and applies this pose to its original left/right hand at the current wrist. Does not apply saved placement, mirror hands or move weapon parts."));
@@ -81,17 +61,46 @@ namespace reloadmaker {
         partGrip->setToolTip(QStringLiteral("Choose a saved pose, then click the magazine or other part where the palm should hold. Adjust the placement and save the grip."));
         layout->addWidget(partGrip);
         connect(partGrip, &QPushButton::clicked, this, &ReloadMakerController::applySavedPoseToPart);
-        _handPoseStatus = new QLabel(panel);
+        _handPoseStatus = design::hintLabel({}, panel);
         _handPoseStatus->setTextFormat(Qt::PlainText);
-        _handPoseStatus->setWordWrap(true);
         layout->addWidget(_handPoseStatus);
+
+        layout->addSpacing(8);
+        layout->addWidget(design::sectionLabel(QStringLiteral("Capture the current hand"), panel));
+        layout->addWidget(design::hintLabel(QStringLiteral("Saves either hand at the current frame as a new pose. Existing poses are never overwritten."), panel));
+        auto* form = new QFormLayout();
+        form->setSpacing(8);
+        form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+        _handPoseName = new QLineEdit(panel);
+        _handPoseName->setMaxLength(kPoseNameLength);
+        _handPoseName->setPlaceholderText(QStringLiteral("e.g. Bolt pinch · relaxed"));
+        _handPoseSide = new QComboBox(panel);
+        _handPoseSide->addItem(QStringLiteral("Right hand"), static_cast<int>(PoseHand::Right));
+        _handPoseSide->addItem(QStringLiteral("Left hand"), static_cast<int>(PoseHand::Left));
+        _handPoseAnchor = new QComboBox(panel);
+        _handPoseAnchor->setMinimumContentsLength(12);
+        _handPoseAnchor->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        _handPoseAnchor->setToolTip(QStringLiteral("Save the wrist relative to this actual assembled frame, plus a separate weapon-relative reference. Does not move the hand."));
+        _handPoseNotes = new QPlainTextEdit(panel);
+        _handPoseNotes->setPlaceholderText(QStringLiteral("Optional notes or intended use"));
+        _handPoseNotes->setMaximumHeight(65);
+        form->addRow(QStringLiteral("Name"), _handPoseName);
+        form->addRow(QStringLiteral("Hand"), _handPoseSide);
+        form->addRow(QStringLiteral("Reference part"), _handPoseAnchor);
+        form->addRow(QStringLiteral("Notes"), _handPoseNotes);
+        layout->addLayout(form);
+        _saveHandPose = new QPushButton(QStringLiteral("Save current hand"), panel);
+        _saveHandPose->setObjectName(QStringLiteral("PrimaryButton"));
+        _saveHandPose->setToolTip(QStringLiteral("Pauses playback and saves a new snapshot. Existing poses are never overwritten."));
+        layout->addWidget(_saveHandPose);
         auto* footer = new QHBoxLayout();
+        footer->setSpacing(6);
         auto* refresh = new QPushButton(QStringLiteral("Refresh list"), panel);
-        auto* folder = new QPushButton(QStringLiteral("Library folder"), panel);
+        auto* folder = new QPushButton(QStringLiteral("Open folder"), panel);
         folder->setToolTip(_handPoseLibrary.directory());
         footer->addWidget(refresh); footer->addWidget(folder);
         layout->addLayout(footer);
-        _handPosePages->addTab(panel, QStringLiteral("Finger poses"));
+        _handPosePages->addTab(panel, QStringLiteral("Poses library"));
         _handPoseDock->setWidget(_handPosePages);
         createPartGripUi();
         createMechanismUi();

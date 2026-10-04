@@ -175,6 +175,20 @@ namespace reloadmaker::design
         return label;
     }
 
+    QPushButton* disclosure(const QString& text, QWidget* content, QWidget* parent)
+    {
+        auto* button = new QPushButton(text, parent);
+        button->setObjectName(QStringLiteral("Disclosure"));
+        button->setCheckable(true);
+        button->setIcon(icon(Icon::ChevronRight, color::textMuted));
+        content->hide();
+        QObject::connect(button, &QPushButton::toggled, content, [content, button](bool open) {
+            content->setVisible(open);
+            button->setIcon(icon(open ? Icon::ChevronDown : Icon::ChevronRight, color::textMuted));
+        });
+        return button;
+    }
+
     QLabel* hintLabel(const QString& text, QWidget* parent)
     {
         auto* label = new QLabel(text, parent);

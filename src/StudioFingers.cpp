@@ -1,8 +1,8 @@
 #include "ReloadMakerController.h"
+#include "design/DesignWidgets.h"
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
-#include <QGroupBox>
 #include <QLabel>
 #include <QPushButton>
 #include <QQuaternion>
@@ -14,8 +14,10 @@
 namespace reloadmaker {
 void ReloadMakerController::createFingerEditor() {
     auto* page = _handPosePages->widget(0);
-    auto* section = new QGroupBox("Exact finger rotation", page);
+    auto* section = new QWidget(page);
     auto* form = new QFormLayout(section);
+    form->setContentsMargins(0, 0, 0, 0);
+    form->setSpacing(8);
     form->setRowWrapPolicy(QFormLayout::WrapLongRows);
     _fingerJoint = new QComboBox(section);
     for (const QString& finger : {"Thumb", "Index", "Middle", "Ring", "Little"})
@@ -38,12 +40,13 @@ void ReloadMakerController::createFingerEditor() {
     }
     auto* restore = new QPushButton("Restore this hand's animation", section);
     form->addRow(restore);
-    auto* help = new QLabel("Edits preserve bone lengths and the other hand. Save the current hand above to keep this finger pose in the library.", section);
+    auto* help = new QLabel("Edits preserve bone lengths and the other hand. Save the current hand below to keep this finger pose in the library.", section);
     help->setWordWrap(true); help->setObjectName("Hint"); form->addRow(help);
-    auto* edit=new QPushButton("Edit finger joints",page);edit->setCheckable(true);
-    section->setVisible(false);connect(edit,&QPushButton::toggled,section,&QWidget::setVisible);
-    static_cast<QVBoxLayout*>(page->layout())->insertWidget(2,edit);
-    static_cast<QVBoxLayout*>(page->layout())->insertWidget(3,section);
+    // Part of capturing a pose, so it sits just before Save current hand.
+    auto* layout = static_cast<QVBoxLayout*>(page->layout());
+    const int at = layout->indexOf(_saveHandPose);
+    layout->insertWidget(at, design::disclosure("Edit finger joints", section, page));
+    layout->insertWidget(at + 1, section);
     connect(_fingerJoint, qOverload<int>(&QComboBox::currentIndexChanged), this, &ReloadMakerController::setFingerJoint);
     connect(restore, &QPushButton::clicked, this, [this] {
         const auto hand = _editedHand;

@@ -134,10 +134,8 @@ namespace reloadmaker {
         _mechanismStatus=hintLabel({},page);_mechanismStatus->setTextFormat(Qt::PlainText);layout->addWidget(_mechanismStatus);
 
         layout->addSpacing(4);
-        auto* advancedToggle=new QPushButton("Exact values and saved files",page);
-        advancedToggle->setObjectName("Disclosure");advancedToggle->setCheckable(true);
-        advancedToggle->setIcon(icon(Icon::ChevronRight,color::textMuted));layout->addWidget(advancedToggle);
         auto* advanced=new QWidget(page);auto* details=new QVBoxLayout(advanced);details->setContentsMargins(0,0,0,0);details->setSpacing(8);
+        layout->addWidget(disclosure("Exact values and saved files",advanced,page));
         _mechanismName=new QLineEdit(page);_mechanismName->setMaxLength(128);_mechanismName->setPlaceholderText("Saved part name");details->addWidget(_mechanismName);
         auto* rest=new QPushButton("Use current animation frame as rest",page);details->addWidget(rest);
         auto* form=new QFormLayout();form->setSpacing(8);_stageReverse=new QLineEdit(page);_stageMotion=new QComboBox(page);
@@ -154,12 +152,8 @@ namespace reloadmaker {
         _mechanismList=new QComboBox(page);details->addWidget(_mechanismList);
         auto* files=new QHBoxLayout();files->setSpacing(6);auto* load=new QPushButton("Load definition",page);auto* folder=new QPushButton("Open folder",page);auto* refresh=new QPushButton("Refresh",page);
         files->addWidget(load);files->addWidget(folder);files->addWidget(refresh);details->addLayout(files);
-        layout->addWidget(advanced);advanced->hide();layout->addStretch();scroll->setWidget(page);
+        layout->addWidget(advanced);layout->addStretch();scroll->setWidget(page);
         _handPosePages->addTab(scroll,"Mechanisms");
-        connect(advancedToggle,&QPushButton::toggled,advanced,[advanced,advancedToggle](bool open){
-            advanced->setVisible(open);
-            advancedToggle->setIcon(icon(open?Icon::ChevronDown:Icon::ChevronRight,color::textMuted));
-        });
 
         _mechanismTimer=new QTimer(this);_mechanismTimer->setTimerType(Qt::PreciseTimer);_mechanismTimer->setInterval(16);
         connect(_mechanismTimer,&QTimer::timeout,this,&ReloadMakerController::advanceMechanismPreview);

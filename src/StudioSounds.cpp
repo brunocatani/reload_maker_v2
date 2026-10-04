@@ -1,4 +1,5 @@
 #include "ReloadMakerController.h"
+#include "design/DesignWidgets.h"
 #include "StudioWindow.h"
 #include <QCheckBox>
 #include <QComboBox>
@@ -21,23 +22,27 @@ bool continuous(const QString& trigger){return trigger=="opening"||trigger=="clo
 void ReloadMakerController::createSoundsUi(){
     _soundsDock=new QDockWidget("SOUNDS",_window);_soundsDock->setObjectName("SoundsDock");_soundsDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
     _soundsDock->setMinimumWidth(330);_soundsDock->setMaximumWidth(460);
-    auto* panel=new QWidget;auto* layout=new QVBoxLayout(panel);layout->setContentsMargins(14,14,14,14);
-    auto* intro=new QLabel("Physical reload sounds\nChoose an action, audition its original sound, and set where it plays along the movement.");intro->setWordWrap(true);layout->addWidget(intro);
+    // Cues first, then the selected cue, then save and test.
+    auto* panel=new QWidget;auto* layout=new QVBoxLayout(panel);layout->setContentsMargins(16,10,16,16);layout->setSpacing(8);
+    layout->addWidget(design::hintLabel("Choose an action, audition its original sound, and set where it plays along the movement.",panel));
+    layout->addSpacing(8);layout->addWidget(design::sectionLabel("Cues",panel));
     _soundCueList=new QListWidget;_soundCueList->setMinimumHeight(245);layout->addWidget(_soundCueList);
+    layout->addSpacing(8);layout->addWidget(design::sectionLabel("Selected cue",panel));
     _soundEnabled=new QCheckBox("Play this cue");layout->addWidget(_soundEnabled);
     _soundChoice=new QComboBox;_soundChoice->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);_soundChoice->setMinimumContentsLength(18);
     _soundTrigger=new QComboBox;for(const auto& trigger:soundTriggers())_soundTrigger->addItem(soundTriggerLabel(trigger),trigger);
     _soundProgress=new QDoubleSpinBox;_soundProgress->setRange(0,100);_soundProgress->setDecimals(1);_soundProgress->setSuffix(" %");
     _soundGain=new QDoubleSpinBox;_soundGain->setRange(0,200);_soundGain->setDecimals(0);_soundGain->setSuffix(" %");_soundGain->setSingleStep(5);
-    auto* form=new QFormLayout;form->addRow("Original sound",_soundChoice);form->addRow("When",_soundTrigger);form->addRow("Movement",_soundProgress);form->addRow("Volume",_soundGain);layout->addLayout(form);
-    auto* buttons=new QHBoxLayout;auto* play=new QPushButton("Play sound");auto* stop=new QPushButton("Stop");buttons->addWidget(play);buttons->addWidget(stop);layout->addLayout(buttons);
+    auto* form=new QFormLayout;form->setSpacing(8);form->addRow("Original sound",_soundChoice);form->addRow("When",_soundTrigger);form->addRow("Movement",_soundProgress);form->addRow("Volume",_soundGain);layout->addLayout(form);
+    auto* buttons=new QHBoxLayout;buttons->setSpacing(6);auto* play=new QPushButton("Play sound");auto* stop=new QPushButton("Stop");buttons->addWidget(play);buttons->addWidget(stop);layout->addLayout(buttons);
     _soundInfo=new QLabel;_soundInfo->setWordWrap(true);_soundInfo->setObjectName("Hint");layout->addWidget(_soundInfo);
     _soundStatus=new QLabel;_soundStatus->setWordWrap(true);_soundStatus->setObjectName("Hint");layout->addWidget(_soundStatus);
+    layout->addSpacing(8);
     auto* save=new QPushButton("Save sounds");save->setObjectName("PrimaryButton");layout->addWidget(save);
     auto* test=new QPushButton("Test in Operate");layout->addWidget(test);
     _soundMute=new QCheckBox("Mute preview");layout->addWidget(_soundMute);
     auto* collision=new QLabel("Ground and object impacts use the game's collision materials. Releasing a magazine does not play a ground-impact sound.\n\nOpening: 0% closed → 100% rear. Closing runs back to 0%. Magazine insertion: 0% entry → 100% seated.");collision->setWordWrap(true);collision->setObjectName("Hint");layout->addWidget(collision);layout->addStretch();
-    auto* scroll=new QScrollArea;scroll->setWidgetResizable(true);scroll->setWidget(panel);_soundsDock->setWidget(scroll);_window->addDockWidget(Qt::RightDockWidgetArea,_soundsDock);_soundsDock->hide();
+    auto* scroll=new QScrollArea;scroll->setWidgetResizable(true);scroll->setFrameShape(QFrame::NoFrame);scroll->setWidget(panel);_soundsDock->setWidget(scroll);_window->addDockWidget(Qt::RightDockWidgetArea,_soundsDock);_soundsDock->hide();
     connect(_soundCueList,&QListWidget::currentRowChanged,this,[this](int row){selectSoundCue(row);});
     connect(_soundChoice,qOverload<int>(&QComboBox::activated),this,[this]{editSoundCue();});
     connect(_soundTrigger,qOverload<int>(&QComboBox::activated),this,[this]{editSoundCue();});
