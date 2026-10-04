@@ -73,6 +73,7 @@ namespace reloadmaker {
         auto* graphScroll = new QScrollArea(_reloadGraphDock);
         graphScroll->setWidgetResizable(true);
         _reloadGraph = new ReloadGraph(graphScroll);
+        _reloadGraph->setToolTip("Click a moment to see the weapon and hands at that time");
         graphScroll->setWidget(_reloadGraph);
         _reloadGraphDock->setWidget(graphScroll);
         _window->addDockWidget(Qt::BottomDockWidgetArea, _reloadGraphDock);

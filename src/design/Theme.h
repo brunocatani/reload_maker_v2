@@ -53,6 +53,7 @@ namespace reloadmaker::design
         inline constexpr QRgb errorFill = 0xff40221f;
         inline constexpr QRgb ai = 0xffc7a6ff;
         inline constexpr QRgb viewport = 0xff2e2e2e;
+        inline constexpr QRgb playhead = 0xffffb562;
         inline constexpr QRgb chipFill = 0xff1d3a35;
         inline constexpr QRgb chipText = 0xff8fe0cf;
     }

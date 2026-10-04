@@ -430,7 +430,7 @@ void ReloadMakerController::createUi() {
     _simulationDock->setTitleBarWidget(new PanelHeader("Operate", "Work the weapon", _simulationDock));
     _soundsDock->setTitleBarWidget(new PanelHeader("Sounds", "Reload sounds", _soundsDock));
     _scopesDock->setTitleBarWidget(new PanelHeader("Scopes", "Scope profile", _scopesDock));
-    _reloadGraphDock->setTitleBarWidget(new PanelHeader("When each part moves · click a moment to see it", {}, _reloadGraphDock));
+    _reloadGraphDock->setTitleBarWidget(new PanelHeader("When each part moves", {}, _reloadGraphDock));
     for (auto* side : {_handPoseDock, _collisionsDock, _reloadDock, _simulationDock, _soundsDock, _scopesDock}) {
         side->setMinimumWidth(360);
     }

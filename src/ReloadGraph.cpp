@@ -1,4 +1,5 @@
 #include "ReloadGraph.h"
+#include "design/Theme.h"
 #include <QMouseEvent>
 #include <QPainter>
 #include <algorithm>
@@ -44,46 +45,57 @@ namespace reloadmaker {
         return std::clamp((x - labelWidth) / span, 0.f, 1.f) * _recipe->duration;
     }
 
+    // Drawn as the canvas timeline's tracks: a ruler, one row per moving
+    // part with its motion spans, and the amber playhead.
     void ReloadGraph::paintEvent(QPaintEvent*)
     {
+        using namespace design;
         QPainter p(this);
-        p.fillRect(rect(), QColor("#111719"));
+        p.fillRect(rect(), qcolor(color::card));
         p.setRenderHint(QPainter::Antialiasing);
         if (!_recipe || _rows.isEmpty()) {
-            p.setPen(QColor("#a6b0b5"));
+            p.setFont(uiFont(kBodyPx));
+            p.setPen(qcolor(color::textMuted));
             const QString text = _recipe ? "No weapon part moves measurably in this reload." : "The reload's moving parts appear here after it is learned.";
             p.drawText(rect().adjusted(18, 12, -18, -12), Qt::AlignCenter, text);
             return;
         }
         const auto& r = *_recipe;
-        p.setPen(QColor("#a7b6bc"));
-        p.drawText(QRect(12, 3, labelWidth - 20, 22), Qt::AlignVCenter, "PARTS / RELOAD TIME");
+        QFont heading = uiFont(kLabelPx, QFont::DemiBold);
+        heading.setLetterSpacing(QFont::AbsoluteSpacing, 1.2);
+        p.setFont(heading);
+        p.setPen(qcolor(color::section));
+        p.drawText(QRect(12, 3, labelWidth - 20, 22), Qt::AlignVCenter, QStringLiteral("PART"));
+        p.setFont(monoFont(kLabelPx));
         for (int i = 0; i <= 10; ++i) {
             const float time = r.duration * i / 10.f;
             const float pixel = xAt(time);
-            p.setPen(QColor("#28343a"));
+            p.setPen(qcolor(color::divider));
             p.drawLine(QPointF(pixel, 26), QPointF(pixel, height()));
-            p.setPen(QColor("#91a3ad"));
-            p.drawText(QPointF(pixel + 3, 19), QString::number(time, 'f', 1) + "s");
+            p.setPen(qcolor(color::textFaint));
+            // The last label sits left of its line so the edge never clips it.
+            const QString tick = QString::number(time, 'f', 1) + "s";
+            const float offset = i == 10 ? -3.f - float(p.fontMetrics().horizontalAdvance(tick)) : 3.f;
+            p.drawText(QPointF(pixel + offset, 19), tick);
         }
-        const QColor bar("#548981");
+        p.setFont(uiFont(kSmallPx));
         for (int row = 0; row < _rows.size(); ++row) {
             const int y = rowTop + rowHeight * row;
             if (row % 2 == 0) {
-                p.fillRect(QRect(0, y - 3, width(), rowHeight), QColor("#182023"));
+                p.fillRect(QRect(0, y - 3, width(), rowHeight), qcolor(color::panel));
             }
             const auto& label = r.tracks[_rows[row].track].label;
-            p.setPen(QColor("#d5dfdf"));
+            p.setPen(qcolor(color::textSecondary));
             p.drawText(QRect(12, y, labelWidth - 24, 19), Qt::AlignVCenter, p.fontMetrics().elidedText(label, Qt::ElideRight, labelWidth - 24));
-            p.setPen(bar.lighter(140));
-            p.setBrush(bar.darker(160));
+            p.setPen(QPen(qcolor(color::accent), 1));
+            p.setBrush(qcolor(color::accent, 64));
             for (const auto& span : _rows[row].spans) {
                 const float left = xAt(r.duration * span.first / (r.frames - 1));
                 const float right = xAt(r.duration * span.last / (r.frames - 1));
-                p.drawRoundedRect(QRectF(left, y, std::max(2.f, right - left), 17), 2, 2);
+                p.drawRoundedRect(QRectF(left, y + 1, std::max(2.f, right - left), 15), 4, 4);
             }
         }
-        p.setPen(QPen(QColor("#f7e1ba"), 1.5));
+        p.setPen(QPen(qcolor(color::playhead), 2));
         p.drawLine(QPointF(xAt(_seconds), 25), QPointF(xAt(_seconds), height()));
     }
 
