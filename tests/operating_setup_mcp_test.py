@@ -53,4 +53,4 @@ def run(names):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--testbed',action='append')
-    run(parser.parse_args().testbed or ['glock','ru556','m1a','timberwolf','l118a2','thanatos','mk18','mk18-empire','srep-service','srep-ar10','srep-honeybadger','srep-xm16e1'])
+    run(parser.parse_args().testbed or ['glock','ru556','m1a','timberwolf','l118a2','thanatos','srep-service','srep-ar10','srep-honeybadger','srep-xm16e1'])

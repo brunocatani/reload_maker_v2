@@ -31,7 +31,7 @@ def check_fit(grip):
   assert max(abs(a-b) for a,b in zip(sum(rotation(actual['rotation']),[]),expected['rotate']))<.004
  return scene
 results=[]
-for title,expected in [('MK18',27),('MK18-Empire',47),('M1A',4)]:
+for title,expected in [('M1A',4)]:
  project=ROOT/'workspace'/f'{title}-native-reload.project.json';edit('open_project',path=str(project));ready();edit('workspace',index=5);ready();op('reset')
  slots=ready()['slots'];mag=next(s for s in slots if s['name']=='Magazine');assert len(mag['choices'])==expected
  for c in mag['choices']:

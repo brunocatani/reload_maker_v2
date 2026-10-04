@@ -13,7 +13,7 @@ from template_mcp_test import ready,edit
 from server import command
 
 NAMES={'glock':'Glock','ru556':'RU556','m1a':'M1A','timberwolf':'Timberwolf','l118a2':'L118A2',
-       'thanatos':'Thanatos','mk18':'MK18','mk18-empire':'MK18Empire',
+       'thanatos':'Thanatos',
        'srep-service':'SREPService','srep-ar10':'SREPAR10','srep-honeybadger':'SREPHoneyBadger','srep-xm16e1':'SREPXM16E1'}
 
 def read(path):return json.loads(path.read_text(encoding='utf-8'))

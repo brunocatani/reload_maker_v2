@@ -21,7 +21,7 @@ ENDPOINT = ROOT / 'local/settings/endpoint.json'
 
 TESTBEDS = (
     'glock', 'ru556', 'm1a', 'timberwolf', 'l118a2', 'thanatos',
-    'mk18', 'mk18-empire', 'srep-service', 'srep-ar10', 'srep-honeybadger', 'srep-xm16e1',
+    'srep-service', 'srep-ar10', 'srep-honeybadger', 'srep-xm16e1',
 )
 
 READY_TIMEOUT_SECONDS = 300

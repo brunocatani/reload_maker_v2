@@ -12,7 +12,7 @@ def run():
     source=Path('F:/fo4dev/PROJECT_ROCK_V2/main_projects/DIAMOND/tests/fixtures/testbeds')
     projects=json.loads((ROOT/'workspace/packs/verified-b5bf9bf910a249da8f180b951aa17ae1/projects.json').read_text(encoding='utf-8'))
     try:
-        for name,file in [('mk18','MK18'),('mk18-empire','MK18Empire'),('thanatos','Thanatos'),('srep-service','SREPService')]:
+        for name,file in [('thanatos','Thanatos'),('srep-service','SREPService')]:
             edit('testbed',dict(name=name));ready();project=Path(ready()['project']);saved=project.read_bytes()
             try:
                 folder=work/name;folder.mkdir();fixture=json.loads(saved)

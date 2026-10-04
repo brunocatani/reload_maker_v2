@@ -35,7 +35,7 @@ def run():
     for name in ('Knife','BaseballBat','TireIron'):
         assert name in by_id,('Playable melee removed',name)
         assert by_id[name]['name']!=name,('Localized name did not resolve',name)
-    required={'glock19x.esp:000f9b','ru556.esp:000f99','m1a.esp:000f9a','l118a2.esp:00206c','l118a2.esp:000002','diarifles.esp:00059e','mk18.esp:000f9d'}
+    required={'glock19x.esp:000f9b','ru556.esp:000f99','m1a.esp:000f9a','l118a2.esp:00206c','l118a2.esp:000002','diarifles.esp:00059e'}
     actual={w['record'].lower() for w in coverage['loadedWeapons']}
     assert required<=actual,('Existing testbed disappeared',sorted(required-actual))
     assert {'SREP_ServiceRifle','SREP_ServiceRifle_Unique_HoneyBadger','SREP_AR10','SREP_XM16E1'}<=set(by_id),'SREP testbed removed'

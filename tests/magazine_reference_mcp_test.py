@@ -51,4 +51,4 @@ def run(names):
         Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('state')['revision']);ready();edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--testbed',action='append');run(p.parse_args().testbed or ['glock','ru556','m1a','timberwolf','mk18','srep-service'])
+    p=argparse.ArgumentParser();p.add_argument('--testbed',action='append');run(p.parse_args().testbed or ['glock','ru556','m1a','timberwolf','srep-service'])

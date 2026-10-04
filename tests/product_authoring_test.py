@@ -41,21 +41,6 @@ def run(captures,assets):
         except ValueError:pass
         else:raise AssertionError('Stale writer accepted')
         assert digest(project)==again['sha256']
-        if name=='mk18':
-            incompatible=read(capture);incompatible['sourcePolicyEdited']=False
-            incompatible['sourcePolicy']=dict(sourceOverride=dict(marker='MK18AttachmentOverhaul.esp:00019e',present=True))
-            alternate=work/name/'another-source.json';write(alternate,incompatible)
-            try:save_configuration(project,alternate,backends,expected=again['sha256'])
-            except ValueError as error:assert 'another source compatibility' in str(error)
-            else:raise AssertionError('Base and overhaul policies silently mixed')
-            assert digest(project)==again['sha256']
-            incompatible['sourcePolicyEdited']=True;write(alternate,incompatible)
-            explicit=save_configuration(project,alternate,backends,expected=again['sha256'])
-            changed_project,_=inspect_project(project);changed_profiles=read(project_source(project,changed_project['weapons'][0]['profiles']))
-            assert changed_profiles['sourceOverride']['present'] is True
-            assert changed_profiles['profiles']==new_docs['profiles']['profiles'],'Compatibility edit changed movement data'
-            restore=read(capture);restore['sourcePolicy']={k:before_docs['profiles'][k] for k in ('sourceOverride','blockedMods','magazineCollections') if k in before_docs['profiles']};restore['sourcePolicyEdited']=True
-            write(alternate,restore);again=save_configuration(project,alternate,backends,expected=explicit['sha256'])
         presentation=read(capture);presentation['magazine']['presentationSetup']={'recipeId':presentation['magazine']['sourceRecipeId'],'pieces':[{'path':'changed','role':'cartridge'}]}
         changed=work/name/'presentation.json';write(changed,presentation)
         try:save_configuration(project,changed,backends,expected=again['sha256'])

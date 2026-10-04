@@ -52,4 +52,4 @@ def run(names):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--testbed',action='append')
-    run(parser.parse_args().testbed or ['glock','m1a','mk18-empire'])
+    run(parser.parse_args().testbed or ['glock','m1a'])

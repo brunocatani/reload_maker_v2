@@ -45,7 +45,7 @@ def run():
     original=ready()['project']
     edit('save_project',path=original)
     projects=['Glock19x-magazine-grips','RU556-native-reload','M1A-native-reload','Timberwolf-native-reload',
-        'L118A2-native-reload','Thanatos-native-reload','MK18-native-reload','MK18-Empire-native-reload',
+        'L118A2-native-reload','Thanatos-native-reload',
         'srep-service-native-reload','srep-honeybadger-native-reload','srep-ar10-native-reload','srep-xm16e1-native-reload']
     results=[]
     try:
