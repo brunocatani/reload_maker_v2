@@ -2,6 +2,8 @@
 #include "design/Icons.h"
 
 #include <QApplication>
+#include <QDir>
+#include <QFontDatabase>
 #include <QPainter>
 #include <QPalette>
 
@@ -22,9 +24,12 @@ namespace reloadmaker::design
         return QStringLiteral("#%1").arg(rgb & 0xffffff, 6, 16, QLatin1Char('0'));
     }
 
+    // The canvas typefaces ship in assets/fonts (SIL OFL, IBM-Plex-OFL.txt);
+    // the system fonts follow so a missing file never leaves text unstyled.
     QFont uiFont(int px, QFont::Weight weight)
     {
-        QFont font(QStringLiteral("Segoe UI"));
+        QFont font;
+        font.setFamilies({ QStringLiteral("IBM Plex Sans"), QStringLiteral("Segoe UI") });
         font.setPixelSize(px);
         font.setWeight(weight);
         return font;
@@ -32,8 +37,8 @@ namespace reloadmaker::design
 
     QFont monoFont(int px)
     {
-        QFont font(QStringLiteral("Cascadia Mono"));
-        font.setFamilies({ QStringLiteral("Cascadia Mono"), QStringLiteral("Consolas") });
+        QFont font;
+        font.setFamilies({ QStringLiteral("IBM Plex Mono"), QStringLiteral("Cascadia Mono"), QStringLiteral("Consolas") });
         font.setPixelSize(px);
         return font;
     }
@@ -239,6 +244,13 @@ QStatusBar::item { border:0; }
 
     void applyTheme()
     {
+        // Registered before any widget exists, so every font lookup sees them.
+        const QDir fonts(QCoreApplication::applicationDirPath() + QStringLiteral("/assets/fonts"));
+        for (const auto& file : fonts.entryList({ QStringLiteral("*.ttf") }, QDir::Files)) {
+            if (QFontDatabase::addApplicationFont(fonts.filePath(file)) < 0) {
+                qWarning("Cannot load the bundled font %s; using the system fallback.", qPrintable(file));
+            }
+        }
         QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
         QApplication::setPalette(palette());
         QApplication::setFont(uiFont(kBodyPx));
