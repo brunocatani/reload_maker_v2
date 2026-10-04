@@ -29,6 +29,7 @@
 namespace reloadmaker {
     void ReloadMakerController::setLoading(bool loading, const QString& message)
     {
+        _sourceLoading = loading;
         if (loading) {
             // A failed/cancelled replacement keeps the learned reload.
             // Successful source installation clears it with caches.
@@ -44,11 +45,11 @@ namespace reloadmaker {
         if (_weaponPicker) _weaponPicker->setEnabled(!loading && _weaponPicker->count() > 0);
         if (_pluginFilter) _pluginFilter->setEnabled(!loading);
         if (_pluginSearch) _pluginSearch->setEnabled(!loading && _pluginFilter->count() > 0);
-        _pages->setTabEnabled(kLoadoutPage, !loading);
-        if(_pages->count()>kReloadPage)_pages->setTabEnabled(kReloadPage,!loading);
+        // The whole rail is disabled: disabling its current tab would move it
+        // to another page, and the page decides the Reload workspace.
+        _pages->setEnabled(!loading);
         if(_reloadGraphDock)_reloadGraphDock->setEnabled(!loading);
         if(_simulationDock)_simulationDock->setEnabled(!loading);
-        if (!loading) { showWorkspacePage(); }
         _playButton->setEnabled(!loading);
         _timelineDock->setEnabled(!loading);
         _handPoseDock->widget()->setEnabled(!loading);

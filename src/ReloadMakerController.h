@@ -177,7 +177,7 @@ namespace reloadmaker
         [[nodiscard]] static bool validWorkspace(int workspace);
         void createUi();
         void setWorkspace(int workspace);
-        void showWorkspacePage();
+        [[nodiscard]] bool loadoutPageActive() const;
         void previewNativeClip(int row);
         [[nodiscard]] bool reloadCaptureAllowed() const noexcept;
         void createCollisionsUi();
@@ -1008,6 +1008,9 @@ namespace reloadmaker
         void startLibraryLoad();
         void installLibrary(LoadOrderLibrary& library);
         void setLoading(bool loading, const QString& message = {});
+        // From setLoading(true) until setLoading(false); the load thread
+        // starts just after the first and ends just before the second.
+        bool _sourceLoading{ false };
         void startPackageLoad(const QString& path, const QString& dataPath,bool newDocument=false);
         [[nodiscard]] const ResourceArchive& referenceMeshes() const;
         void applyStyle();

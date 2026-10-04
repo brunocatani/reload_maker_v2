@@ -62,9 +62,9 @@ namespace reloadmaker {
             _gripViewport->setTeaching(_mechanismTeaching,start);
             if(_mechanismTeaching)_gripViewport->setRotationTool(_teachingRotation);
         }else {_gripViewport->setSimulation(false);_gripViewport->setTeaching(false);}
-        if(_slotOverlay) _slotOverlay->setActive(!_reloadWorkspaceActive && _showPartLabels && !active);
+        if(_slotOverlay) _slotOverlay->setActive(loadoutPageActive() && _showPartLabels && !active);
         // Clicking the model selects parts on the loadout page, unless the grip tools own the viewport.
-        if(_partPicker) _partPicker->setActive(!_reloadWorkspaceActive && !active);
+        if(_partPicker) _partPicker->setActive(loadoutPageActive() && !active);
         if(points){
             const auto g=currentGrabLocations();const int i=_grabLocationList?_selectedGrabLocation:-1,a=operatingAnchor();
             Transformf reference;QString error;

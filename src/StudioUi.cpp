@@ -354,7 +354,7 @@ void ReloadMakerController::createUi() {
     camera->addWidget(_showArmsCheck);
     camera->addWidget(_bodyCombo);
     connect(labels,&QCheckBox::toggled,this,[this](bool show) {
-        _showPartLabels=show;if(_slotOverlay)_slotOverlay->setActive(show&&!_reloadWorkspaceActive);
+        _showPartLabels=show;if(_slotOverlay)_slotOverlay->setActive(show&&loadoutPageActive());
     });
     connect(_workspaceButtons, &QButtonGroup::idClicked, this, &ReloadMakerController::setWorkspace);
     connect(diagnostics, &QAction::toggled, _detailsDock, &QWidget::setVisible);
@@ -382,9 +382,10 @@ bool ReloadMakerController::mechanismPageActive() const {
     return _workspace == GripsWorkspace && _handEditorPage == HandEditorPage::Mechanism;
 }
 
-// The left rail shows the reload page in Reload and the loadout elsewhere.
-void ReloadMakerController::showWorkspacePage() {
-    _pages->setCurrentIndex(_workspace == PhasesWorkspace ? kReloadPage : kLoadoutPage);
+// Part labels and model picking belong to the loadout page: outside Reload,
+// and not while a source loads.
+bool ReloadMakerController::loadoutPageActive() const {
+    return !_reloadWorkspaceActive && !_sourceLoading;
 }
 
 void ReloadMakerController::setWorkspace(int workspace) {
@@ -409,7 +410,7 @@ void ReloadMakerController::setWorkspace(int workspace) {
     // Reload replaces the loadout rail with the reload page and the native
     // clip list; Operate and Hands & grips keep the loadout.
     const bool phases = workspace == PhasesWorkspace;
-    showWorkspacePage();
+    _pages->setCurrentIndex(phases ? kReloadPage : kLoadoutPage);
     _packageDock->setWindowTitle(phases ? "RELOAD" : "LOADOUT");
     _simulationDock->setVisible(workspace == OperateWorkspace);
     _soundsDock->setVisible(workspace==SoundsWorkspace);
@@ -422,7 +423,7 @@ void ReloadMakerController::setWorkspace(int workspace) {
     // Hands & grips needs a frame to capture from; Reload shows the transport
     // only while a non-reload clip is being previewed.
     _timelineDock->setVisible(workspace == GripsWorkspace && !_magazineFitPreview);
-    if (_slotOverlay) _slotOverlay->setActive(!_reloadWorkspaceActive && _showPartLabels);
+    if (_slotOverlay) _slotOverlay->setActive(loadoutPageActive() && _showPartLabels);
     updateGripViewport();
     if(_clip.valid()&&!_reloadCapturing)(void)applyPose(_playbackTime);
     refreshFingerEditor();
