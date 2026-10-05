@@ -43,8 +43,10 @@ namespace reloadmaker
                                                 const QVector<int>& preferredRoots, QString& error) const;
         [[nodiscard]] const AttachmentPoint* point(AttachmentPointMatch match) const;
         [[nodiscard]] int ownerRoot(AttachmentPointMatch match) const;
-        // semanticFallback must be an explicitly identified rig bone, never an
-        // arbitrary global name match. An ambiguous local name always fails.
+        // semanticFallback is the adapter's frame for a parent the owner model
+        // does not emit: an explicitly identified rig bone, or the owner root
+        // for a label that names no node or bone; never an arbitrary global
+        // name match. An ambiguous local name always fails.
         [[nodiscard]] int anchor(AttachmentPointMatch match, int semanticFallback, QString& error) const;
     private:
         QVector<AttachmentModelScope> _scopes;

@@ -63,10 +63,6 @@ namespace reloadmaker
             if (candidate.name.compare(connection->parentName, Qt::CaseInsensitive) == 0) { node = candidate.node; ++count; }
         }
         if (count == 1 && node >= 0) { return node; }
-        // MK18 Empire's stock movement CPA stores its owner-local offset under
-        // this connection-frame label without an emitted NiNode. An actual
-        // named node still takes precedence; ordinary missing parents reject.
-        if(!count&&connection->parentName=="WorkshopConnectPoints")return model.root;
         if (!count && semanticFallback >= 0) { return semanticFallback; }
         error = QStringLiteral("%1 parent '%2' for %3 in model root %4")
             .arg(count ? QStringLiteral("Ambiguous") : QStringLiteral("Missing"), connection->parentName, connection->name).arg(model.root);

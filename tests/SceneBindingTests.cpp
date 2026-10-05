@@ -79,7 +79,10 @@ namespace
         require(connections.anchor(external, 99, error) == 99 && error.isEmpty(), "explicit rig anchor rejected");
         connections.add({50,{{50,"Stock"}},{{"P-StockMove","WorkshopConnectPoints",transform({0,3.5f,0})}}});
         const auto stock=connections.find("P-StockMove",{50},error);
-        require(connections.anchor(stock,-1,error)==50,"Owner-local stock movement escaped its model frame");
+        // A label naming no node and no rig bone is owner-local; the adapter
+        // supplies the owner root for it, and the anchor never guesses.
+        require(connections.anchor(stock,50,error)==50,"Owner-local stock movement escaped its model frame");
+        require(connections.anchor(stock,-1,error)==-1&&!error.isEmpty(),"missing connection-frame label was guessed");
         connections.add({60,{{60,"Stock"},{61,"WorkshopConnectPoints"}},{{"P-StockMove","WorkshopConnectPoints",{}}}});
         require(connections.anchor(connections.find("P-StockMove",{60},error),-1,error)==61,"Actual connection-frame node lost precedence");
         for (const auto parentPose : {transform({0,25,5}), transform({3,12,5}, 20,-35,10)}) {

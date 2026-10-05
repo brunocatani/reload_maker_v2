@@ -20,6 +20,7 @@
 #include <QSlider>
 #include <QTimer>
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -340,18 +341,23 @@ namespace reloadmaker
                     {{t[0], t[1], t[2]}, {q[1], q[2], q[3], q[0]}, {scale, scale, scale}}});
             }
         }
-        // Honey Badger names a rigid shape as its CPA frame. Shapes cannot own
-        // pasted branches, so carry the exact shape-local transform into the
-        // connection and attach beneath its real parent node.
+        // A CPA frame may name a rigid shape instead of a node (the SREP Honey
+        // Badger's "Upper"). Shapes cannot own pasted branches, so carry the
+        // exact shape-local transform into the connection and attach beneath
+        // the shape's real parent node. A node of the same name still wins.
         for (auto& point : scope.points) {
-            if (!isSrepConfiguration() || point.parentName != "Upper") {
+            const bool namesNode = std::any_of(scope.nodes.cbegin(), scope.nodes.cend(), [&](const auto& node) {
+                return node.name.compare(point.parentName, Qt::CaseInsensitive) == 0;
+            });
+            if (point.parentName.isEmpty() || namesNode) {
                 continue;
             }
             QModelIndex shape;
             int matches = 0;
             for (int block = firstBlock; block < lastBlock; ++block) {
                 const auto index = model->getBlockIndex(block);
-                if (model->blockInherits(index, "BSTriShape") && model->get<QString>(index, "Name") == point.parentName) {
+                if (model->blockInherits(index, "BSTriShape") &&
+                    model->get<QString>(index, "Name").compare(point.parentName, Qt::CaseInsensitive) == 0) {
                     shape = index;
                     ++matches;
                 }
@@ -422,10 +428,14 @@ namespace reloadmaker
             }
             result.suppliedBone = bone;
         } else {
-            auto canonical = bone >= 0 ? _canonicalNodes.value(normalizedKey(parentName)) : QPersistentModelIndex{};
-            // These SREP CPAs retain donor model-root labels while emitting
-            // WEAPON / Scene Root. Their supplied offsets are owner-local.
-            if(isSrepConfiguration()&&(parentName=="HandmadeARReceiver"||parentName=="AR10 Handguard"))canonical=model->getBlockIndex(result.ownerRoot);
+            // A parent naming neither a node of the owner model nor a rig bone
+            // is a label without an emitted node: a donor model's root name
+            // (SREP "HandmadeARReceiver", "AR10 Handguard") or a connection
+            // frame label (MK18 Empire "WorkshopConnectPoints"). Its offset is
+            // owner-local. A node of that name in the owner model still wins.
+            auto canonical = bone >= 0               ? _canonicalNodes.value(normalizedKey(parentName))
+                             : !parentName.isEmpty() ? QPersistentModelIndex(model->getBlockIndex(result.ownerRoot))
+                                                     : QPersistentModelIndex{};
             const int anchor = _attachmentConnections.anchor(match,
                 canonical.isValid() ? model->getBlockNumber(canonical) : -1, result.error);
             if (anchor >= 0) { result.parent = model->getBlockIndex(anchor); }
