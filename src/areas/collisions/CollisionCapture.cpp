@@ -6,7 +6,6 @@
 #include "design/DesignWidgets.h"
 #include "StudioPaths.h"
 #include "StudioWindow.h"
-#include "CollisionDraftPolicy.h"
 #include "areas/collisions/CollisionFrames.h"
 #include "commands/CommandSupport.h"
 #include "gl/glshape.h"
@@ -280,9 +279,8 @@ namespace reloadmaker
         return source;
     }
 
-    // Remembers which learned reload, source inputs and magazine presentation
-    // the full or empty magazine's collision draft was generated from, so the
-    // checklist can tell a current draft from a stale one.
+    // Remembers whether the full or empty magazine's collision draft has a
+    // usable hull, for the checklist's world model item.
     void ReloadMakerController::rememberCollisionDraft()
     {
         if (!_collisions || !_reloadRecipe || !currentWeapon()) {
@@ -291,8 +289,7 @@ namespace reloadmaker
         const auto& profile = _collisionWorkshop.profile();
         const auto reference = profile.referencePose;
         const auto presentation = reference["presentation"].toString();
-        if (!profile.valid() || reference["space"] != "magazine-carrier" || (presentation != "full" && presentation != "empty") ||
-            reference["sourceRecipeId"] != _reloadRecipe->id) {
+        if (!profile.valid() || reference["space"] != "magazine-carrier" || (presentation != "full" && presentation != "empty")) {
             return;
         }
         const auto key = profile.weapon.toLower() + "/" + profile.configuration;
@@ -307,7 +304,6 @@ namespace reloadmaker
         auto record = _authoringRecords.value(key).toObject();
         auto drafts = record.value("collisionDrafts").toObject();
         drafts[presentation] = QJsonObject{
-            { "policy", collisionDraftPolicy(_reloadRecipe->id, reference["sources"].toObject(), reference["presentationSetup"].toObject()) },
             { "usable", usable },
             { "edit", QUuid::createUuid().toString(QUuid::WithoutBraces).remove('-') } };
         record["collisionDrafts"] = drafts;

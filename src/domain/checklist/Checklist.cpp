@@ -1,7 +1,5 @@
 #include "domain/checklist/Checklist.h"
 
-#include <QCryptographicHash>
-#include <QJsonDocument>
 #include <QRegularExpression>
 
 namespace reloadmaker
@@ -61,7 +59,6 @@ namespace reloadmaker
 
         items.append(presetChecklistItem());
         add("weapon.reload", S::LearnedReload, Sub::Weapon, O::Auto, true, "Reload learned");
-        add("weapon.sources", S::LearnedReload, Sub::Weapon, O::Auto, true, "Source files recorded");
 
         const bool detachable = model.feed.container == ContainerKind::Detachable;
         if (detachable) {
@@ -124,15 +121,14 @@ namespace reloadmaker
         return { "weapon.preset", ChecklistSection::LearnedReload, ChecklistSubsystem::Weapon, ChecklistOwner::Auto, true, "Behavior preset", {} };
     }
 
-    QString checklistFingerprint(const QString& item, const QJsonObject& inputs)
+    QJsonObject checklistConfirmation(const QString& value, const QString& at)
     {
-        const QJsonObject value{ { "version", 1 }, { "item", item }, { "inputs", inputs } };
-        return QString::fromLatin1(QCryptographicHash::hash(QJsonDocument(value).toJson(QJsonDocument::Compact), QCryptographicHash::Sha256).toHex());
+        return { { "state", "confirmed" }, { "value", value.left(200) }, { "at", at } };
     }
 
-    QJsonObject checklistConfirmation(const QString& fingerprint, const QString& value, const QString& at)
+    QJsonObject checklistSkip(const QString& at)
     {
-        return { { "fingerprint", fingerprint }, { "value", value.left(200) }, { "at", at } };
+        return { { "state", kChecklistNotApplicable }, { "at", at } };
     }
 
     QVector<ChecklistItemStatus> evaluateChecklist(const QVector<ChecklistItem>& items,
@@ -147,10 +143,9 @@ namespace reloadmaker
             const auto observation = observations.value(item.id);
             status.value = observation.value;
             status.evidence = observation.evidence;
-            status.fingerprint = checklistFingerprint(item.id, observation.inputs);
             const auto saved = confirmations.value(item.id).toObject();
-            const auto confirmed = saved.value("fingerprint").toString();
-            const bool skipped = confirmed == QLatin1String(kChecklistNotApplicable) && !item.mandatory;
+            const bool confirmed = saved.value("state").toString() == QLatin1String("confirmed");
+            const bool skipped = saved.value("state").toString() == QLatin1String(kChecklistNotApplicable) && !item.mandatory;
             status.confirmedAt = saved.value("at").toString();
             status.canSkip = !item.mandatory;
             if (!observation.available) {
@@ -160,7 +155,7 @@ namespace reloadmaker
                 if (skipped) {
                     status.state = ChecklistState::NotApplicable;
                     status.byYou = true;
-                } else if (!confirmed.isEmpty() && confirmed != QLatin1String(kChecklistNotApplicable)) {
+                } else if (confirmed) {
                     status.state = ChecklistState::Confirmed;
                     status.value = saved.value("value").toString();
                     status.byYou = true;
@@ -179,16 +174,12 @@ namespace reloadmaker
             } else if (!observation.detected) {
                 status.state = ChecklistState::NeedsYou;
                 status.message = observation.problem;
-            } else if (item.owner == ChecklistOwner::You || confirmed == status.fingerprint) {
+            } else if (item.owner == ChecklistOwner::You || confirmed) {
                 status.state = ChecklistState::Confirmed;
                 status.byYou = true;
             } else {
                 status.state = ChecklistState::Detected;
                 status.canConfirm = true;
-                status.stale = !confirmed.isEmpty() && confirmed != QLatin1String(kChecklistNotApplicable);
-                if (status.stale) {
-                    status.message = QStringLiteral("Changed since you confirmed it; review it again");
-                }
             }
             result.append(status);
         }
@@ -219,17 +210,16 @@ namespace reloadmaker
     bool validChecklistConfirmations(const QJsonObject& confirmations)
     {
         static const QRegularExpression id(QStringLiteral("^[a-z0-9][a-z0-9.\\-]{0,127}$"), QRegularExpression::CaseInsensitiveOption);
-        static const QRegularExpression hash(QStringLiteral("^[a-f0-9]{64}$"));
         if (confirmations.size() > 256) {
             return false;
         }
         for (auto it = confirmations.begin(); it != confirmations.end(); ++it) {
             const auto saved = it.value().toObject();
-            const auto fingerprint = saved.value("fingerprint").toString();
+            const auto state = saved.value("state").toString();
             if (!id.match(it.key()).hasMatch() || !it.value().isObject() || saved.size() > 3 ||
-                (fingerprint != QLatin1String(kChecklistNotApplicable) && !hash.match(fingerprint).hasMatch()) ||
-                !saved.value("value").isString() || saved.value("value").toString().size() > 200 || !saved.value("at").isString() ||
-                saved.value("at").toString().size() > 40) {
+                (state != QLatin1String("confirmed") && state != QLatin1String(kChecklistNotApplicable)) ||
+                (saved.contains("value") && (!saved.value("value").isString() || saved.value("value").toString().size() > 200)) ||
+                !saved.value("at").isString() || saved.value("at").toString().size() > 40) {
                 return false;
             }
         }

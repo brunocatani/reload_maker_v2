@@ -301,14 +301,13 @@ namespace reloadmaker
             done[section] += status.state == ChecklistState::Confirmed || status.state == ChecklistState::NotApplicable;
             auto* row = _checklistItemRows.value(status.item.id);
             row->setMarker(markerFor(status.state));
-            // The tag says who acts next or why the state may be old.
-            const QString tag = status.stale ? QStringLiteral("changed")
-                                : !status.rechecked && status.state == ChecklistState::Confirmed ? QStringLiteral("saved")
+            // The tag says who acts next or that the state is the saved one.
+            const QString tag = !status.rechecked && status.state == ChecklistState::Confirmed ? QStringLiteral("saved")
                                 : status.item.owner == ChecklistOwner::You && status.state == ChecklistState::NeedsYou ? QStringLiteral("you")
                                 : !status.item.mandatory && status.state != ChecklistState::Confirmed ? QStringLiteral("optional")
                                                                                                         : QString();
             row->setTrailing(tag);
-            row->setTrailingColor(tag == QLatin1String("you") || tag == QLatin1String("changed") ? color::needsYou : color::textFaint);
+            row->setTrailingColor(tag == QLatin1String("you") ? color::needsYou : color::textFaint);
             row->setToolTip(status.value.isEmpty() ? status.message : status.value);
             const bool isSelected = status.item.id == _selectedChecklistItem;
             {
@@ -430,7 +429,6 @@ namespace reloadmaker
         _checklistConfirm->setVisible(item.canConfirm || otherPreset || (!item.rechecked && item.state != ChecklistState::NotApplicable));
         _checklistConfirm->setText(otherPreset ? QStringLiteral("Use this preset")
                                    : !item.rechecked ? QStringLiteral("Check in Operate")
-                                   : item.stale ? QStringLiteral("Confirm again")
                                                 : QStringLiteral("Confirm"));
         _checklistSkip->setVisible(item.canSkip);
         const bool skippedByYou = item.state == ChecklistState::NotApplicable && item.byYou;

@@ -15,12 +15,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'mcp'))
 from server import command
 
-# Items whose evidence includes the magazine guide. The retired roadmap also
-# sent its sound step back for review; the reload sound item does not use the
-# guide yet (sound-cue detectors are backlog P2-05).
-GUIDE_DEPENDENT = {'feed.guide'}
-
-
 def idle():
     for _ in range(24000):
         current = command('revision')
@@ -55,7 +49,7 @@ def items():
 
 
 def states():
-    return {key: (item['state'], item['stale']) for key, item in items().items()}
+    return {key: item['state'] for key, item in items().items()}
 
 
 def confirm_all():
@@ -94,8 +88,8 @@ def run():
             confirm_all()
             draft = work / 'sources.project.json'
             edit('save_project', dict(path=str(draft)))
-            key = next(k for k, v in records(draft).items() if 'checklist' in v and 'weapon.sources' in v['checklist'])
-            assert records(draft)[key]['sources']['resources'], 'Confirming the sources did not record them'
+            assert any('checklist' in v for v in records(draft).values()), 'Confirmations were not saved'
+            assert not any('sources' in v for v in records(draft).values()), 'Source bytes were recorded'
             assert not any('step' in v or 'reviews' in v for v in records(draft).values()), 'Retired roadmap keys were saved'
             confirmed = states()
 
@@ -103,19 +97,18 @@ def run():
             edit('view', dict(view='side', fit=True))
             assert states() == confirmed, 'Camera changed the checklist'
 
-            # The magazine guide invalidates exactly the items that use it.
+            # An edited guide keeps every confirmation (owner, 2026-10-05: no
+            # hash verification); the items show the new values.
             guide = command('magazine_guide_state')['settings']
             guide['travel'] *= 1.2
             edit('magazine_guide', dict(operation='save', settings=guide))
             ready()
-            changed = {key for key, value in states().items() if value != confirmed[key]}
-            assert changed == GUIDE_DEPENDENT, changed
-            assert all(states()[key] == ('detected', True) for key in changed), states()
+            assert states() == confirmed, 'Editing the guide revoked confirmations'
             edit('magazine_guide', dict(operation='reset'))
             ready()
-            assert states() == confirmed, 'Restoring the guide did not restore its confirmations'
+            assert states() == confirmed, 'Restoring the guide changed confirmations'
 
-            # Collision hulls invalidate the world model item; the overlay does not.
+            # Hull edits never ask for the world model again; the overlay changes nothing.
             for empty in (False, True):
                 edit('workspace', dict(index=5))
                 ready()
@@ -127,10 +120,9 @@ def run():
             edit('collisions', dict(operation='view', overlay=False))
             assert states() == world, 'Collision overlay changed the checklist'
             edit('collisions', dict(operation='hull', index=0, enabled=False))
-            assert states()['feed.world'] == ('detected', True), states()['feed.world']
+            assert states()['feed.world'] != 'detected', states()['feed.world']
             edit('collisions', dict(operation='hull', index=0, enabled=True))
-            assert items()['feed.world']['canConfirm'], items()['feed.world']
-            edit('checklist', dict(operation='confirm', id='feed.world'))
+            assert states()['feed.world'] == 'confirmed', states()['feed.world']
 
             # Confirmations survive a save and reopen; unconfirm returns an item for review.
             edit('workspace', dict(index=5))
@@ -142,25 +134,31 @@ def run():
             ready()
             assert states() == before, 'Reopening lost confirmations'
             edit('checklist', dict(operation='unconfirm', id='fire.motion'))
-            assert states()['fire.motion'] == ('detected', False), states()['fire.motion']
+            assert states()['fire.motion'] == 'detected', states()['fire.motion']
+            edit('checklist', dict(operation='confirm', id='fire.motion'))
 
-            # A configuration without a record gets one from the checklist alone, and it reopens.
+            # Another sight is not a reload part: the same record and every
+            # confirmation apply, also after a reopen.
+            kept = states()
             sights = next(slot for slot in ready()['slots'] if slot['name'] == 'Sights')
             other = next(choice for choice in sights['choices'] if choice['id'] != sights['selected'])
             edit('configure', dict(slot=sights['key'], mod=other['id']))
             ready()
-            fresh = command('checklist_state')
-            assert fresh['evaluated'], fresh['problem']
-            edit('checklist', dict(operation='confirm', id='weapon.sources'))
-            created = work / 'fresh-record.project.json'
-            edit('save_project', dict(path=str(created)))
-            edit('open_project', dict(path=str(created)))
+            edit('workspace', dict(index=5))
             ready()
-            assert states()['weapon.sources'] == ('confirmed', False), states()['weapon.sources']
+            assert command('checklist_state')['evaluated'], command('checklist_state')['problem']
+            assert states() == kept, 'Another sight changed the checklist'
+            reopened = work / 'other-sight.project.json'
+            edit('save_project', dict(path=str(reopened)))
+            edit('open_project', dict(path=str(reopened)))
+            ready()
+            edit('workspace', dict(index=5))
+            ready()
+            assert states() == kept, 'Reopening with another sight changed the checklist'
 
-            (work / 'result.json').write_text(json.dumps(dict(ok=True, guide=sorted(changed), states=before), indent=2))
-            print('PASS checklist preset and sources, precise guide/collision invalidation, view independence, '
-                  'reopen and checklist-created records:', work, flush=True)
+            (work / 'result.json').write_text(json.dumps(dict(ok=True, states=before), indent=2))
+            print('PASS checklist preset, kept confirmations through guide/collision edits, view independence, '
+                  'reopen and parts outside the reload:', work, flush=True)
         finally:
             project.write_bytes(saved)
             command('open_project', dict(path=str(project)), command('revision')['revision'])

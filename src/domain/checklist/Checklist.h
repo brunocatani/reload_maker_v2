@@ -77,7 +77,6 @@ namespace reloadmaker
         QString value;           // short, shown on the row
         QString evidence;        // where the value came from
         QString problem;         // why nothing was detected, or why it cannot run
-        QJsonObject inputs;      // what the value depends on; hashed into the fingerprint
     };
 
     struct ChecklistItemStatus
@@ -87,8 +86,6 @@ namespace reloadmaker
         QString value;
         QString evidence;
         QString message;
-        QString fingerprint;
-        bool stale{ false };      // confirmed earlier; the inputs changed since
         bool canConfirm{ false }; // a detected value awaits confirmation
         bool canSkip{ false };    // an optional item may be marked not applicable
         bool byYou{ false };      // confirmed, authored or skipped by a person
@@ -96,18 +93,17 @@ namespace reloadmaker
         QString confirmedAt;      // ISO time of the saved confirmation
     };
 
-    // A saved confirmation: {"fingerprint": the confirmed fingerprint, or
-    // "n/a" for a skipped optional item; "value": the value confirmed;
-    // "at": ISO time}. The value shows while the detector cannot run.
+    // A saved confirmation: {"state": "confirmed", "value": the value
+    // confirmed, "at": ISO time}, or {"state": "n/a", "at"} for a skipped
+    // optional item. A confirmation stays until the author removes it; a
+    // later value never revokes it (owner, 2026-10-05: no hash verification).
     inline constexpr char kChecklistNotApplicable[] = "n/a";
-    [[nodiscard]] QJsonObject checklistConfirmation(const QString& fingerprint, const QString& value, const QString& at);
+    [[nodiscard]] QJsonObject checklistConfirmation(const QString& value, const QString& at);
+    [[nodiscard]] QJsonObject checklistSkip(const QString& at);
 
-    [[nodiscard]] QString checklistFingerprint(const QString& item, const QJsonObject& inputs);
-
-    // `confirmations` maps item ids to saved confirmations. A confirmation
-    // whose fingerprint no longer matches returns the item to Detected, marked
-    // stale; "n/a" is honored for optional items only. An item whose detector
-    // cannot run shows its saved confirmation, marked not rechecked.
+    // `confirmations` maps item ids to saved confirmations; "n/a" is honored
+    // for optional items only. An item whose detector cannot run shows its
+    // saved confirmation, marked not rechecked.
     [[nodiscard]] QVector<ChecklistItemStatus> evaluateChecklist(const QVector<ChecklistItem>& items,
                                                                  const QHash<QString, ChecklistObservation>& observations,
                                                                  const QJsonObject& confirmations);

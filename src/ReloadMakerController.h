@@ -487,7 +487,6 @@ namespace reloadmaker
         void rememberCollisionDraft();
         QString assignedTemplate() const;
         void assignReloadPreset(const QString& id);
-        void recordSourceEvidence();
         QJsonObject sourceEvidence() const;
         QJsonObject auditSources(const QJsonObject&) const;
         QJsonObject _authoringRecords;

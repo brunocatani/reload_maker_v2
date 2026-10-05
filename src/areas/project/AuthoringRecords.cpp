@@ -216,19 +216,4 @@ namespace reloadmaker
         prepareSimulation();
         require(saveSession(), "Could not save the assigned preset");
     }
-
-    // Records the bytes of every source file the configuration was authored
-    // from; a later audit compares them before export.
-    void ReloadMakerController::recordSourceEvidence()
-    {
-        const auto key = authoringRecordKey();
-        require(!key.isEmpty(), "Load a weapon first");
-        const auto evidence = sourceEvidence();
-        require(auditSources(evidence)["compatible"].toBool(),
-                "Loaded authoring data differs from the current resource bytes. Reconnect/reload the source before recording it.");
-        auto record = _authoringRecords.value(key).toObject();
-        record["sources"] = evidence;
-        _authoringRecords[key] = record;
-        ++_revision;
-    }
 }

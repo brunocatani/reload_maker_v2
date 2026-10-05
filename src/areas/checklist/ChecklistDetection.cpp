@@ -2,16 +2,12 @@
 // from the weapon's preset model; each one is observed from what Maker
 // already knows: the learned reload, the operating rig, the magazine, the
 // hands and the sounds (P2-04 turns these readings into standalone
-// detectors).
-//
-// An observation's inputs become its fingerprint, so they use only data that
-// is the same on every page: preset values, the rig, the learned reload and
-// authored data. Evidence that exists only while Operate runs (the magazine
-// rail) or after Operate prepared it once (the sound profile) reports that it
-// cannot run here, and the item shows its saved confirmation instead of
-// flipping to stale when the author moves between pages.
+// detectors). A confirmation stays until the author removes it: no value is
+// compared with a hash (owner, 2026-10-05). Evidence that exists only while
+// Operate runs (the magazine rail) or after Operate prepared it once (the
+// sound profile) reports that it cannot run here, and the item shows its
+// saved confirmation.
 #include "ReloadMakerController.h"
-#include "CollisionDraftPolicy.h"
 #include "ReloadBundle.h"
 #include "ReloadTemplates.h"
 
@@ -24,13 +20,12 @@ namespace reloadmaker
 {
     namespace
     {
-        ChecklistObservation found(const QString& value, const QString& evidence, const QJsonObject& inputs)
+        ChecklistObservation found(const QString& value, const QString& evidence)
         {
             ChecklistObservation observation;
             observation.detected = true;
             observation.value = value;
             observation.evidence = evidence;
-            observation.inputs = inputs;
             return observation;
         }
 
@@ -158,62 +153,39 @@ namespace reloadmaker
         // Learned reload.
         o["weapon.preset"] = found(preset.label,
                                    assignedTemplate().isEmpty() ? presetProposal().evidence + QStringLiteral(" Confirming assigns the preset to the weapon.")
-                                                                : QStringLiteral("Assigned to this weapon."),
-                                   { { "template", preset.id } });
-        QJsonObject sources;
+                                                                : QStringLiteral("Assigned to this weapon."));
         if (!captured) {
             o["weapon.reload"] = missing(learn);
         } else {
             const auto animation = _reloadRecipe->source["animation"].toString();
             o["weapon.reload"] = found(QStringLiteral("%1 s · %2 tracks").arg(_reloadRecipe->duration, 0, 'f', 2).arg(_reloadRecipe->tracks.size()),
-                                       animation, { { "recipe", _reloadRecipe->id } });
-            QString error;
-            try {
-                sources = sourceEvidence();
-            } catch (const std::exception& e) {
-                error = QString::fromUtf8(e.what());
-            }
-            if (sources.isEmpty()) {
-                o["weapon.sources"] = missing(error);
-            } else {
-                QStringList paths;
-                for (const auto& value : sources["resources"].toArray()) {
-                    paths << value.toObject()["path"].toString();
-                }
-                o["weapon.sources"] = found(QStringLiteral("%1 source files").arg(paths.size()),
-                                            QStringLiteral("Confirming records their bytes, so a replaced model or animation shows as changed.\n") + paths.join('\n'),
-                                            sources);
-            }
+                                       animation);
         }
 
         // Fire behavior comes from the preset; fire modes from the record.
-        o["fire.afterShot"] = found(afterShotText(model), QStringLiteral("From the ") + preset.label + QStringLiteral(" preset."), { { "template", preset.id } });
-        o["fire.ejection"] = found(ejectionText(model.fire.ejection), QStringLiteral("From the preset."), { { "template", preset.id } });
+        o["fire.afterShot"] = found(afterShotText(model), QStringLiteral("From the ") + preset.label + QStringLiteral(" preset."));
+        o["fire.ejection"] = found(ejectionText(model.fire.ejection), QStringLiteral("From the preset."));
         o["fire.motion"] = found(motionText(model.fire.motion),
-                                 _rifleBoltSource.isEmpty() ? QStringLiteral("From the preset.") : QStringLiteral("Fire clip: ") + _rifleBoltSource,
-                                 { { "template", preset.id } });
+                                 _rifleBoltSource.isEmpty() ? QStringLiteral("From the preset.") : QStringLiteral("Fire clip: ") + _rifleBoltSource);
         for (const auto& m : model.mechanisms) {
             if (model.fire.lockOpenMechanism == m.id) {
                 o["action." + m.id + ".catch"] = found(QStringLiteral("Held open after the last shot"),
-                                                       QStringLiteral("From the preset; Operate's release action closes it."),
-                                                       { { "template", preset.id }, { "mechanism", m.id } });
+                                                       QStringLiteral("From the preset; Operate's release action closes it."));
             }
         }
         const auto ammunition = resolveWeaponAmmunition(*currentPlugin(), *currentWeapon(), *configuration(), _referenceNames);
         o["fire.modes"] = ammunition.valid() ? found(ammunition.automatic ? QStringLiteral("Automatic") : QStringLiteral("Semi-automatic"),
-                                                     QStringLiteral("From the weapon record and its receiver."), { { "automatic", ammunition.automatic } })
+                                                     QStringLiteral("From the weapon record and its receiver."))
                                              : missing(ammunition.error);
 
         // Collision drafts are saved per configuration and need no rig.
         if (captured) {
             const auto drafts = saved.value("collisionDrafts").toObject();
-            const auto policy = collisionDraftPolicy(_reloadRecipe->id, sources, magazinePresentationJson(saved.value("magazineSetup").toObject()));
             const auto full = drafts["full"].toObject();
             const auto empty = drafts["empty"].toObject();
-            const bool ready = full["usable"].toBool() && empty["usable"].toBool() && full["policy"] == policy && empty["policy"] == policy;
+            const bool ready = full["usable"].toBool() && empty["usable"].toBool();
             if (o.contains("feed.world")) {
-                o["feed.world"] = ready ? found(QStringLiteral("Full and empty hulls"), QStringLiteral("Cooked models are checked again when the pack is saved."),
-                                                { { "full", full["edit"] }, { "empty", empty["edit"] }, { "policy", policy } })
+                o["feed.world"] = ready ? found(QStringLiteral("Full and empty hulls"), QStringLiteral("Cooked models are checked again when the pack is saved."))
                                         : missing(QStringLiteral("Capture the full and empty magazines in Magazines, then generate their hulls."));
             }
         }
@@ -240,27 +212,24 @@ namespace reloadmaker
         for (const auto& m : model.mechanisms) {
             const QString prefix = "action." + m.id;
             if (m.driver == MechanismDriver::Hand) {
-                o[prefix + ".part"] = found(label(r.slide), followers.isEmpty() ? QStringLiteral("No followers.") : QStringLiteral("Followers: ") + followers.join(", "), roles);
+                o[prefix + ".part"] = found(label(r.slide), followers.isEmpty() ? QStringLiteral("No followers.") : QStringLiteral("Followers: ") + followers.join(", "));
                 o[prefix + ".motion"] = found(QStringLiteral("Open at frame %1 · closed at frame %2").arg(r.openFrame).arg(r.closedFrame),
-                                              r.mechanicalSource["animation"].toString(),
-                                              { { "setup", r.authoring }, { "source", r.mechanicalSource }, { "open", r.openFrame }, { "closed", r.closedFrame } });
+                                              r.mechanicalSource["animation"].toString());
                 QStringList names;
                 for (const auto& point : grabs.points) {
                     names << point.name;
                 }
-                o[prefix + ".grab"] = !names.isEmpty() ? found(QStringLiteral("%1 point(s)").arg(names.size()), names.join(", "), { { "points", names.size() } })
-                                      : pistol ? found(QStringLiteral("Whole slide"), QStringLiteral("Pistol slides keep the default grab when no point is picked."), {})
+                o[prefix + ".grab"] = !names.isEmpty() ? found(QStringLiteral("%1 point(s)").arg(names.size()), names.join(", "))
+                                      : pistol ? found(QStringLiteral("Whole slide"), QStringLiteral("Pistol slides keep the default grab when no point is picked."))
                                                : missing(QStringLiteral("Pick where a hand may grab it in Grab points."));
             } else {
-                o[prefix + ".follows"] = r.bolt >= 0 ? found(label(r.bolt), QStringLiteral("Moves with ") + label(r.slide) + QStringLiteral(" and holds open on its own catch."),
-                                                             { { "bolt", label(r.bolt) }, { "driver", label(r.slide) } })
+                o[prefix + ".follows"] = r.bolt >= 0 ? found(label(r.bolt), QStringLiteral("Moves with ") + label(r.slide) + QStringLiteral(" and holds open on its own catch."))
                                                      : missing(QStringLiteral("No separate bolt was found in the reload."));
             }
             if (model.fire.afterShot == AfterShot::ManualCycle && model.fire.manualCycleMechanism == m.id) {
                 const bool cycle = !_boltCycle.opening.isEmpty() && _boltCycle.inputTravel > 0;
                 o[prefix + ".cycle"] = cycle ? found(QStringLiteral("Lift, pull, push, lock · ejects at %1%").arg(qRound(_boltCycle.ejectProgress * 100)),
-                                                     _boltCycleSource["animation"].toString(),
-                                                     { { "source", _boltCycleSource }, { "travel", double(_boltCycle.inputTravel) }, { "eject", double(_boltCycle.ejectProgress) } })
+                                                     _boltCycleSource["animation"].toString())
                                        : _simulationActive ? missing(QStringLiteral("No bolt cycle animation was found for this weapon."))
                                                            : unavailable(QStringLiteral("Open Operate once to read the bolt cycle animation."));
             }
@@ -268,7 +237,7 @@ namespace reloadmaker
         if (o.contains("action.fingers")) {
             const auto fingers = exportInteractionGrips()["operatingFingers"].toArray().size();
             o["action.fingers"] = !_operatingFingerError.isEmpty() ? missing(_operatingFingerError)
-                                  : fingers == 2 ? found(QStringLiteral("Both hands"), QStringLiteral("Finger shapes only; the wrist follows your hand."), {})
+                                  : fingers == 2 ? found(QStringLiteral("Both hands"), QStringLiteral("Finger shapes only; the wrist follows your hand."))
                                   : pistol ? notApplicable(QStringLiteral("Pistol slides use the default grip."))
                                            : missing(QStringLiteral("Choose operating fingers in Grab points."));
         }
@@ -291,7 +260,7 @@ namespace reloadmaker
                     problem = error.isEmpty() ? QStringLiteral("Fit the %1 hand on the magazine in Part grips.").arg(side.toLower()) : error;
                 }
             }
-            o["feed.fits"] = problem.isEmpty() ? found(fitted.join(", "), QStringLiteral("Saved hand fits for the selected magazine."), {}) : missing(problem);
+            o["feed.fits"] = problem.isEmpty() ? found(fitted.join(", "), QStringLiteral("Saved hand fits for the selected magazine.")) : missing(problem);
         }
 
         // The magazine rail exists while Operate runs.
@@ -306,11 +275,9 @@ namespace reloadmaker
                 o["feed.presentation"] = found(QStringLiteral("Full: %1 · empty: %2 · rounds: %3 pieces").arg(label(_magazineRail->fullTrack), label(_magazineRail->emptyTrack)).arg(rounds),
                                                saved.contains("magazineSetup") ? QStringLiteral("Your models and payload settings.")
                                                : presentation.contains("rounds") ? QStringLiteral("Detected from the reload; rounds chosen by you.")
-                                                                                 : QStringLiteral("Detected from the reload; rounds from piece names and materials."),
-                                               presentation);
+                                                                                 : QStringLiteral("Detected from the reload; rounds from piece names and materials."));
                 o["feed.guide"] = found(QStringLiteral("%1 units outward").arg(_magazineRail->travel, 0, 'f', 1),
-                                        saved.contains("magazineGuide") ? QStringLiteral("Your insertion guide.") : QStringLiteral("Detected from the reload."),
-                                        { { "guide", saved.value("magazineGuide") }, { "travel", qRound(_magazineRail->travel * 100) / 100.0 } });
+                                        saved.contains("magazineGuide") ? QStringLiteral("Your insertion guide.") : QStringLiteral("Detected from the reload."));
             } else if (_simulationActive) {
                 o["feed.presentation"] = missing(_magazineError);
                 o["feed.guide"] = missing(_magazineError);
@@ -339,7 +306,7 @@ namespace reloadmaker
                 dry = &cue;
             }
         }
-        o["fire.dry"] = dry && dry->enabled ? found(dry->editorId, dry->record, { { "record", dry->record } })
+        o["fire.dry"] = dry && dry->enabled ? found(dry->editorId, dry->record)
                                             : missing(QStringLiteral("The weapon record names no dry-fire sound."));
         QStringList fire;
         QJsonArray descriptors;
@@ -351,13 +318,12 @@ namespace reloadmaker
             fire << _fireSound.loop->editorId + QStringLiteral(" (automatic loop)");
             descriptors.append(_fireSound.loop->record);
         }
-        o["fire.sound"] = !fire.isEmpty() ? found(fire.join(" + "), QStringLiteral("From ") + _fireSoundMapping + QStringLiteral(". The game plays it; packs never include it."),
-                                                  { { "mapping", _fireSoundMapping }, { "descriptors", descriptors } })
+        o["fire.sound"] = !fire.isEmpty() ? found(fire.join(" + "), QStringLiteral("From ") + _fireSoundMapping + QStringLiteral(". The game plays it; packs never include it."))
                                           : missing(_fireSoundError.isEmpty() ? QStringLiteral("No fire sound was found.") : _fireSoundError);
         const auto profile = exportSounds();
         o["sounds.reload"] = !profile.isEmpty() && _soundError.isEmpty()
                                  ? found(QStringLiteral("%1 of %2 cues play").arg(enabled).arg(_soundProfile.cues.size()),
-                                         _soundsDirty ? QStringLiteral("Unsaved changes on the Sounds page.") : QStringLiteral("Saved on the Sounds page."), profile)
+                                         _soundsDirty ? QStringLiteral("Unsaved changes on the Sounds page.") : QStringLiteral("Saved on the Sounds page."))
                                  : missing(_soundError.isEmpty() ? QStringLiteral("Open Sounds and save the reload's cues.") : _soundError);
         return o;
     }
@@ -375,7 +341,7 @@ namespace reloadmaker
                     label = preset.label;
                 }
             }
-            confirmations["weapon.preset"] = checklistConfirmation(checklistFingerprint("weapon.preset", { { "template", assigned } }), label, {});
+            confirmations["weapon.preset"] = checklistConfirmation(label, {});
         }
         return confirmations;
     }
@@ -416,7 +382,7 @@ namespace reloadmaker
             items.append(QJsonObject{ { "id", status.item.id }, { "section", sections[int(status.item.section)] }, { "subsystem", subsystems[int(status.item.subsystem)] },
                                       { "owner", owners[int(status.item.owner)] }, { "mandatory", status.item.mandatory }, { "title", status.item.title },
                                       { "state", states[int(status.state)] }, { "value", status.value }, { "evidence", status.evidence },
-                                      { "message", status.message }, { "stale", status.stale }, { "rechecked", status.rechecked },
+                                      { "message", status.message }, { "rechecked", status.rechecked },
                                       { "canConfirm", status.canConfirm }, { "canSkip", status.canSkip }, { "byYou", status.byYou },
                                       { "confirmedAt", status.confirmedAt } });
         }
@@ -485,18 +451,12 @@ namespace reloadmaker
                 assignReloadPreset(view.preset->id);
                 return checklistState();
             }
-            if (id == QLatin1String("weapon.sources")) {
-                // Records the bytes the source audit compares later.
-                recordSourceEvidence();
-                saved = _authoringRecords.value(key).toObject();
-                confirmations = saved.value("checklist").toObject();
-            }
-            confirmations[id] = checklistConfirmation(status->fingerprint, status->value, now);
+            confirmations[id] = checklistConfirmation(status->value, now);
         } else if (operation == QLatin1String("skip")) {
             if (!status->canSkip) {
                 throw std::runtime_error("Only optional items can be marked not applicable");
             }
-            confirmations[id] = checklistConfirmation(kChecklistNotApplicable, {}, now);
+            confirmations[id] = checklistSkip(now);
         } else if (operation == QLatin1String("unconfirm") || operation == QLatin1String("unskip")) {
             if (id == QLatin1String("weapon.preset")) {
                 throw std::runtime_error("Choose another preset instead");
