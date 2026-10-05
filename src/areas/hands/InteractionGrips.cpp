@@ -11,13 +11,15 @@
 
 namespace reloadmaker
 {
-    // Assignments are per weapon, operating group and hand; the MK18 and SREP
-    // also key them by the operating part's model.
+    // Assignments are per weapon, operating group, the operating part's model
+    // and hand: a receiver that brings its own handle or bolt model keeps its
+    // own fingers. Keys saved before the model was part of every key were
+    // rewritten once by tools/migrate_testbeds.py.
     QString ReloadMakerController::operatingGripKey(PoseHand hand) const
     {
         QString key = poseRecordKey(currentWeapon()->formId) + "|" + operatingGroup();
         const int anchor = operatingAnchor();
-        if ((isMk18Configuration() || isSrepConfiguration()) && anchor >= 0) {
+        if (anchor >= 0) {
             key += "|" + normalizeNifPath(_handPoseAnchors[anchor].description.ownerModel);
         }
         return handAssignmentKey(key, hand);
