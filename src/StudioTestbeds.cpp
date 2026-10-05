@@ -11,9 +11,9 @@
 
 namespace reloadmaker {
 // The testbed of the open weapon: the one whose saved project holds this
-// weapon record. MK18 and its overhaul share a record, so a shared record
-// takes the testbed opened from the record's winning plugin (rework 14,
-// item 25).
+// weapon record. A record shared by two testbeds (a weapon and its overhaul,
+// as MK18 had) takes the testbed opened from the record's winning plugin
+// (rework 14, item 25).
 QString ReloadMakerController::currentTestbed() {
     const auto* weapon=currentWeapon();
     if(!weapon||!currentPlugin())return {};
@@ -33,7 +33,6 @@ QString ReloadMakerController::currentTestbed() {
 }
 QString ReloadMakerController::testbedProject(const QString& name) const {
     if(name.startsWith("srep-"))return studioDataPath("workspace/"+name+"-native-reload.project.json");
-    if(name=="mk18"||name=="mk18-empire")return studioDataPath(name=="mk18"?"workspace/MK18-native-reload.project.json":"workspace/MK18-Empire-native-reload.project.json");
     return studioDataPath(name=="glock"?"workspace/Glock19x-magazine-grips.project.json":
         name=="ru556"?"workspace/RU556-native-reload.project.json":name=="m1a"?"workspace/M1A-native-reload.project.json":
         name=="l118a2"?"workspace/L118A2-native-reload.project.json":name=="thanatos"?"workspace/Thanatos-native-reload.project.json":"workspace/Timberwolf-native-reload.project.json");

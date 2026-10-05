@@ -6,6 +6,6 @@ namespace reloadmaker
     // deletes the picker with this list.
     inline constexpr const char* kTestbedIds[] = {
         "glock", "ru556", "m1a", "timberwolf", "l118a2", "thanatos",
-        "mk18", "mk18-empire", "srep-service", "srep-honeybadger", "srep-ar10", "srep-xm16e1",
+        "srep-service", "srep-honeybadger", "srep-ar10", "srep-xm16e1",
     };
 }
