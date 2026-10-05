@@ -298,7 +298,7 @@ namespace reloadmaker
         for (const auto& action : _animationActions) {
             clips.append(QJsonObject{ { "name", action.label }, { "path", action.resourcePath }, { "baseline", action.baselineResourcePath } });
         }
-        const auto saved = _authoringRoadmaps.value(roadmapKey()).toObject().value("operating").toObject();
+        const auto saved = _authoringRecords.value(authoringRecordKey()).toObject().value("operating").toObject();
         const bool stale = !saved.isEmpty() && saved["recipeId"] != _reloadRecipe->id;
         QString error;
         OperatingSetup setup;
@@ -342,14 +342,11 @@ namespace reloadmaker
     // setup, then restarts the simulation and saves the project.
     QJsonObject ReloadMakerController::configureOperatingSetup(const QJsonObject& request)
     {
-        const auto key = roadmapKey();
+        const auto key = authoringRecordKey();
         if (!_reloadRecipe || _loadThread || _reloadCapturing || _reloadCaptureQueued || _rebuildTimer->isActive() || key.isEmpty()) {
             throw std::runtime_error("Wait for the current source capture");
         }
-        auto plan = _authoringRoadmaps.value(key).toObject();
-        if (!plan.contains("step")) {
-            plan["step"] = 3;
-        }
+        auto plan = _authoringRecords.value(key).toObject();
         if (request["operation"] == "reset") {
             plan.remove("operating");
         } else if (request["operation"] == "save") {
@@ -364,7 +361,7 @@ namespace reloadmaker
             throw std::runtime_error("Choose save or reset for the operating setup");
         }
         stopSimulation();
-        _authoringRoadmaps[key] = plan;
+        _authoringRecords[key] = plan;
         _simulationRig.reset();
         ++_revision;
         prepareSimulation();

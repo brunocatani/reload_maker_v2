@@ -38,7 +38,7 @@ namespace reloadmaker
             error = "Choose a behavior template in Author reload before configuring this weapon.";
             return false;
         }
-        const auto saved = _authoringRoadmaps.value(roadmapKey()).toObject().value("operating").toObject();
+        const auto saved = _authoringRecords.value(authoringRecordKey()).toObject().value("operating").toObject();
         if (saved.isEmpty()) {
             return buildSourceSimulationRig(rig, error);
         }

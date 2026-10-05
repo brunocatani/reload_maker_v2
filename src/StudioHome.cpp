@@ -26,7 +26,7 @@ void ReloadMakerController::showHome() {
     auto* status=new QLabel;status->setWordWrap(true);layout->addWidget(status);
     auto* actions=new QHBoxLayout;layout->addLayout(actions);auto* resume=new QPushButton("Continue recent project");auto* open=new QPushButton("Open project…");auto* setup=new QPushButton("Setup & tools");auto* close=new QPushButton("Close");for(auto* button:{resume,open,setup,close})actions->addWidget(button);
     const auto current=homeState();resume->setEnabled(current["canResume"].toBool());
-    connect(creator,&QPushButton::clicked,dialog,[=,this]{try{chooseHomeRole("creator");dialog->close();if(currentWeapon())showAuthoringRoadmap();else showSetup();}catch(const std::exception& e){status->setText(e.what());}});
+    connect(creator,&QPushButton::clicked,dialog,[=,this]{try{chooseHomeRole("creator");dialog->close();if(currentWeapon())showChecklist();else showSetup();}catch(const std::exception& e){status->setText(e.what());}});
     connect(player,&QPushButton::clicked,dialog,[=,this]{try{chooseHomeRole("player");dialog->close();showPackBuilder();}catch(const std::exception& e){status->setText(e.what());}});
     const auto openProject=[=,this](const QString& path){if(path.isEmpty())return;try{chooseHomeRole("creator");dialog->close();openSession(path);}catch(const std::exception& e){setStatus(e.what(),true);}};
     connect(resume,&QPushButton::clicked,dialog,[=]{openProject(current["recentProject"].toString());});

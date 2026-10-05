@@ -93,6 +93,14 @@ namespace reloadmaker
         syncRail();
     }
 
+    void ReloadMakerController::showChecklist()
+    {
+        showBuilderStep(builderStep().value_or(_lastBuilderStep));
+        if (_leftTabs) {
+            _leftTabs->setCurrentIndex(0);
+        }
+    }
+
     void ReloadMakerController::showBuilderStep(BuilderStep step)
     {
         const auto handStep = [this](HandEditorPage page) {

@@ -1,8 +1,8 @@
-#include "AuthoringProgress.h"
 #include "AuthoringPaths.h"
+#include "CollisionDraftPolicy.h"
 #include "SourcePolicy.h"
 #include <QCoreApplication>
-#include <QSet>
+#include <QJsonArray>
 #include <QTextStream>
 #include <stdexcept>
 using namespace reloadmaker;
@@ -22,22 +22,8 @@ int main(int argc,char** argv) {
         check(path!=authoringProjectPath("Example Weapon.esp:000abc",{{"mode","mo2-profile"},{"profile","overhaul"}}),"Two source profiles share a save destination");
         for(const auto* invalid:{"../Mod.esp:000abc","Folder\\Mod.esp:000abc","Mod.esp:1234567","Mod:000abc"})
             check(authoringProjectPath(invalid,source).isEmpty(),"Unsafe or ambiguous weapon namespace accepted");
-        std::array<AuthoringStepInput,12> inputs;for(int i=0;i<12;++i)inputs[i]={true,true,QString(),{{"input",i}}};
-        const auto initial=authoringProgress(inputs,{});QJsonObject reviews;for(int i=0;i<12;++i)reviews[QString::number(i)]=initial[i].toObject()["fingerprint"];
-        check(validAuthoringReviews(reviews),"Cannot read valid reviews");for(const auto& item:authoringProgress(inputs,reviews))check(item.toObject()["status"]=="reviewed","Unchanged data lost its review");
-        auto changed=inputs;changed[6].evidence["travel"]=7;const auto guide=authoringProgress(changed,reviews);
-        for(int i=0;i<12;++i)check(guide[i].toObject()["status"]==(QSet<int>{6,9,11}.contains(i)?"needs-review":"reviewed"),"Guide invalidated unrelated hand/part reviews or retained dependent review");
-        changed=inputs;changed[11].evidence["sourcePolicy"]=sourceRules;const auto compatibility=authoringProgress(changed,reviews);
-        for(int i=0;i<12;++i)check(compatibility[i].toObject()["status"]==(i==11?"needs-review":"reviewed"),"Compatibility-only edit invalidated geometry or hand work");
-        changed=inputs;changed[10].evidence["hullEdit"]=1;const auto collision=authoringProgress(changed,reviews);
-        for(int i=0;i<12;++i)check(collision[i].toObject()["status"]==(i>=10?"needs-review":"reviewed"),"Collision invalidation escaped its dependent steps");
-        changed=inputs;changed[4].evidence["stroke"]=2;const auto motion=authoringProgress(changed,reviews);
-        for(int i=0;i<12;++i)check(motion[i].toObject()["status"]==(QSet<int>{4,8,9,11}.contains(i)?"needs-review":"reviewed"),"Operating motion did not invalidate point/sound checks precisely");
-        changed=inputs;changed[0].evidence["modelHash"]=QString(64,'a');for(const auto& item:authoringProgress(changed,reviews))check(item.toObject()["status"]=="needs-review","Source change retained stale review");
-        changed=inputs;changed[7].available=false;check(authoringProgress(changed,reviews)[7].toObject()["status"]=="blocked","Unavailable step advertised review readiness");
-        auto bad=reviews;bad["12"]=QString(64,'a');check(!validAuthoringReviews(bad),"Out-of-range review accepted");bad=reviews;bad["1"]="bad";check(!validAuthoringReviews(bad),"Invalid review hash accepted");
         const auto policy=collisionDraftPolicy("recipe",{{"hash","a"}},{});check(policy!=collisionDraftPolicy("recipe",{{"hash","b"}},{}),"Collision proof ignored source changes");
         QJsonObject drafts{{"full",QJsonObject{{"policy",policy},{"edit",QString(32,'a')},{"usable",true}}}};check(validCollisionDrafts(drafts),"Valid collision draft rejected");drafts["unknown"]=drafts["full"];check(!validCollisionDrafts(drafts),"Unknown collision state accepted");
-        QTextStream(stdout)<<"PASS source/guide/motion/collision review invalidation and bounded saved metadata\n";return 0;
+        QTextStream(stdout)<<"PASS source rules, authoring paths and bounded collision draft metadata\n";return 0;
     }catch(const std::exception& e){QTextStream(stderr)<<e.what()<<'\n';return 1;}
 }

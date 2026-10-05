@@ -37,7 +37,7 @@ namespace reloadmaker
         if (!_reloadRecipe || magazineSettingsBusy()) {
             fail("Wait for the magazine's current source capture");
         }
-        const auto saved = _authoringRoadmaps.value(roadmapKey()).toObject().value("magazineGuide").toObject();
+        const auto saved = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineGuide").toObject();
         const bool stale = !saved.isEmpty() && saved["recipeId"] != _reloadRecipe->id;
         if (!_simulationRig && saved.isEmpty()) {
             fail("Choose the operating and magazine roles first");
@@ -73,11 +73,8 @@ namespace reloadmaker
         if (!_reloadRecipe || magazineSettingsBusy()) {
             fail("Wait for the magazine's current source capture");
         }
-        const auto key = roadmapKey();
-        auto plan = _authoringRoadmaps.value(key).toObject();
-        if (!plan.contains("step")) {
-            plan["step"] = 6;
-        }
+        const auto key = authoringRecordKey();
+        auto plan = _authoringRecords.value(key).toObject();
         if (request["operation"] == "reset") {
             plan.remove("magazineGuide");
         } else if (request["operation"] == "save") {
@@ -100,7 +97,7 @@ namespace reloadmaker
             fail("Choose save or reset for the magazine guide");
         }
         stopSimulation();
-        _authoringRoadmaps[key] = plan;
+        _authoringRecords[key] = plan;
         ++_revision;
         prepareSimulation();
         if (!saveSession()) {
@@ -160,7 +157,7 @@ namespace reloadmaker
                 { "record", placement.ownerRecord },
             });
         }
-        const auto saved = _authoringRoadmaps.value(roadmapKey()).toObject().value("magazineReference").toObject();
+        const auto saved = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineReference").toObject();
         MagazineReference initial;
         initial.recipeId = _reloadRecipe->id;
         const int selected = currentMagazineAnchor();
@@ -187,11 +184,8 @@ namespace reloadmaker
     QJsonObject ReloadMakerController::configureMagazineReference(const QJsonObject& request)
     {
         (void)magazineReferenceState();
-        const auto key = roadmapKey();
-        auto plan = _authoringRoadmaps.value(key).toObject();
-        if (!plan.contains("step")) {
-            plan["step"] = 5;
-        }
+        const auto key = authoringRecordKey();
+        auto plan = _authoringRecords.value(key).toObject();
         if (request["operation"] == "reset") {
             plan.remove("magazineReference");
         } else if (request["operation"] == "save") {
@@ -221,7 +215,7 @@ namespace reloadmaker
             fail("Choose save or reset for magazine references");
         }
         stopSimulation();
-        _authoringRoadmaps[key] = plan;
+        _authoringRecords[key] = plan;
         prepareSimulation();
         ++_revision;
         if (!saveSession()) {
@@ -237,7 +231,7 @@ namespace reloadmaker
         if (!_reloadRecipe || !_simulationRig || magazineSettingsBusy()) {
             fail("Prepare the operating roles and native magazine first");
         }
-        const auto saved = _authoringRoadmaps.value(roadmapKey()).toObject().value("magazineSetup").toObject();
+        const auto saved = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineSetup").toObject();
         if (!_magazineRail && saved.isEmpty()) {
             fail(_magazineError.isEmpty() ? QString("The magazine source is not ready") : _magazineError);
         }
@@ -303,12 +297,9 @@ namespace reloadmaker
         if (!_reloadRecipe || !_simulationRig || magazineSettingsBusy()) {
             fail("Wait for the native magazine source");
         }
-        const auto key = roadmapKey();
-        const auto previous = _authoringRoadmaps.value(key);
+        const auto key = authoringRecordKey();
+        const auto previous = _authoringRecords.value(key);
         auto plan = previous.toObject();
-        if (!plan.contains("step")) {
-            plan["step"] = 5;
-        }
         if (request["operation"] == "reset") {
             plan.remove("magazineSetup");
         } else if (request["operation"] == "save") {
@@ -323,15 +314,15 @@ namespace reloadmaker
             fail("Choose save or reset for magazine presentation");
         }
         stopSimulation();
-        _authoringRoadmaps[key] = plan;
+        _authoringRecords[key] = plan;
         prepareSimulation();
         if (!_magazineError.isEmpty() || !_simulationError.isEmpty()) {
             const auto failure = _magazineError.isEmpty() ? _simulationError : _magazineError;
             stopSimulation();
             if (previous.isUndefined()) {
-                _authoringRoadmaps.remove(key);
+                _authoringRecords.remove(key);
             } else {
-                _authoringRoadmaps[key] = previous;
+                _authoringRecords[key] = previous;
             }
             prepareSimulation();
             fail(failure);

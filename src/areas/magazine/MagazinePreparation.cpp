@@ -38,7 +38,7 @@ namespace reloadmaker
         if (!collectMagazineGeometry(body, frame, shapes)) {
             return;
         }
-        const auto guideJson = _authoringRoadmaps.value(roadmapKey()).toObject().value("magazineGuide").toObject();
+        const auto guideJson = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineGuide").toObject();
         MagazineGuide guide;
         QVector3D authoredOutward;
         if (!guideJson.isEmpty()) {
@@ -89,7 +89,7 @@ namespace reloadmaker
     // this recipe.
     bool ReloadMakerController::loadMagazineSetup()
     {
-        const auto setupJson = _authoringRoadmaps.value(roadmapKey()).toObject().value("magazineSetup").toObject();
+        const auto setupJson = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineSetup").toObject();
         if (setupJson.isEmpty()) {
             return true;
         }
@@ -114,7 +114,7 @@ namespace reloadmaker
     {
         const auto& rig = *_simulationRig;
         const auto anchor = simulationMagazineAnchor();
-        const auto referenceJson = _authoringRoadmaps.value(roadmapKey()).toObject().value("magazineReference").toObject();
+        const auto referenceJson = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineReference").toObject();
         MagazineReference reference;
         if (!referenceJson.isEmpty() &&
             (!readMagazineReference(referenceJson, reference, _magazineError) || reference.recipeId != _reloadRecipe->id || currentMagazineAnchor() < 0)) {

@@ -29,7 +29,7 @@ def run(names):
                 else:raise AssertionError('Stale source setup applied')
                 edit('save_project',{'path':str(work/(name+'-read.project.json'))})
                 inspected=json.loads((work/(name+'-read.project.json')).read_text())
-                assert all(isinstance(p,dict) and 'step' in p for p in inspected['authoringRoadmaps'].values()),'Read/rejected edit inserted a null roadmap'
+                assert all(isinstance(p,dict) for p in inspected['authoringRoadmaps'].values()),'Read/rejected edit inserted a null authoring record'
                 edit('operating_setup',dict(operation='save',settings=setup));ready()
                 assert command('simulation_state')['active'],command('simulation_state')
                 after=simulation();assert after==before,(name,'Explicit preset roles changed source behavior')

@@ -21,12 +21,15 @@ def run():
         selected=min(candidates,key=lambda w:len(w['editorId']))
         edit('select_weapon',dict(index=selected['index']));ready();edit('workspace',dict(index=5));ready()
         before=command('simulation_state');assert 'Choose a behavior template' in before['error'],before
-        edit('roadmap',dict(operation='template',id='pistol.slide-detachable.v1'));ready()
-        assert command('roadmap')['templateAssigned']
+        edit('checklist',dict(operation='preset',id='pistol.slide-detachable.v1'));ready()
+        assert command('checklist_state')['presetAssigned']
         assert 'Choose a behavior template' not in command('simulation_state')['error']
-        edit('roadmap',dict(operation='record-sources'));audit=command('roadmap',dict(operation='check-sources'))
+        edit('checklist',dict(operation='confirm',id='weapon.sources'))
+        base=work/'base.project.json';edit('save_project',dict(path=str(base)))
+        evidence=next(v['sources'] for v in json.loads(base.read_text(encoding='utf-8'))['authoringRoadmaps'].values() if 'sources' in v)
+        audit=command('inspect_sources',dict(evidence=evidence))
         assert audit['compatible'] and audit['sourceMode']=='explicit-data'
-        base=work/'base.project.json';edit('save_project',dict(path=str(base)));edit('open_project',dict(path=str(base)));ready()
+        edit('open_project',dict(path=str(base)));ready()
         assert command('pack_coverage')['sourceMode']=='explicit-data'
         (work/'result.json').write_text(json.dumps(dict(ok=True,weapons=len(loaded),selected=selected,source=audit,simulation=command('simulation_state')),indent=2))
         print('PASS real base Data import, explicit source audit, source/template resume and previous project preservation:',work,flush=True)

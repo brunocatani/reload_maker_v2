@@ -61,7 +61,7 @@ namespace reloadmaker
         const QString path = QFileInfo(projectPath).dir().filePath(QStringLiteral("status.json"));
         const auto previous = readStatus(path);
         auto configurations = previous["configurations"].toObject();
-        const QString configuration = roadmapKey().section('/', 1);
+        const QString configuration = authoringRecordKey().section('/', 1);
         if (!view.evaluated && configurations[configuration].toObject()["evaluated"].toBool()) {
             return;
         }

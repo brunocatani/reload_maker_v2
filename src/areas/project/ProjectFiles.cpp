@@ -4,7 +4,7 @@
 // once the source is indexed.
 #include "ReloadMakerController.h"
 #include "AuthoringPaths.h"
-#include "AuthoringProgress.h"
+#include "CollisionDraftPolicy.h"
 #include "MagazineGuide.h"
 #include "MagazineReference.h"
 #include "ReloadBundle.h"
@@ -47,7 +47,7 @@ namespace reloadmaker
             return json;
         }
 
-        // Template, source policy, roadmap and attachment choice collections.
+        // Template, source policy, authoring record and attachment choice collections.
         bool validProjectAssignments(const QJsonObject& record, QString& message)
         {
             QString error;
@@ -80,27 +80,25 @@ namespace reloadmaker
             if (record.contains("authoringRoadmaps")) {
                 const auto plans = record["authoringRoadmaps"].toObject();
                 if (!record["authoringRoadmaps"].isObject() || plans.size() > 512) {
-                    message = "Invalid authoring roadmap collection.";
+                    message = "Invalid authoring record collection.";
                     return false;
                 }
                 for (const auto& value : plans) {
                     const auto plan = value.toObject();
-                    const int step = plan["step"].toInt(-1);
                     OperatingSetup setup;
                     MagazineGuide guide;
                     MagazineSetup magazine;
                     MagazineReference reference;
-                    if (!value.isObject() || step < 0 || step > 11 ||
+                    if (!value.isObject() ||
                         (plan.contains("sources") && !validSourceEvidence(plan["sources"].toObject(), error)) ||
                         (plan.contains("operating") && !readOperatingSetup(plan["operating"].toObject(), setup, error)) ||
                         (plan.contains("magazineGuide") && !readMagazineGuide(plan["magazineGuide"].toObject(), guide, error)) ||
                         (plan.contains("magazineReference") && !readMagazineReference(plan["magazineReference"].toObject(), reference, error)) ||
-                        (plan.contains("reviews") && (!plan["reviews"].isObject() || !validAuthoringReviews(plan["reviews"].toObject()))) ||
                         (plan.contains("checklist") && (!plan["checklist"].isObject() || !validChecklistConfirmations(plan["checklist"].toObject()))) ||
                         (plan.contains("collisionDrafts") &&
                          (!plan["collisionDrafts"].isObject() || !validCollisionDrafts(plan["collisionDrafts"].toObject()))) ||
                         (plan.contains("magazineSetup") && !readMagazineSetup(plan["magazineSetup"].toObject(), magazine, error))) {
-                        message = "Invalid saved authoring roadmap: " + error;
+                        message = "Invalid saved authoring record: " + error;
                         return false;
                     }
                 }
@@ -419,7 +417,7 @@ namespace reloadmaker
             }
         }
         record["choices"] = choices;
-        record["authoringRoadmaps"] = _authoringRoadmaps;
+        record["authoringRoadmaps"] = _authoringRecords;
         record["reloadTemplates"] = _reloadTemplateAssignments;
         record["sourcePolicies"] = _sourcePolicies;
         if (const auto* config = configuration()) {
@@ -666,12 +664,21 @@ namespace reloadmaker
         _glockNoExtender = record["glockReloadNoExtender"].toBool(false);
     }
 
-    // Roadmaps, templates, source policies, sound and optic profiles, the
+    // Authoring records, templates, source policies, sound and optic profiles, the
     // interaction hand, grab locations and every grip assignment and draft.
     // Unsaved drafts from the previous project are dropped.
     void ReloadMakerController::restoreProjectAuthoring(const QJsonObject& record)
     {
-        _authoringRoadmaps = record["authoringRoadmaps"].toObject();
+        // "step" and "reviews" belonged to the retired 12-step roadmap
+        // (2026-10-04); nothing reads them, so they are not kept.
+        _authoringRecords = {};
+        const auto records = record["authoringRoadmaps"].toObject();
+        for (auto it = records.begin(); it != records.end(); ++it) {
+            auto saved = it.value().toObject();
+            saved.remove(QStringLiteral("step"));
+            saved.remove(QStringLiteral("reviews"));
+            _authoringRecords.insert(it.key(), saved);
+        }
         _reloadTemplateAssignments = record["reloadTemplates"].toObject();
         _sourcePolicies = record["sourcePolicies"].toObject();
         _savedSounds.clear();

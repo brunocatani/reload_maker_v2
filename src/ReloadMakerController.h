@@ -394,7 +394,8 @@ namespace reloadmaker
         std::optional<CollisionProfile> _magazineWorldSnapshot;
         bool _magazineWorldPreview{false};
         QJsonObject _preparedPart;
-        void showAuthoringRoadmap();
+        // Opens the reload builder on its checklist (Main menu, Home).
+        void showChecklist();
     public:
         // The weapon's checklist (areas/checklist): items from its preset's
         // weapon model, detected and confirmed. `evaluated` is false until the
@@ -457,15 +458,18 @@ namespace reloadmaker
         QJsonObject homeState() const;
         QJsonObject chooseHomeRole(const QString&);
         bool openBaseGame();
-        QString roadmapKey() const;
-        QJsonObject roadmapState() const;
-        QJsonArray roadmapProgress() const;
+        // Authoring records (areas/project/AuthoringRecords.cpp): one per
+        // assembled configuration, keyed "<weapon record>/<choices sha256>".
+        // Projects save them under "authoringRoadmaps", the name of the retired
+        // 12-step roadmap that first kept them.
+        QString authoringRecordKey() const;
         void rememberCollisionDraft();
         QString assignedTemplate() const;
-        QJsonObject roadmapCommand(const QJsonObject&);
+        void assignReloadPreset(const QString& id);
+        void recordSourceEvidence();
         QJsonObject sourceEvidence() const;
         QJsonObject auditSources(const QJsonObject&) const;
-        QJsonObject _authoringRoadmaps;
+        QJsonObject _authoringRecords;
         QJsonObject _reloadTemplateAssignments;
         std::optional<WeaponMechanism> _assignedMechanism;
         mutable QHash<QString,QString> _animationReadHashes;

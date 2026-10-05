@@ -13,7 +13,7 @@ async def run():
     async with stdio_client(parameters) as (reader,writer):
         async with ClientSession(reader,writer) as client:
             await client.initialize();catalog=await client.list_tools()
-            assert {'home','get_pack_coverage','authoring_roadmap','configure_magazine_presentation'}<={t.name for t in catalog.tools}
+            assert {'home','get_pack_coverage','checklist','configure_magazine_presentation'}<={t.name for t in catalog.tools}
             result=await client.call_tool('home',{});assert not result.isError,result
             value=json.loads(next(c.text for c in result.content if c.type=='text'));assert Path(value['workspace'])==ROOT
             print('PASS bundled launcher runtime and current studio capability catalog with developer PATH removed')

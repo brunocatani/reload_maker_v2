@@ -11,7 +11,7 @@
 // cannot run here, and the item shows its saved confirmation instead of
 // flipping to stale when the author moves between pages.
 #include "ReloadMakerController.h"
-#include "AuthoringProgress.h"
+#include "CollisionDraftPolicy.h"
 #include "ReloadBundle.h"
 #include "ReloadTemplates.h"
 
@@ -151,7 +151,7 @@ namespace reloadmaker
         if (!loaded) {
             return o;
         }
-        const auto saved = _authoringRoadmaps.value(roadmapKey()).toObject();
+        const auto saved = _authoringRecords.value(authoringRecordKey()).toObject();
 
         // Learned reload.
         o["weapon.preset"] = found(preset.label,
@@ -360,7 +360,7 @@ namespace reloadmaker
     // its assignment to the weapon, which is saved on its own.
     QJsonObject ReloadMakerController::checklistConfirmations() const
     {
-        auto confirmations = _authoringRoadmaps.value(roadmapKey()).toObject().value("checklist").toObject();
+        auto confirmations = _authoringRecords.value(authoringRecordKey()).toObject().value("checklist").toObject();
         const QString assigned = assignedTemplate();
         if (!assigned.isEmpty()) {
             QString label = assigned;
@@ -408,7 +408,12 @@ namespace reloadmaker
                                       { "confirmedAt", status.confirmedAt } });
         }
         const auto& s = view.summary;
+        QJsonArray presets;
+        for (const auto& preset : reloadPresets()) {
+            presets.append(QJsonObject{ { "id", preset.id }, { "label", preset.label }, { "category", preset.category } });
+        }
         return { { "preset", view.preset ? view.preset->id : QString() }, { "presetLabel", view.preset ? view.preset->label : QString() },
+                 { "presetAssigned", !assignedTemplate().isEmpty() }, { "presets", presets },
                  { "evaluated", view.evaluated }, { "problem", view.problem }, { "items", items },
                  { "summary", QJsonObject{ { "total", s.total }, { "done", s.done }, { "mandatory", s.mandatory }, { "mandatoryDone", s.mandatoryDone },
                                            { "needsYou", s.needsYou }, { "toConfirm", s.toConfirm }, { "started", s.started }, { "complete", s.complete },
@@ -424,13 +429,13 @@ namespace reloadmaker
         if (operation == QLatin1String("state")) {
             return checklistState();
         }
-        const auto key = roadmapKey();
+        const auto key = authoringRecordKey();
         if (key.isEmpty() || _loadThread || _reloadCapturing || _reloadCaptureQueued || (_rebuildTimer && _rebuildTimer->isActive())) {
             throw std::runtime_error("Wait for a loaded weapon and its learned reload");
         }
         const auto id = request["id"].toString();
         if (operation == QLatin1String("preset")) {
-            (void)roadmapCommand({ { "operation", "template" }, { "id", id } });
+            assignReloadPreset(id);
             return checklistState();
         }
         auto view = checklistView();
@@ -456,7 +461,7 @@ namespace reloadmaker
                 throw std::runtime_error(("Operate could not check it: " + status->message).toStdString());
             }
         }
-        auto saved = _authoringRoadmaps.value(key).toObject();
+        auto saved = _authoringRecords.value(key).toObject();
         auto confirmations = saved.value("checklist").toObject();
         const auto now = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
         if (operation == QLatin1String("confirm")) {
@@ -464,13 +469,13 @@ namespace reloadmaker
                 throw std::runtime_error((status->message.isEmpty() ? QStringLiteral("Nothing to confirm for ") + status->item.title : status->message).toStdString());
             }
             if (id == QLatin1String("weapon.preset")) {
-                (void)roadmapCommand({ { "operation", "template" }, { "id", view.preset->id } });
+                assignReloadPreset(view.preset->id);
                 return checklistState();
             }
             if (id == QLatin1String("weapon.sources")) {
                 // Records the bytes the source audit compares later.
-                (void)roadmapCommand({ { "operation", "record-sources" } });
-                saved = _authoringRoadmaps.value(key).toObject();
+                recordSourceEvidence();
+                saved = _authoringRecords.value(key).toObject();
                 confirmations = saved.value("checklist").toObject();
             }
             confirmations[id] = checklistConfirmation(status->fingerprint, status->value, now);
@@ -488,7 +493,7 @@ namespace reloadmaker
             throw std::runtime_error("Unknown checklist operation");
         }
         saved["checklist"] = confirmations;
-        _authoringRoadmaps[key] = saved;
+        _authoringRecords[key] = saved;
         ++_revision;
         if (!saveSession()) {
             throw std::runtime_error("Could not save the checklist");

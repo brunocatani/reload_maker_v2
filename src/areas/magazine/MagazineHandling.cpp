@@ -13,7 +13,7 @@ namespace reloadmaker
     // the rig's magazine track.
     HandPosePlacement ReloadMakerController::simulationMagazineAnchor() const
     {
-        if (isRifleConfiguration() || _authoringRoadmaps.value(roadmapKey()).toObject().contains("magazineReference")) {
+        if (isRifleConfiguration() || _authoringRecords.value(authoringRecordKey()).toObject().contains("magazineReference")) {
             const int index = currentMagazineAnchor();
             return index >= 0 ? _handPoseAnchors[index].description : HandPosePlacement{};
         }
@@ -29,7 +29,7 @@ namespace reloadmaker
     // MK18 and embedded SREP magazines) or is named WeaponMagazine.
     int ReloadMakerController::currentMagazineAnchor() const
     {
-        const auto saved = _authoringRoadmaps.value(roadmapKey()).toObject().value("magazineReference").toObject();
+        const auto saved = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineReference").toObject();
         if (!saved.isEmpty()) {
             MagazineReference reference;
             QString error;

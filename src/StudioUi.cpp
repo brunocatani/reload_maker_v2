@@ -138,12 +138,13 @@ void ReloadMakerController::createUi() {
     connect(_sourceMenu->addAction("Open base game and loose Data"),&QAction::triggered,this,[this]{(void)openBaseGame();});
     _sourceMenu->addSeparator();
     connect(_sourceMenu->addAction("Reload source files"),&QAction::triggered,this,&ReloadMakerController::reloadSourceFiles);
+    connect(_sourceMenu->addAction("Compatibility rules…"),&QAction::triggered,this,&ReloadMakerController::showSourcePolicy);
     connect(_sourceMenu,&QMenu::aboutToShow,this,[this,dynamicSource,developmentSource]{dynamicSource->setChecked(_libraryMode);developmentSource->setChecked(!_libraryMode&&!_package.sourcePath.isEmpty());});
     mainMenu->addSeparator();
     connect(mainMenu->addAction("Setup && tools…"),&QAction::triggered,this,&ReloadMakerController::showSetup);
     connect(mainMenu->addAction("Weapon collision…"),&QAction::triggered,this,[this]{setWorkspace(WeaponCollisionWorkspace);});
     connect(mainMenu->addAction("Home"),&QAction::triggered,this,&ReloadMakerController::showHome);
-    connect(mainMenu->addAction("Author reload…"),&QAction::triggered,this,&ReloadMakerController::showAuthoringRoadmap);
+    connect(mainMenu->addAction("Reload checklist"),&QAction::triggered,this,&ReloadMakerController::showChecklist);
     connect(mainMenu->addAction("Reload library…"),&QAction::triggered,this,&ReloadMakerController::showPackCoverage);
     mainMenu->addSeparator();
     auto* openProject=mainMenu->addAction("Open project…");

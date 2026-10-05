@@ -448,25 +448,6 @@ def capture_magazine_world(empty: bool, expected_revision: int) -> dict:
     return command('capture_magazine_world', dict(empty=empty), expected_revision)
 
 @mcp.tool()
-def authoring_roadmap(operation: str = 'state', index: int | None = None,
-                      id: str = '',
-                      expected_revision: int | None = None) -> dict:
-    """Inspect or navigate the twelve manual authoring steps. record-sources freezes
-    relevant selected-assembly animation/model bytes; check-sources compares the
-    actual current resource bytes, including same-path animation-only overrides.
-    template with an id from state.templates assigns that supported behavior to
-    the weapon across its attachment variations, then rebuilds its simulation.
-    Steps include availability, blockers and data-dependent review status.
-    Use review/unreview with an index only after actually inspecting that step;
-    changing relevant inputs invalidates its review and dependent steps. Review
-    marks never bypass native source, collision or pack validation.
-    Checks retain all authored work. Source mode/profile are explicit in results.
-    """
-    if operation not in ('state', 'check-sources') and expected_revision is None:
-        raise ValueError('Read the current revision before editing roadmap state')
-    return command('roadmap', dict(operation=operation, index=index, id=id), expected_revision)
-
-@mcp.tool()
 def load_timings(since: int = 0) -> dict:
     """Wall time of each loading stage after sequence number `since`: source
     load stages (archives, plugins, masters, names, reference catalogs),
@@ -483,7 +464,9 @@ def checklist_state() -> dict:
     detected, confirmed or not-applicable, its value, evidence and whether it
     was rechecked here or kept from a saved confirmation. summary.progress is
     not-started, draft or complete. evaluated is false until the weapon, its
-    learned reload and its operating parts are available.
+    learned reload and its operating parts are available. presets lists the
+    supported behavior presets; presetAssigned says whether one is assigned to
+    the weapon (otherwise preset is the one Maker matched).
     """
     return command('checklist_state')
 
@@ -491,7 +474,9 @@ def checklist_state() -> dict:
 def checklist(operation: str, id: str, expected_revision: int) -> dict:
     """Confirm, unconfirm, skip or unskip one checklist item by id, or assign
     a behavior preset with operation preset and a preset id. confirm records
-    the item's current inputs; a later change returns it for review. Items
+    the item's current inputs; a later change returns it for review.
+    Confirming weapon.sources records the source bytes; inspect_sources
+    compares recorded bytes with the current source. Items
     checked only in Operate (magazine presentation and guide) are checked
     there and the builder step is shown again. skip marks an optional item
     not applicable. Confirmations save with the project.

@@ -35,9 +35,6 @@ namespace reloadmaker
                             return std::nullopt;
                         } });
 
-        _commands.add({ "roadmap", CommandAccess::Edit, CommandGate::Always,
-                        [this](const QJsonObject& params) -> std::optional<QJsonObject> { return roadmapCommand(params); } });
-
         _commands.add({ "revision", CommandAccess::Read, CommandGate::Always,
                         [this](const QJsonObject&) -> std::optional<QJsonObject> {
                             // A cheap idle check for clients that would otherwise poll the full state.

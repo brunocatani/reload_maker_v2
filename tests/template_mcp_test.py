@@ -37,15 +37,15 @@ def run(names):
             edit('testbed',{'name':name});ready();project=Path(ready()['project']);saved=project.read_bytes()
             try:
                 edit('workspace',{'index':5});ready();before=simulation()
-                state=command('roadmap');expected=state['template'];assert len(state['templates'])==5
-                assigned=edit('roadmap',dict(operation='template',id=expected));ready()
-                assert assigned['templateAssigned'] and assigned['template']==expected
+                state=command('checklist_state');expected=state['preset'];assert len(state['presets'])==5
+                assigned=edit('checklist',dict(operation='preset',id=expected));ready()
+                assert assigned['presetAssigned'] and assigned['preset']==expected
                 after=simulation();assert after==before,(name,'Template assignment changed the existing source behavior')
                 edit('save_project',{'path':str(work/(name+'.project.json'))})
                 edit('open_project',{'path':str(work/(name+'.project.json'))});ready()
-                reopened=command('roadmap');assert reopened['templateAssigned'] and reopened['template']==expected
+                reopened=command('checklist_state');assert reopened['presetAssigned'] and reopened['preset']==expected
                 assert simulation()==before,(name,'Reopening an assigned template changed behavior')
-                try:edit('roadmap',dict(operation='template',id='unsupported.template'))
+                try:edit('checklist',dict(operation='preset',id='unsupported.template'))
                 except RuntimeError:pass
                 else:raise AssertionError('Unknown behavior template accepted')
                 results.append(dict(name=name,template=expected));print('PASS',name,expected,flush=True)

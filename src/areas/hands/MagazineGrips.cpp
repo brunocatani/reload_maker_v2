@@ -49,7 +49,7 @@ namespace reloadmaker
     // match a grab-capable magazine of the same record and model.
     int ReloadMakerController::magazineGrabAnchor(const HandPosePlacement& placement) const
     {
-        if (isRifleConfiguration() || _authoringRoadmaps.value(roadmapKey()).toObject().contains("magazineReference")) {
+        if (isRifleConfiguration() || _authoringRecords.value(authoringRecordKey()).toObject().contains("magazineReference")) {
             const int index = currentMagazineAnchor();
             return index >= 0 && sameGripAnchor(placement, _handPoseAnchors[index].description) ? index : -1;
         }

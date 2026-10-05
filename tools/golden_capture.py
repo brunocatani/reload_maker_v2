@@ -24,7 +24,7 @@ from editor_session import ROOT, TESTBEDS, EditorRun, command, edit, ready
 
 # Read-only state commands recorded for every testbed.
 STATES = (
-    'roadmap', 'operating_setup_state', 'magazine_guide_state', 'magazine_setup_state',
+    'checklist_state', 'operating_setup_state', 'magazine_guide_state', 'magazine_setup_state',
     'magazine_reference_state', 'source_policy_state', 'sound_state',
     'grab_locations_state', 'simulation_state', 'source_browser', 'installation', 'home',
 )
