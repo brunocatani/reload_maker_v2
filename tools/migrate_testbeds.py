@@ -8,7 +8,9 @@ no longer needs to recognize any weapon by name.
 
 It also adds the operating part's model to operating finger keys
 ("weapon|group|hand" becomes "weapon|group|model|hand"); only the MK18 and
-SREP keys carried the model before (rework 14, item 20).
+SREP keys carried the model before (rework 14, item 20). Any project can hold
+those keys, so that rewrite covers every project in workspace/ and in the
+testbed project folders as well.
 
 It edits, in place, every session the testbed switcher can open: the paths
 saved in the settings file and the default projects in workspace/. Running it
@@ -99,12 +101,25 @@ def scope_operating_grips(session, changes):
         changes.append('scoped ' + key)
 
 
-def migrate(path):
+def projects(testbeds):
+    """Every other project file: workspace/ and the folders holding testbed projects."""
+    folders = {ROOT / 'workspace'} | {path.parent for path in testbeds if not path.resolve().is_relative_to((ROOT / 'workspace').resolve())}
+    known = {path.resolve() for path in testbeds}
+    found = []
+    for folder in sorted(folders):
+        for path in sorted(folder.rglob('*.project.json')):
+            if path.resolve() not in known:
+                known.add(path.resolve())
+                found.append(path)
+    return found
+
+
+def migrate(path, testbed=True):
     session = json.loads(path.read_text(encoding='utf-8'))
     editor_id = session.get('weaponEditorId', '').lower()
     weapon = session.get('weapon', '').lower()
     changes = []
-    if editor_id in PRESETS and weapon:
+    if testbed and editor_id in PRESETS and weapon:
         templates = session.setdefault('reloadTemplates', {})
         if templates.get(weapon) != PRESETS[editor_id]:
             templates[weapon] = PRESETS[editor_id]
@@ -124,8 +139,15 @@ def migrate(path):
 
 
 def main():
-    for path in sessions():
+    testbeds = sessions()
+    for path in testbeds:
         print('%s: %s' % (path, migrate(path)))
+    for path in projects(testbeds):
+        try:
+            result = migrate(path, testbed=False)
+        except (ValueError, OSError) as error:
+            result = 'skipped (%s)' % error
+        print('%s: %s' % (path, result))
     return 0
 
 
