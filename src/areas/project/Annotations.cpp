@@ -4,6 +4,7 @@
 // and stay listed when their part is not installed. UI and commands share the
 // mutations below; commands add the parameter checks.
 #include "LoadoutView.h"
+#include "PoseEvaluator.h"
 #include "ReloadMakerController.h"
 #include "StudioWindow.h"
 #include "commands/CommandSupport.h"
@@ -284,6 +285,15 @@ namespace reloadmaker
             json["placed"] = marker.shape.isValid();
             if (const auto point = marker.shape.isValid() && _pinOverlay ? _pinOverlay->screenPosition(marker) : std::nullopt) {
                 json["screen"] = QJsonArray{ point->x(), point->y() };
+            }
+            // Where the pinned point is now in weapon space, independent of the
+            // camera: it moves when the part does.
+            Transformf weaponInverse;
+            const auto world = marker.shape.isValid() && _pinOverlay ? _pinOverlay->worldPosition(marker) : std::nullopt;
+            if (world && _weaponBoneIndex >= 0 && _weaponBoneIndex < _globalPose.size() &&
+                invertUniformTransform(_globalPose[_weaponBoneIndex], weaponInverse)) {
+                const auto local = composed(weaponInverse, Transformf{ { world->x(), world->y(), world->z() } }).translation;
+                json["position"] = QJsonArray{ local.x, local.y, local.z };
             }
             list.append(json);
         }

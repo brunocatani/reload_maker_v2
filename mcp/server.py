@@ -111,8 +111,8 @@ def configure_weapon(changes: dict, expected_revision: int) -> dict:
 @mcp.tool()
 def annotations() -> dict:
     """Pins: notes pointed at parts (open or resolved), with part, anchor shape, author,
-    whether the part is installed in the current configuration (placed) and its viewport
-    position (screen, logical pixels)."""
+    whether the part is installed in the current configuration (placed), its viewport
+    position (screen, logical pixels) and its current point in weapon space (position)."""
     return command('annotations')
 
 @mcp.tool()

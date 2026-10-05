@@ -33,13 +33,23 @@ def rejected(params,reason):
     raise AssertionError(reason)
 
 
-def point_on(label):
+def points_on(label):
     size=command('part_at',dict(x=0,y=0))
     for fy in range(30,71,3):
         for fx in range(15,86,3):
             x,y=size['width']*fx/100,size['height']*fy/100
-            if command('part_at',dict(x=x,y=y))['label']==label:return x,y
-    raise AssertionError('No point on '+label)
+            if command('part_at',dict(x=x,y=y))['label']==label:yield x,y
+
+
+def pin_on_slide(text):
+    """Adds a pin on the Glock's slide: the receiver slot also holds the frame,
+    which does not move."""
+    for x,y in points_on('Receiver'):
+        state=edit('annotation',dict(operation='add',x=x,y=y,text=text))
+        pin=next(p for p in state['annotations'] if p['id']==state['id'])
+        if pin['shape'].lower().startswith('slide'):return state,x,y
+        edit('annotation',dict(operation='remove',id=pin['id']))
+    raise AssertionError('No point on the slide')
 
 
 def run():
@@ -51,14 +61,14 @@ def run():
         command('render',dict(view='side',fit=True))
         assert pins()==[],('Testbed already has pins',pins())
         rejected(dict(operation='add',x=2,y=2,text='background'),'A pin off the weapon was accepted')
-        x,y=point_on('Receiver')
+        x,y=next(points_on('Receiver'))
         rejected(dict(operation='add',x=x,y=y,text='   '),'A blank note was accepted')
         rejected(dict(operation='add',x=x,y=y,text='x'*2001),'An over-long note was accepted')
         rejected(dict(operation='explode',id='x'),'An unknown operation was accepted')
         rejected(dict(operation='edit',id='missing',text='note'),'An unknown pin was edited')
 
         plain=render()
-        state=edit('annotation',dict(operation='add',x=x,y=y,text='Ejection port edge: the case should clear it'))
+        state,x,y=pin_on_slide('Ejection port edge: the case should clear it')
         pin=state['annotations'][0]
         assert state['id']==pin['id'] and state['selected']==pin['id']
         assert pin['author']=='ai' and pin['state']=='open' and pin['placed'] and pin['slotLabel']=='Receiver' and pin['shape'],pin
@@ -67,9 +77,12 @@ def run():
         scale=plain.width/command('part_at',dict(x=0,y=0))['width']
         assert changed and changed[0]<=x*scale<=changed[2] and changed[1]<=y*scale<=changed[3],('Pin not drawn at its point',changed,(x,y))
 
+        # Weapon space, so the check holds whatever pose and camera an earlier
+        # suite left behind.
         edit('simulate',dict(operation='pull',progress=1.0))
-        pulled=pins()[0]['screen']
-        assert abs(pulled[0]-pin['screen'][0])>30 and abs(pulled[1]-pin['screen'][1])<3,('Pin does not follow the slide',pin['screen'],pulled)
+        pulled=pins()[0]['position']
+        travel=sum((a-b)**2 for a,b in zip(pulled,pin['position']))**.5
+        assert travel>1.0,('Pin does not follow the slide',pin['position'],pulled)
         edit('simulate',dict(operation='release'))
 
         edited=edit('annotation',dict(operation='edit',id=pin['id'],text='  Port edge: the spent case must clear it  '))['annotations'][0]
@@ -102,7 +115,7 @@ def run():
         assert state['annotations']==[] and state['selected']=='',state
         edit('save_project',dict(path=str(saved)))
         assert 'annotations' not in json.loads(saved.read_text(encoding='utf-8')),'An empty pin list was saved'
-        print('PASS pins: anchored to',pin['shape'],'in',pin['slotLabel'],'moved',round(pulled[0]-pin['screen'][0],1),'px with the slide',
+        print('PASS pins: anchored to',pin['shape'],'in',pin['slotLabel'],'moved',round(travel,2),'units with the slide',
               'swap checked' if other else 'no alternative receiver',flush=True)
     finally:
         # Saving elsewhere re-points the Glock testbed and the last project at
