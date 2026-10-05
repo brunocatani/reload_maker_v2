@@ -50,9 +50,6 @@ namespace reloadmaker
     // bolt's stroke. Parts that move only with the bolt follow it.
     bool ReloadMakerController::buildSourceSimulationRig(SimulationRig& rig, QString& error)
     {
-        if (!rejectOwnReloadAttachments(error)) {
-            return false;
-        }
         const auto& recipe = *_reloadRecipe;
         const auto mechanism = simulationMechanism();
         const int handle = surfaceTrack(recipe, QStringLiteral("WeaponExtra1"));
@@ -61,20 +58,6 @@ namespace reloadmaker
             return false;
         }
         rig.slideTracks += boltDrivenTracks(recipe, rig);
-        return true;
-    }
-
-    // Underbarrel modes with their own reload graph cannot take a physical
-    // rifle reload. Still named by record until rework 14 item 15.
-    bool ReloadMakerController::rejectOwnReloadAttachments(QString& error) const
-    {
-        for (const auto id : configuration()->activeMods()) {
-            const auto* mod = configuration()->mod(id);
-            if (mod && (mod->editorId == QLatin1String("mod_SREP_M203Dummy") || mod->editorId == QLatin1String("mod_SREP_M26MASSDummy"))) {
-                error = "The active underbarrel weapon uses its own reload. Select rifle mode for physical rifle reloads.";
-                return false;
-            }
-        }
         return true;
     }
 
@@ -212,24 +195,29 @@ namespace reloadmaker
         return true;
     }
 
-    // Seconds between automatic shots, or the single-fire clip length when the
-    // receiver fires once per press.
+    // Seconds between automatic shots, from the automatic clip's steady
+    // weaponfire cadence. A receiver the records make semi-automatic fires
+    // once per press at the single clip's length; it does not need the
+    // graph's automatic clip, whose cadence may vary (rework 14, item 16).
     bool ReloadMakerController::measureRifleFireInterval(const HkxClip& single, const AnimationAction* automatic, QString& error)
     {
-        if (isThanatosConfiguration() || !automatic) {
-            // The installed Thanatos receivers are semi-automatic. Its inherited
-            // automatic graph clip has a variable cadence and is not their source.
-            if (_simulationAmmo.automatic) {
-                _simulationError = "This Thanatos profile requires a semi-automatic receiver.";
-                return false;
-            }
+        const auto singleFire = [&] {
             _rifleFireInterval = single.durationSeconds;
             return true;
+        };
+        const auto fail = [&](const QString& message) {
+            if (!_simulationAmmo.automatic) {
+                return singleFire();
+            }
+            _simulationError = message;
+            return false;
+        };
+        if (!automatic) {
+            return fail("Automatic-fire source is missing.");
         }
         const auto automaticClip = HkxReader::readClip(readAnimationResource(automatic->resourcePath, error), error);
         if (!automaticClip.valid()) {
-            _simulationError = "Cannot read rifle fire source: " + error;
-            return false;
+            return fail("Cannot read rifle fire source: " + error);
         }
         QVector<float> shots;
         for (const auto& event : automaticClip.annotations) {
@@ -239,20 +227,18 @@ namespace reloadmaker
         }
         std::sort(shots.begin(), shots.end());
         if (shots.size() < 2) {
-            _simulationError = "Automatic-fire source has no repeated weaponfire cadence.";
-            return false;
+            return fail("Automatic-fire source has no repeated weaponfire cadence.");
         }
-        _rifleFireInterval = shots[1] - shots[0];
-        if (_rifleFireInterval < .01f || _rifleFireInterval > 2) {
-            _simulationError = "Invalid automatic-fire cadence.";
-            return false;
+        const float interval = shots[1] - shots[0];
+        if (interval < .01f || interval > 2) {
+            return fail("Invalid automatic-fire cadence.");
         }
         for (int i = 2; i < shots.size(); ++i) {
-            if (std::abs(shots[i] - shots[i - 1] - _rifleFireInterval) > .002f) {
-                _simulationError = "Variable fire cadence needs an explicit event schedule.";
-                return false;
+            if (std::abs(shots[i] - shots[i - 1] - interval) > .002f) {
+                return fail("Variable fire cadence needs an explicit event schedule.");
             }
         }
+        _rifleFireInterval = interval;
         return true;
     }
 

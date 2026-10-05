@@ -661,7 +661,6 @@ namespace reloadmaker
         struct MagazineVisual {QPersistentModelIndex node;int flags{0};bool empty{false};int track{-1};bool cartridge{false};bool nativeOnly{false};bool parked{false};};
         QVector<MagazineVisual> _magazineVisuals;
         // Steps of the Operate simulation (src/areas/operate/).
-        bool rejectOwnReloadAttachments(QString& error) const;
         bool buildBoltDrivenRig(SimulationRig& rig, QString& error);
         bool manualBoltFromReload() const;
         bool measureRifleFireInterval(const HkxClip& single, const AnimationAction* automatic, QString& error);
