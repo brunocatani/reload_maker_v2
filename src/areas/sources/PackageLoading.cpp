@@ -6,6 +6,7 @@
 #include "ReloadMakerController.h"
 #include "LibraryResources.h"
 #include "areas/sources/PackageLoad.h"
+#include "StudioPaths.h"
 #include "StudioWindow.h"
 
 #include <QCoreApplication>
@@ -127,7 +128,8 @@ namespace reloadmaker
         }
 
         // Worker body. Returns early with `load.error` or `load.cancelled` set.
-        void loadPackage(PackageLoad& load, const QString& path, const QString& dataPath, const Progress& progress)
+        void loadPackage(PackageLoad& load, const QString& path, const QString& dataPath, const QString& dependencies,
+                         const Progress& progress)
         {
             const LibraryCancelled cancelled = [] { return QThread::currentThread()->isInterruptionRequested(); };
             // Without a game folder `data` still resolves against the working
@@ -159,7 +161,7 @@ namespace reloadmaker
                 QVector<PluginContent> catalogs;
                 {
                     StageClock clock(load.timings, "source.masters");
-                    catalogs = includePackageMasters(own, data, cancelled, load.error);
+                    catalogs = includePackageMasters(own, data, dependencies, cancelled, load.error);
                 }
                 {
                     StageClock clock(load.timings, "source.resources");
@@ -307,7 +309,10 @@ namespace reloadmaker
         const Progress progress = [this](const QString& message) {
             QMetaObject::invokeMethod(this, [this, message]() { _loadingLabel->setText(message); }, Qt::QueuedConnection);
         };
-        _loadThread = QThread::create([result, resident, current, currentFiles, currentStamp, path, dataPath, progress]() {
+        // Masters the owner keeps out of Data (they live in MO2 mods), copied into
+        // workspace/dependencies with their archives. Test workers mirror it.
+        const QString dependencies = studioDataPath(QStringLiteral("workspace/dependencies"));
+        _loadThread = QThread::create([result, resident, current, currentFiles, currentStamp, path, dataPath, dependencies, progress]() {
             try {
                 StageClock clock(result->timings, "source.load");
                 if (current && sourceStamp(currentFiles) == currentStamp) {
@@ -322,7 +327,7 @@ namespace reloadmaker
                     result->timings.add(QStringLiteral("source.reused resident"), 0);
                     return;
                 }
-                loadPackage(*result, path, dataPath, progress);
+                loadPackage(*result, path, dataPath, dependencies, progress);
             } catch (const std::exception& exception) {
                 result->error = QString::fromUtf8(exception.what());
             }

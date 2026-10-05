@@ -46,8 +46,12 @@ namespace reloadmaker {
     // The merger owns stable internal IDs, never guessed runtime FormIDs. A
     // source FormID is resolved using THAT plugin's MAST table, including ESLs.
     [[nodiscard]] PluginContent mergeLoadOrder(const QVector<PluginContent>& plugins, QString& error);
+    // A development source's masters, dependency first. Each master resolves
+    // beside the plugin that needs it, then in the game's Data folder, then in
+    // dependencyPath: Reload Maker's own copies of masters that stay out of Data
+    // (they live in MO2 mods). An empty dependencyPath is not searched.
     [[nodiscard]] QVector<PluginContent> includePackageMasters(const QVector<PluginContent>& plugins,
-        const QString& dataPath, const LibraryCancelled& cancelled, QString& error);
+        const QString& dataPath, const QString& dependencyPath, const LibraryCancelled& cancelled, QString& error);
     [[nodiscard]] QStringList packageResourceLayers(const QVector<PluginContent>& plugins,const QStringList& roots);
     [[nodiscard]] LoadOrderLibrary loadOrderLibrary(const LoadOrderSnapshot& snapshot,
         const LibraryProgress& progress, const LibraryCancelled& cancelled);

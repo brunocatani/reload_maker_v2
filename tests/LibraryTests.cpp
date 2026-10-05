@@ -161,7 +161,7 @@ namespace {
         write(dir.filePath("Addon.esm"),record("TES4",0,0,masterField("Base.esm"))+record("WEAP",0x123));
         write(dir.filePath("Patch.esl"),record("TES4",0,0,masterField("Base.esm")+masterField("Addon.esm"))+record("WEAP",0x123));
         QString error;const auto root=EspReader::read(dir.filePath("Patch.esl"));
-        const auto loaded=includePackageMasters({root},dir.filePath("unused Data"),{},error);
+        const auto loaded=includePackageMasters({root},dir.filePath("unused Data"),{},{},error);
         require(error.isEmpty()&&loaded.size()==3,"sibling/transitive masters were not auto-loaded");
         require(loaded[0].fileName=="Base.esm"&&loaded[1].fileName=="Addon.esm"&&loaded[2].fileName=="Patch.esl","master order is not dependency-first");
         const auto catalog=mergeLoadOrder(loaded,error);
@@ -173,9 +173,24 @@ namespace {
         const QStringList roots{dir.filePath("explicit source")};const auto layers=packageResourceLayers(loaded,roots);
         require(layers==QStringList({dir.filePath("Base - Main.ba2"),dir.filePath("Addon - Main.ba2"),roots[0]}),"development source inherited unrelated Data assets or lost master priority");
         auto missing=root;missing.masters={"Absent.esm"};
-        require(includePackageMasters({missing},dir.path(),{},error).isEmpty()&&error.contains("Absent.esm"),"missing master was silently skipped");
+        require(includePackageMasters({missing},dir.path(),{},{},error).isEmpty()&&error.contains("Absent.esm"),"missing master was silently skipped");
         auto cycle=root;cycle.masters={cycle.fileName};
-        require(includePackageMasters({cycle},dir.path(),{},error).isEmpty()&&error.contains("cyclic"),"cyclic masters accepted");
+        require(includePackageMasters({cycle},dir.path(),{},{},error).isEmpty()&&error.contains("cyclic"),"cyclic masters accepted");
+        // A master kept out of Data resolves from Reload Maker's dependency
+        // folder, with its archives; Data wins when both have it.
+        QDir(dir.path()).mkpath("source");QDir(dir.path()).mkpath("Data");QDir(dir.path()).mkpath("dependencies");
+        write(dir.filePath("source/Mod.esp"),record("TES4",0,0,masterField("Kept.esl")+masterField("Both.esm"))+record("WEAP",0x200));
+        write(dir.filePath("dependencies/Kept.esl"),record("TES4",0)+record("WEAP",0x201));
+        write(dir.filePath("dependencies/Kept - Main.ba2"),{});
+        write(dir.filePath("dependencies/Both.esm"),record("TES4",0)+record("WEAP",0x202));
+        write(dir.filePath("Data/Both.esm"),record("TES4",0)+record("WEAP",0x202));
+        const auto mod=EspReader::read(dir.filePath("source/Mod.esp"));
+        require(includePackageMasters({mod},dir.filePath("Data"),{},{},error).isEmpty()&&error.contains("Kept.esl"),"dependency folder searched when none was given");
+        const auto withDependencies=includePackageMasters({mod},dir.filePath("Data"),dir.filePath("dependencies"),{},error);
+        require(error.isEmpty()&&withDependencies.size()==3,"master kept out of Data not found in the dependency folder");
+        require(QFileInfo(withDependencies[0].filePath).absolutePath()==QFileInfo(dir.filePath("dependencies")).absoluteFilePath()&&
+                QFileInfo(withDependencies[1].filePath).absolutePath()==QFileInfo(dir.filePath("Data")).absoluteFilePath(),"Data did not win over the dependency copy");
+        require(packageResourceLayers(withDependencies,{}).contains(dir.filePath("dependencies/Kept - Main.ba2")),"dependency master archives not layered");
         const auto package=PackageSource::prepare(dir.filePath("Patch.esl"));
         require(package.ok()&&package.plugins==QStringList({QFileInfo(root.filePath).canonicalFilePath()}),"single-plugin source cannot be opened");
     }

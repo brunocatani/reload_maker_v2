@@ -252,7 +252,7 @@ namespace reloadmaker {
     }
 
     QVector<PluginContent> includePackageMasters(const QVector<PluginContent>& plugins,const QString& dataPath,
-        const LibraryCancelled& cancelled,QString& error) {
+        const QString& dependencyPath,const LibraryCancelled& cancelled,QString& error) {
         QVector<PluginContent> result;QHash<QString,PluginContent> available;QSet<QString> done,visiting;error.clear();
         for(const auto& plugin:plugins)available.insert(plugin.fileName.toLower(),plugin);
         std::function<void(const QString&,const QString&)> add=[&](const QString& name,const QString& parentFolder){
@@ -261,8 +261,12 @@ namespace reloadmaker {
             if(!leafName(name)||visiting.contains(key)||visiting.size()>64||result.size()>=256)throw std::runtime_error("Invalid or cyclic source master dependencies");
             visiting.insert(key);auto plugin=available.value(key);
             if(!available.contains(key)) {
-                const auto sibling=QDir(parentFolder).filePath(name);
-                plugin=EspReader::read(QFileInfo::exists(sibling)?sibling:QDir(dataPath).filePath(name),cancelled);
+                // Data stays authoritative: a dependency copy only fills a gap.
+                QString path=QDir(dataPath).filePath(name);
+                for(const auto& folder:{parentFolder,dataPath,dependencyPath}) {
+                    if(!folder.isEmpty()&&QFileInfo::exists(QDir(folder).filePath(name))){path=QDir(folder).filePath(name);break;}
+                }
+                plugin=EspReader::read(path,cancelled);
             }
             if(!plugin.parsed)throw std::runtime_error(("Required source master is unavailable: "+name+". "+plugin.diagnostics.join(';')).toStdString());
             for(const auto& master:plugin.masters)add(master,QFileInfo(plugin.filePath).absolutePath());
