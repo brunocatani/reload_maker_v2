@@ -165,6 +165,15 @@ end = blocks.index('REGISTER_SPELL( spConvertBlock )', begin)+len('REGISTER_SPEL
 write('src/spells/blocks.cpp', blocks[:begin]+blocks[end:])
 model = (source/'src/model/nifmodel.cpp').read_text(encoding='utf-8')
 model = replace_exactly(model, 'spMeshFileImport::processAllItems( this );', 'throw NifSkopeError("Starfield mesh conversion is outside the Fallout 4 reload workflow");', 'src/model/nifmodel.cpp', count=2)
+# moveAllNiBlocks appends before the footer, at row getBlockCount() + 1 (row 0
+# is the header), like insertNiBlock. It announced the insertion one row early,
+# so Qt shifted every persistent index on the last existing block by the number
+# of blocks moved in: a part surface recorded on it later named another part's
+# shape (Glock Mag:0 read as the sights' Glow:0, 2026-10-05).
+model = replace_exactly(model,
+    'targetnif->beginInsertRows( QModelIndex(), targetnif->getBlockCount(), targetnif->getBlockCount() + bcnt - 1 );',
+    'targetnif->beginInsertRows( QModelIndex(), targetnif->getBlockCount() + 1, targetnif->getBlockCount() + bcnt );',
+    'src/model/nifmodel.cpp moveAllNiBlocks')
 write('src/model/nifmodel.cpp', model)
 
 pro = (source / 'NifSkope.pro').read_text(encoding='utf-8')
