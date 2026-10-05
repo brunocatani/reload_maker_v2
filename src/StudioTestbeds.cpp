@@ -1,5 +1,5 @@
-// Development testbeds: the named weapons and their saved projects. P7 migrates
-// these projects and deletes the testbed picker.
+// Development testbeds: the automated corpus by name and the dev bench weapons
+// (areas/sources/Testbeds.h), each opened through its saved project.
 #include "ReloadMakerController.h"
 #include "StudioPaths.h"
 #include "areas/sources/Testbeds.h"
@@ -40,18 +40,20 @@ QString ReloadMakerController::testbedProject(const QString& name) const {
 
 bool ReloadMakerController::selectTestbed(const QString& name) {
     if(_loadThread||_reloadCapturing||_rebuildTimer->isActive()){setStatus("Wait for the current weapon to finish loading.",true);return false;}
-    if(std::none_of(std::begin(kTestbedIds),std::end(kTestbedIds),[&](const char* testbed){return name==QLatin1String(testbed);})){setStatus("Unknown weapon testbed.",true);return false;}
+    // A dev bench weapon always opens the project it was discovered from.
+    if(!_testbedSourcesLoaded)refreshDevelopmentSources();
+    QString benchProject;
+    for(const auto& value:_testbedSources){const auto entry=value.toObject();if(entry["bench"].toBool()&&entry["id"]==name){benchProject=entry["project"].toString();break;}}
+    if(!isCorpusTestbed(name)&&benchProject.isEmpty()){setStatus("Unknown weapon testbed.",true);return false;}
     const auto current=currentTestbed();
-    const auto defaultProject=testbedProject(name);
-    const auto project=QSettings().value("testbeds/"+name,defaultProject).toString();
+    const auto project=isCorpusTestbed(name)?QSettings().value("testbeds/"+name,testbedProject(name)).toString():benchProject;
     if(!QFileInfo::exists(project)){setStatus("Open and save the "+name+" project before selecting this testbed.",true);return false;}
     if(current==name&&!_libraryMode&&QFileInfo(_sessionPath).absoluteFilePath()==QFileInfo(project).absoluteFilePath()){setWorkspace(OperateWorkspace);alignPluginToWeapon();refreshWeaponPicker();return true;}
     if(!saveSession())return false;
-    if(!current.isEmpty()&&!_libraryMode)QSettings().setValue("testbeds/"+current,_sessionPath);
+    if(isCorpusTestbed(current)&&!_libraryMode)QSettings().setValue("testbeds/"+current,_sessionPath);
     openSession(project);
     if(!_pendingSession.isEmpty()) {
         _pendingSession["workspace"]=OperateWorkspace;
-        if(!_testbedSourcesLoaded)refreshDevelopmentSources();
         for(const auto& value:_testbedSources){const auto entry=value.toObject();if(entry["id"]==name){_pendingSession["browserPlugin"]=entry["plugin"];break;}}
     }
     return _lastError.isEmpty();

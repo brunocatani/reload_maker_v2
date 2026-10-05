@@ -3,15 +3,20 @@
 // StudioSourceBrowser.cpp only render this state.
 #include "ReloadMakerController.h"
 #include "InstallationSetup.h"
+#include "StudioPaths.h"
 #include "StudioWindow.h"
 #include "areas/sources/Testbeds.h"
 
 #include <QComboBox>
+#include <QDateTime>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QMap>
 #include <QMenu>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QTimer>
@@ -41,6 +46,15 @@ namespace reloadmaker
             }
             return plugin;
         }
+
+        // A dev bench id: the weapon record as a lowercase slug
+        // ("HKUSP9mm.esp:000800" -> "bench-hkusp9mm-000800").
+        QString devBenchId(const QString& weapon)
+        {
+            QString slug = QFileInfo(weapon.section(':', 0, 0)).completeBaseName().toLower() + '-' + weapon.section(':', 1).toLower();
+            slug.replace(QRegularExpression("[^a-z0-9]+"), "-");
+            return "bench-" + slug;
+        }
     }
 
     void ReloadMakerController::refreshDevelopmentSources()
@@ -68,6 +82,40 @@ namespace reloadmaker
                 { "source", source },
                 { "name", document["weaponName"].toString(document["weaponEditorId"].toString(id)) },
             });
+        }
+        // Dev bench weapons, in record order. A weapon saved from two dev
+        // bench sources lists its most recently saved project.
+        const QString bench = QDir::cleanPath(studioDataPath(kDevBenchFolder)) + '/';
+        QMap<QString, QPair<QDateTime, QJsonObject>> benchWeapons;
+        QDirIterator projects(studioDataPath("workspace/projects"), { "authoring.project.json" }, QDir::Files, QDirIterator::Subdirectories);
+        while (projects.hasNext()) {
+            const QFileInfo project(projects.next());
+            QFile file(project.filePath());
+            if (file.size() > kProjectSizeLimit || !file.open(QIODevice::ReadOnly)) {
+                continue;
+            }
+            const QJsonObject document = QJsonDocument::fromJson(file.readAll()).object();
+            const QString weapon = document["weapon"].toString();
+            const QString source = QDir::cleanPath(document["package"].toString());
+            if (document["library"].toBool() || weapon.isEmpty() || !source.startsWith(bench, Qt::CaseInsensitive)) {
+                continue;
+            }
+            const QString id = devBenchId(weapon);
+            if (benchWeapons.contains(id) && benchWeapons[id].first >= project.lastModified()) {
+                continue;
+            }
+            benchWeapons.insert(id, { project.lastModified(), QJsonObject{
+                { "id", id },
+                { "plugin", testbedPlugin(weapon, source) },
+                { "weapon", weapon },
+                { "project", project.filePath() },
+                { "source", source },
+                { "name", document["weaponName"].toString(document["weaponEditorId"].toString(id)) },
+                { "bench", true },
+            } });
+        }
+        for (const auto& entry : benchWeapons) {
+            _testbedSources.append(entry.second);
         }
     }
 

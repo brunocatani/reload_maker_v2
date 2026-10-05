@@ -100,7 +100,7 @@ def select_weapon(index: int, expected_revision: int) -> dict:
 
 @mcp.tool()
 def select_testbed(name: str, expected_revision: int) -> dict:
-    """Switch glock/ru556/m1a/timberwolf/l118a2/thanatos/srep saved testbeds, retaining the outgoing project. State becomes busy while the source loads."""
+    """Switch to a saved testbed, retaining the outgoing project: the corpus (glock/ru556/m1a/timberwolf/l118a2/thanatos/srep-*) or a dev bench weapon (source_browser developmentSources with bench=true). State becomes busy while the source loads."""
     return command('testbed',{'name':name},expected_revision)
 
 @mcp.tool()

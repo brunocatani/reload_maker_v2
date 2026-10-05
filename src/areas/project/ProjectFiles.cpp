@@ -3,6 +3,7 @@
 // source, and restores the weapon, its authored data, the pose and the view
 // once the source is indexed.
 #include "ReloadMakerController.h"
+#include "areas/sources/Testbeds.h"
 #include "AuthoringPaths.h"
 #include "CollisionDraftPolicy.h"
 #include "MagazineGuide.h"
@@ -613,8 +614,8 @@ namespace reloadmaker
             return false;
         }
         _sessionPath = absolute;
-        if (!_libraryMode && !currentTestbed().isEmpty()) {
-            QSettings().setValue("testbeds/" + currentTestbed(), absolute);
+        if (const QString testbed = currentTestbed(); !_libraryMode && isCorpusTestbed(testbed)) {
+            QSettings().setValue("testbeds/" + testbed, absolute);
         }
         QSettings().setValue("projects/lastProject", absolute);
         writeWeaponStatus(absolute);
