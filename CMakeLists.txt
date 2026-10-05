@@ -66,3 +66,6 @@ foreach(suite IN LISTS reloadmaker_suites)
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
   set_tests_properties(${suite} PROPERTIES RESOURCE_LOCK reloadmaker-compiler TIMEOUT 1800)
 endforeach()
+# No weapon is recognized by name in application source (rework 14, item 26).
+add_test(NAME WeaponNames
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/check_weapon_names.py" "${CMAKE_SOURCE_DIR}/src")
