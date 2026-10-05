@@ -42,6 +42,139 @@ namespace reloadmaker::design
         _title->setVisible(!title.isEmpty());
     }
 
+    namespace
+    {
+        constexpr int kTileHeight = 84;
+        constexpr int kTileIconPx = 32;
+        constexpr qreal kTileRadius = 8;
+    }
+
+    IconTile::IconTile(Icon icon, const QString& text, QWidget* parent) : QAbstractButton(parent), _icon(icon)
+    {
+        setText(text);
+        setCursor(Qt::PointingHandCursor);
+        setFocusPolicy(Qt::StrongFocus);
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    }
+
+    void IconTile::setIcon(Icon icon)
+    {
+        _icon = icon;
+        update();
+    }
+
+    void IconTile::setPrimary(bool primary)
+    {
+        _primary = primary;
+        update();
+    }
+
+    QSize IconTile::sizeHint() const
+    {
+        return { 84, kTileHeight };
+    }
+
+    QSize IconTile::minimumSizeHint() const
+    {
+        return { 64, kTileHeight };
+    }
+
+    void IconTile::enterEvent(QEnterEvent* event)
+    {
+        _hovered = true;
+        update();
+        QAbstractButton::enterEvent(event);
+    }
+
+    void IconTile::leaveEvent(QEvent* event)
+    {
+        _hovered = false;
+        update();
+        QAbstractButton::leaveEvent(event);
+    }
+
+    void IconTile::paintEvent(QPaintEvent*)
+    {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        const QRectF frame = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
+        const bool enabled = isEnabled();
+        const bool lit = (_hovered || isDown()) && enabled;
+        QRgb fill = lit ? color::buttonHover : color::button;
+        QRgb border = color::buttonBorder;
+        QRgb ink = color::text;
+        if (!enabled) {
+            // A choice that cannot change still shows which one holds.
+            fill = isChecked() ? color::row : color::card;
+            border = isChecked() ? color::section : color::border;
+            ink = isChecked() ? color::textMuted : color::textDisabled;
+        } else if (_primary) {
+            fill = lit ? color::primaryHover : color::primary;
+            border = fill;
+            ink = color::onPrimary;
+        } else if (isChecked()) {
+            fill = color::selected;
+            border = color::accent;
+            ink = color::onPrimary;
+        }
+        painter.setPen(QPen(qcolor(border), isChecked() ? 1.5 : 1));
+        painter.setBrush(qcolor(fill));
+        painter.drawRoundedRect(frame, kTileRadius, kTileRadius);
+        if (hasFocus()) {
+            painter.setPen(QPen(qcolor(color::accent), 1));
+            painter.setBrush(Qt::NoBrush);
+            painter.drawRoundedRect(frame.adjusted(2, 2, -2, -2), kTileRadius - 2, kTileRadius - 2);
+        }
+        const QRgb iconColor = !enabled ? ink : isChecked() && !_primary ? color::accent : ink;
+        const QRect iconRect(int((width() - kTileIconPx) / 2), 10, kTileIconPx, kTileIconPx);
+        design::icon(_icon, iconColor).paint(&painter, iconRect, Qt::AlignCenter, QIcon::Normal);
+        painter.setPen(qcolor(ink));
+        painter.setFont(uiFont(kSmallPx, isChecked() || _primary ? QFont::DemiBold : QFont::Normal));
+        const QRectF label(4, iconRect.bottom() + 5, width() - 8, height() - iconRect.bottom() - 8);
+        // Two lines at most; a longer label is elided on the second.
+        const QFontMetricsF metrics(painter.font());
+        QString shown = text();
+        if (metrics.horizontalAdvance(shown) > label.width()) {
+            const int cut = shown.lastIndexOf(' ', int(shown.size() * 0.6));
+            if (cut > 0) {
+                shown = shown.left(cut) + '\n' + metrics.elidedText(shown.mid(cut + 1), Qt::ElideRight, label.width());
+            }
+        }
+        painter.drawText(label, Qt::AlignHCenter | Qt::AlignTop, shown);
+    }
+
+    TileChoice::TileChoice(QWidget* parent) : QWidget(parent), _group(new QButtonGroup(this))
+    {
+        _group->setExclusive(true);
+        _layout = new QHBoxLayout(this);
+        _layout->setContentsMargins(0, 0, 0, 0);
+        _layout->setSpacing(8);
+    }
+
+    int TileChoice::addChoice(Icon icon, const QString& text, const QString& toolTip)
+    {
+        auto* tile = new IconTile(icon, text, this);
+        tile->setCheckable(true);
+        tile->setToolTip(toolTip);
+        const int index = int(_tiles.size());
+        _group->addButton(tile, index);
+        _layout->addWidget(tile);
+        _tiles.append(tile);
+        return index;
+    }
+
+    void TileChoice::setCurrentIndex(int index)
+    {
+        if (index >= 0 && index < _tiles.size()) {
+            _tiles[index]->setChecked(true);
+        }
+    }
+
+    int TileChoice::currentIndex() const
+    {
+        return _group->checkedId();
+    }
+
     SegmentedControl::SegmentedControl(const QString& objectName, QWidget* parent) : QFrame(parent), _group(new QButtonGroup(this))
     {
         setObjectName(objectName);

@@ -5,6 +5,7 @@
 // Each setter does what the control's change used to trigger, and only when
 // the value changes.
 #include "ReloadMakerController.h"
+#include "design/DesignWidgets.h"
 #include "StudioWindow.h"
 #include "gl/glscene.h"
 #include "glview.h"
@@ -18,7 +19,7 @@ namespace reloadmaker
 {
     namespace
     {
-        void showChecked(QCheckBox* box, bool checked)
+        void showChecked(QAbstractButton* box, bool checked)
         {
             if (box) {
                 const QSignalBlocker block(box);

@@ -1,5 +1,6 @@
 #include "ReloadMakerController.h"
 #include "design/DesignWidgets.h"
+#include <QButtonGroup>
 #include "ReloadBundle.h"
 #include <QCheckBox>
 #include <QComboBox>
@@ -39,12 +40,13 @@ namespace reloadmaker {
         connect(_editMagazineGrip,&QPushButton::clicked,this,[this]{(void)editMagazineGrip();});
 
         section(QStringLiteral("Hand"),QStringLiteral("The hand that holds it during the reload."));
-        _magazineHandPicker=new QComboBox(page);_magazineHandPicker->addItem("Left reload hand");_magazineHandPicker->addItem("Right reload hand");
-        auto* mirrorMagazine=new QPushButton("Mirror to other hand",page);
+        _magazineHandPicker=new design::TileChoice(page);
+        _magazineHandPicker->addChoice(design::Icon::HandLeft,"Left reload hand");_magazineHandPicker->addChoice(design::Icon::HandRight,"Right reload hand");
+        auto* mirrorMagazine=new design::IconTile(design::Icon::Mirror,"Mirror to other hand",page);
         mirrorMagazine->setToolTip(QStringLiteral("Create the opposite hand's fit for this magazine by mirroring this one."));
-        auto* handRow=new QHBoxLayout();handRow->setSpacing(6);handRow->addWidget(_magazineHandPicker,1);handRow->addWidget(mirrorMagazine);layout->addLayout(handRow);
-        connect(_magazineHandPicker,qOverload<int>(&QComboBox::activated),this,[this](int i){(void)setInteractionHand(PoseHand(i));updateInteractionGripUi();});
-        connect(mirrorMagazine,&QPushButton::clicked,this,[this]{(void)mirrorMagazineGrip();});
+        auto* handRow=new QHBoxLayout();handRow->setSpacing(8);handRow->addWidget(_magazineHandPicker,2);handRow->addWidget(mirrorMagazine,1);layout->addLayout(handRow);
+        connect(_magazineHandPicker->group(),&QButtonGroup::idClicked,this,[this](int i){(void)setInteractionHand(PoseHand(i));updateInteractionGripUi();});
+        connect(mirrorMagazine,&QAbstractButton::clicked,this,[this]{(void)mirrorMagazineGrip();});
 
         section(QStringLiteral("Fingers"),QStringLiteral("A saved pose from the Poses library."));
         _gripPoseCombo=new QComboBox(page);

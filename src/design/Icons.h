@@ -28,6 +28,21 @@ namespace reloadmaker::design
         Diamond,
         DotCircle,
         Minus,
+        // Operate actions and options.
+        Fire,           // a muzzle burst
+        ReleaseForward, // a stop with an arrow running forward (slide or bolt release)
+        MagazineOut,
+        MagazineIn,
+        MagazineGrab,
+        MagazineDrop,
+        Reload,         // a clockwise arrow
+        Rewind,         // back to the start (reset)
+        Spring,
+        Ghost,          // a part and its second position
+        MagazineShort,
+        HandLeft,
+        HandRight,
+        Mirror,         // two halves facing a centre line
     };
 
     // Follows the button state: disabled icons are drawn in the disabled colour.

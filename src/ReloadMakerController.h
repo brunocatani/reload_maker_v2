@@ -88,7 +88,7 @@ namespace reloadmaker
     class GripViewport;
     class MagazineViewport;
     class CollisionPanel;
-    namespace design { class PanelHeader; class ChecklistRow; }
+    namespace design { class PanelHeader; class ChecklistRow; class IconTile; class TileChoice; }
     struct PackageLoad;
     struct WeaponPreset;
     class ReloadMakerController final : public QObject
@@ -721,23 +721,23 @@ namespace reloadmaker
         void showReloadCaptureStarted(const QString& expected);
         std::optional<MagazineSetup> _magazineSetup;
         MagazineViewport* _magazineViewport{nullptr};
-        QPushButton* _magazineOut{nullptr};
-        QPushButton* _magazineIn{nullptr};
-        QPushButton* _magazineGrab{nullptr};
+        design::IconTile* _magazineOut{nullptr};
+        design::IconTile* _magazineIn{nullptr};
+        design::IconTile* _magazineGrab{nullptr};
         QDockWidget* _simulationDock{nullptr};
-        QPushButton* _simulationFire{nullptr};
-        QPushButton* _simulationReload{nullptr};
-        QPushButton* _simulationDrop{nullptr};
-        QPushButton* _simulationReset{nullptr};
+        design::IconTile* _simulationFire{nullptr};
+        design::IconTile* _simulationReload{nullptr};
+        design::IconTile* _simulationDrop{nullptr};
+        design::IconTile* _simulationReset{nullptr};
         QLabel* _simulationStatus{nullptr};
         QLabel* _simulationParts{nullptr};
         QLabel* _simulationInstructions{nullptr};
-        QCheckBox* _simulationNoExtender{nullptr};
+        design::IconTile* _simulationNoExtender{nullptr};
         QLabel* _simulationSource{nullptr};
         bool _glockNoExtender{false};
         float _glockReloadRackAt{-1}, _glockReloadFeedAt{-1};
-        QCheckBox* _simulationSpring{nullptr};
-        QCheckBox* _simulationGhost{nullptr};
+        design::IconTile* _simulationSpring{nullptr};
+        design::IconTile* _simulationGhost{nullptr};
         QTimer* _simulationTimer{nullptr};
         QElapsedTimer _simulationClock;
         ReloadDriveViewport* _simulationDrive{nullptr};
@@ -747,7 +747,7 @@ namespace reloadmaker
         QString _simulationError;
         WeaponAmmunition _simulationAmmo;
         QHash<QString,QString> _referenceNames;
-        QPushButton* _simulationSlideRelease{nullptr};
+        design::IconTile* _simulationSlideRelease{nullptr};
         QVector<std::pair<QPersistentModelIndex,int>> _simulationVisibility;
         QButtonGroup* _railButtons{nullptr};
         QButtonGroup* _builderStepButtons{nullptr};
@@ -870,8 +870,8 @@ namespace reloadmaker
         void resolveMagazineGrabGrip();
         bool applyMagazineGrabPose();
         PoseHand _interactionHand{PoseHand::Left};
-        QComboBox* _interactionHandPicker{nullptr};
-        QComboBox* _magazineHandPicker{nullptr};
+        design::TileChoice* _interactionHandPicker{nullptr};
+        design::TileChoice* _magazineHandPicker{nullptr};
         // Assignments supply finger locals only; operating wrists stay live.
         QHash<QString,QString> _savedOperatingGrips;
         std::array<std::optional<HandPose>,2> _operatingFingers;
@@ -1450,7 +1450,7 @@ namespace reloadmaker
         std::array<QDoubleSpinBox*,3> _stagePivot{};
         QListWidget* _mechanismFollowers{nullptr};
         QPushButton* _mechanismSuggest{nullptr};
-        QComboBox* _operatingHandPicker{nullptr};
+        design::TileChoice* _operatingHandPicker{nullptr};
         QWidget* _magazineSetupPanel{nullptr};
         QLabel* _mechanismStatus{nullptr};
         QPushButton* _mechanismSave{nullptr};

@@ -1,7 +1,10 @@
 #pragma once
 
+#include "design/Icons.h"
+
 #include <QAbstractButton>
 #include <QFrame>
+#include <QVector>
 #include <QWidget>
 
 class QButtonGroup;
@@ -76,6 +79,49 @@ namespace reloadmaker::design
         QRgb _trailingColor{ 0 };
         int _number{ 0 };
         bool _hovered{ false };
+    };
+
+    // A square button: a large icon over a short label of up to two lines.
+    // Actions use it plain or as the primary action; options and choices use
+    // it checkable, shown selected while checked (owner, 2026-10-05: squared
+    // icon buttons instead of lists and rectangular buttons).
+    class IconTile final : public QAbstractButton
+    {
+    public:
+        IconTile(Icon icon, const QString& text, QWidget* parent = nullptr);
+        void setIcon(Icon icon);
+        void setPrimary(bool primary);
+        [[nodiscard]] QSize sizeHint() const override;
+        [[nodiscard]] QSize minimumSizeHint() const override;
+
+    protected:
+        void paintEvent(QPaintEvent* event) override;
+        void enterEvent(QEnterEvent* event) override;
+        void leaveEvent(QEvent* event) override;
+
+    private:
+        Icon _icon;
+        bool _primary{ false };
+        bool _hovered{ false };
+    };
+
+    // An exclusive choice shown as a row of checkable tiles, used where a short
+    // list of options was a drop-down. Indexes follow the order of addChoice;
+    // group()'s idClicked reports a choice the person made, never one set by
+    // setCurrentIndex.
+    class TileChoice final : public QWidget
+    {
+    public:
+        explicit TileChoice(QWidget* parent = nullptr);
+        int addChoice(Icon icon, const QString& text, const QString& toolTip = {});
+        void setCurrentIndex(int index);
+        [[nodiscard]] int currentIndex() const;
+        [[nodiscard]] QButtonGroup* group() const { return _group; }
+
+    private:
+        QButtonGroup* _group;
+        QHBoxLayout* _layout;
+        QVector<IconTile*> _tiles;
     };
 
     [[nodiscard]] QLabel* sectionLabel(const QString& text, QWidget* parent = nullptr);

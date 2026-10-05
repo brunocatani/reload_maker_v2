@@ -2,6 +2,7 @@
 // user input to it; the simulation itself lives in src/areas/operate/.
 #include "ReloadMakerController.h"
 #include "design/DesignWidgets.h"
+#include <QButtonGroup>
 #include "StudioWindow.h"
 #include "MagazineViewport.h"
 #include "ReloadBundle.h"
@@ -48,44 +49,56 @@ void ReloadMakerController::createSimulationUi() {
     layout->addWidget(design::sectionLabel("Weapon state",panel));
     _simulationStatus=new QLabel("Preparing native motion…",panel);_simulationStatus->setWordWrap(true);_simulationStatus->setObjectName("StatusCard");
     _simulationStatus->setTextFormat(Qt::RichText);layout->addWidget(_simulationStatus);
-    const auto button=[&](const QString& text,const QString& action) {
-        auto* b=new QPushButton(text,panel);b->setMinimumHeight(36);
-        connect(b,&QPushButton::clicked,this,[this,action]{if(action!="fire")runSimulationAction(action);});return b;
+    // Square icon tiles, three to a row (owner, 2026-10-05).
+    const auto button=[&](design::Icon icon,const QString& text,const QString& action) {
+        auto* b=new design::IconTile(icon,text,panel);
+        connect(b,&QAbstractButton::clicked,this,[this,action]{if(action!="fire")runSimulationAction(action);});return b;
     };
     section("Actions");
-    auto* actions=new QGridLayout;actions->setSpacing(6);
-    _simulationFire=button("Fire","fire");_simulationFire->setObjectName("PrimaryButton");
+    auto* actions=new QGridLayout;actions->setSpacing(8);
+    _simulationFire=button(design::Icon::Fire,"Fire","fire");_simulationFire->setPrimary(true);
     _simulationFire->setToolTip("Hold to keep the trigger pulled");
     connect(_simulationFire,&QPushButton::pressed,this,[this]{setSimulationTrigger(true);});
     connect(_simulationFire,&QPushButton::released,this,[this]{setSimulationTrigger(false);});
     // Leaving the application releases a held trigger. An unattended run has no one holding it; only commands do.
     if(!qApp->property("unattended").toBool())connect(qGuiApp,&QGuiApplication::applicationStateChanged,this,[this](Qt::ApplicationState state){if(state!=Qt::ApplicationActive){setSimulationTrigger(false);_audio.stop();}});
-    _simulationSlideRelease=button("Slide release","slide_release");
-    _simulationReload=button("Automatic reload","reload");
-    _simulationReset=button("Reset","reset");
-    _magazineOut=button("Magazine out","mag_out");_magazineIn=button("Magazine in","mag_in");
-    _magazineGrab=button("Grab magazine","grab_magazine");_simulationDrop=button("Drop magazine","drop_magazine");
-    actions->addWidget(_simulationFire,0,0);actions->addWidget(_simulationSlideRelease,0,1);
-    actions->addWidget(_magazineOut,1,0);actions->addWidget(_magazineIn,1,1);
-    actions->addWidget(_magazineGrab,2,0);actions->addWidget(_simulationDrop,2,1);
-    actions->addWidget(_simulationReload,3,0);actions->addWidget(_simulationReset,3,1);
+    _simulationSlideRelease=button(design::Icon::ReleaseForward,"Slide release","slide_release");
+    _simulationReload=button(design::Icon::Reload,"Automatic reload","reload");
+    _simulationReset=button(design::Icon::Rewind,"Reset","reset");
+    _magazineOut=button(design::Icon::MagazineOut,"Magazine out","mag_out");_magazineIn=button(design::Icon::MagazineIn,"Magazine in","mag_in");
+    _magazineGrab=button(design::Icon::MagazineGrab,"Grab magazine","grab_magazine");_simulationDrop=button(design::Icon::MagazineDrop,"Drop magazine","drop_magazine");
+    _simulationReload->setToolTip("Play the native reload animation.");
+    _simulationReset->setToolTip("Start again with a full magazine and the weapon ready.");
+    _magazineGrab->setToolTip("Carry the magazine with the mouse and insert it by hand.");
+    actions->addWidget(_simulationFire,0,0);actions->addWidget(_simulationSlideRelease,0,1);actions->addWidget(_simulationReload,0,2);
+    actions->addWidget(_magazineOut,1,0);actions->addWidget(_magazineIn,1,1);actions->addWidget(_magazineGrab,1,2);
+    actions->addWidget(_simulationDrop,2,0);actions->addWidget(_simulationReset,2,1);
+    for(int column=0;column<3;++column)actions->setColumnStretch(column,1);
     layout->addLayout(actions);
     layout->addWidget(design::hintLabel("Drag the slide or the magazine in the view to operate them by hand, as in VR.",panel));
-    _simulationSpring=new QCheckBox("Slide returns when released",panel);_simulationSpring->setChecked(_slideSpringReturn);layout->addWidget(_simulationSpring);
-    connect(_simulationSpring,&QCheckBox::toggled,this,[this](bool enabled){setSlideSpringReturn(enabled);});
-    _simulationGhost=new QCheckBox("Show the source animation's pose",panel);_simulationGhost->setChecked(_nativeGhost);layout->addWidget(_simulationGhost);
-    _simulationGhost->setToolTip("Where authored motion differs from the source clip, the part is drawn again, tinted, where the clip has it.");
-    connect(_simulationGhost,&QCheckBox::toggled,this,[this](bool enabled){setNativeGhost(enabled);});
-    _simulationNoExtender=new QCheckBox("NoExtender reload (unextended magazine)",panel);layout->addWidget(_simulationNoExtender);
-    _simulationNoExtender->setToolTip("Use the animation set's optional NoExtender reload. QuickHands sets ship it for the unextended standard magazine.");
-    connect(_simulationNoExtender,&QCheckBox::toggled,this,[this](bool enabled){setGlockNoExtender(enabled);rebuildWeapon();});
+
+    section("Options");
+    auto* options=new QGridLayout;options->setSpacing(8);
+    const auto option=[&](design::Icon icon,const QString& text,const QString& tip,bool checked) {
+        auto* tile=new design::IconTile(icon,text,panel);tile->setCheckable(true);tile->setChecked(checked);tile->setToolTip(tip);return tile;
+    };
+    _simulationSpring=option(design::Icon::Spring,"Slide returns","The slide returns when released.",_slideSpringReturn);
+    connect(_simulationSpring,&QAbstractButton::toggled,this,[this](bool enabled){setSlideSpringReturn(enabled);});
+    _simulationGhost=option(design::Icon::Ghost,"Source pose","Where authored motion differs from the source clip, the part is drawn again, tinted, where the clip has it.",_nativeGhost);
+    connect(_simulationGhost,&QAbstractButton::toggled,this,[this](bool enabled){setNativeGhost(enabled);});
+    _simulationNoExtender=option(design::Icon::MagazineShort,"NoExtender reload","Use the animation set's optional NoExtender reload. QuickHands sets ship it for the unextended standard magazine.",false);
+    connect(_simulationNoExtender,&QAbstractButton::toggled,this,[this](bool enabled){setGlockNoExtender(enabled);rebuildWeapon();});
+    options->addWidget(_simulationSpring,0,0);options->addWidget(_simulationGhost,0,1);options->addWidget(_simulationNoExtender,0,2);
+    for(int column=0;column<3;++column)options->setColumnStretch(column,1);
+    layout->addLayout(options);
 
     section("Magazine");
     layout->addWidget(design::hintLabel("The reload hand, and the hand fit Grab magazine uses. Fits are set up in Reload builder › Part grips.",panel));
-    _interactionHandPicker=new QComboBox(panel);
-    _interactionHandPicker->addItem("Left hand · right firing grip");_interactionHandPicker->addItem("Right hand · left support grip");
+    _interactionHandPicker=new design::TileChoice(panel);
+    _interactionHandPicker->addChoice(design::Icon::HandLeft,"Left reload hand","Reload with the left hand; the right hand holds the firing grip.");
+    _interactionHandPicker->addChoice(design::Icon::HandRight,"Right reload hand","Reload with the right hand; the left hand holds the support grip.");
     layout->addWidget(_interactionHandPicker);
-    connect(_interactionHandPicker,qOverload<int>(&QComboBox::activated),this,[this](int i){(void)setInteractionHand(PoseHand(i));updateInteractionGripUi();});
+    connect(_interactionHandPicker->group(),&QButtonGroup::idClicked,this,[this](int i){(void)setInteractionHand(PoseHand(i));updateInteractionGripUi();});
     _simulationMagazineGrip=new QComboBox(panel);layout->addWidget(_simulationMagazineGrip);
     _simulationMagazineGrip->setToolTip("Saved hand grip for this magazine, used by Grab magazine. Create one in Reload builder › Part grips by selecting a pose and clicking its contact point.");
     connect(_simulationMagazineGrip,qOverload<int>(&QComboBox::activated),this,[this](int index) {
@@ -144,7 +157,8 @@ void ReloadMakerController::updateSimulationControls() {
         "Drag the "+part+" to rack. "+(!ar?QString():automatic?QString("Hold FIRE for automatic fire. "):QString("FIRE shoots once per press. "))+grabText+" Esc cancels.");
     _simulationSlideRelease->setVisible(!bolt);_simulationSpring->setVisible(!bolt);
     _simulationSlideRelease->setText(ar?"Bolt release":"Slide release");
-    _simulationSpring->setText(isAr15Configuration()?"Charging handle returns when released":ar?"Bolt returns when released":"Slide returns when released");
+    _simulationSpring->setText(isAr15Configuration()?"Handle returns":ar?"Bolt returns":"Slide returns");
+    _simulationSpring->setToolTip(isAr15Configuration()?"The charging handle returns when released.":ar?"The bolt returns when released.":"The slide returns when released.");
     _simulationFire->setToolTip(ar&&_simulationAmmo.automatic?"Press for one shot; hold for automatic fire.":"Fire one shot.");
     _simulationDrive->setInstructions(bolt?"Grab the bolt · pull back to lift and open · push forward to close and lock · releasing holds its position":
         ar?"Grab the "+part+" to rack · Bolt release closes the bolt · "+(automatic?"hold Fire for automatic fire":"background drag orbits"):"Grab the slide to rack it · linked parts follow · background drag orbits");

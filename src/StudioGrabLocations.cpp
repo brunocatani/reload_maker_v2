@@ -1,6 +1,7 @@
 #include "ReloadMakerController.h"
 #include "GripViewport.h"
 #include "design/DesignWidgets.h"
+#include <QButtonGroup>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -44,8 +45,9 @@ void ReloadMakerController::createGrabLocationsUi(){
     layout->addSpacing(8);layout->addWidget(sectionLabel("Operating fingers",page));
     _operatingGripStatus=hintLabel({},page);layout->addWidget(_operatingGripStatus);
     _operatingGripStatus->setToolTip("Saved finger shape only. In game your wrist follows your approach. Mouse preview applies the fingers to the native wrist; it does not run the VR contact solver.");
-    _operatingHandPicker=new QComboBox;_operatingHandPicker->addItem("Left hand");_operatingHandPicker->addItem("Right hand");layout->addWidget(_operatingHandPicker);
-    connect(_operatingHandPicker,qOverload<int>(&QComboBox::activated),this,[this](int i){(void)setInteractionHand(PoseHand(i));updateInteractionGripUi();});
+    _operatingHandPicker=new design::TileChoice;_operatingHandPicker->addChoice(design::Icon::HandLeft,"Left hand");_operatingHandPicker->addChoice(design::Icon::HandRight,"Right hand");
+    layout->addWidget(_operatingHandPicker);
+    connect(_operatingHandPicker->group(),&QButtonGroup::idClicked,this,[this](int i){(void)setInteractionHand(PoseHand(i));updateInteractionGripUi();});
     _operatingFingerPicker=new QComboBox;layout->addWidget(_operatingFingerPicker);
     _operatingFingerPicker->setToolTip("Replace this hand's operating finger pose. If the other hand is unassigned it uses a skeleton-aware mirror. Saved wrist placement is never applied.");
     connect(_operatingFingerPicker,qOverload<int>(&QComboBox::activated),this,[this](int index){if(index>0)(void)useOperatingFingers(_operatingFingerPicker->itemData(index).toString());});
