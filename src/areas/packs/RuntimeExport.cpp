@@ -419,13 +419,16 @@ namespace reloadmaker
             require(invertUniformTransform(full.poses[frame], inv), "Invalid payload carrier");
             return composed(composed(full.poses[0], inv), track.poses[frame]);
         };
-        // A magazine bone with no geometry below it is timing-only: posing it
-        // changes nothing the player sees, and a bone Maker added for a
-        // passive attachment does not exist in the game (rework 14, item 8).
+        // Every magazine bone the game has is posed, empty or not: in game
+        // another attachment may hang below a bone that is empty here. A bone
+        // Maker synthesized from the skeleton (for a passive attachment) does
+        // not exist in the game; with no geometry below it, it is left out.
         for (int index = 0; index < recipe.tracks.size(); ++index) {
             const auto& track = recipe.tracks[index];
             const bool magazinePart = _magazineSetup ? runtimeFullTrack(index) : track.anchor.anchorName.startsWith("WeaponMagazine");
-            if (!magazinePart || !track.surface) {
+            const bool synthesized = index < _reloadTrackNodes.size() && _reloadTrackNodes[index] >= 0 &&
+                                     _reloadTrackNodes[index] < _sceneNodes.size() && _synthesizedBones.contains(_sceneNodes[_reloadTrackNodes[index]]);
+            if (!magazinePart || (synthesized && !track.surface)) {
                 continue;
             }
             const int frame = sampledMagazinePayload() ? _m1aLoadedMagazineFrame : 0;

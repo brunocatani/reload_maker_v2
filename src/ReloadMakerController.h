@@ -1535,6 +1535,9 @@ namespace reloadmaker
         QVector<Transformf> _boundLocalPose;
         QVector<Transformf> _boundGlobalPose;
         QHash<QString, QPersistentModelIndex> _canonicalNodes;
+        // Bones createBoneNode added from the skeleton: absent from every
+        // loaded model, so they do not exist in the game.
+        QSet<QPersistentModelIndex> _synthesizedBones;
         QPersistentModelIndex _weaponRoot;
         QPersistentModelIndex _bodyRoot;
         QPersistentModelIndex _handsRoot;

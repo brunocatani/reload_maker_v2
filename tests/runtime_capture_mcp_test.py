@@ -16,6 +16,14 @@ NAMES={'glock':'Glock','ru556':'RU556','m1a':'M1A','timberwolf':'Timberwolf','l1
        'thanatos':'Thanatos',
        'srep-service':'SREPService','srep-ar10':'SREPAR10','srep-honeybadger':'SREPHoneyBadger','srep-xm16e1':'SREPXM16E1'}
 
+# The published SREP AR10, HoneyBadger and XM16E1 packs left out these empty
+# bones. Their receivers' meshes hold them under WeaponMagazine, so they exist
+# in the game's magazine clone; DIAMOND poses them and nothing visible moves.
+# Maker now lists every magazine bone the game has and leaves out only those it
+# synthesized from the skeleton, which the clone lacks (DIAMOND would reject them).
+EMPTY_RECEIVER_BONES=['WeaponMagazineChild%d'%i for i in range(1,6)]
+EXTRA_PARTS={'srep-ar10':EMPTY_RECEIVER_BONES,'srep-honeybadger':EMPTY_RECEIVER_BONES,'srep-xm16e1':EMPTY_RECEIVER_BONES}
+
 def read(path):return json.loads(path.read_text(encoding='utf-8'))
 def write(path,value):path.write_text(json.dumps(value,indent=2),encoding='utf-8')
 
@@ -74,8 +82,11 @@ def main(names,editor_project=None):
                         if field in a[key]:close(a[key][field],b[key][field],key+'/'+field)
                 for field in ('fireCycle','openingProgress','closingProgress','inputAxis','inputTravel','ejectProgress','operatingFingers'):
                     if field in old:close(old[field],captured['profile'][field],field)
+                extra=EXTRA_PARTS.get(name,[])
+                assert all(n in [part['name'] for part in captured['magazine']['parts']] for n in extra),(name,'magazine/parts',extra)
+                current=dict(captured['magazine'],parts=[part for part in captured['magazine']['parts'] if part['name'] not in extra])
                 for field in ('seat','modelInMagazine','motion','parts','emptyParts','grip','rightGrip'):
-                    if field in previous:close(previous[field],captured['magazine'][field],'magazine/'+field)
+                    if field in previous:close(previous[field],current[field],'magazine/'+field)
                 results.append(dict(testbed=name,selector=selector,nativeAccepted=True));print('PASS',name,flush=True)
             except Exception as error:
                 errors.append(dict(testbed=name,error=str(error)));print('FAIL',name,str(error),flush=True)

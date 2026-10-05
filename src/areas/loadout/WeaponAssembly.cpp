@@ -269,6 +269,7 @@ namespace reloadmaker
         blockLink(model, parent, node);
         const QPersistentModelIndex persistent(node);
         _canonicalNodes.insert(normalizedKey(bone.name), persistent);
+        _synthesizedBones.insert(persistent);
         return persistent;
     }
 
@@ -584,6 +585,7 @@ namespace reloadmaker
         refreshAnimations();
         if (!reuseGeometry) {
             _canonicalNodes.clear();
+            _synthesizedBones.clear();
             _partRoots.clear();
             _partSurfaces.clear();
             _partAlignmentAnchors.clear();
@@ -673,6 +675,7 @@ namespace reloadmaker
         _window->getGLView()->update();
         const int baseSkeletonBlockCount = destination.getBlockCount();
         _canonicalNodes = collectCanonicalNodes(0, baseSkeletonBlockCount);
+        _synthesizedBones.clear();
         if (!addSkinHelperBones(detail)) {
             error = QStringLiteral("Cannot complete the first-person skin skeleton: %1").arg(detail);
             return false;
