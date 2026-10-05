@@ -56,10 +56,21 @@ namespace reloadmaker
         if (placement.anchorName != "WeaponMagazine" && placement.anchorName != "WeaponExtra3") {
             return -1;
         }
+        // A frame on the installed magazine's model maps to the anchor the
+        // editor and simulation use for it. The first supported anchor on the
+        // model can be another one: on the Glock, the installed part's "Mag"
+        // root precedes the WeaponMagazine carrier, and the editor then never
+        // recognised its own draft.
+        const auto sameModel = [&](const HandPosePlacement& candidate) {
+            return candidate.ownerRecord.compare(placement.ownerRecord, Qt::CaseInsensitive) == 0 &&
+                normalizeNifPath(candidate.ownerModel) == normalizeNifPath(placement.ownerModel);
+        };
+        if (const int current = currentMagazineAnchor(); current >= 0 && sameModel(_handPoseAnchors[current].description)) {
+            return current;
+        }
         for (int i = 0; i < _handPoseAnchors.size(); ++i) {
             const auto& candidate = _handPoseAnchors[i].description;
-            if (magazineGrabSupported(candidate) && candidate.ownerRecord.compare(placement.ownerRecord, Qt::CaseInsensitive) == 0 &&
-                normalizeNifPath(candidate.ownerModel) == normalizeNifPath(placement.ownerModel)) {
+            if (magazineGrabSupported(candidate) && sameModel(candidate)) {
                 return i;
             }
         }
@@ -285,10 +296,20 @@ namespace reloadmaker
         }
         const auto previousAssignments = _magazineGrabGrips;
         const auto previousDefaults = _magazineGrabDefaults;
-        const auto key = handAssignmentKey(magazineGrabKey(grip.weaponRecord, grip.pose.placement.ownerRecord), grip.pose.hand);
-        _magazineGrabGrips[key] = grip.pose.id;
+        // A save for one hand supersedes a legacy key without a hand that holds
+        // a fit for that same hand, as Use weapon default does; left in place
+        // it could never be read again.
+        const auto assign = [&](QHash<QString, QString>& values, const QString& base) {
+            for (const auto& saved : _partGrips) {
+                if (saved.pose.id == values.value(base) && saved.pose.hand == grip.pose.hand) {
+                    values.remove(base);
+                }
+            }
+            values[handAssignmentKey(base, grip.pose.hand)] = grip.pose.id;
+        };
+        assign(_magazineGrabGrips, magazineGrabKey(grip.weaponRecord, grip.pose.placement.ownerRecord));
         if (allMagazines) {
-            _magazineGrabDefaults[handAssignmentKey(grip.weaponRecord, grip.pose.hand)] = grip.pose.id;
+            assign(_magazineGrabDefaults, grip.weaponRecord.toLower());
         }
         if (sameGripAnchor(_partGripDraft->pose.placement, grip.pose.placement)) {
             _partGripDraft = grip;

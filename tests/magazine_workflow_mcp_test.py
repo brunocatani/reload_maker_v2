@@ -101,12 +101,14 @@ try:
     for name in ['Weapon', 'RArm_Hand']:
         nearly(next(b['world'] for b in before_pose['bones'] if b['name']==name),
                next(b['world'] for b in after_pose['bones'] if b['name']==name))
-    saved = save(); new_id = saved['magazineEditor']['gripId']
+    saved = save(); new_id = saved["magazineEditor"]["gripId"]
     assert new_id != old_id and not saved['magazineEditor']['unsaved'], saved['magazineEditor']
     assert len(saved['magazineGrabGrips']) == len(before)
     persisted = json.loads(working.read_text(encoding='utf-8'))
+    # Fits are assigned per hand; the save replaces the legacy key without a hand.
     key = next(k for k, v in before.items() if v == old_id)
-    assert persisted['magazineGrabGrips'][key] == new_id
+    assert persisted['magazineGrabGrips'][key + '|' + saved['magazineEditor']['hand']] == new_id
+    assert key not in persisted['magazineGrabGrips'], 'Superseded legacy assignment kept'
     edit('workspace', index=5); ready()
     edit('simulate', operation='drop_magazine');edit('simulate', operation='grab_magazine')
     assert command('simulation_state')['magazineGrip']['id'] == new_id
