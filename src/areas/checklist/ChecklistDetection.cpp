@@ -207,7 +207,7 @@ namespace reloadmaker
         // Collision drafts are saved per configuration and need no rig.
         if (captured) {
             const auto drafts = saved.value("collisionDrafts").toObject();
-            const auto policy = collisionDraftPolicy(_reloadRecipe->id, sources, saved.value("magazineSetup").toObject());
+            const auto policy = collisionDraftPolicy(_reloadRecipe->id, sources, magazinePresentationJson(saved.value("magazineSetup").toObject()));
             const auto full = drafts["full"].toObject();
             const auto empty = drafts["empty"].toObject();
             const bool ready = full["usable"].toBool() && empty["usable"].toBool() && full["policy"] == policy && empty["policy"] == policy;
@@ -297,12 +297,16 @@ namespace reloadmaker
         // The magazine rail exists while Operate runs.
         if (o.contains("feed.presentation")) {
             if (_simulationActive && _magazineRail && _magazineError.isEmpty()) {
-                auto presentation = saved.value("magazineSetup").toObject();
+                // Round choices join the inputs only when the author made any,
+                // so confirmations without them stay valid.
+                auto presentation = magazinePresentationJson(saved.value("magazineSetup").toObject());
                 presentation["fullTrack"] = label(_magazineRail->fullTrack);
                 presentation["emptyTrack"] = label(_magazineRail->emptyTrack);
-                o["feed.presentation"] = found(QStringLiteral("Full: %1 · empty: %2").arg(label(_magazineRail->fullTrack), label(_magazineRail->emptyTrack)),
+                const auto rounds = std::count_if(_magazineVisuals.cbegin(), _magazineVisuals.cend(), [](const auto& v) { return v.cartridge && !v.nativeOnly && !v.empty; });
+                o["feed.presentation"] = found(QStringLiteral("Full: %1 · empty: %2 · rounds: %3 pieces").arg(label(_magazineRail->fullTrack), label(_magazineRail->emptyTrack)).arg(rounds),
                                                saved.contains("magazineSetup") ? QStringLiteral("Your models and payload settings.")
-                                                                               : QStringLiteral("Detected from the reload."),
+                                               : presentation.contains("rounds") ? QStringLiteral("Detected from the reload; rounds chosen by you.")
+                                                                                 : QStringLiteral("Detected from the reload; rounds from piece names and materials."),
                                                presentation);
                 o["feed.guide"] = found(QStringLiteral("%1 units outward").arg(_magazineRail->travel, 0, 'f', 1),
                                         saved.contains("magazineGuide") ? QStringLiteral("Your insertion guide.") : QStringLiteral("Detected from the reload."),

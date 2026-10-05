@@ -208,7 +208,13 @@ namespace reloadmaker
         connect(_checklistUndo, &QPushButton::clicked, this, [this] {
             runChecklistCommand({ { "operation", _checklistUndo->property("skip").toBool() ? "unskip" : "unconfirm" }, { "id", _selectedChecklistItem } });
         });
-        connect(_checklistOpen, &QPushButton::clicked, this, [this] { setWorkspace(_checklistOpen->property("workspace").toInt()); });
+        connect(_checklistOpen, &QPushButton::clicked, this, [this] {
+            if (_checklistOpen->property("rounds").toBool()) {
+                showMagazineRounds();
+            } else {
+                setWorkspace(_checklistOpen->property("workspace").toInt());
+            }
+        });
         connect(_checklistPresetChoice, qOverload<int>(&QComboBox::activated), this, [this] { refreshChecklistUi(); });
 
         // Re-evaluated while shown, only when something it reads changed.
@@ -435,8 +441,11 @@ namespace reloadmaker
         // Fire behavior is tried in Operate; sounds are tuned on their page.
         const bool sound = item.item.id == QLatin1String("fire.sound") || item.item.id == QLatin1String("fire.dry") || item.item.id == QLatin1String("sounds.reload");
         const bool fire = item.item.section == ChecklistSection::Fire && !sound;
-        _checklistOpen->setVisible(sound || fire);
-        _checklistOpen->setText(sound ? QStringLiteral("Open Sounds") : QStringLiteral("Try it in Operate"));
+        // The magazine presentation item edits which pieces are rounds.
+        const bool rounds = item.item.id == QLatin1String("feed.presentation");
+        _checklistOpen->setVisible(sound || fire || rounds);
+        _checklistOpen->setText(sound ? QStringLiteral("Open Sounds") : rounds ? QStringLiteral("Edit rounds hidden when empty") : QStringLiteral("Try it in Operate"));
         _checklistOpen->setProperty("workspace", sound ? int(SoundsWorkspace) : int(OperateWorkspace));
+        _checklistOpen->setProperty("rounds", rounds);
     }
 }

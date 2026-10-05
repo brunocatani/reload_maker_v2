@@ -412,6 +412,25 @@ def configure_magazine_presentation(operation: str, expected_revision: int, sett
     return command('magazine_setup',dict(operation=operation,settings=settings or {}),expected_revision)
 
 @mcp.tool()
+def get_magazine_rounds() -> dict:
+    """Read the selected magazine's pieces: round (hidden when empty) or body, and what Maker detected."""
+    return command('magazine_rounds_state')
+
+@mcp.tool()
+def configure_magazine_rounds(operation: str, expected_revision: int, rounds: dict | None = None) -> dict:
+    """Save or reset which pieces of the selected magazine are rounds, hidden when it is empty.
+
+    save: rounds maps piece paths from get_magazine_rounds to true (round) or
+    false (body); pieces left out keep their current role. Only choices that
+    differ from the detected role are kept. reset returns to the detected roles.
+    The choice belongs to the magazine and applies to every configuration that
+    uses it. At least one piece must stay a body. Afterwards, recapture and cook
+    both world models. A configuration with a saved presentation setup decides
+    its pieces there instead.
+    """
+    return command('magazine_rounds',dict(operation=operation,rounds=rounds or {}),expected_revision)
+
+@mcp.tool()
 def configure_magazine_guide(operation: str, expected_revision: int, settings: dict | None = None) -> dict:
     """Save or reset the magazine guide without flattening the visible animation.
 

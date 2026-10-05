@@ -611,6 +611,20 @@ namespace reloadmaker
         bool magazineReferenceCandidate(int anchor) const;
         QJsonObject configureMagazineSetup(const QJsonObject&);
         void showMagazineSetup();
+        // Rounds hidden when the magazine is empty (src/areas/magazine/
+        // MagazineRounds.cpp): per magazine record and model, the pieces whose
+        // round role the author changed from the detected one, keyed by their
+        // path from the full carrier. A saved magazine setup decides instead.
+        QHash<QString,QJsonObject> _magazineRounds;
+        QString magazineRoundsKey() const;
+        QString magazineRoundPath(const QModelIndex& node, const QModelIndex& carrier) const;
+        QJsonArray magazineRoundPieces() const;
+        void applyMagazineRounds(const MagazineRail& rail);
+        QJsonObject magazinePresentationJson(const QJsonObject& setup) const;
+        QJsonObject magazineRoundsState() const;
+        QJsonObject configureMagazineRounds(const QJsonObject&);
+        void previewMagazineOutside(bool empty);
+        void showMagazineRounds();
         QJsonObject packCoverageState(bool refresh=false);
         void showPackCoverage();
         QString selectionRecordKey(int selection) const;

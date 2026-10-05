@@ -72,6 +72,7 @@ namespace reloadmaker
         bool emptyBody = false;
         bool fullBody = false;
         classifyMagazineShapes(shapes, rail, emptyBody, fullBody);
+        applyMagazineRounds(rail);
         if (_magazineSetup && !applyMagazinePieceRoles(rail)) {
             return;
         }

@@ -35,6 +35,14 @@ namespace reloadmaker
                             return configureMagazineSetup(params);
                         } });
 
+        _commands.add({ "magazine_rounds_state", CommandAccess::Read, CommandGate::Always,
+                        [this](const QJsonObject&) -> std::optional<QJsonObject> { return magazineRoundsState(); } });
+
+        _commands.add({ "magazine_rounds", CommandAccess::Edit, CommandGate::Always,
+                        [this](const QJsonObject& params) -> std::optional<QJsonObject> {
+                            return configureMagazineRounds(params);
+                        } });
+
         _commands.add({ "capture_magazine_world", CommandAccess::Edit, CommandGate::Always,
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
                             require(params["empty"].isBool(), "Choose the full or empty presentation");

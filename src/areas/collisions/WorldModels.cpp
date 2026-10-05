@@ -87,8 +87,8 @@ namespace reloadmaker
         captured.referencePose = { { "space", "magazine-carrier" },          { "magazineRecord", anchor.ownerRecord }, { "model", anchor.ownerModel },
                                    { "presentation", empty ? "empty" : "full" }, { "sourceRecipeId", _reloadRecipe->id },   { "rootToWorld", frameJson(root) },
                                    { "sources", sourceEvidence() } };
-        if (_magazineSetup) {
-            captured.referencePose["presentationSetup"] = magazineSetupJson(*_magazineSetup);
+        if (const auto presentation = magazinePresentationJson(_magazineSetup ? magazineSetupJson(*_magazineSetup) : QJsonObject{}); !presentation.isEmpty()) {
+            captured.referencePose["presentationSetup"] = presentation;
         }
         return captured;
     }

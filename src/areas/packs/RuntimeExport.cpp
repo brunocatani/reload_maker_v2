@@ -336,8 +336,8 @@ namespace reloadmaker
                               { "emptyHidePrefix", "" } };
         magazine["fullPath"] = runtimeTrackPath(rail.fullTrack);
         magazine["emptyPath"] = runtimeTrackPath(rail.emptyTrack);
-        if (_magazineSetup) {
-            magazine["presentationSetup"] = magazineSetupJson(*_magazineSetup);
+        if (const auto presentation = magazinePresentationJson(_magazineSetup ? magazineSetupJson(*_magazineSetup) : QJsonObject{}); !presentation.isEmpty()) {
+            magazine["presentationSetup"] = presentation;
         }
         if (_magazineSetup && _magazineSetup->motion == "manual") {
             const auto movement = std::find_if(_mechanisms.cbegin(), _mechanisms.cend(), [&](const auto& m) { return m.id == _magazineSetup->movementId; });

@@ -6,6 +6,7 @@
 #include "areas/loadout/SceneTree.h"
 #include "model/nifmodel.h"
 
+#include <QTimer>
 #include <algorithm>
 
 
@@ -113,6 +114,23 @@ namespace reloadmaker
     bool ReloadMakerController::sampledMagazinePayload() const
     {
         return _magazineSetup ? _magazineSetup->sampledPayload : isM1AConfiguration();
+    }
+
+    // Shows the magazine in Operate outside the weapon, full or empty, so its
+    // presentation can be checked. Needs the magazine rail.
+    void ReloadMakerController::previewMagazineOutside(bool empty)
+    {
+        if (!_magazineRail) {
+            return;
+        }
+        setWorkspace(OperateWorkspace);
+        _simulationTimer->stop();
+        _simulation.reset();
+        _simulation.magazine.phase = MagazinePhase::OutsideEmpty;
+        _simulation.magazine.distance = _magazineRail->travel;
+        _simulation.magazine.offset = magazineInputOffset(*_magazineRail, _magazineRail->travel);
+        _simulation.magazineRounds = empty ? 0 : _simulationAmmo.capacity;
+        updateMagazinePose();
     }
 
     // Re-poses the simulation after the magazine moved.

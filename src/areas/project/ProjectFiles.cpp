@@ -250,6 +250,23 @@ namespace reloadmaker
                     return false;
                 }
             }
+            // Round choices: magazine record|model -> piece path -> round.
+            const auto rounds = record["magazineRounds"].toObject();
+            if ((record.contains("magazineRounds") && !record["magazineRounds"].isObject()) || rounds.size() > 512) {
+                message = "Invalid magazine round choices.";
+                return false;
+            }
+            for (auto it = rounds.begin(); it != rounds.end(); ++it) {
+                const auto pieces = it.value().toObject();
+                bool valid = it.key().contains('|') && it.key().size() <= 1024 && it.value().isObject() && !pieces.isEmpty() && pieces.size() <= 256;
+                for (auto piece = pieces.begin(); valid && piece != pieces.end(); ++piece) {
+                    valid = !piece.key().isEmpty() && piece.key().size() <= 4096 && piece.value().isBool();
+                }
+                if (!valid) {
+                    message = "Invalid magazine round choice.";
+                    return false;
+                }
+            }
             return true;
         }
 
@@ -487,6 +504,13 @@ namespace reloadmaker
         record["scopeSelection"] = currentScopeKey();
         record["operatingGrips"] = stringMapJson(_savedOperatingGrips);
         record["magazineGrabDefaults"] = stringMapJson(_magazineGrabDefaults);
+        if (!_magazineRounds.isEmpty()) {
+            QJsonObject rounds;
+            for (auto it = _magazineRounds.cbegin(); it != _magazineRounds.cend(); ++it) {
+                rounds[it.key()] = it.value();
+            }
+            record["magazineRounds"] = rounds;
+        }
         if (_simulationRig && _reloadRecipe) {
             record["simulationSetup"] = simulationRigJson(*_reloadRecipe, *_simulationRig, _slideSpringReturn);
         }
@@ -773,6 +797,11 @@ namespace reloadmaker
         const auto magazineDefaults = record["magazineGrabDefaults"].toObject();
         for (auto it = magazineDefaults.begin(); it != magazineDefaults.end(); ++it) {
             _magazineGrabDefaults[it.key().toLower()] = it.value().toString();
+        }
+        _magazineRounds.clear();
+        const auto rounds = record["magazineRounds"].toObject();
+        for (auto it = rounds.begin(); it != rounds.end(); ++it) {
+            _magazineRounds[it.key().toLower()] = it.value().toObject();
         }
         _partGripDraft.reset();
         _operateSuspendedGrip.reset();
