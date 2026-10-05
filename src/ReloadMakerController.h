@@ -433,6 +433,7 @@ namespace reloadmaker
         QLabel* _checklistCount{nullptr};
         QProgressBar* _checklistProgress{nullptr};
         QLabel* _checklistBanner{nullptr};
+        QLabel* _checklistFooter{nullptr}; // status footer counts while the checklist shows
         QButtonGroup* _checklistItemButtons{nullptr};
         std::array<design::ChecklistRow*, 6> _checklistSectionRows{};
         std::array<QWidget*, 6> _checklistSectionBoxes{};

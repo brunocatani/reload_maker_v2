@@ -7,6 +7,7 @@
 #include "ReloadTemplates.h"
 #include "design/DesignWidgets.h"
 #include "design/Theme.h"
+#include "StudioWindow.h"
 
 #include <QButtonGroup>
 #include <QComboBox>
@@ -17,6 +18,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QStackedWidget>
+#include <QStatusBar>
 #include <QStyle>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -66,6 +68,12 @@ namespace reloadmaker
     void ReloadMakerController::createChecklistPanel()
     {
         _checklistPanel = new QWidget(_leftStack);
+        // The footer repeats what is left, as on the builder board.
+        _checklistFooter = new QLabel(_window);
+        _checklistFooter->setObjectName(QStringLiteral("ChecklistFooter"));
+        _checklistFooter->setTextFormat(Qt::RichText);
+        _checklistFooter->hide();
+        _window->statusBar()->insertPermanentWidget(0, _checklistFooter);
         auto* layout = new QVBoxLayout(_checklistPanel);
         layout->setContentsMargins(10, 14, 10, 10);
         layout->setSpacing(6);
@@ -240,6 +248,9 @@ namespace reloadmaker
     void ReloadMakerController::refreshChecklistUi()
     {
         if (!_checklistPanel || !_checklistPanel->isVisible()) {
+            if (_checklistFooter) {
+                _checklistFooter->hide();
+            }
             return;
         }
         prepareChecklistEvidence();
@@ -348,6 +359,20 @@ namespace reloadmaker
             setTone(_checklistBanner, "attention");
         }
         _checklistBanner->setVisible(true);
+        QStringList footer;
+        if (view.preset && s.complete) {
+            footer << QStringLiteral("Checklist complete");
+        } else if (view.preset) {
+            if (s.needsYou) {
+                footer << QStringLiteral("<span style=\"color:%1\">%2</span>")
+                              .arg(hex(color::needsYou), s.needsYou == 1 ? QStringLiteral("1 item needs you") : QStringLiteral("%1 items need you").arg(s.needsYou));
+            }
+            if (s.toConfirm) {
+                footer << (s.toConfirm == 1 ? QStringLiteral("1 detected item to confirm") : QStringLiteral("%1 detected items to confirm").arg(s.toConfirm));
+            }
+        }
+        _checklistFooter->setText(footer.join(QStringLiteral(" &nbsp;·&nbsp; ")));
+        _checklistFooter->setVisible(!footer.isEmpty());
 
         _checklistCard->setVisible(selected != nullptr);
         if (!selected) {

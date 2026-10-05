@@ -135,6 +135,7 @@ QLabel#StateChip[tone="na"] { background:@row; color:@textMuted; }
 QLabel#ChecklistBanner { border-radius:8px; padding:8px 10px; font-size:12px; background:@doneFill; color:@done; }
 QLabel#ChecklistBanner[tone="attention"] { background:@card; color:@textSecondary; border:1px solid @border; }
 QLabel#ViewHint { color:@textFaint; font-size:12px; }
+QLabel#ChecklistFooter { color:@textMuted; font-size:12px; padding-right:14px; }
 QLabel#ClipPath { color:@textMuted; font-size:12px; }
 QLabel#TimeLabel { color:@text; }
 QLabel#SourceLabel { color:@textMuted; }
