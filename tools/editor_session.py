@@ -81,7 +81,9 @@ def close_editor(process):
 
 
 def corpus_files():
-    """The settings file plus every session the testbed switcher can open or save."""
+    """The settings file plus every session the testbed switcher can open or save,
+    with the checklist status file a weapon project keeps beside it (which may
+    not exist yet)."""
     settings = configparser.ConfigParser(interpolation=None)
     settings.optionxform = str
     settings.read(SETTINGS, encoding='utf-8')
@@ -90,17 +92,22 @@ def corpus_files():
     for section, key in keys:
         if settings.has_option(section, key):
             files.append(Path(settings.get(section, key)))
-    return [path for path in files if path.exists()]
+    files = [path for path in files if path.exists()]
+    return files + [path.with_name('status.json') for path in files if path.name == 'authoring.project.json']
 
 
 def snapshot(paths):
-    return {path: path.read_bytes() for path in paths}
+    return {path: path.read_bytes() if path.exists() else None for path in paths}
 
 
 def restore(saved):
     restored = []
     for path, data in saved.items():
-        if not path.exists() or path.read_bytes() != data:
+        if data is None:
+            if path.exists():
+                path.unlink()
+                restored.append(str(path))
+        elif not path.exists() or path.read_bytes() != data:
             path.write_bytes(data)
             restored.append(str(path))
     return restored

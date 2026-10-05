@@ -179,7 +179,7 @@ def prepare_worker(index):
     # Testbed projects kept outside the workspace folder are part of the corpus too.
     for path in corpus_files():
         path = path.resolve()
-        if path == SETTINGS or not path.is_relative_to(ROOT) or path.is_relative_to(ROOT / 'workspace'):
+        if path == SETTINGS or not path.exists() or not path.is_relative_to(ROOT) or path.is_relative_to(ROOT / 'workspace'):
             continue
         copy = worker / path.relative_to(ROOT)
         copy.parent.mkdir(parents=True, exist_ok=True)
