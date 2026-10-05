@@ -42,12 +42,12 @@ namespace reloadmaker
 
     // Index of the magazine's hand anchor, or -1 when it is missing or
     // ambiguous. A saved magazine reference names it. Otherwise, when the
-    // WeaponMagazine bone belongs to the frame (the receiver the export
-    // names, or the weapon's own model), the magazine is the part mounted
-    // into that bone: the outermost installed part inside it. A magazine
-    // model that brings its own bone, or one built into the receiver with
-    // nothing mounted, is grabbed by that bone. Parts nested in a magazine
-    // (the Timberwolf's rounds model) are never the magazine.
+    // magazine carrier belongs to the frame (the receiver the export names,
+    // or the weapon's own model), the magazine is the part mounted into the
+    // carrier: the outermost installed part inside it. A magazine model that
+    // brings its own carrier, or one built into the receiver with nothing
+    // mounted, is grabbed by that carrier. Parts nested in a magazine (the
+    // Timberwolf's rounds model) are never the magazine.
     int ReloadMakerController::currentMagazineAnchor() const
     {
         const auto saved = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineReference").toObject();
@@ -73,9 +73,16 @@ namespace reloadmaker
         if (!model) {
             return -1;
         }
+        // The carrier is the rig's magazine track, so the hand anchor and the
+        // exported identity are the same node even when the operating setup
+        // picks a helper pivot (the USP's WeaponMagazineChild2). Before the
+        // reload is prepared, the WeaponMagazine bone.
         QVector<int> carriers;
+        const bool rigged = _simulationRig && _reloadRecipe && _simulationRig->magazine >= 0 && _simulationRig->magazine < _reloadRecipe->tracks.size();
         for (int i = 0; i < _handPoseAnchors.size(); ++i) {
-            if (_handPoseAnchors[i].description.anchorName.compare("WeaponMagazine", Qt::CaseInsensitive) == 0) {
+            const auto& anchor = _handPoseAnchors[i].description;
+            if (rigged ? sameMechanismPart(anchor, _reloadRecipe->tracks[_simulationRig->magazine].anchor)
+                       : anchor.anchorName.compare("WeaponMagazine", Qt::CaseInsensitive) == 0) {
                 carriers.append(i);
             }
         }
