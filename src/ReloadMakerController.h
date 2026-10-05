@@ -903,7 +903,7 @@ namespace reloadmaker
         QLineEdit* _grabLocationName{};
         QDoubleSpinBox* _grabLocationPosition[3]{};
         QDoubleSpinBox* _grabLocationRadius{};
-        QComboBox* _grabLocationHands{};
+        design::TileChoice* _grabLocationHands{};
         QLabel* _grabLocationStatus{};
         bool _editingGrabLocationUi{},_pickingGrabLocation{},_replaceGrabLocation{};
         QString operatingGroup() const;
@@ -1348,7 +1348,7 @@ namespace reloadmaker
         QDockWidget* _handPoseDock{nullptr};
         QLineEdit* _handPoseName{nullptr};
         QPlainTextEdit* _handPoseNotes{nullptr};
-        QComboBox* _handPoseSide{nullptr};
+        design::TileChoice* _handPoseSide{nullptr};
         QComboBox* _handPoseAnchor{nullptr};
         QPushButton* _saveHandPose{nullptr};
         QPushButton* _previewHandPose{nullptr};

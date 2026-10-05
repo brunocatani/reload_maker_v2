@@ -42,6 +42,7 @@ namespace reloadmaker::design
         MagazineShort,
         HandLeft,
         HandRight,
+        HandBoth,       // either hand
         Mirror,         // two halves facing a centre line
     };
 

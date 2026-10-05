@@ -17,8 +17,13 @@
 #include <QUuid>
 #include <stdexcept>
 #include <algorithm>
+#include <iterator>
 
 namespace reloadmaker {
+namespace {
+// Grab point hand masks in the order of the Allowed hand tiles.
+constexpr int kGrabLocationMasks[] = { 3, 1, 2 };
+}
 void ReloadMakerController::createGrabLocationsUi(){
     // The Grab points inspector: the points, the selected point, save.
     using namespace design;
@@ -31,7 +36,12 @@ void ReloadMakerController::createGrabLocationsUi(){
     layout->addSpacing(8);layout->addWidget(sectionLabel("Selected point",page));
     auto* form=new QFormLayout;form->setSpacing(8);_grabLocationName=new QLineEdit;_grabLocationName->setMaxLength(128);form->addRow("Name",_grabLocationName);
     _grabLocationRadius=new QDoubleSpinBox;_grabLocationRadius->setRange(.1,64);_grabLocationRadius->setDecimals(2);_grabLocationRadius->setSuffix(" game units");_grabLocationRadius->setKeyboardTracking(false);form->addRow("Grab radius",_grabLocationRadius);
-    _grabLocationHands=new QComboBox;_grabLocationHands->addItem("Either hand",3);_grabLocationHands->addItem("Left hand",1);_grabLocationHands->addItem("Right hand",2);form->addRow("Allowed hand",_grabLocationHands);layout->addLayout(form);
+    layout->addLayout(form);
+    // Tile order matches kGrabLocationMasks: either, left, right.
+    layout->addWidget(sectionLabel("Allowed hand",page));
+    _grabLocationHands=new design::TileChoice(page);
+    _grabLocationHands->addChoice(design::Icon::HandBoth,"Either hand");_grabLocationHands->addChoice(design::Icon::HandLeft,"Left hand");_grabLocationHands->addChoice(design::Icon::HandRight,"Right hand");
+    layout->addWidget(_grabLocationHands);
     auto* fromPalm=new QPushButton("Use picked palm contact");fromPalm->setToolTip("Copy the existing Part grip's explicitly picked contact, keeping its wrist and finger pose unchanged.");
     auto* remove=new QPushButton("Remove");remove->setToolTip("Remove the selected point");
     auto* pointActions=new QHBoxLayout;pointActions->setSpacing(6);pointActions->addWidget(fromPalm,1);pointActions->addWidget(remove);layout->addLayout(pointActions);
@@ -60,8 +70,8 @@ void ReloadMakerController::createGrabLocationsUi(){
     connect(remove,&QPushButton::clicked,this,[action]{action({{"operation","remove"}});});
     connect(fromPalm,&QPushButton::clicked,this,[action]{action({{"operation","use_palm"}});});
     connect(_grabLocationList,&QListWidget::currentRowChanged,this,[this](int row){selectGrabLocation(row);});
-    const auto edit=[this,action]{if(_editingGrabLocationUi)return;action({{"operation","edit"},{"name",_grabLocationName->text()},{"pointInSource",QJsonArray{_grabLocationPosition[0]->value(),_grabLocationPosition[1]->value(),_grabLocationPosition[2]->value()}},{"radiusGame",_grabLocationRadius->value()},{"handMask",_grabLocationHands->currentData().toInt()}});};
-    connect(_grabLocationName,&QLineEdit::editingFinished,this,edit);connect(_grabLocationHands,qOverload<int>(&QComboBox::activated),this,edit);
+    const auto edit=[this,action]{if(_editingGrabLocationUi)return;action({{"operation","edit"},{"name",_grabLocationName->text()},{"pointInSource",QJsonArray{_grabLocationPosition[0]->value(),_grabLocationPosition[1]->value(),_grabLocationPosition[2]->value()}},{"radiusGame",_grabLocationRadius->value()},{"handMask",kGrabLocationMasks[std::max(0,_grabLocationHands->currentIndex())]}});};
+    connect(_grabLocationName,&QLineEdit::editingFinished,this,edit);connect(_grabLocationHands->group(),&QButtonGroup::idClicked,this,edit);
     for(auto* spin:{_grabLocationPosition[0],_grabLocationPosition[1],_grabLocationPosition[2],_grabLocationRadius})connect(spin,qOverload<double>(&QDoubleSpinBox::valueChanged),this,edit);
     refreshGrabLocationsUi();
 }
@@ -73,7 +83,7 @@ void ReloadMakerController::refreshGrabLocationsUi(){
     {const QSignalBlocker b(_grabLocationList);_grabLocationList->clear();for(const auto& p:g.points)_grabLocationList->addItem(p.name);if(!g.points.isEmpty())_grabLocationList->setCurrentRow(index);}
     const bool selected=index<g.points.size();_grabLocationName->setEnabled(selected);_grabLocationRadius->setEnabled(selected);_grabLocationHands->setEnabled(selected);
     for(auto* spin:_grabLocationPosition)spin->setEnabled(selected);
-    if(selected){const auto& p=g.points[index];_grabLocationName->setText(p.name);_grabLocationPosition[0]->setValue(p.point.x);_grabLocationPosition[1]->setValue(p.point.y);_grabLocationPosition[2]->setValue(p.point.z);_grabLocationRadius->setValue(p.radius);_grabLocationHands->setCurrentIndex(_grabLocationHands->findData(p.hands));}
+    if(selected){const auto& p=g.points[index];_grabLocationName->setText(p.name);_grabLocationPosition[0]->setValue(p.point.x);_grabLocationPosition[1]->setValue(p.point.y);_grabLocationPosition[2]->setValue(p.point.z);_grabLocationRadius->setValue(p.radius);_grabLocationHands->setCurrentIndex(int(std::find(std::begin(kGrabLocationMasks),std::end(kGrabLocationMasks),p.hands)-std::begin(kGrabLocationMasks)));}
     else _grabLocationName->clear();
     _grabLocationStatus->setText(g.weapon.isEmpty()?"Prepare the weapon in Operate first.":g.points.isEmpty()?"No points yet. Pick a point on the operating part, then save.":QString("%1 points on %2, shared by compatible variants of this part model.").arg(g.points.size()).arg(g.sourceName));
     _editingGrabLocationUi=false;

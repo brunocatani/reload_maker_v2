@@ -2,6 +2,7 @@
 #include "design/DesignWidgets.h"
 #include "StudioWindow.h"
 
+#include <QButtonGroup>
 #include <QComboBox>
 #include <QDesktopServices>
 #include <QDir>
@@ -74,9 +75,10 @@ namespace reloadmaker {
         _handPoseName = new QLineEdit(panel);
         _handPoseName->setMaxLength(kPoseNameLength);
         _handPoseName->setPlaceholderText(QStringLiteral("e.g. Bolt pinch · relaxed"));
-        _handPoseSide = new QComboBox(panel);
-        _handPoseSide->addItem(QStringLiteral("Right hand"), static_cast<int>(PoseHand::Right));
-        _handPoseSide->addItem(QStringLiteral("Left hand"), static_cast<int>(PoseHand::Left));
+        // Tile index is the PoseHand value.
+        _handPoseSide = new design::TileChoice(panel);
+        _handPoseSide->addChoice(design::Icon::HandLeft, QStringLiteral("Left hand"));
+        _handPoseSide->addChoice(design::Icon::HandRight, QStringLiteral("Right hand"));
         _handPoseAnchor = new QComboBox(panel);
         _handPoseAnchor->setMinimumContentsLength(12);
         _handPoseAnchor->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
@@ -109,8 +111,8 @@ namespace reloadmaker {
         _handPoseDock->show(); _handPoseDock->raise();
         connect(_handPoseName, &QLineEdit::textChanged, this, &ReloadMakerController::setHandCaptureName);
         connect(_handPoseNotes, &QPlainTextEdit::textChanged, this, [this]() { setHandCaptureNotes(_handPoseNotes->toPlainText()); });
-        connect(_handPoseSide, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int index) {
-            setEditedHand(static_cast<PoseHand>(_handPoseSide->itemData(index).toInt()));
+        connect(_handPoseSide->group(), &QButtonGroup::idClicked, this, [this](int index) {
+            setEditedHand(static_cast<PoseHand>(index));
         });
         connect(_handPoseSearch, &QLineEdit::textChanged, this, &ReloadMakerController::setHandPoseFilter);
         connect(_handPoseList, &QListWidget::currentItemChanged, this, [this](QListWidgetItem* item) {
@@ -203,8 +205,7 @@ namespace reloadmaker {
     void ReloadMakerController::showEditedHand()
     {
         if (!_handPoseSide) { return; }
-        const QSignalBlocker blocker(_handPoseSide);
-        _handPoseSide->setCurrentIndex(_handPoseSide->findData(int(_editedHand)));
+        _handPoseSide->setCurrentIndex(int(_editedHand));
     }
 
     void ReloadMakerController::showHandPoseAnchors()

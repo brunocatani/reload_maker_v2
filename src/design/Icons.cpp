@@ -214,6 +214,11 @@ namespace reloadmaker::design
                 return { mirrored(hand()) };
             case Icon::HandRight:
                 return { hand() };
+            case Icon::HandBoth:
+                // The two hands at two thirds size, side by side.
+                path = QTransform::fromScale(0.62, 0.62).translate(-1, 7).map(mirrored(hand()));
+                path.addPath(QTransform::fromScale(0.62, 0.62).translate(15.5, 7).map(hand()));
+                return { path };
             case Icon::Mirror:
                 path = polyline({ { 9.5, 6 }, { 9.5, 18 }, { 3, 18 } });
                 path.closeSubpath();
