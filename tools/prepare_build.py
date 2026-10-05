@@ -44,13 +44,13 @@ def remove_method(text, signature):
 
 patch('src/glview.h', [
     ('\tQModelIndex indexAt( const QPointF & p, bool shiftModifier = false );',
-     '\tQModelIndex indexAt( const QPointF & p, bool shiftModifier = false );\n\tQMatrix4x4 reloadMakerWorldToClip() const;\n\tQImage studioCaptureFrame();\n\tQJsonObject studioDiagnostics() const;\n\tQVector<QVector3D> studioGeometryBounds(const QVector<int>& blocks);\n\tbool studioFitBounds(const QVector<QVector3D>& points);\n\tQJsonObject studioCameraState() const;\n\tbool studioRestoreCamera(const QJsonObject& value);\n\tbool reloadMakerSurfaceAt(const QPointF& point, const QVector<int>& allowedBlocks, int& block, Vector3& world);'),
-    ('#include <QOpenGLWindow> // Inherited', '#include <QOpenGLWindow> // Inherited\n#include <QMatrix4x4>\n#include <QJsonObject>\n#include <QVector3D>'),
+     '\tQModelIndex indexAt( const QPointF & p, bool shiftModifier = false );\n\tQMatrix4x4 reloadMakerWorldToClip() const;\n\tQImage studioCaptureFrame();\n\tQJsonObject studioDiagnostics() const;\n\tQVector<QVector3D> studioGeometryBounds(const QVector<int>& blocks);\n\tbool studioFitBounds(const QVector<QVector3D>& points);\n\tQJsonObject studioCameraState() const;\n\tbool studioRestoreCamera(const QJsonObject& value);\n\tbool reloadMakerSurfaceAt(const QPointF& point, const QVector<int>& allowedBlocks, int& block, Vector3& world);\n\t// Part outlines drawn after the scene (ReloadMakerHighlight.cpp).\n\tstruct ReloadMakerHighlight { QVector<int> blocks; QColor color; float width = 3.0f; };\n\tvoid reloadMakerSetHighlights(QVector<ReloadMakerHighlight> highlights);\n\tvoid reloadMakerDrawHighlights();\n\tQVector<ReloadMakerHighlight> reloadMakerHighlights;\n\tunsigned int reloadMakerHighlightQuery = 0;\n\tbool reloadMakerHighlightQueryPending = false;\n\tdouble reloadMakerHighlightMs = -1.0;'),
+    ('#include <QOpenGLWindow> // Inherited', '#include <QOpenGLWindow> // Inherited\n#include <QColor>\n#include <QMatrix4x4>\n#include <QJsonObject>\n#include <QVector3D>'),
     ('\tstatic bool selectPBRCubeMapForGame( quint32 bsVersion );', ''),
     ('\tvoid selectPBRCubeMap();', '')])
 patch('src/gl/glshape.h', [
     ('\tvirtual void updateLodLevel() { lodTriangleCount = triangles.size(); }',
-     '\tvirtual void updateLodLevel() { lodTriangleCount = triangles.size(); }\n\tvoid reloadMakerDrawSurface();\n\tQVector<int> reloadMakerSkinBones() const;\n\tQVector<Vector3> reloadMakerCollisionVertices() const;\n\tqsizetype reloadMakerCollisionTriangleCount() const;\n\tQJsonObject reloadMakerRigidMeshJson() const;'),
+     '\tvirtual void updateLodLevel() { lodTriangleCount = triangles.size(); }\n\tvoid reloadMakerDrawSurface();\n\tvoid reloadMakerDrawHighlight(const FloatVector4& color);\n\tQVector<int> reloadMakerSkinBones() const;\n\tQVector<Vector3> reloadMakerCollisionVertices() const;\n\tqsizetype reloadMakerCollisionTriangleCount() const;\n\tQJsonObject reloadMakerRigidMeshJson() const;'),
     ('#include <QString>', '#include <QString>\n#include <QJsonObject>')])
 patch('src/glview.cpp', [
     ('#include "nifskope.h"', ''),
@@ -68,6 +68,8 @@ patch('src/glview.cpp', [
     ('\t\tauto ns = qobject_cast<NifSkope *>( graphicsView->parent() );\n\t\tif ( ns )\n\t\t\tns->openFiles( draggedNifs );',
      '\t\t// Source selection belongs to the studio, never a generic NIF window.'),
     ('\temit paintUpdate();', '\tglProjection();\n\temit paintUpdate();'),
+    # Selection and hover outlines, over the model and under the axes overlay.
+    ('\tglDisable( GL_BLEND );\n\tscene->draw();\n', '\tglDisable( GL_BLEND );\n\tscene->draw();\n\treloadMakerDrawHighlights();\n'),
     # An unattended (automated) editor never waits for the display between
     # commands; the interactive editor keeps V-Sync.
     ('\tfmt.setSwapInterval( DEBUG_FRAME_TIME ? 0 : 1 );',

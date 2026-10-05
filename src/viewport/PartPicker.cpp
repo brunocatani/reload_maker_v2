@@ -1,6 +1,7 @@
 #include "viewport/PartPicker.h"
 
 #include "SlotOverlay.h"
+#include "design/Theme.h"
 #include "glview.h"
 #include "gl/glscene.h"
 #include "gl/glshape.h"
@@ -15,6 +16,9 @@ namespace reloadmaker
         // Hover descriptions wait until the pointer rests; each pick renders the
         // part surfaces offscreen, which is too costly for every mouse move.
         constexpr int kHoverDelayMilliseconds = 250;
+        // Outline widths in logical pixels; about half of each lies outside the part.
+        constexpr float kSelectedOutlineWidth = 4.0f;
+        constexpr float kHoveredOutlineWidth = 3.0f;
     }
 
     PartPicker::PartPicker(GLView* view, QObject* parent) : QObject(parent), _view(view)
@@ -31,19 +35,55 @@ namespace reloadmaker
         _press.reset();
         _pressDouble = false;
         _hoverTimer.stop();
+        _hovered.reset();
         if (!active) {
             QToolTip::hideText();
         }
+        refreshHighlights();
     }
 
     void PartPicker::setParts(QVector<PartSurfaces> parts)
     {
         _slotByBlock.clear();
+        _blocksBySlot.clear();
         for (const auto& part : parts) {
             for (const int block : part.blocks) {
                 _slotByBlock.insert(block, part.slot);
             }
+            _blocksBySlot[part.slot] += part.blocks;
         }
+        refreshHighlights();
+    }
+
+    void PartPicker::setSelected(std::optional<SlotKey> slot)
+    {
+        _selected = slot;
+        refreshHighlights();
+    }
+
+    void PartPicker::setHovered(std::optional<SlotKey> slot)
+    {
+        if (_hovered != slot) {
+            _hovered = slot;
+            refreshHighlights();
+        }
+    }
+
+    // Hover first, so the selection draws over it where they meet.
+    void PartPicker::refreshHighlights()
+    {
+        QVector<GLView::ReloadMakerHighlight> highlights;
+        if (_active) {
+            if (_hovered && _hovered != _selected) {
+                QColor color = QColor::fromRgba(design::color::text);
+                color.setAlphaF(0.7f);
+                highlights.append({ _blocksBySlot.value(*_hovered), color, kHoveredOutlineWidth });
+            }
+            if (_selected) {
+                highlights.append({ _blocksBySlot.value(*_selected), QColor::fromRgba(design::color::selection), kSelectedOutlineWidth });
+            }
+        }
+        _view->reloadMakerSetHighlights(std::move(highlights));
     }
 
     std::optional<SlotKey> PartPicker::partAt(QPointF point) const
@@ -106,6 +146,7 @@ namespace reloadmaker
             const auto* mouse = static_cast<QMouseEvent*>(event);
             _hoverTimer.stop();
             QToolTip::hideText();
+            setHovered(std::nullopt);
             if (mouse->button() == Qt::LeftButton || mouse->button() == Qt::RightButton) {
                 _press = mouse->position();
                 _pressButton = mouse->button();
@@ -166,6 +207,7 @@ namespace reloadmaker
             _press.reset();
             _hoverTimer.stop();
             QToolTip::hideText();
+            setHovered(std::nullopt);
             break;
         default:
             break;
@@ -175,11 +217,12 @@ namespace reloadmaker
 
     void PartPicker::showHoverDescription()
     {
-        if (!_active || !describe) {
+        if (!_active) {
             return;
         }
         const auto slot = partAt(_hoverPoint);
-        if (!slot) {
+        setHovered(slot);
+        if (!slot || !describe) {
             QToolTip::hideText();
             return;
         }

@@ -40,6 +40,9 @@ namespace reloadmaker
 
         void setActive(bool active);
         void setParts(QVector<PartSurfaces> parts);
+        // The focused part, outlined in the selection colour while picking is
+        // active. A part under the resting pointer gets a lighter outline.
+        void setSelected(std::optional<SlotKey> slot);
         [[nodiscard]] std::optional<SlotKey> partAt(QPointF point) const;
         // A completed click at a viewport point. Also called by tools that
         // capture weapon-surface presses to block orbit but do not use them.
@@ -59,9 +62,14 @@ namespace reloadmaker
 
     private:
         void showHoverDescription();
+        void setHovered(std::optional<SlotKey> slot);
+        void refreshHighlights();
 
         GLView* _view;
         QHash<int, SlotKey> _slotByBlock;
+        QHash<SlotKey, QVector<int>> _blocksBySlot;
+        std::optional<SlotKey> _selected;
+        std::optional<SlotKey> _hovered;
         std::optional<QPointF> _press;
         Qt::MouseButton _pressButton{ Qt::NoButton };
         bool _pressDouble{ false };

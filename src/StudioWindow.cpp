@@ -51,12 +51,17 @@ QImage GLView::studioCaptureFrame() {
     return result;
 }
 QJsonObject GLView::studioDiagnostics() const {
-    QJsonArray meshes;
+    QJsonArray meshes,highlights;
+    for(const auto& highlight:reloadMakerHighlights){QJsonArray blocks;for(const int block:highlight.blocks)blocks.append(block);
+        highlights.append(QJsonObject{{"blocks",blocks},{"color",highlight.color.name(QColor::HexArgb)},{"width",highlight.width}});}
     if (scene&&!doCompile&&!isDisabled) for (const auto* shape : scene->shapes) {
-        if (shape) meshes.append(QJsonObject{{"block",shape->id()},{"hidden",shape->isHidden()},{"triangles",shape->triangles.size()}});
+        if (shape) meshes.append(QJsonObject{{"block",shape->id()},{"name",model?model->get<QString>(model->getBlockIndex(shape->id()),"Name"):QString()},
+            {"hidden",shape->isHidden()},{"triangles",shape->triangles.size()}});
     }
     return {{"renderer",bool(scene&&scene->haveRenderer())},{"validContext",isValid()},{"sceneReady",bool(scene&&!doCompile&&!isDisabled)},
         {"disabled",isDisabled},{"compilePending",int(doCompile)},{"modelBlocks",model?model->getBlockCount():0},
         {"meshes",meshes},{"fieldOfView",cfg.fov},{"navigationScale",axis},{"distance",Dist},{"zoom",Zoom},{"position",QJsonArray{Pos[0],Pos[1],Pos[2]}},
-        {"rotation",QJsonArray{Rot[0],Rot[1],Rot[2]}},{"width",width()},{"height",height()}};
+        {"rotation",QJsonArray{Rot[0],Rot[1],Rot[2]}},{"width",width()},{"height",height()},
+        // GPU time of the latest measured part-outline pass; -1 before the first.
+        {"highlights",highlights},{"highlightGpuMs",reloadMakerHighlightMs}};
 }

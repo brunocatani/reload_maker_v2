@@ -179,6 +179,7 @@ namespace reloadmaker
             .arg(plugin ? (_libraryMode ? plugin->origins.value(weapon->formId).plugin : plugin->fileName) : QString())
             .arg(config->activeMods().size()));
         if (_slotOverlay) { _slotOverlay->setSelected(_focusedSlot); }
+        if (_partPicker) { _partPicker->setSelected(_focusedSlot ? std::optional<SlotKey>(_focusedSlot) : std::nullopt); }
         refreshHeader();
     }
 
