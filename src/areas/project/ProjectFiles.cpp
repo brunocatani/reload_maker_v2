@@ -405,23 +405,29 @@ namespace reloadmaker
     }
 
     // Changing weapons saves the current project under the previous weapon,
-    // then opens the next weapon's project when one exists. Returns whether
+    // then opens the next weapon's project when one exists. With no weapon on
+    // screen (a source just opened) there is nothing to save, but the chosen
+    // weapon still opens its saved project: shown as a new document, it would
+    // be saved over that project on the next weapon change. Returns whether
     // the change was handled here.
     bool ReloadMakerController::beginWeaponProject(int selectedIndex)
     {
         const int previousIndex = _renderedWeapon;
-        if (_loadThread || !_pendingSession.isEmpty() || previousIndex < 0 || selectedIndex < 0 || previousIndex == selectedIndex) {
+        if (_loadThread || !_pendingSession.isEmpty() || selectedIndex < 0 || previousIndex == selectedIndex) {
             return false;
         }
-        _selectedWeapon = validWeaponIndex(previousIndex);
-        if (_reloadCapturing || _packProcess) {
-            setStatus("Finish the current capture or pack job before changing weapons.", true);
-            return true;
+        QString oldPath;
+        if (previousIndex >= 0) {
+            _selectedWeapon = validWeaponIndex(previousIndex);
+            if (_reloadCapturing || _packProcess) {
+                setStatus("Finish the current capture or pack job before changing weapons.", true);
+                return true;
+            }
+            if (!saveSession()) {
+                return true;
+            }
+            oldPath = _sessionPath;
         }
-        if (!saveSession()) {
-            return true;
-        }
-        const QString oldPath = _sessionPath;
         _selectedWeapon = validWeaponIndex(selectedIndex);
         const auto next = suggestedSessionPath();
         _sessionPath.clear();

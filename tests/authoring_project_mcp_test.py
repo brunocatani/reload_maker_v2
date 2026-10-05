@@ -39,8 +39,20 @@ def run():
         edit('select_weapon',dict(index=first_index));state=ready();assert Path(state['project'])==first
         assert simulation()==before,'Changing weapon projects lost the existing motion or pose assignments'
         assert json.loads(second.read_text(encoding='utf-8'))['weapon']==second_record['weapon']
+        # Open mod folder (owner, 2026-10-05): after the source reopens, a
+        # weapon with a saved project opens it, and changing weapons never
+        # saves a new document over it.
+        kept=json.loads(first.read_text(encoding='utf-8'))
+        edit('open_source',dict(path=state['source'],gameData=state['gameData']));state=ready()
+        index=lambda editor:next(w['index'] for w in state['weapons'] if w['editorId'].lower()==editor)
+        edit('select_weapon',dict(index=index('c14timberwolf')));state=ready()
+        assert Path(state['project'])==first,('A weapon with a saved project opened as a new document',state['project'])
+        edit('select_weapon',dict(index=index('l118a2')));state=ready()
+        assert Path(state['project'])==second,state['project']
+        reopened=json.loads(first.read_text(encoding='utf-8'))
+        assert reopened['weapon']==kept['weapon'] and reopened['authoringRoadmaps']==kept['authoringRoadmaps'],'A new document was saved over the project'
         (work/'result.json').write_text(json.dumps(dict(ok=True,first=str(first),second=str(second),weapons=[first_record['weapon'],second_record['weapon']]),indent=2),encoding='utf-8')
-        print('PASS independent ESP/weapon source projects, autosave on switching and exact restored simulation:',work,flush=True)
+        print('PASS independent ESP/weapon source projects, autosave on switching, exact restored simulation and projects kept after Open mod folder:',work,flush=True)
     finally:
         for name,path in old_paths.items():
             path.write_bytes(old_bytes[name]);command('open_project',dict(path=str(path)),command('revision')['revision']);ready();edit('save_project',dict(path=str(path)));path.write_bytes(old_bytes[name])
