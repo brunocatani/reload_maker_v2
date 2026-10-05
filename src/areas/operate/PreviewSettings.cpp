@@ -42,6 +42,21 @@ namespace reloadmaker
         noteDocumentChange("slide spring return");
     }
 
+    // A view option: not saved, and it changes no document state. Re-posing
+    // records the native poses (or clears the ghosts) for the current state.
+    void ReloadMakerController::setNativeGhost(bool enabled)
+    {
+        if (enabled == _nativeGhost) {
+            return;
+        }
+        _nativeGhost = enabled;
+        showChecked(_simulationGhost, enabled);
+        if (_simulationActive) {
+            const bool handHeld = _simulation.action == SimulationAction::Held || _simulation.grab();
+            (void)applyPose(handHeld ? 0.0f : simulationPoseSeconds());
+        }
+    }
+
     void ReloadMakerController::setWeaponFixedMotion(bool fixed)
     {
         if (fixed == _weaponFixedMotion) {

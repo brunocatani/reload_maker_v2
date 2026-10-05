@@ -73,6 +73,9 @@ void ReloadMakerController::createSimulationUi() {
     layout->addWidget(design::hintLabel("Drag the slide or the magazine in the view to operate them by hand, as in VR.",panel));
     _simulationSpring=new QCheckBox("Slide returns when released",panel);_simulationSpring->setChecked(_slideSpringReturn);layout->addWidget(_simulationSpring);
     connect(_simulationSpring,&QCheckBox::toggled,this,[this](bool enabled){setSlideSpringReturn(enabled);});
+    _simulationGhost=new QCheckBox("Show the source animation's pose",panel);_simulationGhost->setChecked(_nativeGhost);layout->addWidget(_simulationGhost);
+    _simulationGhost->setToolTip("Where authored motion differs from the source clip, the part is drawn again, tinted, where the clip has it.");
+    connect(_simulationGhost,&QCheckBox::toggled,this,[this](bool enabled){setNativeGhost(enabled);});
     _simulationNoExtender=new QCheckBox("NoExtender reload (unextended magazine)",panel);layout->addWidget(_simulationNoExtender);
     _simulationNoExtender->setToolTip("Use the animation set's optional NoExtender reload. QuickHands sets ship it for the unextended standard magazine.");
     connect(_simulationNoExtender,&QCheckBox::toggled,this,[this](bool enabled){setGlockNoExtender(enabled);rebuildWeapon();});

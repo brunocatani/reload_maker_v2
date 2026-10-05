@@ -107,9 +107,18 @@ const QVector<Transformf>& simulationTrackCurve(const ReloadRecipe& r,const Simu
     const auto authored=rig.authoredCurves.constFind(track);if(authored!=rig.authoredCurves.cend())return authored.value();
     return r.tracks[track].poses;
 }
+namespace {
+float simulationFrame(const SimulationRig& rig,float progress){return rig.closedFrame+(rig.openFrame-rig.closedFrame)*std::clamp(progress,0.f,1.f);}
+}
+bool simulationTrackAuthored(const SimulationRig& rig,int track) {
+    return rig.authoredCurves.contains(track)||(track==rig.slide&&!rig.derivedHandle.isEmpty())||(track==rig.bolt&&!rig.derivedBolt.isEmpty());
+}
+Transformf simulationNativeTrackPose(const ReloadRecipe& r,const SimulationRig& rig,int track,float progress) {
+    return reloadTrackPose(r,track,r.duration*simulationFrame(rig,progress)/(r.frames-1));
+}
 Transformf simulationTrackPose(const ReloadRecipe& r,const SimulationRig& rig,int track,float progress) {
-    const float frame=rig.closedFrame+(rig.openFrame-rig.closedFrame)*std::clamp(progress,0.f,1.f);
-    if(!rig.authoredCurves.contains(track)&&!(track==rig.slide&&!rig.derivedHandle.isEmpty())&&!(track==rig.bolt&&!rig.derivedBolt.isEmpty()))return reloadTrackPose(r,track,r.duration*frame/(r.frames-1));
+    if(!simulationTrackAuthored(rig,track))return simulationNativeTrackPose(r,rig,track,progress);
+    const float frame=simulationFrame(rig,progress);
     const auto& curve=simulationTrackCurve(r,rig,track);const int a=int(frame),b=std::min(a+1,int(curve.size()-1));return interpolatedTransform(curve[a],curve[b],frame-a);
 }
 float reloadTrackStroke(const ReloadRecipe& r,int track) {

@@ -10,6 +10,10 @@
 // the outline where it is visible; a second round without it colours, dimmed,
 // what other geometry hides, so a part behind the hands still shows its shape.
 //
+// An entry with a fill also tints its visible silhouette once per pixel. An
+// entry with an offset draws its shapes moved by that world transform: the
+// native-motion ghost (03 §5) shows a part where the source clip has it.
+//
 // NifSkope's thick-line wireframe program (wireframe.prog) rasterizes nothing in
 // this context (0 samples passed, measured 2026-10-05), so it is not used.
 #include "glview.h"
@@ -38,10 +42,12 @@ namespace
                                                                          { -0.7071f, -0.7071f } } };
 }
 
-// Draws the shape filled in one colour with the scene's current projection.
-void Shape::reloadMakerDrawHighlight(const FloatVector4& color)
+// Draws the shape filled in one colour with the scene's current projection,
+// optionally moved by a world transform. A skinned shape follows its bones and
+// cannot be moved this way.
+void Shape::reloadMakerDrawHighlight(const FloatVector4& color, const Transform* worldOffset)
 {
-    if (isHidden() || !scene || !scene->renderer || !bindShape()) {
+    if (isHidden() || !scene || !scene->renderer || (worldOffset && !transformRigid) || !bindShape()) {
         return;
     }
     auto* context = scene->renderer;
@@ -50,6 +56,11 @@ void Shape::reloadMakerDrawHighlight(const FloatVector4& color)
         return;
     }
     setUniforms(program);
+    if (worldOffset) {
+        const Transform moved = scene->view * *worldOffset * worldTrans();
+        program->uni3m("normalMatrix", moved.rotation);
+        program->uni4m("modelViewMatrix", moved.toMatrix4());
+    }
     program->uni1i("selectionFlags", 0);
     program->uni1i("selectionParam", -1);
     // Components above zero replace the vertex colour.
@@ -63,12 +74,22 @@ void Shape::reloadMakerDrawHighlight(const FloatVector4& color)
 void GLView::reloadMakerSetHighlights(QVector<ReloadMakerHighlight> highlights)
 {
     const auto same = [](const ReloadMakerHighlight& a, const ReloadMakerHighlight& b) {
-        return a.blocks == b.blocks && a.color == b.color && a.width == b.width;
+        return a.blocks == b.blocks && a.color == b.color && a.width == b.width && a.fill == b.fill && !a.offset && !b.offset;
     };
     if (std::equal(highlights.cbegin(), highlights.cend(), reloadMakerHighlights.cbegin(), reloadMakerHighlights.cend(), same)) {
         return;
     }
     reloadMakerHighlights = std::move(highlights);
+    update();
+}
+
+// Ghosts move with the simulation, so every call repaints unless both are empty.
+void GLView::reloadMakerSetGhosts(QVector<ReloadMakerHighlight> ghosts)
+{
+    if (ghosts.isEmpty() && reloadMakerGhosts.isEmpty()) {
+        return;
+    }
+    reloadMakerGhosts = std::move(ghosts);
     update();
 }
 
@@ -90,10 +111,12 @@ void GLView::reloadMakerDrawHighlights()
             reloadMakerHighlightQueryPending = false;
         }
     }
-    QVector<QVector<Shape*>> shapes(reloadMakerHighlights.size());
+    // Ghosts first, so the selection outline draws over them.
+    const auto entries = reloadMakerGhosts + reloadMakerHighlights;
+    QVector<QVector<Shape*>> shapes(entries.size());
     bool any = false;
-    for (int i = 0; i < reloadMakerHighlights.size(); ++i) {
-        const auto& blocks = reloadMakerHighlights[i].blocks;
+    for (int i = 0; i < entries.size(); ++i) {
+        const auto& blocks = entries[i].blocks;
         const QSet<int> wanted(blocks.cbegin(), blocks.cend());
         for (auto* shape : scene->shapes) {
             if (shape && !shape->isHidden() && wanted.contains(shape->id())) {
@@ -155,11 +178,12 @@ void GLView::reloadMakerDrawHighlights()
     glDepthMask(GL_FALSE);
     glEnable(GL_BLEND);
     fn->glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-    for (int i = 0; i < reloadMakerHighlights.size(); ++i) {
+    for (int i = 0; i < entries.size(); ++i) {
         if (shapes[i].isEmpty()) {
             continue;
         }
-        const auto& highlight = reloadMakerHighlights[i];
+        const auto& highlight = entries[i];
+        const Transform* offset = highlight.offset ? &highlight.worldOffset : nullptr;
         glClear(GL_STENCIL_BUFFER_BIT);
         // Silhouette into the stencil buffer only.
         glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
@@ -167,11 +191,22 @@ void GLView::reloadMakerDrawHighlights()
         glStencilFunc(GL_ALWAYS, 1, 0xFF);
         glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
         for (auto* shape : shapes[i]) {
-            shape->reloadMakerDrawHighlight(FloatVector4(0.0f));
+            shape->reloadMakerDrawHighlight(FloatVector4(0.0f), offset);
+        }
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        if (highlight.fill > 0.0f) {
+            // The visible silhouette, tinted once per pixel (1 becomes 2).
+            glEnable(GL_DEPTH_TEST);
+            glDepthFunc(GL_LEQUAL);
+            glStencilFunc(GL_EQUAL, 1, 0xFF);
+            glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
+            const FloatVector4 tint(float(highlight.color.redF()), float(highlight.color.greenF()), float(highlight.color.blueF()), highlight.fill);
+            for (auto* shape : shapes[i]) {
+                shape->reloadMakerDrawHighlight(tint, offset);
+            }
         }
         // Shifted copies outside the silhouette, each pixel once: a coloured
         // pixel's stencil leaves 0, a depth-failed one stays 0 for the dim round.
-        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         glStencilFunc(GL_EQUAL, 0, 0xFF);
         glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
         const float radius = std::max(1.0f, 0.5f * highlight.width * float(devicePixelRatioF()));
@@ -187,7 +222,7 @@ void GLView::reloadMakerDrawHighlights()
             for (const auto& direction : kOutlineDirections) {
                 shiftProjection(std::round(direction[0] * radius), std::round(direction[1] * radius));
                 for (auto* shape : shapes[i]) {
-                    shape->reloadMakerDrawHighlight(color);
+                    shape->reloadMakerDrawHighlight(color, offset);
                 }
             }
         }

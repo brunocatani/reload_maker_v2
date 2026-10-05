@@ -44,6 +44,7 @@ namespace reloadmaker
             { "slide", _simulation.slide },
             { "seconds", _simulation.seconds },
             { "error", _simulationError },
+            { "nativeGhost", _nativeGhost },
         };
         if (isBoltActionConfiguration()) {
             result["boltAction"] = QJsonObject{

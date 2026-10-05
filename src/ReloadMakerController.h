@@ -309,11 +309,19 @@ namespace reloadmaker
         QString _armsBody{ "male" };
         // Preview and Operate settings saved with the project (areas/operate/PreviewSettings.cpp).
         bool _slideSpringReturn{ true };      // the slide, handle or bolt returns when released
+        // Operate draws parts whose authored motion differs from the source
+        // clip a second time at their native pose (rework 03 §5). A view
+        // option, not part of the document.
+        bool _nativeGhost{ false };
+        // Native weapon-local poses of the authored operating tracks posed this
+        // frame, by scene node; written while the targets are collected.
+        mutable QHash<int, Transformf> _ghostNatives;
         bool _weaponFixedMotion{ true };      // the preview holds the weapon frame still
         bool _approximateTransitions{ true }; // clip entry and exit blends
         bool _armsShown{ true };
         [[nodiscard]] QString motionModeName() const;
         void setSlideSpringReturn(bool enabled);
+        void setNativeGhost(bool enabled);
         void setWeaponFixedMotion(bool fixed);
         void showWeaponFixedMotion();
         void setApproximateTransitions(bool enabled);
@@ -574,6 +582,7 @@ namespace reloadmaker
         void runSimulationAction(const QString& action);
         bool selectSimulationClip(bool fire, bool reload);
         bool applySimulationPose();
+        void refreshNativeGhost(const QHash<int, Transformf>& targets);
         void applySimulationVisibility();
         void tickSimulation();
         bool beginSimulationGrab(QPointF point, ReloadDriveCurve& curve);
@@ -671,6 +680,7 @@ namespace reloadmaker
         void setBoltDriveCurve(const Vec3f& hit, ReloadDriveCurve& curve) const;
         bool setStrokeDriveCurve(const Vec3f& hit, ReloadDriveCurve& curve, QString& error);
         void addSlideTargets(QHash<int, Transformf>& targets, bool holdOpen) const;
+        [[nodiscard]] Transformf operatingTrackTarget(int track, float progress) const;
         void addAr15Targets(QHash<int, Transformf>& targets, bool holdOpen) const;
         [[nodiscard]] Transformf ar15BoltPose(bool holdOpen) const;
         void addM1ATargets(QHash<int, Transformf>& targets, bool holdOpen) const;
@@ -721,6 +731,7 @@ namespace reloadmaker
         bool _glockNoExtender{false};
         float _glockReloadRackAt{-1}, _glockReloadFeedAt{-1};
         QCheckBox* _simulationSpring{nullptr};
+        QCheckBox* _simulationGhost{nullptr};
         QTimer* _simulationTimer{nullptr};
         QElapsedTimer _simulationClock;
         ReloadDriveViewport* _simulationDrive{nullptr};

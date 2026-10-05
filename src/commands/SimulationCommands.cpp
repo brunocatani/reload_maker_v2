@@ -69,6 +69,8 @@ namespace reloadmaker
             cancelMagazine();
         } else if (operation == "spring") {
             setSlideSpringReturn(params["enabled"].toBool(true));
+        } else if (operation == "ghost") {
+            setNativeGhost(params["enabled"].toBool(true));
         } else {
             require(isActionOperation(operation), "Unknown simulation operation");
             runSimulationAction(operation);

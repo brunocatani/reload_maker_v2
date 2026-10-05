@@ -75,6 +75,12 @@ namespace reloadmaker {
     bool buildSimulationRig(const ReloadRecipe& recipe, SimulationRig& rig, QString& error,WeaponMechanism profile=WeaponMechanism::PistolSlide,bool deriveHandleFromBolt=false,const QVector<Transformf>& boltOverride={},const SimulationParts* selected=nullptr);
     const QVector<Transformf>& simulationTrackCurve(const ReloadRecipe&,const SimulationRig&,int track);
     Transformf simulationTrackPose(const ReloadRecipe& recipe, const SimulationRig& rig, int track, float progress);
+    // Whether the rig replaces the track's native curve (an authored stage, a
+    // derived handle or bolt).
+    [[nodiscard]] bool simulationTrackAuthored(const SimulationRig& rig, int track);
+    // The track's native pose at the recipe frame simulationTrackPose uses
+    // for the same progress.
+    [[nodiscard]] Transformf simulationNativeTrackPose(const ReloadRecipe& recipe, const SimulationRig& rig, int track, float progress);
     QJsonObject simulationRigJson(const ReloadRecipe& recipe, const SimulationRig& rig, bool springReturn);
     // A full bolt or slide stroke moves at least this far (game units plus 3 x radians).
     constexpr float kCompleteStroke = .15f;

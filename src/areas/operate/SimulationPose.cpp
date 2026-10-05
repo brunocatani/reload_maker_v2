@@ -5,6 +5,7 @@
 // listed as scene targets; the weapon bone's current pose places them.
 #include "ReloadMakerController.h"
 #include "StudioWindow.h"
+#include "design/Theme.h"
 #include "glview.h"
 #include "gl/glscene.h"
 #include "model/nifmodel.h"
@@ -21,6 +22,9 @@ namespace reloadmaker
     {
         // NiAVObject flag bit that hides a node.
         constexpr int kHiddenFlag = 1;
+        // Authored and native poses closer than this (reloadPoseDistance: game
+        // units plus 3 per radian) draw no ghost; the copies would coincide.
+        constexpr float kNativeGhostMinimumDistance = 0.05f;
 
         // Writes a node's flags, and refreshes its drawn node, only when they change.
         void setNodeFlags(NifModel* model, Scene* scene, const QModelIndex& index, int flags)
@@ -48,7 +52,9 @@ namespace reloadmaker
     // Sets the simulated parts over the native pose already in _boundLocalPose.
     bool ReloadMakerController::applySimulationPose()
     {
+        _ghostNatives.clear();
         if (!_simulationActive || !_simulationRig || !_reloadRecipe) {
+            refreshNativeGhost({});
             return true;
         }
         // A reload started with the action locked open keeps it open until
@@ -57,6 +63,7 @@ namespace reloadmaker
         // Otherwise the native reload clip poses the parts; only an AR-15's
         // bolt is still set.
         if (_simulation.action == SimulationAction::Reload && !holdOpen && !isAr15Configuration()) {
+            refreshNativeGhost({});
             return true;
         }
         QVector<Transformf> local;
@@ -92,7 +99,76 @@ namespace reloadmaker
             _boundLocalPose[i] = local[node];
             _boundGlobalPose[i] = world[node];
         }
+        refreshNativeGhost(targets);
         return true;
+    }
+
+    // The simulation pose of an operating track. With the ghost shown, a track
+    // whose curve the rig replaces also records its native pose at the same
+    // recipe frame.
+    Transformf ReloadMakerController::operatingTrackTarget(int track, float progress) const
+    {
+        const auto& rig = *_simulationRig;
+        if (_nativeGhost && simulationTrackAuthored(rig, track)) {
+            _ghostNatives.insert(_reloadTrackNodes[track], simulationNativeTrackPose(*_reloadRecipe, rig, track, progress));
+        }
+        return simulationTrackPose(*_reloadRecipe, rig, track, progress);
+    }
+
+    // Each recorded track whose authored pose differs from its native one is
+    // drawn again at the native pose: its shapes, up to the next posed node,
+    // moved by native x inverse(authored) in world space. Skinned shapes follow
+    // their bones and are left out.
+    void ReloadMakerController::refreshNativeGhost(const QHash<int, Transformf>& targets)
+    {
+        QVector<GLView::ReloadMakerHighlight> ghosts;
+        auto* model = activeModel();
+        if (_nativeGhost && model && !_ghostNatives.isEmpty()) {
+            QHash<int, int> posedBlocks; // NIF block of each posed scene node
+            for (auto it = targets.cbegin(); it != targets.cend(); ++it) {
+                if (it.key() >= 0 && it.key() < _sceneNodes.size() && _sceneNodes[it.key()].isValid()) {
+                    posedBlocks.insert(model->getBlockNumber(_sceneNodes[it.key()]), it.key());
+                }
+            }
+            QHash<int, QVector<int>> shapes;
+            for (int block = 0; block < model->getBlockCount(); ++block) {
+                const auto index = model->getBlockIndex(block);
+                if (!model->blockInherits(index, "BSTriShape") && !model->blockInherits(index, "NiGeometry")) {
+                    continue;
+                }
+                auto node = model->getBlockIndex(model->getParent(index));
+                for (int depth = 0; node.isValid() && depth < model->getBlockCount(); ++depth) {
+                    const auto found = posedBlocks.constFind(model->getBlockNumber(node));
+                    if (found != posedBlocks.cend()) {
+                        shapes[found.value()].append(block);
+                        break;
+                    }
+                    node = model->getBlockIndex(model->getParent(node));
+                }
+            }
+            const auto weapon = _globalPose[_weaponBoneIndex];
+            const QColor color = QColor::fromRgba(design::color::detected);
+            for (auto it = _ghostNatives.cbegin(); it != _ghostNatives.cend(); ++it) {
+                if (!targets.contains(it.key())) {
+                    continue;
+                }
+                const auto authored = targets.value(it.key());
+                if (reloadPoseDistance(authored, it.value()) < kNativeGhostMinimumDistance) {
+                    continue;
+                }
+                Transformf inverse;
+                if (!invertUniformTransform(composed(weapon, authored), inverse)) {
+                    continue;
+                }
+                const auto offset = composed(composed(weapon, it.value()), inverse);
+                GLView::ReloadMakerHighlight ghost{ shapes.value(it.key()), color, 2.5f, 0.22f, true, {} };
+                ghost.worldOffset.rotation.fromQuat(Quat(offset.rotation.w, offset.rotation.x, offset.rotation.y, offset.rotation.z));
+                ghost.worldOffset.translation = Vector3(offset.translation.x, offset.translation.y, offset.translation.z);
+                ghost.worldOffset.scale = offset.scale.x;
+                ghosts.append(std::move(ghost));
+            }
+        }
+        _window->getGLView()->reloadMakerSetGhosts(std::move(ghosts));
     }
 
     // Slide tracks follow the slide's progress: pistols and reciprocating
@@ -112,7 +188,7 @@ namespace reloadmaker
             if (holdOpen && rig.magazineTracks.contains(track)) {
                 continue;
             }
-            targets.insert(_reloadTrackNodes[track], simulationTrackPose(*_reloadRecipe, rig, track, progress));
+            targets.insert(_reloadTrackNodes[track], operatingTrackTarget(track, progress));
         }
     }
 
@@ -127,11 +203,11 @@ namespace reloadmaker
             return;
         }
         const float handle = _simulation.action == SimulationAction::Fire ? 0.f : _simulation.handle;
-        targets.insert(_reloadTrackNodes[rig.slide], simulationTrackPose(*_reloadRecipe, rig, rig.slide, handle));
+        targets.insert(_reloadTrackNodes[rig.slide], operatingTrackTarget(rig.slide, handle));
         const float bolt = _simulation.slideLocked ? 1.f : _simulation.slide;
         for (const int track : rig.slideTracks) {
             if (track != rig.slide) {
-                targets.insert(_reloadTrackNodes[track], simulationTrackPose(*_reloadRecipe, rig, track, bolt));
+                targets.insert(_reloadTrackNodes[track], operatingTrackTarget(track, bolt));
             }
         }
     }
@@ -148,7 +224,7 @@ namespace reloadmaker
             return rifleFireBoltPose();
         }
         if (_simulation.action == SimulationAction::Reload && boltDrivesHandle) {
-            return holdOpen ? simulationTrackPose(recipe, rig, rig.bolt, 1) : reloadTrackPose(recipe, rig.bolt, _simulation.seconds);
+            return holdOpen ? operatingTrackTarget(rig.bolt, 1) : reloadTrackPose(recipe, rig.bolt, _simulation.seconds);
         }
         if (_simulation.action == SimulationAction::Reload) {
             const auto& handlePoses = recipe.tracks[rig.slide].poses;
@@ -158,7 +234,7 @@ namespace reloadmaker
             return rifleBoltPose(progress);
         }
         if (boltDrivesHandle) {
-            return simulationTrackPose(recipe, rig, rig.bolt, _simulation.slide);
+            return operatingTrackTarget(rig.bolt, _simulation.slide);
         }
         return rifleBoltPose(_simulation.slide);
     }
@@ -174,11 +250,11 @@ namespace reloadmaker
             const float travel = reloadPoseDistance(_rifleBoltCycle.front(), _rifleBoltCycle[_rifleBoltOpen]);
             progress = std::clamp(reloadPoseDistance(_rifleBoltCycle.front(), bolt) / travel, 0.f, 1.f);
         } else {
-            targets.insert(_reloadTrackNodes[rig.bolt], simulationTrackPose(*_reloadRecipe, rig, rig.bolt, progress));
+            targets.insert(_reloadTrackNodes[rig.bolt], operatingTrackTarget(rig.bolt, progress));
         }
         // The native fire clip omits the operating handle. Its own reload
         // trajectory follows the measured firing bolt stroke, including lock.
-        targets.insert(_reloadTrackNodes[rig.slide], simulationTrackPose(*_reloadRecipe, rig, rig.slide, progress));
+        targets.insert(_reloadTrackNodes[rig.slide], operatingTrackTarget(rig.slide, progress));
     }
 
     // Round shapes inside the magazine, outside native fire and reload clips.

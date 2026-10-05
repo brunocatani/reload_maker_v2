@@ -258,6 +258,8 @@ namespace reloadmaker
         _simulationVisibility.clear();
         _magazineVisuals.clear();
         _magazineRail.reset();
+        _ghostNatives.clear();
+        refreshNativeGhost({});
     }
 
     // Runs one Operate action by name (the buttons and MCP use the same names).
