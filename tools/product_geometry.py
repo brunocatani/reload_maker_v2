@@ -12,14 +12,14 @@ import struct
 import uuid
 
 from product_assets import checked, render_signature
-from product_packs import cancellation, digest, read, require, write
+from product_packs import cancellation, read, require, write
 
 METRES=.9144/64
 
 
 def prepare_world_object(snapshot_path, output, backends):
     snapshot_path, output=Path(snapshot_path).resolve(),Path(output).resolve()
-    snapshot=read(snapshot_path);source_hash=digest(snapshot_path)
+    snapshot=read(snapshot_path)
     require(snapshot.get('format')=='reload-maker-visible-part' and snapshot.get('version')==1 and snapshot.get('units')=='game-units','Invalid visible-part snapshot')
     shapes=snapshot.get('meshes',[])
     require(isinstance(shapes,list) and 0<len(shapes)<=128,'Select one bounded rigid magazine/part')
@@ -98,7 +98,6 @@ def prepare_world_object(snapshot_path, output, backends):
             require(geometry['hasNormals'] and geometry['hasTangents'] and geometry['hasUV'],'Native import lost required surface attributes')
         expected=sorted(s['material'].replace('\\','/').lower() for s in shapes)
         require(sorted(name.replace('\\','/').lower() for _,name in signature['materials'])==expected,'Native import changed material references')
-        require(digest(snapshot_path)==source_hash,'Visible snapshot changed during preparation')
         cancellation()
         receipt=output.with_suffix('.prepared.json');require(not receipt.exists(),'Prepared receipt already exists')
         points=[[sum(source['localToRoot'][r*4+c]*v[c] for c in range(3))+source['localToRoot'][r*4+3]
@@ -107,8 +106,8 @@ def prepare_world_object(snapshot_path, output, backends):
         require(all(-32768<=v<=32767 for v in bounds),'World object exceeds native object-bound range')
         capture={key:snapshot[key] for key in ('weapon','target','configuration','referencePose')}
         capture['pieces']=[source['source'] for source in shapes]
-        write(stage/'receipt.json',dict(format='reload-maker-prepared-object',version=1,snapshotSha256=source_hash,
-              modelSha256=digest(prepared),weapon=snapshot['weapon'],target=snapshot['target'],referencePose=snapshot['referencePose'],
+        write(stage/'receipt.json',dict(format='reload-maker-prepared-object',version=1,
+              weapon=snapshot['weapon'],target=snapshot['target'],referencePose=snapshot['referencePose'],
               capture=capture,bounds=bounds,shapes=len(shapes),vertices=vertices,triangles=triangles,materials=expected,engineCooked=False))
         os.replace(stage/'receipt.json',receipt)
         try:os.replace(prepared,output)

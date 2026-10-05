@@ -11,7 +11,7 @@ import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'tools'))
 from product_backend import Backends
-from product_packs import allocate, build, digest, load_pack, PLUGIN, read, write
+from product_packs import allocate, build, load_pack, PLUGIN, read, write
 
 
 async def run(args):
@@ -35,7 +35,8 @@ async def run(args):
         second = await build(list(reversed(packs)), install, backends)
         reordered = read(install/read(install/'current.json')['generation']/'ledger.json')
         assert ids == {k: v['localId'] for k, v in reordered['objects'].items()}
-        assert first['generation']['pluginSha256'] == second['generation']['pluginSha256']
+        plugin = lambda built: (install/built['generation']['generation']/'output'/PLUGIN).read_bytes()
+        assert plugin(first) == plugin(second), 'Pack order changed the generated plugin'
         removed = await build(packs[:1], install, backends)
         assert removed['activeObjects'] < len(ids)
         retained = read(install/read(install/'current.json')['generation']/'ledger.json')
@@ -55,9 +56,9 @@ async def run(args):
         objects.write_bytes(b'[]')
         try:
             await build(packs, install, backends)
-            raise AssertionError('Changed frozen input was accepted')
+            raise AssertionError('An empty object list was accepted')
         except ValueError as exc:
-            assert 'changed after export' in str(exc), str(exc)
+            assert 'object count' in str(exc), str(exc)
         assert (install/'current.json').read_bytes() == original_pointer
         objects.write_bytes(original)
         manifest_bytes=manifest_path.read_bytes()
@@ -72,7 +73,7 @@ async def run(args):
         manifest_path.write_bytes(manifest_bytes)
         budget=backends.content_validation()['limits']['worldObjects']
         oversized=[dict(loaded['objects'][0],id=loaded['manifest']['id']+'/test-'+str(i)) for i in range(budget)]
-        write(objects,oversized);manifest=copy.deepcopy(loaded['manifest']);manifest['files'][manifest['objects']]=digest(objects);write(manifest_path,manifest)
+        write(objects,oversized)
         try:
             await build(packs,install,backends)
             raise AssertionError('An aggregate object catalog above runtime capacity was accepted')

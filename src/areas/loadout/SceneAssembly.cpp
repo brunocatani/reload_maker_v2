@@ -111,7 +111,6 @@ namespace reloadmaker
         _nifCache.clear();
         _nifBytesCache.clear();
         _clipCache.clear();
-        _animationReadHashes.clear();
         _assignedMechanism.reset();
         _graphCache.clear();
         _skeleton = {};

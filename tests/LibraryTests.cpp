@@ -263,9 +263,7 @@ namespace {
         require(package.ok()&&package.resourceData==data&&package.archives==snapshot.archives&&package.displayName=="Fixture base Data","Explicit source view was not retained");
         archives.append(archives[0]);definition["archives"]=archives;write(source,QJsonDocument(definition).toJson());
         require(!PackageSource::prepare(source).ok(),"Duplicate explicit archive accepted");
-        const auto firstFingerprint = snapshot.fingerprint;
         write(profile + "/modlist.txt", "+AnimationReplacer\n");
-        require(profileFingerprint(instance, profile) != firstFingerprint, "MO2 mod change not detected");
         write(profile + "/plugins.txt", "*Patch.esl\n*Base.esp\n");
         require(!readLoadOrderSnapshot(instance, data).valid(), "conflicting order accepted");
         write(profile + "/plugins.txt", "*Base.esp\n*Patch.esl\n*Absent.esp\n");

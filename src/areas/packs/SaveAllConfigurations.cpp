@@ -77,7 +77,6 @@ namespace reloadmaker
         const auto project = request["project"].toString();
         require(!project.isEmpty() && QFileInfo(project).isFile(),
                 "Choose the weapon's pack project. Save one configuration of each new magazine with its cooked models first.");
-        require(!request["expected"].toString().isEmpty(), "Inspect the pack project before saving");
         setWorkspace(OperateWorkspace);
         auto plan = saveAllPlan();
         require(!plan.isEmpty(), "This weapon offers no receiver, operating part or magazine choices to save");
@@ -224,8 +223,7 @@ namespace reloadmaker
             QString python;
             QString id = _packJob["id"].toString();
             auto arguments = packToolArguments(python, id);
-            arguments << "packs" << "save-configurations" << "--project" << job.request["project"].toString() << "--captures" << job.folder
-                      << "--expected" << job.request["expected"].toString();
+            arguments << "packs" << "save-configurations" << "--project" << job.request["project"].toString() << "--captures" << job.folder;
             auto state = _packJob;
             state["stage"] = "saving";
             state["captureFolder"] = job.folder;

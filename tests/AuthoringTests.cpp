@@ -22,8 +22,7 @@ int main(int argc,char** argv) {
         check(path!=authoringProjectPath("Example Weapon.esp:000abc",{{"mode","mo2-profile"},{"profile","overhaul"}}),"Two source profiles share a save destination");
         for(const auto* invalid:{"../Mod.esp:000abc","Folder\\Mod.esp:000abc","Mod.esp:1234567","Mod:000abc"})
             check(authoringProjectPath(invalid,source).isEmpty(),"Unsafe or ambiguous weapon namespace accepted");
-        const auto policy=collisionDraftPolicy("recipe",{{"hash","a"}},{});check(policy!=collisionDraftPolicy("recipe",{{"hash","b"}},{}),"Collision proof ignored source changes");
-        QJsonObject drafts{{"full",QJsonObject{{"policy",policy},{"edit",QString(32,'a')},{"usable",true}}}};check(validCollisionDrafts(drafts),"Valid collision draft rejected");drafts["unknown"]=drafts["full"];check(!validCollisionDrafts(drafts),"Unknown collision state accepted");
+        QJsonObject drafts{{"full",QJsonObject{{"edit",QString(32,'a')},{"usable",true}}}};check(validCollisionDrafts(drafts),"Valid collision draft rejected");drafts["unknown"]=drafts["full"];check(!validCollisionDrafts(drafts),"Unknown collision state accepted");
         QTextStream(stdout)<<"PASS source rules, authoring paths and bounded collision draft metadata\n";return 0;
     }catch(const std::exception& e){QTextStream(stderr)<<e.what()<<'\n';return 1;}
 }

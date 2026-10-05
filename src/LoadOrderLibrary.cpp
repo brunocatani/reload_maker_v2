@@ -1,6 +1,5 @@
 #include "LoadOrderLibrary.h"
 
-#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -72,20 +71,6 @@ namespace reloadmaker {
         return language;
     }
 
-    QByteArray profileFingerprint(const QString& instancePath, const QString& profilePath) {
-        QCryptographicHash hash(QCryptographicHash::Sha256);
-        // Only selected profile/game paths, not window geometry changed by MO2.
-        QSettings ini(QDir(instancePath).filePath("ModOrganizer.ini"), QSettings::IniFormat);
-        hash.addData(iniText(ini.value("General/selected_profile", ini.value("selected_profile"))).toUtf8());
-        hash.addData(iniText(ini.value("General/gamePath", ini.value("gamePath"))).toUtf8());
-        for (const auto* name : {"modlist.txt", "plugins.txt", "loadorder.txt", "archives.txt", "fallout4.ini", "fallout4custom.ini", "initweaks.ini"}) {
-            QFile file(QDir(profilePath).filePath(QLatin1String(name)));
-            hash.addData(QByteArray(name));
-            if (file.open(QIODevice::ReadOnly)) { hash.addData(file.readAll()); }
-        }
-        return hash.result();
-    }
-
     QStringList resolveGameArchives(const QString& dataPath,const QStringList& plugins,const QStringList& iniPaths,QString& error) {
         error.clear();QStringList result;
         try {
@@ -118,7 +103,6 @@ namespace reloadmaker {
             profiles.replace("%BASE_DIR%", result.instancePath, Qt::CaseInsensitive);
             if (QDir::isRelativePath(profiles)) { profiles = QDir(instancePath).filePath(profiles); }
             result.profilePath = QDir(profiles).filePath(result.profileName);
-            const auto initialFingerprint = profileFingerprint(result.instancePath, result.profilePath);
             const QString game = iniText(settings.value("General/gamePath", settings.value("gamePath")));
             result.dataPath = dataPath.isEmpty() ? QDir(game).filePath("Data") : QDir(dataPath).absolutePath();
             if (!QDir(result.dataPath).exists()) { throw std::runtime_error("Reference Data folder is missing"); }
@@ -151,8 +135,6 @@ namespace reloadmaker {
             result.archives=resolveGameArchives(result.dataPath,result.plugins,{QDir(result.profilePath).filePath("fallout4.ini"),QDir(result.profilePath).filePath("fallout4custom.ini")},archiveError);
             if(!archiveError.isEmpty())throw std::runtime_error(archiveError.toStdString());
             result.language=sourceLanguage({QDir(result.profilePath).filePath("fallout4.ini"),QDir(result.profilePath).filePath("fallout4custom.ini")});
-            result.fingerprint = profileFingerprint(result.instancePath, result.profilePath);
-            if (result.fingerprint != initialFingerprint) { throw std::runtime_error("MO2 profile changed while reading it; relaunch the viewer through MO2"); }
         } catch (const std::exception& exception) { result.error = QString::fromUtf8(exception.what()); }
         return result;
     }
@@ -331,9 +313,6 @@ namespace reloadmaker {
         result.catalog = mergeLoadOrder(contents, result.error);
         result.catalog.diagnostics.append(diagnostics);
         if (!result.error.isEmpty()) { return result; }
-        if (profileFingerprint(snapshot.instancePath, snapshot.profilePath) != snapshot.fingerprint) {
-            result.error = QStringLiteral("MO2 profile changed during indexing. Relaunch Reload Maker through MO2.");
-        }
         result.cancelled = stopped();
         return result;
     }

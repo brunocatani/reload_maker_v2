@@ -11,7 +11,6 @@ The behavior-preserving refactor gates every step on `compare` reporting no
 differences against the baseline recorded before the refactor started.
 """
 import argparse
-import hashlib
 import json
 import shutil
 import subprocess
@@ -184,7 +183,7 @@ def compare(a, b):
             problem = render_difference(first, second)
             if problem:
                 differences.append('%s: %s' % (relative, problem))
-        elif hashlib.sha256(first.read_bytes()).digest() != hashlib.sha256(second.read_bytes()).digest():
+        elif first.read_bytes() != second.read_bytes():
             differences.append('%s: content differs' % relative)
     for line in differences:
         print(line)

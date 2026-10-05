@@ -6,7 +6,6 @@ authored setup changed is saved alone; configurations that cannot be prepared,
 or that DIAMOND rejects, are reported without stopping the rest; a cancelled
 job leaves the project byte-identical.
 """
-import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -25,9 +24,6 @@ from product_export import inspect_project
 VERIFIED=ROOT/'workspace/packs/verified-b5bf9bf910a249da8f180b951aa17ae1'
 
 
-def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def wait():
     state=command('pack_job')
     end=time.monotonic()+900
@@ -38,7 +34,7 @@ def wait():
 
 
 def save_all(project):
-    edit('save_all_configurations',dict(project=str(project),expected=sha(project)))
+    edit('save_all_configurations',dict(project=str(project)))
     state=wait();assert state['phase']=='complete',state
     return state
 
@@ -66,10 +62,10 @@ def run():
         assert inspect_project(project)[1][0]['variants']==counts['saved']
         assert selection()==chosen,'The author selection was not restored'
         assert not list(Path(ROOT/'local/authoring-captures').glob(first['id'])),'The captures outlived the save'
-        written=sha(project)
+        written=project.read_bytes()
         again=save_all(project)
         assert statuses(again)=={'up-to-date':counts['saved']},statuses(again)
-        assert sha(project)==written,'An up-to-date run rewrote the project'
+        assert project.read_bytes()==written,'An up-to-date run rewrote the project'
         # The magazine guide belongs to the selected configuration alone.
         guide=command('magazine_guide_state')['settings']
         edit('magazine_guide',dict(operation='save',settings=dict(guide,travel=guide['travel']*1.25)));ready()
@@ -78,18 +74,18 @@ def run():
         row=next(r for r in changed['result']['rows'] if r['status']=='saved')
         current=json.loads(Path(edit('export',{'kind':'runtime_configuration'})['path']).read_text(encoding='utf-8'))
         assert row['selection']==current['selection'],(row['selection'],current['selection'])
-        written=sha(project)
+        written=project.read_bytes()
         edit('magazine_guide',dict(operation='reset'));ready()
-        edit('save_all_configurations',dict(project=str(project),expected=written))
+        edit('save_all_configurations',dict(project=str(project)))
         command('pack_job',dict(operation='cancel'),command('revision')['revision'])
         cancelled=wait()
-        assert cancelled['phase']=='cancelled' and sha(project)==written,cancelled
+        assert cancelled['phase']=='cancelled' and project.read_bytes()==written,cancelled
         assert selection()==chosen,'A cancelled job left another selection'
         # The bundled save reports a capture DIAMOND rejects and keeps the rest.
         capture=Path(edit('export',{'kind':'runtime_configuration'})['path'])
         bad=json.loads(capture.read_text(encoding='utf-8'));bad['magazine']['grip']['fingerLocalTransforms']=[]
         rejected=work/'rejected.json';rejected.write_text(json.dumps(bad),encoding='utf-8')
-        result=save_configurations(project,[rejected,capture],Backends(ROOT/'build-fast/dist/ReloadMakerV2',ROOT),expected=written)
+        result=save_configurations(project,[rejected,capture],Backends(ROOT/'build-fast/dist/ReloadMakerV2',ROOT))
         assert [r['status'] for r in result['rows']]==['failed','saved'] and result['rows'][0]['error'],result['rows']
         assert inspect_project(project)[1][0]['variants']==counts['saved']
         print('PASS save all configurations:',counts['saved'],'saved,',len(exceptions),'reported, up to date, one changed, cancel, rejected capture:',work,flush=True)

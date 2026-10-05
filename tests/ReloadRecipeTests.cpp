@@ -16,7 +16,7 @@ namespace {
     float ramp(float time,float a,float b){return std::clamp((time-a)/(b-a),0.f,1.f);}
     Transformf pose(Vec3f t={},float degrees=0){const auto q=QQuaternion::fromAxisAndAngle(0,1,0,degrees);return {t,{q.x(),q.y(),q.z(),q.scalar()},{1.3f,1.3f,1.3f}};}
     ReloadRecipe capture(){
-        ReloadRecipe r;r.duration=4;r.frames=481;r.source={{"action","WPNReload"},{"weaponRecord","Test.esp:123456"},{"animation","wpnreload.hkx"},{"animationSha256","source-a"}};
+        ReloadRecipe r;r.duration=4;r.frames=481;r.source={{"action","WPNReload"},{"weaponRecord","Test.esp:123456"},{"animation","wpnreload.hkx"}};
         for(const QString name:{"Bolt","Sight","Magazine","Round","Tilting barrel","Stationary"}){ReloadTrack t;t.anchor={"animated-part",name,"Root/"+name,"Weapons/Test.nif","Test.esp:123456",{}, {}};t.label=name;t.surface=true;r.tracks.append(t);}
         r.tracks[1].parent=0;r.tracks[3].parent=2;
         for(int i=0;i<r.frames;++i){const float time=r.duration*i/(r.frames-1);
@@ -50,8 +50,11 @@ namespace {
         check(loaded.id==id&&loaded.tracks.size()==r.tracks.size(),"Round trip changed the recipe");
         check(std::abs(loaded.tracks[0].poses[30].scale.x-1.3f)<.0001f,"Scale was reset to one");
         check(loaded.tracks[2].poses[210].scale.x==0,"Hidden scale lost");
-        r.source["animationSha256"]="override-b";check(reloadRecipeIdentity(r)!=id,"Animation override reused stale source identity");
-        check(encodeReloadRecipe(r,error).isEmpty(),"Changed source encoded under old identity");
+        // The id names the content; it is derived, never checked against a stored one.
+        r.source["animation"]="other.hkx";check(reloadRecipeIdentity(r)!=id,"Another animation kept the recipe id");
+        ReloadRecipe renamed;check(decodeReloadRecipe(encodeReloadRecipe(r,error),renamed,error)&&renamed.id==reloadRecipeIdentity(r),"Encoding wrote a stale id");
+        auto edited=json;edited["id"]="not-a-hash";
+        check(decodeReloadRecipe(QJsonDocument(edited).toJson(),loaded,error)&&loaded.id==id,"A stored id was compared instead of derived");
         auto future=json;future["version"]=3;
         check(!decodeReloadRecipe(QJsonDocument(future).toJson(),loaded,error),"Unknown recipe version accepted");
     }

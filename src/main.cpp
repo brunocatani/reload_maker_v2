@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
     if(parser.isSet("source-receipt")) {
         const auto snapshot=reloadmaker::readLoadOrderSnapshot(parser.value("mo2-instance"),parser.value("game-data"),parser.value("mo2-profile"));
         const bool virtualized=reloadmaker::insideMo2VirtualFilesystem();
-        QJsonObject value{{"ok",virtualized&&snapshot.valid()},{"virtualFilesystem",virtualized},{"instance",snapshot.instancePath},{"profile",snapshot.profileName},{"gameData",snapshot.dataPath},{"pluginCount",snapshot.plugins.size()},{"archiveCount",snapshot.archives.size()},{"fingerprint",QString::fromLatin1(snapshot.fingerprint.toHex())},{"error",snapshot.error}};
+        QJsonObject value{{"ok",virtualized&&snapshot.valid()},{"virtualFilesystem",virtualized},{"instance",snapshot.instancePath},{"profile",snapshot.profileName},{"gameData",snapshot.dataPath},{"pluginCount",snapshot.plugins.size()},{"archiveCount",snapshot.archives.size()},{"error",snapshot.error}};
         QSaveFile file(parser.value("source-receipt"));const auto bytes=QJsonDocument(value).toJson();
         if(!file.open(QIODevice::WriteOnly)||file.write(bytes)!=bytes.size()||!file.commit())return 3;
         return virtualized&&snapshot.valid()?0:2;

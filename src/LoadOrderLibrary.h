@@ -16,7 +16,6 @@ namespace reloadmaker {
         QStringList plugins; // enabled, low to high priority
         QStringList archives; // explicit INI archives then enabled plugin archives
         QString language{"en"};
-        QByteArray fingerprint;
         QString error;
         [[nodiscard]] bool valid() const { return error.isEmpty() && !plugins.isEmpty(); }
     };
@@ -40,7 +39,6 @@ namespace reloadmaker {
     [[nodiscard]] bool insideMo2VirtualFilesystem();
     [[nodiscard]] LoadOrderSnapshot readLoadOrderSnapshot(const QString& instancePath,
                                                          const QString& dataPath,const QString& requestedProfile = {});
-    [[nodiscard]] QByteArray profileFingerprint(const QString& instancePath, const QString& profilePath);
     [[nodiscard]] QString sourceLanguage(const QStringList& iniPaths);
     [[nodiscard]] QStringList resolveGameArchives(const QString& dataPath,const QStringList& plugins,const QStringList& iniPaths,QString& error);
     // The merger owns stable internal IDs, never guessed runtime FormIDs. A

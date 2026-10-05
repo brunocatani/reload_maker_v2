@@ -98,14 +98,15 @@ def load_pack(root):
     require(isinstance(weapons, list) and weapons and all(isinstance(w,dict) for w in weapons),
             'A finished reload pack needs weapon behavior, hand fits, sounds and grab policies; object-only packs are incomplete')
     files = manifest.get('files')
-    require(isinstance(files, dict) and 0 < len(files) <= 10000, 'Missing pack content digests')
+    require(isinstance(files, list) and 0 < len(files) <= 10000, 'Export this pack again: its file list is missing or from an older Maker')
     normalized = set()
-    for path, expected in files.items():
+    for path in files:
         key = relative(path).casefold()
         require(key not in normalized, 'Case-ambiguous pack file')
+        require(key.startswith(f'f4se/plugins/diamond/packs/{pack}/') or key.startswith(f'meshes/diamond/packs/{pack}/'),
+                f'Pack file is outside its namespace: {path}')
+        require(within(root, path).is_file(), f'Pack file is missing: {path}')
         normalized.add(key)
-        require(re.fullmatch('[a-f0-9]{64}', expected or '') is not None, 'Invalid content digest')
-        require(digest(within(root, path)) == expected, f'Content changed after export: {path}')
     objects_path = relative(manifest.get('objects'))
     require(objects_path in files, 'Object definitions are not frozen in the pack')
     objects = read(within(root, objects_path), 8*1024*1024)
@@ -124,7 +125,7 @@ def load_pack(root):
         require(isinstance(obj.get('name'), str) and 0 < len(obj['name']) <= 256, 'Invalid object name')
         require(type(obj.get('weight')) in (int, float) and math.isfinite(obj['weight']) and 0 <= obj['weight'] < 10000, 'Invalid inventory weight')
         require(type(obj.get('value')) is int and 0 <= obj['value'] <= 0x7fffffff, 'Invalid inventory value')
-    return dict(root=root, manifestPath=manifest_path, manifest=manifest, objects=objects, manifestSha256=digest(manifest_path))
+    return dict(root=root, manifestPath=manifest_path, manifest=manifest, objects=objects)
 
 
 def allocate(previous, packs):
@@ -151,7 +152,7 @@ def allocate(previous, packs):
                 require(next_id <= 0xffffff and len(entries) < 8192, 'Generated object allocation is full')
                 entries[key] = dict(localId=next_id)
                 next_id += 1
-            entries[key].update(definition=obj, active=True, pack=pack['manifest']['id'], assetSha256=pack['manifest']['files'][obj['model']])
+            entries[key].update(definition=obj, active=True, pack=pack['manifest']['id'])
     ledger['nextId'] = next_id
     return ledger
 
@@ -219,10 +220,6 @@ async def build(packs, installation, backends, initialize=False):
             pointer = read(current, 16384)
             old = within(installation, pointer['generation'])
             ledger = read(old/'ledger.json')
-            require(digest(old/'ledger.json') == pointer['ledgerSha256'], 'Installation ledger was modified or corrupted')
-            require(digest(old/'output'/PLUGIN) == pointer['pluginSha256'], 'Last good generated plugin is missing or altered')
-            require(digest(old/'output/F4SE/Plugins/DIAMOND/Generated/objects.json') == pointer['bindingsSha256'],
-                    'Last good generated bindings are missing or altered')
         else:
             completed = any((folder/'receipt.json').exists() for folder in (installation/'generations').glob('*'))
             require(initialize and not completed, 'Use explicit initialization for a new installation; restore current.json for an existing one')
@@ -242,15 +239,13 @@ async def build(packs, installation, backends, initialize=False):
         stage = installation/generation
         output = stage/'output'
         output.mkdir(parents=True)
-        seen = {}
+        seen = set()
         native = backends.adapter('nif')
         for pack in loaded:
             for obj in pack['objects']:
                 cancellation()
                 source = within(pack['root'], obj['model'])
                 key = obj['model'].casefold()
-                expected = pack['manifest']['files'][obj['model']]
-                require(key not in seen or seen[key] == expected, 'Packs disagree about a model path')
                 if key not in seen:
                     validation = native.nif_validate(str(source))
                     require(validation.get('ok'), f'Invalid finished NIF: {source}')
@@ -262,9 +257,8 @@ async def build(packs, installation, backends, initialize=False):
                             f'Model has no cooked Fallout 4 collision: {source}')
                     # Authored packs own their finished assets. Copying models
                     # into the generated companion would mask later pack updates
-                    # in MO2 and defeat source-content validation.
-                    require(digest(source) == expected, 'Selected object changed during validation')
-                    seen[key] = expected
+                    # in MO2.
+                    seen.add(key)
         write_plugin_source(stage/'plugin-source', ledger)
         backends.prepare_serializer()
         backend = backends.adapter('plugin')
@@ -275,13 +269,12 @@ async def build(packs, installation, backends, initialize=False):
             raise RuntimeError(f'The plugin serializer failed. The last good output is unchanged. Diagnostics: {log}')
         cancellation()
         await verify_plugin(backend, output/PLUGIN, ledger)
-        plugin_hash = digest(output/PLUGIN)
         bindings = dict(format='diamond-object-bindings', version=1, installation=ledger['installation'],
-                        generation=generation.split('/')[-1], plugin=PLUGIN, pluginSha256=plugin_hash,
-                        packs={p['manifest']['id']: p['manifestSha256'] for p in loaded},
+                        generation=generation.split('/')[-1], plugin=PLUGIN,
+                        packs=sorted(p['manifest']['id'] for p in loaded),
                         objects={key: dict(form=f'{PLUGIN}:{entry["localId"]:06x}', editorId=entry['editorId'],
                                            model=entry['definition']['model'][7:], name=entry['definition']['name'],
-                                           modelSha256=entry['assetSha256'], active=entry['active'])
+                                           active=entry['active'])
                                  for key, entry in ledger['objects'].items() if entry['active']})
         write(output/'F4SE/Plugins/DIAMOND/Generated/objects.json', bindings)
         # Validate the exact effective Data view with the runtime catalog loader.
@@ -290,9 +283,8 @@ async def build(packs, installation, backends, initialize=False):
         view = stage/'validation-Data'
         def snapshot_copy(source, destination):
             destination.parent.mkdir(parents=True, exist_ok=True)
-            if destination.exists():
-                require(digest(source) == digest(destination), 'Selected packs conflict at '+str(destination))
-                return
+            # Pack files live in their own pack's namespace.
+            require(not destination.exists(), 'Two selected packs ship '+str(destination))
             shutil.copy2(source, destination)
         for pack in loaded:
             cancellation()
@@ -308,14 +300,9 @@ async def build(packs, installation, backends, initialize=False):
                 'DIAMOND rejected the complete generated catalog: '+json.dumps(checked)+
                 f'. Review {stage / "catalog-validation.json"}')
         write(stage/'ledger.json', ledger)
-        receipt = dict(version=1, generation=generation, ledgerSha256=digest(stage/'ledger.json'), pluginSha256=plugin_hash,
-                       bindingsSha256=digest(output/'F4SE/Plugins/DIAMOND/Generated/objects.json'))
-        for pack in loaded:
-            require(digest(pack['manifestPath']) == pack['manifestSha256'], 'Pack changed during build')
-            for name, expected in pack['manifest']['files'].items():
-                require(digest(within(pack['root'], name)) == expected, 'Pack content changed during build')
+        receipt = dict(version=1, generation=generation)
         cancellation()
-        # Only mark a generation complete after input rechecks/cancellation.
+        # Only mark a generation complete after cancellation is checked.
         # Otherwise a cancelled first build would forbid initialize retry even
         # though there has never been a current.json to restore.
         write(stage/'receipt.json', receipt)

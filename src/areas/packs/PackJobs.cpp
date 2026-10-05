@@ -163,7 +163,7 @@ namespace reloadmaker
         require(!project.isEmpty() && (saving || QFileInfo(project).isFile()), "Select an authored pack project");
         arguments << "--project" << project;
         if (saving) {
-            for (const auto* key : { "capture", "expected", "id", "full", "empty" }) {
+            for (const auto* key : { "capture", "id", "full", "empty" }) {
                 const auto value = request[key].toString();
                 if (!value.isEmpty()) {
                     arguments << ("--" + QString(key)) << value;
@@ -248,55 +248,5 @@ namespace reloadmaker
         args["operation"] = "save-configuration";
         args["capture"] = path;
         return packCommand(args);
-    }
-
-    // Checks the loaded configuration's source bytes against an inspected
-    // pack project: exactly one of its configurations must use the loaded
-    // weapon, receiver, magazine and operating part.
-    QString ReloadMakerController::loadedConfigurationSourceReport(const QJsonObject& inspection) const
-    {
-        require(currentWeapon() && configuration(), "Load the weapon and configuration to check");
-        const auto weapon = poseRecordKey(currentWeapon()->formId).toLower();
-        QSet<QString> forms{ weapon };
-        for (const auto* mod : configuredObjectMods()) {
-            forms.insert(poseRecordKey(mod->formId).toLower());
-        }
-        QMap<QString, QJsonObject> selected;
-        int matches = 0;
-        for (const auto& row : inspection["sourceRequirements"].toArray()) {
-            const auto entry = row.toObject();
-            if (entry["weapon"].toString().toLower() != weapon) {
-                continue;
-            }
-            for (const auto& value : entry["configurations"].toArray()) {
-                const auto config = value.toObject();
-                if (!forms.contains(config["receiver"].toString().toLower()) || !forms.contains(config["magazine"].toString().toLower())
-                    || (config.contains("operatingPart") && !forms.contains(config["operatingPart"].toString().toLower()))) {
-                    continue;
-                }
-                ++matches;
-                for (const auto& item : config["resources"].toArray()) {
-                    auto resource = item.toObject();
-                    const auto path = resource["path"].toString();
-                    resource["kind"] = path.endsWith(".hkx") ? "animation" : "model";
-                    selected[path] = resource;
-                }
-            }
-        }
-        require(matches == 1, "Select one configuration included in this pack project");
-        QJsonArray resources;
-        for (const auto& resource : selected) {
-            resources.append(resource);
-        }
-        const auto audit = auditSources({ { "version", 1 }, { "resources", resources } });
-        QString text = "\n\nSource view: " + audit["sourceMode"].toString() + " " + audit["profile"].toString();
-        text += audit["compatible"].toBool() ? "\nSelected configuration source bytes match." : "\nSelected configuration needs source review.";
-        for (const auto& value : audit["resources"].toArray()) {
-            const auto item = value.toObject();
-            if (item["status"] != "unchanged") {
-                text += "\n" + item["status"].toString() + " · " + item["path"].toString() + "\n" + item["provider"].toString();
-            }
-        }
-        return text;
     }
 }

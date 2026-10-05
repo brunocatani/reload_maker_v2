@@ -10,7 +10,6 @@
 #include "MagazineReference.h"
 #include "ReloadBundle.h"
 #include "ReloadTemplates.h"
-#include "SourceEvidence.h"
 #include "SourcePolicy.h"
 #include "StudioPaths.h"
 #include "StudioWindow.h"
@@ -127,7 +126,6 @@ namespace reloadmaker
                     MagazineSetup magazine;
                     MagazineReference reference;
                     if (!value.isObject() ||
-                        (plan.contains("sources") && !validSourceEvidence(plan["sources"].toObject(), error)) ||
                         (plan.contains("operating") && !readOperatingSetup(plan["operating"].toObject(), setup, error)) ||
                         (plan.contains("magazineGuide") && !readMagazineGuide(plan["magazineGuide"].toObject(), guide, error)) ||
                         (plan.contains("magazineReference") && !readMagazineReference(plan["magazineReference"].toObject(), reference, error)) ||

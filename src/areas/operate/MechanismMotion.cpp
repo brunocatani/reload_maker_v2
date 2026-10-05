@@ -5,7 +5,6 @@
 #include "ReloadTemplates.h"
 #include "areas/operate/WeaponLocalSampler.h"
 
-#include <QCryptographicHash>
 #include <QJsonArray>
 #include <algorithm>
 #include <cmath>
@@ -19,11 +18,6 @@ namespace reloadmaker
         int sampleCount(float seconds)
         {
             return int(std::ceil(seconds * kSamplesPerSecond)) + 1;
-        }
-
-        QString sha256Hex(const QByteArray& data)
-        {
-            return QString::fromLatin1(QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex());
         }
     }
 
@@ -149,7 +143,6 @@ namespace reloadmaker
         }
         rig.mechanicalSource = {
             { "animation", path },
-            { "animationSha256", sha256Hex(bytes) },
             { "duration", clip.durationSeconds },
         };
         return true;
@@ -460,15 +453,11 @@ namespace reloadmaker
         if (authoredCycle) {
             _boltCycleSource = rig.mechanicalSource;
             _boltCycleSource["fireAnimation"] = fire->resourcePath;
-            _boltCycleSource["fireSha256"] = sha256Hex(fireBytes);
         } else {
             _boltCycleSource = {
                 { "animation", cycle->resourcePath },
-                { "animationSha256", sha256Hex(bytes) },
                 { "baseline", cycle->baselineResourcePath },
-                { "baselineSha256", sha256Hex(baseBytes) },
                 { "fireAnimation", fire->resourcePath },
-                { "fireSha256", sha256Hex(fireBytes) },
                 { "ejectSeconds", eject },
             };
         }

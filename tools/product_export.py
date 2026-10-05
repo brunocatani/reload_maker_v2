@@ -26,44 +26,8 @@ def project_source(project, entry):
     path = Path(entry['path'])
     path = path if path.is_absolute() else project.parent/path
     path = path.resolve()
-    require(path.is_file() and digest(path) == entry.get('sha256'),
-            f'Authored input changed; review and refresh its project reference: {path}')
+    require(path.is_file(), f'Missing authored input: {path}')
     return path
-
-
-def source_requirements(weapon,profiles):
-    """Requirements belong to each configuration, not every optional variant."""
-    result=[]
-    def selector(value):
-        return tuple(form_key(value.get(key,profiles.get('standardReceiver'))) if key in value or key=='receiver' else ''
-                     for key in ('receiver','magazine','operatingPart'))
-    for variant in profiles['profiles']:
-        sources={}
-        def add(path,sha):
-            path=relative(path).lower()
-            require(path.startswith('meshes/') and path.endswith(('.hkx','.nif')),'Invalid runtime source resource')
-            require(isinstance(sha,str) and re.fullmatch('[0-9a-f]{64}',sha),'Missing runtime source digest')
-            require(path not in sources or sources[path]==sha,'A capture disagrees with its authored motion source: '+path)
-            sources[path]=sha
-        source=variant.get('source',variant);add(source['animation'],source['animationSha256'])
-        if source.get('baseline'):add(source['baseline'],source['baselineSha256'])
-        matching=[capture for capture in weapon.get('captures',[]) if selector(capture['selection'])==selector(variant)]
-        require(len(matching)<=1,'Duplicate source capture for one configuration')
-        if matching:
-            for source in matching[0]['sources']['resources']:add(source['path'],source['sha256'])
-        require(0<len(sources)<=512,'Runtime source requirements exceed their configuration budget')
-        receiver,magazine,operating=selector(variant)
-        item=dict(receiver=receiver,magazine=magazine,resources=[dict(path=path,sha256=sha) for path,sha in sorted(sources.items())])
-        if operating:item['operatingPart']=operating
-        result.append(item)
-    return result
-
-
-def source_conflicts(requirements):
-    versions={}
-    for item in requirements:
-        for source in item['resources']:versions.setdefault(source['path'],set()).add(source['sha256'])
-    return sorted(path for path,hashes in versions.items() if len(hashes)>1)
 
 
 def inspect_project(path, skip=frozenset()):
@@ -95,7 +59,6 @@ def inspect_project(path, skip=frozenset()):
         require(weapon.get('template') in TEMPLATES, 'Unsupported reload template')
         documents = {kind: read(project_source(path, weapon[kind])) for kind in ('profiles', 'magazines', 'grabs', 'sounds')}
         profile, magazines = documents['profiles'], documents['magazines']
-        source_requirements(weapon,profile)
         require(form_key(profile['weapon']) == key and form_key(magazines['weapon']) == key,
                 'Prepared behavior belongs to a different weapon')
         require(magazines['version'] == 3, 'Magazine export must use logical object bindings, without local world forms')
@@ -141,7 +104,7 @@ def export_pack(path, destination, backends, skip=()):
     stage.mkdir()
     pack = project['id']
     prefix = f'F4SE/Plugins/DIAMOND/Packs/{pack}/'
-    files, objects, weapons, materials = {}, [], [], set()
+    files, objects, weapons, materials = [], [], [], set()
     native = backends.adapter('nif')
     verified = set()
     try:
@@ -152,15 +115,12 @@ def export_pack(path, destination, backends, skip=()):
             folder = prefix+f'weapons/{plugin}/{local}/'
             item = dict(record=key, name=weapon.get('name', key), template=weapon['template'],
                         magazineObjects=copy.deepcopy(weapon['magazineObjects']))
-            item['sourceRequirements']=source_requirements(weapon,read(project_source(path,weapon['profiles'])))
-            conflicts=source_conflicts(item['sourceRequirements'])
-            require(not conflicts,'Review configurations captured from different versions before publishing: '+', '.join(conflicts))
             for kind in ('profiles', 'magazines', 'sounds', 'grabs'):
                 source = project_source(path, weapon[kind])
                 target = folder+kind+'.json'
                 within(stage, target).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, within(stage, target))
-                files[target] = digest(within(stage, target));item[kind] = target
+                files.append(target);item[kind] = target
             validator = backends.application/'backends/diamond/DiamondProfileCheck.exe'
             require(validator.is_file(), 'The bundled DIAMOND content validator is missing')
             # The Data namespace plus an author-chosen workspace can exceed
@@ -177,6 +137,7 @@ def export_pack(path, destination, backends, skip=()):
             if obj['id'] not in owned:
                 continue
             source = project_source(path, obj['source'])
+            # Identical finished models share one file named by their content.
             fingerprint = digest(source)
             if fingerprint not in verified:
                 validation, info = native.nif_validate(str(source)), native.nif_info(str(source))
@@ -192,15 +153,14 @@ def export_pack(path, destination, backends, skip=()):
                 verified.add(fingerprint)
             model = f'Meshes/DIAMOND/Packs/{pack}/{fingerprint}.nif'
             target = within(stage, model);target.parent.mkdir(parents=True, exist_ok=True)
-            if not target.exists():shutil.copy2(source, target)
-            files[model] = digest(target)
-            require(files[model] == fingerprint, 'Finished model changed while exporting')
+            if not target.exists():
+                shutil.copy2(source, target);files.append(model)
             objects.append({**{k: copy.deepcopy(obj[k]) for k in ('id', 'name', 'bounds', 'weight', 'value')}, 'model': model})
             materials.update(relative(value) for value in obj.get('materialDependencies', []))
-        object_path = prefix+'objects.json';write(within(stage, object_path), objects);files[object_path] = digest(within(stage, object_path))
+        object_path = prefix+'objects.json';write(within(stage, object_path), objects);files.append(object_path)
         manifest = dict(format='diamond-content-pack', version=1, id=pack, revision=project['revision'],
                         name=project.get('name', pack), templates=sorted({w['template'] for w in weapons}),
-                        files=files, objects=object_path, weapons=weapons,
+                        files=sorted(files), objects=object_path, weapons=weapons,
                         requirements=copy.deepcopy(project.get('requirements', {})))
         manifest['requirements']['materials'] = sorted(materials)
         write(stage/prefix/'manifest.json', manifest)

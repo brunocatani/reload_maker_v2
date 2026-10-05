@@ -25,7 +25,7 @@ def run():
     assert sum(w['variants'] for p in valid for w in p['weapons'])==852
     assert sum(w['magazines'] for p in valid for w in p['weapons'])==135
     assert len({w['record'] for p in valid for w in p['weapons']})<12,'Fixture must include independent packs for one weapon'
-    assert result['sourceVerification']=='not-run' and result['gameEnablement']=='not-checked'
+    assert result['gameEnablement']=='not-checked'
     marker=work/'cancel';marker.touch();os.environ['RELOAD_MAKER_CANCEL_FILE']=str(marker)
     try:
         try:inventory(work,paths)

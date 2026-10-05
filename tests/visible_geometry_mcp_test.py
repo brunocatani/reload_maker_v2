@@ -1,6 +1,5 @@
 """Capture visible magazine geometry, generate hulls and cook through Maker."""
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import sys
@@ -37,7 +36,7 @@ def finish(job):
     raise AssertionError('Native asset job timed out')
 
 
-def reference(path):return dict(path=str(path),sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+def reference(path):return dict(path=str(path))
 
 
 def main(names):

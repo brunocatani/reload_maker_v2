@@ -45,14 +45,12 @@ def main():
     save = packs.add_parser('save-configuration')
     save.add_argument('--project', required=True)
     save.add_argument('--capture', required=True)
-    save.add_argument('--expected', default='')
     save.add_argument('--id', default='')
     save.add_argument('--full', default='')
     save.add_argument('--empty', default='')
     batch = packs.add_parser('save-configurations')
     batch.add_argument('--project', required=True)
     batch.add_argument('--captures', required=True, help='Folder of captures, saved in file-name order')
-    batch.add_argument('--expected', default='')
     batch.add_argument('--id', default='')
     args = parser.parse_args(remaining)
     backends = Backends(Path(settings.application), Path(settings.workspace))
@@ -88,20 +86,16 @@ def main():
         elif args.action == 'build':
             result = asyncio.run(build_packs(args.pack, Path(args.installation), backends, args.initialize))
         elif args.action == 'inspect-project':
-            from product_export import inspect_project,project_source,source_requirements,source_conflicts
-            from product_packs import digest,read
-            project_path=Path(args.project).resolve()
-            project, weapons = inspect_project(project_path)
+            from product_export import inspect_project
+            project, weapons = inspect_project(Path(args.project).resolve())
             result = dict(ok=True, id=project['id'], name=project.get('name', project['id']),
-                          sha256=digest(project_path),revision=project['revision'], weapons=weapons, objects=len(project['objects']))
-            result['sourceRequirements']=[dict(weapon=w['record'],configurations=source_requirements(w,read(project_source(project_path,w['profiles'])))) for w in project['weapons']]
-            result['sourceConflicts']=[dict(weapon=w['weapon'],paths=source_conflicts(w['configurations'])) for w in result['sourceRequirements'] if source_conflicts(w['configurations'])]
+                          revision=project['revision'], weapons=weapons, objects=len(project['objects']))
         elif args.action == 'save-configuration':
             from product_authoring import save_configuration
-            result=save_configuration(args.project,args.capture,backends,args.expected,args.id,args.full,args.empty)
+            result=save_configuration(args.project,args.capture,backends,args.id,args.full,args.empty)
         elif args.action == 'save-configurations':
             from product_authoring import save_configurations
-            result=save_configurations(args.project,sorted(Path(args.captures).glob('*.json')),backends,args.expected,args.id)
+            result=save_configurations(args.project,sorted(Path(args.captures).glob('*.json')),backends,args.id)
         else:
             from product_export import export_pack
             result = export_pack(args.project, args.output, backends, args.skip)

@@ -487,8 +487,6 @@ namespace reloadmaker
         void rememberCollisionDraft();
         QString assignedTemplate() const;
         void assignReloadPreset(const QString& id);
-        QJsonObject sourceEvidence() const;
-        QJsonObject auditSources(const QJsonObject&) const;
         QJsonObject _authoringRecords;
         QJsonObject _reloadTemplateAssignments;
         std::optional<WeaponMechanism> _assignedMechanism;
@@ -510,7 +508,6 @@ namespace reloadmaker
         PoseHand defaultMagazineHand() const;
         QString magazineHandRule() const;
         void setWeaponProperty(const QString& name, const QJsonValue& value);
-        mutable QHash<QString,QString> _animationReadHashes;
         QJsonObject packCommand(const QJsonObject&);
         QProcess* _packProcess{};
         QJsonObject _packJob;
@@ -1211,7 +1208,6 @@ namespace reloadmaker
         // complete in the loaded source), each {record, name, reason}.
         [[nodiscard]] QJsonArray exportSkippedWeapons(const QString& project) const;
         void startPackProcess(const QString& python, const QStringList& arguments, const QJsonObject& job);
-        [[nodiscard]] QString loadedConfigurationSourceReport(const QJsonObject& inspection) const;
         [[nodiscard]] QJsonObject runtimeOperatingProfile() const;
         [[nodiscard]] QVector<int> runtimeOperatingTracks() const;
         [[nodiscard]] QJsonObject runtimeOperatingTrack(int index) const;
@@ -1222,7 +1218,6 @@ namespace reloadmaker
         void addRuntimeMagazineReference(QJsonObject& magazine, const HandPosePlacement& anchor) const;
         void addRuntimeMagazineParts(QJsonObject& magazine) const;
         void addRuntimeMagazineHiding(QJsonObject& magazine) const;
-        [[nodiscard]] QJsonArray runtimeSourceResources(const QJsonObject& sources, const HandPosePlacement& anchor) const;
         [[nodiscard]] QJsonObject runtimeProfileHeader(const QString& weapon, bool concreteReceiver, const QString& receiverKey,
                                                        const QString& magazineKey, const QJsonObject& selection) const;
         // Scopes document (src/areas/scopes): the optics offered and the

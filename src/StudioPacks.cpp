@@ -1,7 +1,6 @@
 #include "ReloadMakerController.h"
 #include "StudioWindow.h"
 #include "StudioPaths.h"
-#include <QCryptographicHash>
 #include <QDialog>
 #include <QDir>
 #include <QDateTime>
@@ -41,7 +40,7 @@ void ReloadMakerController::showConfigurationSaver() {
     // Save all results: one row per configuration; double-click opens its parts.
     auto* results=new QTreeWidget;results->setColumnCount(3);results->setHeaderLabels({"Configuration","Result","Reason"});results->setColumnWidth(0,330);results->setColumnWidth(1,90);results->setRootIsDecorated(false);results->hide();layout->addWidget(results,2);
     const auto partName=[this](const QString& record){if(const auto* config=configuration())for(const auto& slot:config->entries())for(const auto id:slot.choices)if(poseRecordKey(id).compare(record,Qt::CaseInsensitive)==0)if(const auto* mod=config->mod(id))return mod->name;return record;};
-    QString expected,ownedJob;const auto inspect=[&]{QFile file(project->text());expected.clear();ownedJob.clear();if(file.exists()){if(file.open(QIODevice::ReadOnly))expected=QString::fromLatin1(QCryptographicHash::hash(file.readAll(),QCryptographicHash::Sha256).toHex());id->setEnabled(false);}else id->setEnabled(true);};
+    QString ownedJob;const auto inspect=[&]{ownedJob.clear();id->setEnabled(!QFileInfo::exists(project->text()));};
     connect(project,&QLineEdit::textChanged,&dialog,inspect);inspect();
     auto* actions=new QHBoxLayout;layout->addLayout(actions);auto* save=new QPushButton("Save selected configuration");auto* saveAll=new QPushButton("Save all configurations");auto* cancel=new QPushButton("Cancel job");actions->addWidget(save);actions->addWidget(saveAll);actions->addWidget(cancel);
     const auto showAll=[&](const QJsonObject& state){
@@ -50,7 +49,6 @@ void ReloadMakerController::showConfigurationSaver() {
         const auto result=state["result"].toObject();
         if(state["phase"]=="cancelled"){report->setPlainText("Cancelled. The pack project is unchanged.");return;}
         if(state["phase"]=="failed"){report->setPlainText(state["error"].toString());return;}
-        if(!result["sha256"].toString().isEmpty())expected=result["sha256"].toString();
         report->setPlainText(QString("Saved %1 · up to date %2 · not saved %3 of %4 configurations.%5\nDouble-click a configuration to open its parts.").arg(result["saved"].toInt()).arg(result["upToDate"].toInt())
             .arg(result["failed"].toInt()+state["exceptions"].toArray().size()).arg(state["total"].toInt()).arg(result["saved"].toInt()?QString("\nRevision %1 · %2").arg(result["revision"].toInt()).arg(result["project"].toString()):QString()));
         results->clear();results->show();
@@ -63,13 +61,13 @@ void ReloadMakerController::showConfigurationSaver() {
     const auto update=[&]{const auto state=packCommand({});const bool running=state["phase"]=="running"||state["phase"]=="cancelling";save->setEnabled(!running);saveAll->setEnabled(!running);cancel->setEnabled(running);
         if(state["operation"]=="save-all-configurations"&&state["id"].toString()==ownedJob){showAll(state);return;}
         if(state["operation"]!="save-configuration"||state["id"].toString()!=ownedJob)return;
-        if(running)report->setPlainText("Validating live motion, both hand fits, source identities and finished magazine models…");
+        if(running)report->setPlainText("Validating live motion, both hand fits and finished magazine models…");
         else if(state["phase"]=="failed")report->setPlainText(state["error"].toString());
-        else{const auto result=state["result"].toObject();expected=result["sha256"].toString();report->setPlainText(QString("Saved revision %1.\n%2 configurations · %3 magazines\n\n%4\n\nUse Export complete reload pack to publish this project.").arg(result["revision"].toInt()).arg(result["variants"].toInt()).arg(result["magazines"].toInt()).arg(result["project"].toString()));}
+        else{const auto result=state["result"].toObject();report->setPlainText(QString("Saved revision %1.\n%2 configurations · %3 magazines\n\n%4\n\nUse Export complete reload pack to publish this project.").arg(result["revision"].toInt()).arg(result["variants"].toInt()).arg(result["magazines"].toInt()).arg(result["project"].toString()));}
     };
     connect(this,&ReloadMakerController::packJobChanged,&dialog,update);
-    connect(save,&QPushButton::clicked,&dialog,[&]{try{settings.setValue(setting,project->text());settings.setValue("packExporter/project",project->text());ownedJob=saveConfiguredReload({{"project",project->text()},{"expected",expected},{"id",id->text()},{"full",full->text()},{"empty",empty->text()}})["id"].toString();update();}catch(const std::exception& e){report->setPlainText(e.what());}});
-    connect(saveAll,&QPushButton::clicked,&dialog,[&]{try{settings.setValue(setting,project->text());settings.setValue("packExporter/project",project->text());results->clear();ownedJob=startSaveAllConfigurations({{"project",project->text()},{"expected",expected}})["id"].toString();update();}catch(const std::exception& e){report->setPlainText(e.what());}});
+    connect(save,&QPushButton::clicked,&dialog,[&]{try{settings.setValue(setting,project->text());settings.setValue("packExporter/project",project->text());ownedJob=saveConfiguredReload({{"project",project->text()},{"id",id->text()},{"full",full->text()},{"empty",empty->text()}})["id"].toString();update();}catch(const std::exception& e){report->setPlainText(e.what());}});
+    connect(saveAll,&QPushButton::clicked,&dialog,[&]{try{settings.setValue(setting,project->text());settings.setValue("packExporter/project",project->text());results->clear();ownedJob=startSaveAllConfigurations({{"project",project->text()}})["id"].toString();update();}catch(const std::exception& e){report->setPlainText(e.what());}});
     connect(cancel,&QPushButton::clicked,&dialog,[&]{packCommand({{"operation","cancel"}});});
     update();dialog.exec();
 }
@@ -88,10 +86,10 @@ void ReloadMakerController::showPackExporter() {
     auto* output=new QLineEdit(studioDataPath("exports/packs/export-"+QDateTime::currentDateTimeUtc().toString("yyyyMMdd-HHmmss")));layout->addWidget(output);
     auto* report=new QPlainTextEdit;report->setReadOnly(true);layout->addWidget(report,1);
     auto* actions=new QHBoxLayout;layout->addLayout(actions);
-    auto* inspect=new QPushButton("Check project");auto* sourceCheck=new QPushButton("Check loaded configuration sources");auto* publish=new QPushButton("Export complete pack");
+    auto* inspect=new QPushButton("Check project");auto* publish=new QPushButton("Export complete pack");
     auto* cancel=new QPushButton("Cancel job");auto* open=new QPushButton("Open exported folder");
-    for(auto* button:{inspect,sourceCheck,publish,cancel,open})actions->addWidget(button);
-    QString exported,sourceJob;
+    for(auto* button:{inspect,publish,cancel,open})actions->addWidget(button);
+    QString exported;
     // Weapons an export leaves out because their checklist is not complete.
     const auto skippedText=[](const QJsonObject& state,const QString& heading){const auto skipped=state["skipped"].toArray();if(skipped.isEmpty())return QString();
         QString text="\n\n"+heading;for(const auto& value:skipped){const auto w=value.toObject();text+=QString("\n  %1 · %2: %3").arg(w["name"].toString(),w["record"].toString(),w["reason"].toString());}
@@ -99,17 +97,15 @@ void ReloadMakerController::showPackExporter() {
     const auto update=[&]{
         const auto state=packCommand({});const auto phase=state["phase"].toString();
         const bool running=phase=="running"||phase=="cancelling";
-        inspect->setEnabled(!running);sourceCheck->setEnabled(!running&&currentWeapon());publish->setEnabled(!running);cancel->setEnabled(running);open->setEnabled(!exported.isEmpty());
+        inspect->setEnabled(!running);publish->setEnabled(!running);cancel->setEnabled(running);open->setEnabled(!exported.isEmpty());
         if(phase=="idle")report->setPlainText("Prepared pack projects are organized by source ESP and weapon under workspace/packs. Each export contains full/empty objects and all included configurations. Original weapon plugins remain dependencies.");
         else if(running)report->setPlainText(phase=="cancelling"?"Cancellation requested. Waiting for the native tool to finish…":"Checking frozen authoring inputs and finished models…");
         else if(phase=="failed")report->setPlainText(state["error"].toString()+skippedText(state,"Left out:"));
         else if(state["operation"]=="inspect-project") {
             const auto result=state["result"].toObject();QString text=result["name"].toString()+"\n";
             for(const auto& value:result["weapons"].toArray()) {const auto weapon=value.toObject();text+=QString("\n%1 · %2\n%3 configurations · %4 magazines\n%5\n").arg(weapon["name"].toString(),weapon["record"].toString()).arg(weapon["variants"].toInt()).arg(weapon["magazines"].toInt()).arg(weapon["template"].toString());}
-            if(!result["sourceConflicts"].toArray().isEmpty())text+="\nSome configurations were captured from different source versions. Review those inputs before publishing.";
-            else text+="\nReady to validate native collision and publish.";
+            text+="\nReady to validate native collision and publish.";
             text+=skippedText(state,"Export will leave out:");
-            if(state["id"].toString()==sourceJob)try{text+=loadedConfigurationSourceReport(result);}catch(const std::exception& e){text+="\n\n"+QString::fromUtf8(e.what());}
             report->setPlainText(text);
         } else if(state["operation"]=="export") {
             const auto result=state["result"].toObject();exported=result["output"].toString();open->setEnabled(!exported.isEmpty());
@@ -119,7 +115,6 @@ void ReloadMakerController::showPackExporter() {
     connect(this,&ReloadMakerController::packJobChanged,&dialog,update);
     const auto run=[&](const QString& operation){settings.setValue("packExporter/project",project->text());try{packCommand({{"operation",operation},{"project",project->text()},{"output",output->text()}});update();}catch(const std::exception& e){report->setPlainText(e.what());}};
     connect(inspect,&QPushButton::clicked,&dialog,[&]{run("inspect-project");});
-    connect(sourceCheck,&QPushButton::clicked,&dialog,[&]{try{sourceJob=packCommand({{"operation","inspect-project"},{"project",project->text()}})["id"].toString();update();}catch(const std::exception& e){report->setPlainText(e.what());}});
     connect(publish,&QPushButton::clicked,&dialog,[&]{run("export");});
     connect(cancel,&QPushButton::clicked,&dialog,[&]{try{packCommand({{"operation","cancel"}});}catch(const std::exception& e){report->setPlainText(e.what());}});
     connect(open,&QPushButton::clicked,&dialog,[&]{QDesktopServices::openUrl(QUrl::fromLocalFile(exported));});

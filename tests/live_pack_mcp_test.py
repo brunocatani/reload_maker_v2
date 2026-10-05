@@ -32,14 +32,13 @@ def run():
             saved_pack=finish(edit('save_configured_reload',dict(project=str(project),id='live.glock',full=models['full'],empty=models['empty'])))
             assert saved_pack['variants']==1 and saved_pack['magazines']==1 and saved_pack['objects']==2
             inspected=finish(edit('pack_job',dict(operation='inspect-project',project=str(project))))
-            assert inspected['sha256']==saved_pack['sha256']
-            replaced=finish(edit('save_configured_reload',dict(project=str(project),expected=inspected['sha256'])))
+            assert inspected['revision']==saved_pack['revision']
+            replaced=finish(edit('save_configured_reload',dict(project=str(project))))
             assert replaced['variants']==1 and replaced['magazines']==1 and replaced['objects']==2
             exported=finish(edit('pack_job',dict(operation='export',project=str(project),output=str(work/'pack'))))
             built=finish(edit('pack_job',dict(operation='build',packs=[exported['output']],installation=str(work/'installation'),initialize=True)))
             assert built['activeObjects']==2
-            # Swapping an empty hull set under the full geometry cannot cook,
-            # even when both file hashes are refreshed correctly.
+            # Swapping an empty hull set under the full geometry cannot cook.
             wrong=read(work/'full/job.json');wrong['collision']=reference(work/'empty/hulls.json')
             (work/'wrong.json').write_text(json.dumps(wrong))
             try:finish(edit('pack_job',dict(operation='cook',job=str(work/'wrong.json'),output=str(work/'wrong.nif'))))

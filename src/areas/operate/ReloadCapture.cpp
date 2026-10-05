@@ -11,7 +11,6 @@
 #include "areas/operate/WeaponLocalSampler.h"
 
 #include <QComboBox>
-#include <QCryptographicHash>
 #include <QJsonArray>
 #include <QLabel>
 #include <QProgressBar>
@@ -29,11 +28,6 @@ namespace reloadmaker
         constexpr float kCaptureSamplesPerSecond = 120.0f;
         // Frames sampled per timer tick.
         constexpr int kCaptureBatchFrames = 16;
-
-        QString sha256Hex(const QByteArray& data)
-        {
-            return QString::fromLatin1(QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex());
-        }
     }
 
     // Drops the recipe and any capture in progress, and the simulation built on it.
@@ -166,8 +160,6 @@ namespace reloadmaker
             { "mods", mods },
             { "animation", expected },
             { "baseline", _stateBaselineAnimationPath },
-            { "animationSha256", sha256Hex(clipBytes) },
-            { "baselineSha256", sha256Hex(baseBytes) },
         };
         return true;
     }

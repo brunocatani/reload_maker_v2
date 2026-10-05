@@ -8,7 +8,6 @@
 #include "ReloadMakerController.h"
 #include "areas/operate/WeaponLocalSampler.h"
 
-#include <QCryptographicHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QTimer>
@@ -17,14 +16,6 @@
 
 namespace reloadmaker
 {
-    namespace
-    {
-        QString sha256Hex(const QByteArray& data)
-        {
-            return QString::fromLatin1(QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex());
-        }
-    }
-
     bool ReloadMakerController::buildConfiguredSimulationRig(const OperatingSetup& setup, SimulationRig& rig, QString& error)
     {
         if (!_reloadRecipe) {
@@ -143,9 +134,7 @@ namespace reloadmaker
         }
         motion.provenance = {
             { "animation", setup.clip },
-            { "animationSha256", sha256Hex(bytes) },
             { "baseline", setup.baseline },
-            { "baselineSha256", sha256Hex(baseBytes) },
             { "duration", motion.duration },
         };
         return true;

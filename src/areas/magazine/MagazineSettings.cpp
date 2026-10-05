@@ -264,6 +264,20 @@ namespace reloadmaker
                 tracks.append(QJsonObject{ { "index", i }, { "name", track.anchor.anchorName }, { "model", track.anchor.ownerModel } });
             }
         }
+        // A saved presentation is shown on this configuration's reload: its
+        // track index maps by node, and the node list is recorded again on save.
+        QJsonObject settings = magazineSetupJson(value);
+        if (!saved.isEmpty()) {
+            MagazineSetup current;
+            QString error;
+            settings = saved;
+            if (readMagazineSetup(saved, current, error)) {
+                current.emptyTrack = mapRecipeTrack(current.trackAnchors, *_reloadRecipe, current.emptyTrack);
+                current.recipeId = _reloadRecipe->id;
+                current.trackAnchors = {};
+                settings = magazineSetupJson(current);
+            }
+        }
         const auto& carrier = _reloadRecipe->tracks[_simulationRig->magazine].anchor;
         QJsonArray movements;
         for (const auto& movement : _mechanisms) {
@@ -273,7 +287,7 @@ namespace reloadmaker
         }
         return {
             { "movements", movements },
-            { "settings", saved.isEmpty() ? magazineSetupJson(value) : saved },
+            { "settings", settings },
             { "saved", !saved.isEmpty() },
             { "fullTrack", _simulationRig->magazine },
             { "fullName", carrier.anchorName },

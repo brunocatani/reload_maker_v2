@@ -26,7 +26,6 @@ namespace reloadmaker {
                 if(!std::isfinite(v)||std::abs(v)>1e7f)return false;
             const auto& q=p.rotation;return std::abs(q.x*q.x+q.y*q.y+q.z*q.z+q.w*q.w-1)<.01f;
         }
-        bool identity(const QString& id){return id.size()==64&&std::all_of(id.cbegin(),id.cend(),[](QChar c){return (c>='0'&&c<='9')||(c>='a'&&c<='f');});}
         QJsonObject anchorJson(const HandPosePlacement& a){return {{"kind",a.anchorKind},{"name",a.anchorName},{"path",a.anchorPath},{"model",a.ownerModel},{"record",a.ownerRecord}};}
         HandPosePlacement readAnchor(const QJsonObject& a){return {a["kind"].toString(),a["name"].toString(),a["path"].toString(),a["model"].toString(),a["record"].toString(),{}, {}};}
         bool validCapture(const ReloadRecipe& r,QString& error){
@@ -111,10 +110,7 @@ namespace reloadmaker {
     QByteArray encodeReloadRecipe(const ReloadRecipe& r,QString& error)
     {
         error.clear();
-        if (!validCapture(r, error) || !identity(r.id) || reloadRecipeIdentity(r) != r.id) {
-            if (error.isEmpty()) {
-                error = "Reload source identity differs from its capture";
-            }
+        if (!validCapture(r, error)) {
             return {};
         }
         QJsonArray tracks;
@@ -128,7 +124,7 @@ namespace reloadmaker {
                                        { "surface", t.surface }, { "poses", poses } });
         }
         const QJsonObject recipe{ { "format", "reload-maker-reload-recipe" }, { "version", kRecipeVersion }, { "space", "weapon-local" },
-                                  { "id", r.id }, { "source", r.source }, { "duration", r.duration }, { "frames", r.frames },
+                                  { "id", reloadRecipeIdentity(r) }, { "source", r.source }, { "duration", r.duration }, { "frames", r.frames },
                                   { "tracks", tracks } };
         const auto bytes = QJsonDocument(recipe).toJson(QJsonDocument::Compact);
         if (bytes.size() > maximumBytes) {
@@ -153,7 +149,6 @@ namespace reloadmaker {
             return false;
         }
         ReloadRecipe r;
-        r.id = d["id"].toString();
         r.source = d["source"].toObject();
         r.duration = float(d["duration"].toDouble());
         r.frames = d["frames"].toInt();
@@ -190,12 +185,12 @@ namespace reloadmaker {
             }
             r.tracks.append(std::move(t));
         }
-        if (!validCapture(r, error) || !identity(r.id) || reloadRecipeIdentity(r) != r.id) {
-            if (error.isEmpty()) {
-                error = "Reload source identity differs from its capture";
-            }
+        if (!validCapture(r, error)) {
             return false;
         }
+        // The id names the recipe's content; it is derived, never compared
+        // with a stored one (owner, 2026-10-05).
+        r.id = reloadRecipeIdentity(r);
         recipe = std::move(r);
         return true;
     }

@@ -47,12 +47,11 @@ namespace reloadmaker
         }
 
         // True when this editor already runs inside the configured profile's
-        // virtual file system with an unchanged load order.
+        // virtual file system.
         bool attachedToProfile(const LoadOrderSnapshot& launch, const InstallationSetup& setup, const InstallationCheck& check)
         {
             return insideMo2VirtualFilesystem() && launch.valid() && launch.profileName == setup.profile &&
-                   samePath(launch.instancePath, setup.mo2Instance) && samePath(launch.dataPath, check.dataPath) &&
-                   launch.fingerprint == profileFingerprint(setup.mo2Instance, check.profilePath);
+                   samePath(launch.instancePath, setup.mo2Instance) && samePath(launch.dataPath, check.dataPath);
         }
     }
 
@@ -291,9 +290,10 @@ namespace reloadmaker
         const bool installed = reuse && _libraryMode && _packageResources.isOpen() && !_libraryStamp.isEmpty() && _launchSnapshot.valid() &&
                                (requested.isEmpty() || requested == _launchSnapshot.profileName);
         const QByteArray installedStamp = _libraryStamp;
-        const QByteArray installedFingerprint = _launchSnapshot.fingerprint;
+        const QStringList installedPlugins = _launchSnapshot.plugins;
+        const QStringList installedArchives = _launchSnapshot.archives;
         const QString installedInstance = _launchSnapshot.instancePath;
-        _loadThread = QThread::create([result, timings, reuseState, installed, installedStamp, installedFingerprint, installedInstance, instance, data,
+        _loadThread = QThread::create([result, timings, reuseState, installed, installedStamp, installedPlugins, installedArchives, installedInstance, instance, data,
                                        launch, progress, requested]() {
             StageClock clock(*timings, "library.load");
             try {
@@ -302,12 +302,14 @@ namespace reloadmaker
                     result->error = snapshot.error;
                     return;
                 }
-                if (launch.valid() && (launch.instancePath != snapshot.instancePath || launch.fingerprint != snapshot.fingerprint)) {
-                    result->error = "MO2 profile/load order changed since this viewer attached. Relaunch through MO2 so virtual files and plugin order match.";
+                // MO2's virtual files belong to the launch: another plugin order
+                // needs a relaunch.
+                if (launch.valid() && (launch.instancePath != snapshot.instancePath || launch.plugins != snapshot.plugins || launch.archives != snapshot.archives)) {
+                    result->error = "MO2's enabled plugins changed since this viewer attached. Relaunch through MO2 so virtual files and plugin order match.";
                     return;
                 }
                 reuseState->stamp = sourceStamp(libraryStampFiles(snapshot));
-                if (installed && snapshot.instancePath == installedInstance && snapshot.fingerprint == installedFingerprint &&
+                if (installed && snapshot.instancePath == installedInstance && snapshot.plugins == installedPlugins && snapshot.archives == installedArchives &&
                     reuseState->stamp == installedStamp) {
                     reuseState->installed = true;
                     timings->add(QStringLiteral("library.reused installed"), 0);

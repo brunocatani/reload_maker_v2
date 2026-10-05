@@ -10,7 +10,6 @@
 #include "glview.h"
 #include "model/nifmodel.h"
 
-#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -75,8 +74,8 @@ namespace reloadmaker
     }
 
     // Weapon, magazine presentation and reload parts, and the evidence the
-    // capture was made from: carrier frame, source recipe, sources and the
-    // magazine setup.
+    // capture was made from: carrier frame, source recipe and the magazine
+    // setup.
     CollisionProfile ReloadMakerController::magazineWorldIdentity(bool empty, const HandPosePlacement& anchor, const QMatrix4x4& root) const
     {
         CollisionProfile captured;
@@ -84,8 +83,7 @@ namespace reloadmaker
         captured.target = anchor.ownerRecord + "|magazine-carrier|" + (empty ? "empty" : "full");
         captured.configuration = authoringRecordKey().section('/', 1);
         captured.referencePose = { { "space", "magazine-carrier" },          { "magazineRecord", anchor.ownerRecord }, { "model", anchor.ownerModel },
-                                   { "presentation", empty ? "empty" : "full" }, { "sourceRecipeId", _reloadRecipe->id },   { "rootToWorld", frameJson(root) },
-                                   { "sources", sourceEvidence() } };
+                                   { "presentation", empty ? "empty" : "full" }, { "sourceRecipeId", _reloadRecipe->id },   { "rootToWorld", frameJson(root) } };
         if (const auto presentation = magazinePresentationJson(_magazineSetup ? magazineSetupJson(*_magazineSetup) : QJsonObject{}); !presentation.isEmpty()) {
             captured.referencePose["presentationSetup"] = presentation;
         }
@@ -149,7 +147,6 @@ namespace reloadmaker
             }
             total += source.triangles.size();
             require(total <= 1000000, "Magazine exceeds one million triangles");
-            source.geometryHash = collisionGeometryHash(source);
             captured.sources.append(std::move(source));
         }
         captured.inputTriangles = total;
@@ -185,8 +182,7 @@ namespace reloadmaker
     }
 
     // The render meshes in the part's frame. When the workshop shows the same
-    // capture, its excluded world pieces stay out, and a piece whose geometry
-    // changed since must be regenerated first.
+    // capture, its excluded world pieces stay out.
     QJsonArray ReloadMakerController::preparedPartMeshes(const CollisionProfile& profile, const QMatrix4x4& inverse) const
     {
         const auto& selected = _collisionWorkshop.profile();
@@ -198,11 +194,8 @@ namespace reloadmaker
         for (const auto& source : profile.sources) {
             if (same) {
                 const auto old = std::find_if(selected.sources.begin(), selected.sources.end(), [&](const auto& s) { return s.key == source.key; });
-                if (old != selected.sources.end()) {
-                    require(old->geometryHash == source.geometryHash, "Source geometry changed; regenerate and review world pieces");
-                    if (!old->worldIncluded) {
-                        continue;
-                    }
+                if (old != selected.sources.end() && !old->worldIncluded) {
+                    continue;
                 }
             }
             auto mesh = source.render;
@@ -239,11 +232,10 @@ namespace reloadmaker
         const auto hulls = folder + "/hulls.json";
         _collisionWorkshop.command({ { "operation", "export-hulls" }, { "path", hulls } });
         const auto reference = [](const QString& path) {
-            QFile file(path);
-            if (!file.open(QIODevice::ReadOnly) || file.size() > 64 * 1024 * 1024) {
+            if (!QFileInfo(path).isFile() || QFileInfo(path).size() > 64 * 1024 * 1024) {
                 throw std::runtime_error("Cannot read prepared asset input (maximum 64 MiB)");
             }
-            return QJsonObject{ { "path", path }, { "sha256", QString::fromLatin1(QCryptographicHash::hash(file.readAll(), QCryptographicHash::Sha256).toHex()) } };
+            return QJsonObject{ { "path", path } };
         };
         const QJsonObject job{ { "format", "reload-maker-world-object-job" }, { "version", 1 }, { "geometry", reference(geometry) }, { "collision", reference(hulls) } };
         const auto path = folder + "/job.json";

@@ -121,9 +121,9 @@ try:
             for sight in slots['Sights']['choices']:
                 choose(scope,sight['id']);s=valid();op('reset')
                 source=command('state')['animationSource'];recipe=command('reload')
-                signature=recipe['source']['animationSha256']
+                signature=recipe['source']['animation'].lower()
                 if signature not in seen:
-                    full_cycle(signature[:12]);seen.add(signature)
+                    full_cycle('reload%d'%len(seen));seen.add(signature)
                     coverage['profiles'].append({'identity':source,'source':recipe['source']['animation']})
                 op('reset')
                 before=command('diagnostics')['attachmentRemaps'][0]

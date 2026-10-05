@@ -28,15 +28,11 @@ def run():
         edit('checklist',dict(operation='preset',id='pistol.slide-detachable.v1'));ready()
         assert command('checklist_state')['presetAssigned']
         assert 'behavior preset' not in command('simulation_state')['error']
-        edit('checklist',dict(operation='confirm',id='weapon.sources'))
         base=work/'base.project.json';edit('save_project',dict(path=str(base)))
-        evidence=next(v['sources'] for v in json.loads(base.read_text(encoding='utf-8'))['authoringRoadmaps'].values() if 'sources' in v)
-        audit=command('inspect_sources',dict(evidence=evidence))
-        assert audit['compatible'] and audit['sourceMode']=='explicit-data'
         edit('open_project',dict(path=str(base)));ready()
         assert command('pack_coverage')['sourceMode']=='explicit-data'
-        (work/'result.json').write_text(json.dumps(dict(ok=True,weapons=len(loaded),selected=selected,source=audit,simulation=command('simulation_state')),indent=2))
-        print('PASS real base Data import, explicit source audit, source/template resume and previous project preservation:',work,flush=True)
+        (work/'result.json').write_text(json.dumps(dict(ok=True,weapons=len(loaded),selected=selected,simulation=command('simulation_state')),indent=2))
+        print('PASS real base Data import, source/template resume and previous project preservation:',work,flush=True)
     except Exception:
         (work/'failure.json').write_text(json.dumps(dict(state=command('state'),diagnostics=command('diagnostics')),indent=2));print('Failure evidence:',work,flush=True);raise
     finally:

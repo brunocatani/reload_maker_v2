@@ -4,7 +4,6 @@ Uses a separate project, preserves all pre-existing library files, and restores
 the caller's session. No game data or runtime deployment is involved.
 """
 import copy
-import hashlib
 import json
 import math
 import sys
@@ -62,7 +61,7 @@ def save(scope='magazine'):
 initial = ready()
 snapshot = OUT/'original.project.json'
 working = OUT/'test.project.json'
-originals = {p: hashlib.sha256(p.read_bytes()).hexdigest()
+originals = {p: p.read_bytes()
              for folder in ['hand-poses', 'part-grips']
              for p in (ROOT/'workspace'/folder).glob('*.json')}
 edit('save_project', path=str(snapshot))
@@ -176,8 +175,8 @@ try:
 finally:
     edit('open_project',path=str(snapshot));ready()
     edit('save_project',path=initial['project'])
-    for path,digest in originals.items():
-        assert hashlib.sha256(path.read_bytes()).hexdigest()==digest, f'Original library changed: {path}'
+    for path,content in originals.items():
+        assert path.read_bytes()==content, f'Original library changed: {path}'
     # Only remove the exact test-owned UUID files; never touch user records.
     for path in created:
         assert path.parent.resolve()==(ROOT/'workspace/part-grips').resolve() and path not in originals

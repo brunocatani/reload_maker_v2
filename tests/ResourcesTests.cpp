@@ -1,7 +1,4 @@
 #include "PackageSource.h"
-#include "SourceEvidence.h"
-#include <QCryptographicHash>
-#include <QJsonArray>
 #include <QCoreApplication>
 #include <QDir>
 #include <QDirIterator>
@@ -60,21 +57,11 @@ int main(int argc, char** argv)
         require(resources.read(QStringLiteral("missing.hkx"), error).isEmpty() && !error.isEmpty(),
                 "missing input did not return a diagnostic");
         require(resources.read(path, error) == payload && error.isEmpty(), "successful read retains stale error");
-        const QJsonObject evidence{{"version",1},{"resources",QJsonArray{QJsonObject{{"path",path.toLower()},{"kind","animation"},
-            {"sha256",QString::fromLatin1(QCryptographicHash::hash(payload,QCryptographicHash::Sha256).toHex())}}}}};
-        const SourceReader sourceRead=[&](const QString&,const QString& key){SourceBytes r;r.bytes=resources.read(key,r.error);r.provider=resources.provider(key);return r;};
-        require(inspectSourceEvidence(evidence,sourceRead)["compatible"].toBool(),"unchanged source rejected");
-        write(temporary.filePath(path),"replacement animation without any plugin change");
-        const auto changed=inspectSourceEvidence(evidence,sourceRead);
-        require(!changed["compatible"].toBool()&&changed["changed"].toInt()==1&&changed["missing"].toInt()==0,"same-path loose replacement was not detected");
-        write(temporary.filePath(path),payload);
-        require(inspectSourceEvidence(evidence,[&](const QString& kind,const QString& key){auto r=sourceRead(kind,key);r.provider="different mod label, same content";return r;})["compatible"].toBool(),"provider label invalidated identical content");
         // Deleting a winning loose input must report its failure, not silently
         // substitute another provider.
         require(QFile::remove(temporary.filePath(path)), "cannot remove owned fixture");
         require(resources.read(path, error).isEmpty() && error.contains(QStringLiteral("loose")),
                 "missing indexed loose input was silently replaced");
-        require(inspectSourceEvidence(evidence,sourceRead)["missing"].toInt()==1,"missing source was not reported");
         resources.close();
         require(!resources.isOpen() && resources.files().isEmpty() && !resources.contains(path),
                 "close retained the old index");
@@ -92,9 +79,6 @@ int main(int argc, char** argv)
         write(QDir(patch).filePath(path),"new loose override without an ESP");
         ResourceArchive refreshed;require(refreshed.openPackages({base,patch},error),"Cannot refresh effective source view");
         require(refreshed.read(path,error)=="new loose override without an ESP","A newly added winning file was missed by source refresh");
-        const QJsonObject oldView{{"version",1},{"resources",QJsonArray{QJsonObject{{"path",path.toLower()},{"kind","animation"},
-            {"sha256",QString::fromLatin1(QCryptographicHash::hash(oldWinner,QCryptographicHash::Sha256).toHex())}}}}};
-        require(inspectSourceEvidence(oldView,[&](const QString&,const QString& key){SourceBytes r;r.bytes=refreshed.read(key,r.error);return r;})["changed"].toInt()==1,"Added animation override was not reported as a source change");
         resources.close();refreshed.close();
         out << "PASS loose HKX indexing, bytes, normalized paths, missing-input failure and index lifetime\n";
 

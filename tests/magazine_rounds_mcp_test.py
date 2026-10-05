@@ -61,7 +61,8 @@ def run():
         assert 'emptyHideNodes' not in exported and exported['presentationSetup'] == {'rounds': {bullet: False}}, exported
         persisted = json.loads(project.read_text(encoding='utf-8'))['magazineRounds']
         assert persisted == {state['key']: {bullet: False}}, persisted
-        assert presentation_item()['state'] != 'confirmed' or confirmed != 'confirmed', 'Changed rounds kept the old confirmation'
+        # A confirmation stays until the author removes it (owner, 2026-10-05).
+        assert presentation_item()['state'] == confirmed, 'Changed rounds revoked the confirmation'
 
         # The choice survives reopening the project.
         edit('open_project', dict(path=str(project)))

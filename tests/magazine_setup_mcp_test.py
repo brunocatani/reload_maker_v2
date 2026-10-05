@@ -29,10 +29,9 @@ def run(names):
                     fixture.setdefault('grabLocations',{}).setdefault(key,location)
                 write(folder/'fixture.project.json',fixture);edit('open_project',dict(path=str(folder/'fixture.project.json')));ready()
                 edit('workspace',dict(index=5));ready();before=simulation();profile=runtime();settings=command('magazine_setup_state')['settings']
-                bad=dict(settings,recipeId='0'*64)
-                try:edit('magazine_setup',dict(operation='save',settings=bad))
-                except RuntimeError:pass
-                else:raise AssertionError('Stale magazine presentation accepted')
+                # A recipe id is provenance, never a gate (owner, 2026-10-05).
+                edit('magazine_setup',dict(operation='save',settings=dict(settings,recipeId='0'*64)));ready()
+                assert command('magazine_setup_state')['settings']['recipeId']!='0'*64,'A foreign recipe id was kept'
                 edit('magazine_setup',dict(operation='save',settings=settings));ready();assert simulation()==before,(name,'Explicit source settings changed simulation')
                 after=runtime();after['magazine'].pop('presentationSetup');write(folder/'before.json',profile);write(folder/'after.json',after);assert after==profile,(name,'Explicit source settings changed runtime records')
                 bad=dict(settings,pieces=[dict(p,role='spare') for p in settings['pieces']])

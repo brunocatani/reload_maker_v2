@@ -5,7 +5,6 @@ has its own fit: the drum exclusion was removed when the owner authored one
 (implementation plan, "Removed the drum model-name exclusion").
 Preserves its configuration, camera, and project path; no new grips are created.
 """
-import hashlib
 import json
 import math
 import sys
@@ -48,7 +47,7 @@ def check_hand(grip):
 
 initial=ready();edit('testbed',{'name':'glock'});initial=ready()
 snapshot=OUT/'original.project.json';edit('save_project',{'path':str(snapshot)})
-pose_hashes={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in (ROOT/'workspace/hand-poses').glob('*.json')}
+pose_bytes={p.name:p.read_bytes() for p in (ROOT/'workspace/hand-poses').glob('*.json')}
 slot=next(s['key'] for s in initial['slots'] if s['name']=='Magazine')
 cases=[]
 try:
@@ -101,7 +100,7 @@ try:
     ids={g['pose']['id'] for g in bundle['grips']}
     bindings=bundle['magazineGrabBindings'];assert len(bindings)==7,len(bindings)
     assert all(x['gripId'] in ids for x in bindings)
-    assert pose_hashes=={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in (ROOT/'workspace/hand-poses').glob('*.json')}
+    assert pose_bytes=={p.name:p.read_bytes() for p in (ROOT/'workspace/hand-poses').glob('*.json')}
     (OUT/'validated.json').write_text(json.dumps({'cases':cases,'fixedReloadSamples':len(samples),'bundle':exported['path'],'sourcePosesUnchanged':True},indent=2))
     print('PASS seven magazine grips including the drum, free/rail following, reach and hand independence, fixed/native reload authoring, persistence and self-contained export')
 finally:

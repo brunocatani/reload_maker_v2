@@ -3,7 +3,6 @@
 // search stack, and reading those clip resources.
 #include "ReloadMakerController.h"
 
-#include <QCryptographicHash>
 #include <QFileInfo>
 #include <QSet>
 #include <algorithm>
@@ -76,19 +75,11 @@ namespace reloadmaker
         return result;
     }
 
-    // Reads an animation resource from the package or the game. The first
-    // read of each resource records its SHA-256 for source identity.
+    // Reads an animation resource from the package or the game.
     QByteArray ReloadMakerController::readAnimationResource(const QString& resourcePath, QString& error) const
     {
         error.clear();
-        const auto read = [&](const ResourceArchive& archive) {
-            auto bytes = archive.read(resourcePath, error);
-            const auto key = ResourceArchive::normalizeResourcePath(resourcePath);
-            if (error.isEmpty() && !bytes.isEmpty() && !_animationReadHashes.contains(key)) {
-                _animationReadHashes.insert(key, QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex()));
-            }
-            return bytes;
-        };
+        const auto read = [&](const ResourceArchive& archive) { return archive.read(resourcePath, error); };
         if (_libraryMode || !_package.resourceData.isEmpty()) {
             return read(_packageResources);
         }

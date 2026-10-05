@@ -78,11 +78,6 @@ namespace reloadmaker
                             return std::nullopt;
                         } });
 
-        _commands.add({ "inspect_sources", CommandAccess::Read, CommandGate::Always,
-                        [this](const QJsonObject& params) -> std::optional<QJsonObject> {
-                            return auditSources(params["evidence"].toObject());
-                        } });
-
         _commands.add({ "source_policy_state", CommandAccess::Read, CommandGate::Always,
                         [this](const QJsonObject&) -> std::optional<QJsonObject> { return sourcePolicyState(); } });
 

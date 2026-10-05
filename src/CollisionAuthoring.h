@@ -10,7 +10,7 @@
 
 namespace reloadmaker {
 struct CollisionMesh {
-    QString key,name,model,record,path,geometryHash,material;
+    QString key,name,model,record,path,material;
     bool worldIncluded{true};
     QMatrix4x4 frame;
     QJsonObject render; // Populated only by an explicit prepared-model capture.
@@ -47,5 +47,4 @@ QJsonObject collisionJson(const CollisionProfile& profile);
 QJsonObject collisionCookInput(const CollisionProfile& profile,QString& error);
 bool readCollisionJson(const QJsonObject& json,CollisionProfile& profile,QString& error);
 QJsonObject collisionSummary(const CollisionProfile& profile);
-QString collisionGeometryHash(const CollisionMesh& source);
 }

@@ -11,7 +11,7 @@ sys.path.insert(0,str(ROOT/'tools'))
 from product_authoring import save_configuration
 from product_backend import Backends
 from product_export import inspect_project
-from product_packs import read,write,digest
+from product_packs import read,write
 
 def run(capture,assets):
     work=ROOT/'local/multiweapon-pack-tests'/uuid.uuid4().hex;work.mkdir(parents=True)
@@ -21,17 +21,16 @@ def run(capture,assets):
     original=read(project)
     second=read(capture);weapon='FixturePistol.esp:000001';second['weapon']=weapon;second['name']='Independent pistol'
     second['profileHeader']['weapon']=weapon;second['profile']['source']['weaponRecord']=weapon
-    second['sources']['weapon']=weapon;second['sounds']['weapon']=weapon
+    second['sounds']['weapon']=weapon
     second['magazine']['grip']['placement']['handInAnchor']['translate'][0]+=1
     assert not second['grabs'],'This fixture uses the unassigned Glock policy'
     models={}
     for state in ('full','empty'):
         model=work/(state+'.nif');shutil.copy2(assets/state/'finished.nif',model)
         receipt=read(assets/state/'finished.receipt.json');receipt['capture']['weapon']=weapon
-        receipt['capture']['referencePose']['sources']['weapon']=weapon
         write(model.with_suffix('.receipt.json'),receipt);models[state]=str(model)
     snapshot=work/'second.json';write(snapshot,second)
-    save_configuration(project,snapshot,backend,expected=first['sha256'],full=models['full'],empty=models['empty'])
+    save_configuration(project,snapshot,backend,full=models['full'],empty=models['empty'])
     current,coverage=inspect_project(project);assert len(coverage)==2 and len(current['objects'])==4
     a,b=(w['magazineObjects'][0] for w in current['weapons']);assert a['record']==b['record']
     assert {a['full'],a['empty']}.isdisjoint({b['full'],b['empty']})

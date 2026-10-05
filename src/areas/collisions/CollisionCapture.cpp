@@ -13,7 +13,6 @@
 #include "model/nifmodel.h"
 #include "physics-interaction/weapon/WeaponEffectGeometryPolicy.h"
 
-#include <QCryptographicHash>
 #include <QDockWidget>
 #include <QJsonDocument>
 #include <QTimer>
@@ -64,7 +63,6 @@ namespace reloadmaker
                     reference.triangles.append({ t[0] + base, t[1] + base, t[2] + base });
                 }
             }
-            reference.geometryHash = collisionGeometryHash(reference);
             return reference;
         }
     }
@@ -156,7 +154,10 @@ namespace reloadmaker
     }
 
     // Weapon, target and loadout, and the pose the capture was taken in:
-    // animation, time, part choices and the target's frame.
+    // animation, time, part choices and the target's frame. The whole weapon's
+    // shape depends on every part, so its key lists them all, readably; a
+    // part target is keyed by that part alone (no configuration hashes,
+    // owner 2026-10-05).
     CollisionProfile ReloadMakerController::collisionProfileIdentity(int target) const
     {
         const auto& anchor = _handPoseAnchors[target];
@@ -164,10 +165,14 @@ namespace reloadmaker
         p.weapon = poseRecordKey(currentWeapon()->formId);
         p.target = target ? anchor.description.ownerRecord + "|" + anchor.description.ownerModel + "|" + anchor.description.anchorPath : "whole-weapon";
         QJsonObject choices;
+        QStringList parts;
         for (const auto& slot : configuration()->entries()) {
-            choices[QString::number(slot.key)] = poseRecordKey(configuration()->selected(slot.key));
+            const auto record = poseRecordKey(configuration()->selected(slot.key));
+            choices[QString::number(slot.key)] = record;
+            parts.append(record.toLower());
         }
-        p.configuration = QString::fromLatin1(QCryptographicHash::hash(QJsonDocument(choices).toJson(QJsonDocument::Compact), QCryptographicHash::Sha256).toHex());
+        parts.sort();
+        p.configuration = target ? anchor.description.ownerRecord.toLower() : parts.join(';');
         p.referencePose = { { "animation", _activeAnimationPath }, { "seconds", _playbackTime }, { "choices", choices } };
         if (target > 0) {
             Transformf world;
@@ -227,7 +232,6 @@ namespace reloadmaker
             if (source.triangles.isEmpty()) {
                 continue;
             }
-            source.geometryHash = collisionGeometryHash(source);
             p.sources.append(std::move(source));
         }
         p.inputTriangles = totalTriangles;

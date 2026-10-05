@@ -148,9 +148,6 @@ namespace reloadmaker
         const auto magazine = runtimeMagazine(anchor, weapon);
         const auto grabs = exportGrabLocations();
         require(type == WeaponMechanism::PistolSlide || !grabs.isEmpty(), "Configure the operating surface grab points before capture");
-        const auto sources = sourceEvidence();
-        require(auditSources(sources)["compatible"].toBool(), "Source resources changed; reload and review the configuration before export");
-        const auto runtimeSources = runtimeSourceResources(sources, anchor);
         auto header = runtimeProfileHeader(weapon, receiver != nullptr, receiverKey, magazineKey, selection);
         const auto compatibility = sourcePolicyState();
         const auto policy = compatibility["policy"].toObject();
@@ -170,8 +167,6 @@ namespace reloadmaker
                  { "magazine", magazine },
                  { "grabs", grabs },
                  { "sounds", exportSounds() },
-                 { "sources", sources },
-                 { "runtimeSources", runtimeSources },
                  { "worldModelSpace", "magazine-carrier" } };
     }
 
@@ -191,7 +186,6 @@ namespace reloadmaker
         const auto indices = runtimeOperatingTracks();
         QJsonObject profile{ { "recipeId", recipe.id },
                              { "animation", recipe.source["animation"] },
-                             { "animationSha256", recipe.source["animationSha256"] },
                              { "duration", (rig.motionDuration > 0 ? rig.motionDuration : recipe.duration) * (rig.closedFrame - rig.openFrame) / (recipe.frames - 1) },
                              { "slideTrack", indices.indexOf(rig.slide) },
                              { "boltTrack", indices.indexOf(rig.bolt) } };
@@ -520,35 +514,6 @@ namespace reloadmaker
                 magazine[fullBody ? "excludedFullPieces" : "excludedEmptyPieces"] = excluded;
             }
         }
-    }
-
-    // The animations, and the models the runtime motion depends on: the
-    // weapon, the magazine and the owner of every operating and magazine track.
-    QJsonArray ReloadMakerController::runtimeSourceResources(const QJsonObject& sources, const HandPosePlacement& anchor) const
-    {
-        const auto& recipe = *_reloadRecipe;
-        const auto& rig = *_simulationRig;
-        QSet<QString> criticalModels{ normalizeNifPath(currentWeapon()->baseModelPath), normalizeNifPath(anchor.ownerModel) };
-        auto criticalTracks = rig.slideTracks;
-        for (int track : rig.magazineTracks) {
-            if (!criticalTracks.contains(track)) {
-                criticalTracks.append(track);
-            }
-        }
-        if (rig.bolt >= 0 && !criticalTracks.contains(rig.bolt)) {
-            criticalTracks.append(rig.bolt);
-        }
-        for (int track : criticalTracks) {
-            criticalModels.insert(normalizeNifPath(recipe.tracks[track].anchor.ownerModel));
-        }
-        QJsonArray runtimeSources;
-        for (const auto& value : sources["resources"].toArray()) {
-            const auto source = value.toObject();
-            if (source["kind"] == "animation" || criticalModels.contains(source["path"].toString())) {
-                runtimeSources.append(source);
-            }
-        }
-        return runtimeSources;
     }
 
     // The pack header: format and mechanism, the standard receiver, and the

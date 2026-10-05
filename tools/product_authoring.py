@@ -17,7 +17,7 @@ import tempfile
 import uuid
 
 from product_export import form_key, inspect_project, project_source
-from product_packs import TEMPLATES, cancellation, digest, identity, read, require, write
+from product_packs import TEMPLATES, cancellation, identity, read, require, write
 
 KINDS = ('profiles', 'magazines', 'sounds', 'grabs')
 
@@ -59,17 +59,18 @@ def policy_identity(policy):
 
 def presentation_identity(setup):
     """What a magazine's cooked models depend on in its presentation setup.
-    recipeId only binds the setup to one reload capture; every receiver has
-    its own, yet they share the magazine's pieces and so its models. It
-    counts only when the payload is posed from that capture's frames."""
-    if isinstance(setup,dict) and not setup.get('sampledPayload'):
+    recipeId only names the reload capture the setup was saved from; every
+    receiver has its own, yet they share the magazine's pieces and so its
+    models. It never counts (owner, 2026-10-05: no hash gating)."""
+    if isinstance(setup,dict):
         return {key:value for key,value in setup.items() if key!='recipeId'}
     return setup
 
 
 def input_hash(snapshot):
-    """Everything a configuration is saved from: the capture holds the source
-    checksums, the authored setup and the hand fits it uses."""
+    """Everything a configuration is saved from: the capture, the authored
+    setup and the hand fits it uses. Save all only uses it to report an
+    unchanged configuration up to date; a different hash saves it again."""
     return hashlib.sha256(json.dumps(snapshot,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
 
 
@@ -79,7 +80,7 @@ def load_capture(capture_path):
     require(snapshot.get('format')=='reload-maker-runtime-configuration' and snapshot.get('version')==1,
             'Select a live runtime configuration captured by Maker')
     require(snapshot.get('worldModelSpace')=='magazine-carrier','The capture must use the native magazine carrier frame')
-    return dict(path=path,snapshot=snapshot,sha256=digest(path),inputHash=input_hash(snapshot))
+    return dict(path=path,snapshot=snapshot,inputHash=input_hash(snapshot))
 
 
 def selector_for(profiles):
@@ -127,7 +128,7 @@ class Draft:
 
 
 def apply_capture(draft,capture,full='',empty=''):
-    """Writes one capture into the draft. Returns the finished models it uses."""
+    """Writes one capture into the draft."""
     snapshot=capture['snapshot']
     record,weapon,documents=draft.weapon(snapshot)
     magazine=form_key(snapshot['selection']['magazine'])
@@ -169,7 +170,6 @@ def apply_capture(draft,capture,full='',empty=''):
     assignment=next((a for a in weapon['magazineObjects'] if form_key(a['record'])==magazine),None)
     require(bool(full)==bool(empty),'Choose both a full and an empty finished model')
     require(assignment is not None or full,'A new magazine needs its full and empty cooked models')
-    asset_inputs=[]
     if full:
         if assignment is None:
             # Two weapons may use the same source OMOD but need different hand
@@ -177,30 +177,21 @@ def apply_capture(draft,capture,full='',empty=''):
             # the publisher can still deduplicate identical finished NIF bytes.
             logical=project['id']+'/magazine/'+hashlib.sha256((record+'|'+magazine).encode()).hexdigest()[:24]
             assignment=dict(record=magazine,full=logical+'/full',empty=logical+'/empty');weapon['magazineObjects'].append(assignment)
-        current_resources={r['path'].replace('\\','/').lower():r['sha256'] for r in snapshot['sources']['resources']}
         for presentation,model in (('full',full),('empty',empty)):
             model=Path(model).resolve();receipt=model.with_suffix('.receipt.json');meta=read(receipt)
-            require(meta.get('engineCooked') and digest(model)==meta.get('outputSha256'),'Finished model differs from its cook receipt')
+            require(meta.get('engineCooked'),'Choose a finished model cooked by Maker')
             provenance=meta.get('capture',{});source=provenance.get('referencePose',{})
             require(source.get('space')=='magazine-carrier' and source.get('presentation')==presentation and
                     form_key(provenance.get('weapon'))==record and form_key(source.get('magazineRecord'))==magazine,
                     'Finished model belongs to another weapon, magazine, presentation or reference frame')
-            require(source.get('sourceRecipeId')==snapshot['magazine'].get('sourceRecipeId'),
-                    'Magazine motion changed; recapture both world models for this configured reload')
             require(presentation_identity(source.get('presentationSetup'))==presentation_identity(snapshot['magazine'].get('presentationSetup')),
                     'Magazine model was cooked with another body/payload presentation')
-            require(all(current_resources.get(r['path'].replace('\\','/').lower())==r['sha256'] for r in source['sources']['resources']),
-                    'World model source bytes differ from the configured reload')
-            asset_inputs.append((model,receipt,digest(model),digest(receipt)))
             item=dict(id=assignment[presentation],name=f"{weapon['name']} {snapshot['magazine']['capacity']} round magazine ({presentation})",
-                      bounds=meta['bounds'],weight=meta['massKg'],value=0,source=dict(path=str(model),sha256=meta['outputSha256']))
+                      bounds=meta['bounds'],weight=meta['massKg'],value=0,source=dict(path=str(model)))
             replace_record(project['objects'],item,lambda p:p['id'])
     capture_records=weapon.setdefault('captures',[])
-    require(isinstance(snapshot.get('runtimeSources'),list) and snapshot['runtimeSources'],'Recapture this configuration with its runtime source requirements')
-    runtime_sources=dict(version=1,weapon=snapshot['weapon'],resources=snapshot['runtimeSources'])
-    replace_record(capture_records,dict(selection=snapshot['selection'],sources=runtime_sources,inputHash=capture['inputHash']),
+    replace_record(capture_records,dict(selection=snapshot['selection'],inputHash=capture['inputHash']),
                    lambda p:selector(p['selection']))
-    return asset_inputs
 
 
 def checked(draft,record,backends):
@@ -209,7 +200,7 @@ def checked(draft,record,backends):
         native_validate(draft.documents[record],Path(folder),backends)
 
 
-def save(project_path,captures,backends,expected='',pack_id='',full='',empty='',skip_unchanged=False,strict=True):
+def save(project_path,captures,backends,pack_id='',full='',empty='',skip_unchanged=False,strict=True):
     """Applies the captures in order and writes the project once.
 
     With strict, any failure fails the save. Otherwise each failing capture is
@@ -220,16 +211,14 @@ def save(project_path,captures,backends,expected='',pack_id='',full='',empty='',
     loaded=[load_capture(c) for c in captures]
     existing=path.exists()
     if existing:
-        require(expected and digest(path)==expected,'Pack project changed; inspect it again before saving')
         project,_=inspect_project(path);project=copy.deepcopy(project)
     else:
-        require(not expected,'The selected project is missing')
         pack_id=identity(pack_id);require('/' not in pack_id,'Choose a single pack namespace')
         project=dict(format='reload-maker-pack-project',version=1,id=pack_id,name=loaded[0]['snapshot'].get('name',pack_id),revision=0,
                      requirements={},weapons=[],objects=[])
     path.parent.mkdir(parents=True,exist_ok=True)
     draft=Draft(path,project)
-    rows,asset_inputs,touched=[],[],set()
+    rows,touched=[],set()
     for capture in loaded:
         cancellation()
         snapshot=capture['snapshot'];row=dict(selection=snapshot.get('selection',{}),capture=str(capture['path']))
@@ -237,7 +226,7 @@ def save(project_path,captures,backends,expected='',pack_id='',full='',empty='',
             rows.append(dict(row,status='up-to-date'));continue
         trial=Draft(path,copy.deepcopy(draft.project));trial.documents=copy.deepcopy(draft.documents)
         try:
-            models=apply_capture(trial,capture,full,empty)
+            apply_capture(trial,capture,full,empty)
             record=form_key(snapshot.get('weapon'))
             if not strict:
                 checked(trial,record,backends)
@@ -245,13 +234,13 @@ def save(project_path,captures,backends,expected='',pack_id='',full='',empty='',
             if strict:
                 raise
             rows.append(dict(row,status='failed',error=str(error)));continue
-        draft=trial;asset_inputs+=models;touched.add(record)
+        draft=trial;touched.add(record)
         rows.append(dict(row,status='saved'))
     saved=[r for r in rows if r['status']=='saved']
     summary=dict(ok=True,project=str(path),rows=rows,saved=len(saved),upToDate=sum(r['status']=='up-to-date' for r in rows),
                  failed=sum(r['status']=='failed' for r in rows))
     if not saved:
-        return dict(summary,sha256=digest(path) if existing else '',revision=project['revision'])
+        return dict(summary,revision=project['revision'])
     stage=path.parent/('.authoring-'+uuid.uuid4().hex);stage.mkdir()
     final=path.parent/'authoring'/uuid.uuid4().hex
     try:
@@ -264,7 +253,7 @@ def save(project_path,captures,backends,expected='',pack_id='',full='',empty='',
             folder=folders[record];folder.mkdir(exist_ok=True)
             files=native_validate(draft.documents[record],folder,backends)
             for kind,file in zip(KINDS,files):
-                weapon[kind]=dict(path=str((final/file.relative_to(stage)).relative_to(path.parent)).replace('\\','/'),sha256=digest(file))
+                weapon[kind]=dict(path=str((final/file.relative_to(stage)).relative_to(path.parent)).replace('\\','/'))
         project=draft.project
         plugins=set(project.setdefault('requirements',{}).get('plugins',[]))
         def collect(value):
@@ -287,17 +276,12 @@ def save(project_path,captures,backends,expected='',pack_id='',full='',empty='',
         for item in probe['objects']:
             source=Path(item['source']['path']);item['source']['path']=str(source if source.is_absolute() else path.parent/source)
         write(stage/'project-check.json',probe);inspect_project(stage/'project-check.json');(stage/'project-check.json').unlink()
-        for capture in loaded:
-            require(digest(capture['path'])==capture['sha256'],'Live capture changed during save')
-        for model,receipt,model_hash,receipt_hash in asset_inputs:
-            require(digest(model)==model_hash and digest(receipt)==receipt_hash,'Finished model changed during save')
-        require(digest(path)==expected if existing else not path.exists(),'Pack project changed during save')
         cancellation();final.parent.mkdir(parents=True,exist_ok=True);os.replace(stage,final)
         # Commit the pointer last. Until this one atomic replacement, every
         # previous behavior document/model remains the active project content.
         write(path,project)
         last=form_key(loaded[-1]['snapshot']['weapon']) if len(loaded)==1 else None
-        result=dict(summary,sha256=digest(path),revision=project['revision'],objects=len(project['objects']))
+        result=dict(summary,revision=project['revision'],objects=len(project['objects']))
         if last:
             result.update(weapon=last,variants=len(draft.documents[last]['profiles']['profiles']),
                           magazines=len(draft.documents[last]['magazines']['magazines']),updatedSelection=loaded[0]['snapshot']['selection'])
@@ -306,12 +290,12 @@ def save(project_path,captures,backends,expected='',pack_id='',full='',empty='',
         if stage.exists() and stage.parent==path.parent and stage.name.startswith('.authoring-'):shutil.rmtree(stage)
 
 
-def save_configuration(project_path,capture_path,backends,expected='',pack_id='',full='',empty=''):
+def save_configuration(project_path,capture_path,backends,pack_id='',full='',empty=''):
     """Saves one configuration; any failure fails the save."""
-    return save(project_path,[capture_path],backends,expected,pack_id,full,empty)
+    return save(project_path,[capture_path],backends,pack_id,full,empty)
 
 
-def save_configurations(project_path,capture_paths,backends,expected='',pack_id=''):
+def save_configurations(project_path,capture_paths,backends,pack_id=''):
     """Saves every configuration that passes; unchanged ones are skipped and
     failing ones reported, none of them blocking the rest."""
-    return save(project_path,capture_paths,backends,expected,pack_id,skip_unchanged=True,strict=False)
+    return save(project_path,capture_paths,backends,pack_id,skip_unchanged=True,strict=False)

@@ -447,32 +447,22 @@ def configure_operating_setup(operation: str, expected_revision: int, settings: 
     baseline), manual (saved movement IDs per track). Explicit open/closed sample
     order may reverse a native path. Manual spring parts use an opening path;
     manual bolts use a full cycle. Both -1 endpoints request stroke detection.
-    Fire mode is preset/native/stroke. Source changes require review; no wrist
-    orientation is imposed by this setup. Test Operate before runtime export.
+    Fire mode is preset/native/stroke. Saved roles follow the reload's nodes, so
+    other parts keep them; no wrist orientation is imposed by this setup. Test
+    Operate before runtime export.
     """
     return command('operating_setup',dict(operation=operation,settings=settings or {}),expected_revision)
 
 @mcp.tool()
-def inspect_sources(evidence: dict) -> dict:
-    """Compare expected animation/model bytes with a fresh current source view.
-    evidence has version=1 and resources[{kind: animation|model, path, sha256}].
-    Inspect-project returns per-configuration resource requirements; add kind from
-    .hkx/.nif and check the selected configuration. The result states package vs
-    verified MO2 profile context. New loose overrides are re-indexed; no authoring
-    data or expected hash is changed. Loading or changed MO2 profiles reject.
-    """
-    return command('inspect_sources',dict(evidence=evidence))
-
-@mcp.tool()
-def save_configured_reload(project: str, expected_revision: int, expected_project_sha256: str = '',
+def save_configured_reload(project: str, expected_revision: int,
                            pack_id: str = '', full_model: str = '', empty_model: str = '') -> dict:
     """Replace/save the selected Operate configuration in a pack project.
-    Existing projects require their current SHA256; a new project needs a pack ID
-    and both carrier-space cooked models with receipts. Existing model assignments
+    A new project needs a pack ID and both carrier-space cooked models with
+    receipts. Existing model assignments
     can be kept by omitting both paths. Other configurations and source rules are
     preserved. Poll pack_job until complete/failed. No game installation occurs.
     """
-    return command('save_configured_reload',dict(project=project,expected=expected_project_sha256,
+    return command('save_configured_reload',dict(project=project,
                    id=pack_id,full=full_model,empty=empty_model),expected_revision)
 
 @mcp.tool()
@@ -482,7 +472,7 @@ def grip_tool(tool: str, expected_revision: int) -> dict:
     return command('grip_tool',dict(tool=tool),expected_revision)
 
 @mcp.tool()
-def save_all_configurations(project: str, expected_project_sha256: str, expected_revision: int) -> dict:
+def save_all_configurations(project: str, expected_revision: int) -> dict:
     """Save every receiver x operating part x magazine configuration of the loaded
     weapon into an existing pack project, in one write. Each configuration is
     assembled, prepared in Operate and captured like save_configured_reload; one
@@ -492,7 +482,7 @@ def save_all_configurations(project: str, expected_project_sha256: str, expected
     while capturing, then result.rows (saved, up-to-date, failed) and exceptions.
     Cancel with pack_job(operation='cancel'); a cancelled job writes nothing.
     """
-    return command('save_all_configurations',dict(project=project,expected=expected_project_sha256),expected_revision)
+    return command('save_all_configurations',dict(project=project),expected_revision)
 
 @mcp.tool()
 def capture_magazine_world(empty: bool, expected_revision: int) -> dict:
@@ -531,10 +521,8 @@ def checklist_state() -> dict:
 @mcp.tool()
 def checklist(operation: str, id: str, expected_revision: int) -> dict:
     """Confirm, unconfirm, skip or unskip one checklist item by id, or assign
-    a behavior preset with operation preset and a preset id. confirm records
-    the item's current inputs; a later change returns it for review.
-    Confirming weapon.sources records the source bytes; inspect_sources
-    compares recorded bytes with the current source. Items
+    a behavior preset with operation preset and a preset id. A confirmation
+    stays until it is removed; a later value change never revokes it. Items
     checked only in Operate (magazine presentation and guide) are checked
     there and the builder step is shown again. skip marks an optional item
     not applicable. Confirmations save with the project.

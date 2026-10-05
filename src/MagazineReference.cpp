@@ -11,7 +11,9 @@ QString magazineReferenceKey(const HandPosePlacement& p) {
     return QStringList{p.anchorKind,normalize(p.ownerRecord),normalize(p.ownerModel),normalize(p.anchorName),normalize(p.anchorPath)}.join('|');
 }
 bool readMagazineReference(const QJsonObject& json,MagazineReference& out,QString& error) {
-    if(json["version"]!=1||json["anchorKey"].toString().isEmpty()||json["anchorKey"].toString().size()>4096) {error="Select a magazine reference from the current assembly";return false;}
+    // A key names the whole node (kind|record|model|name|path), never a bare name.
+    const auto key=json["anchorKey"].toString().split('|');
+    if(json["version"]!=1||key.size()!=5||key[0].isEmpty()||key[4].isEmpty()||json["anchorKey"].toString().size()>4096) {error="Select a magazine reference from the current assembly";return false;}
     MagazineReference value;value.recipeId=json["recipeId"].toString();value.anchorKey=json["anchorKey"].toString();value.connectionMode=json["connectionMode"].toString();
     if(value.connectionMode!="source"&&value.connectionMode!="carrier"&&value.connectionMode!="custom") {error="Choose a native mount, carrier pivot or custom connection";return false;}
     if(!decodePoseTransform(json["connectionInCarrier"],value.connectionInCarrier,error))return false;

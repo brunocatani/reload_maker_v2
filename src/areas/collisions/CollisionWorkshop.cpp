@@ -243,7 +243,7 @@ namespace reloadmaker
         if (p.weapon == _profile.weapon && p.configuration == _profile.configuration && p.target == _profile.target) {
             for (auto& source : p.sources) {
                 for (const auto& old : _profile.sources) {
-                    if (source.key == old.key && source.geometryHash == old.geometryHash) {
+                    if (source.key == old.key) {
                         source.worldIncluded = old.worldIncluded;
                     }
                 }
@@ -436,8 +436,8 @@ namespace reloadmaker
                 "Profile belongs to a different weapon, loadout or target");
         for (auto& source : next.sources) {
             auto it = std::find_if(current.sources.begin(), current.sources.end(),
-                                   [&](const auto& s) { return s.key == source.key && s.geometryHash == source.geometryHash; });
-            require(it != current.sources.end(), "Source geometry/pose changed; regenerate this profile");
+                                   [&](const auto& s) { return s.key == source.key; });
+            require(it != current.sources.end(), "The profile names a piece this weapon no longer shows");
             source.frame = it->frame;
             source.material = it->material;
         }

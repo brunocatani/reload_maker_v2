@@ -63,7 +63,7 @@ try:
     assert record['space'] == 'source-local' and record['units'] == 'game-units'
     assert not record['engineCooked'] and record['runtimeConsumerRequired']
     assert all(len(h['points']) <= 252 for h in record['hulls'])
-    assert all(s['geometrySha256'] and len(s['sourceToWorld']) == 16 for s in record['sources'])
+    assert all(len(s['sourceToWorld']) == 16 for s in record['sources'])
     assert not any('LArm' in s['name'] or 'RArm' in s['name'] for s in record['sources'])
     results['weapon'] = {k: whole[k] for k in ('hullCount', 'sourceCount', 'points', 'inputTriangles', 'warnings')}
 

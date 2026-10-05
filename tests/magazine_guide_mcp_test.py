@@ -18,10 +18,9 @@ def run(names):
             edit('testbed',dict(name=name));ready();project=Path(ready()['project']);saved=project.read_bytes()
             try:
                 edit('workspace',dict(index=5));ready();before=simulation();state=command('magazine_guide_state');settings=state['settings']
-                bad=dict(settings,recipeId='0'*64)
-                try:edit('magazine_guide',dict(operation='save',settings=bad))
-                except RuntimeError:pass
-                else:raise AssertionError('Stale guide was accepted')
+                # A recipe id is provenance, never a gate (owner, 2026-10-05).
+                edit('magazine_guide',dict(operation='save',settings=dict(settings,recipeId='0'*64)));ready()
+                assert command('magazine_guide_state')['settings']['recipeId']!='0'*64,'A foreign recipe id was kept'
                 revised=dict(settings,outwardInConnection=[.6,0,-.8],travel=settings['travel']*1.25)
                 edit('magazine_guide',dict(operation='save',settings=revised));ready();after=simulation()
                 a,b=before.pop('magazineInteraction'),after.pop('magazineInteraction')

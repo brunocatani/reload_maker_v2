@@ -5,7 +5,6 @@
 #include "physics-interaction/weapon/WeaponGeometry.h"
 #pragma pop_macro("slots")
 #include "RockCollisionProvenance.h"
-#include <QCryptographicHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSet>
@@ -58,7 +57,6 @@ bool collisionHullFaces(CollisionHull& h,QString& error){
     for(const auto& [ids,e]:edges)if(e.count==1||e.crease)h.edges.append({ids.first,ids.second});
     return true;
 }
-QString collisionGeometryHash(const CollisionMesh& source){QCryptographicHash h(QCryptographicHash::Sha256);for(auto p:source.vertices)for(int k=0;k<3;++k){float v=p[k];h.addData(QByteArrayView(reinterpret_cast<const char*>(&v),sizeof(v)));}for(auto t:source.triangles)h.addData(QByteArrayView(reinterpret_cast<const char*>(t.data()),sizeof(t)));return QString::fromLatin1(h.result().toHex());}
 CollisionResult bakeCollision(CollisionProfile input,const std::shared_ptr<std::atomic<bool>>& stop){
     CollisionResult out;try{
         QString error;if(!collisionSettingsValid(input.settings,error))throw std::runtime_error(error.toStdString());
@@ -66,7 +64,7 @@ CollisionResult bakeCollision(CollisionProfile input,const std::shared_ptr<std::
         if(input.sources.isEmpty()||input.sources.size()>512)throw std::runtime_error("Select 1-512 visible source meshes");
         const auto& s=input.settings;
         for(auto& source:input.sources){checkCancel(stop);if(source.vertices.size()>65536||source.triangles.size()>65536)throw std::runtime_error("Source exceeds ROCK's supported triangle budget");
-            source.geometryHash=collisionGeometryHash(source);if(!source.worldIncluded)continue;input.inputTriangles+=source.triangles.size();if(input.inputTriangles>1000000)throw std::runtime_error("Snapshot triangle budget exceeded");
+            if(!source.worldIncluded)continue;input.inputTriangles+=source.triangles.size();if(input.inputTriangles>1000000)throw std::runtime_error("Snapshot triangle budget exceeded");
             std::vector<rock::weapon_gap_decomposition::Triangle> mesh;std::vector<Point> all;
             for(auto tri:source.triangles){rock::weapon_gap_decomposition::Triangle t;for(int i=0;i<3;++i){if(tri[i]>=quint32(source.vertices.size()))throw std::runtime_error("Invalid triangle index");auto p=source.vertices[int(tri[i])];if(!finite(p.x())||!finite(p.y())||!finite(p.z()))throw std::runtime_error("Non-finite source geometry");t[i]={p.x(),p.y(),p.z()};all.push_back({p.x(),p.y(),p.z()});}mesh.push_back(t);}
             all=dedup(all,s.dedup);if(!volume(all)){input.warnings<<source.name+": degenerate surface omitted (ROCK also requires a volume)";continue;}
@@ -106,7 +104,7 @@ QJsonObject collisionCookInput(const CollisionProfile& p,QString& error){
         {"capture",QJsonObject{{"weapon",p.weapon},{"target",p.target},{"configuration",p.configuration},{"referencePose",p.referencePose},{"pieces",pieces}}}};
 }
 QJsonObject collisionJson(const CollisionProfile& p){
-    QJsonArray sources,hulls,warnings;for(const auto& s:p.sources){QJsonArray frame;for(int r=0;r<4;++r)for(int c=0;c<4;++c)frame.append(s.frame(r,c));sources.append(QJsonObject{{"key",s.key},{"name",s.name},{"model",s.model},{"record",s.record},{"path",s.path},{"geometrySha256",s.geometryHash},{"material",s.material},{"worldIncluded",s.worldIncluded},{"sourceToWorld",frame}});}
+    QJsonArray sources,hulls,warnings;for(const auto& s:p.sources){QJsonArray frame;for(int r=0;r<4;++r)for(int c=0;c<4;++c)frame.append(s.frame(r,c));sources.append(QJsonObject{{"key",s.key},{"name",s.name},{"model",s.model},{"record",s.record},{"path",s.path},{"material",s.material},{"worldIncluded",s.worldIncluded},{"sourceToWorld",frame}});}
     for(const auto& h:p.hulls){QJsonArray points;for(auto point:h.points)points.append(vector(point));hulls.append(QJsonObject{{"source",h.source},{"name",h.name},{"enabled",h.enabled},{"points",points}});}
     for(auto w:p.warnings)warnings.append(w);
     return {{"format","reload-maker-collision-profile"},{"version",1},{"units","game-units"},{"space","source-local"},{"weapon",p.weapon},{"configuration",p.configuration},{"target",p.target},{"origin",p.origin},{"provenanceSha256",p.sourceHash},{"referencePose",p.referencePose},{"inputTriangles",double(p.inputTriangles)},{"settings",settingsJson(p.settings)},{"sources",sources},{"hulls",hulls},{"warnings",warnings},{"engineCooked",false},{"runtimeConsumerRequired",true}};
@@ -118,7 +116,7 @@ bool readCollisionJson(const QJsonObject& o,CollisionProfile& output,QString& er
     p.weapon=o["weapon"].toString();p.configuration=o["configuration"].toString();p.target=o["target"].toString();p.origin=o["origin"].toString();p.sourceHash=o["provenanceSha256"].toString();p.referencePose=o["referencePose"].toObject();p.inputTriangles=o["inputTriangles"].toInteger();
     if(!readSettings(o["settings"].toObject(),p.settings,error))return false;
     QSet<QString> keys;const auto sources=o["sources"].toArray(),hulls=o["hulls"].toArray();if(sources.isEmpty()||sources.size()>512||hulls.isEmpty()||hulls.size()>1024)return fail("Collision profile exceeds source/hull limits");
-    for(auto v:sources){const auto j=v.toObject();CollisionMesh s;s.key=j["key"].toString();if(s.key.isEmpty()||keys.contains(s.key))return fail("Missing or duplicate source binding");keys.insert(s.key);s.name=j["name"].toString();s.path=j["path"].toString();s.model=j["model"].toString();s.record=j["record"].toString();s.geometryHash=j["geometrySha256"].toString();s.material=j["material"].toString();if(j.contains("worldIncluded")&&!j["worldIncluded"].isBool())return fail("Invalid world piece selection");s.worldIncluded=j["worldIncluded"].toBool(true);const auto frame=j["sourceToWorld"].toArray();if(frame.size()!=16)return fail("Invalid collision source frame");for(int i=0;i<16;++i){if(!frame[i].isDouble()||!finite(frame[i].toDouble()))return fail("Invalid collision source frame");s.frame(i/4,i%4)=float(frame[i].toDouble());}if(!s.frame.isAffine()||std::abs(s.frame.determinant())<1e-8)return fail("Singular collision source frame");p.sources.append(s);}
+    for(auto v:sources){const auto j=v.toObject();CollisionMesh s;s.key=j["key"].toString();if(s.key.isEmpty()||keys.contains(s.key))return fail("Missing or duplicate source binding");keys.insert(s.key);s.name=j["name"].toString();s.path=j["path"].toString();s.model=j["model"].toString();s.record=j["record"].toString();s.material=j["material"].toString();if(j.contains("worldIncluded")&&!j["worldIncluded"].isBool())return fail("Invalid world piece selection");s.worldIncluded=j["worldIncluded"].toBool(true);const auto frame=j["sourceToWorld"].toArray();if(frame.size()!=16)return fail("Invalid collision source frame");for(int i=0;i<16;++i){if(!frame[i].isDouble()||!finite(frame[i].toDouble()))return fail("Invalid collision source frame");s.frame(i/4,i%4)=float(frame[i].toDouble());}if(!s.frame.isAffine()||std::abs(s.frame.determinant())<1e-8)return fail("Singular collision source frame");p.sources.append(s);}
     qsizetype total=0;for(auto v:hulls){const auto j=v.toObject();CollisionHull h;h.source=j["source"].toString();h.name=j["name"].toString();if(!keys.contains(h.source)||!j["enabled"].isBool())return fail("Unknown hull source or enabled state");h.enabled=j["enabled"].toBool();const auto points=j["points"].toArray();total+=points.size();if(points.size()<4||points.size()>4096||total>262144)return fail("Collision point budget exceeded");for(auto q:points){QVector3D point;if(!readPoint(q,point))return fail("Invalid hull point");h.points.append(point);}if(!collisionHullFaces(h,error))return false;p.hulls.append(std::move(h));}
     for(auto w:o["warnings"].toArray())if(w.isString())p.warnings.append(w.toString());
     output=std::move(p);return true;
