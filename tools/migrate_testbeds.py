@@ -46,6 +46,11 @@ PRESETS = {
     'l118a2': BOLT_ACTION,
 }
 
+# Sessions saved before they recorded the weapon's editor ID, by weapon record.
+EDITOR_IDS = {
+    'diarifles.esp:00059e': 'diam107',
+}
+
 # Testbeds whose behavior differed from their preset's default.
 PROPERTIES = {
     # The Thanatos magazine followed its clip's insertion curve.
@@ -70,8 +75,8 @@ def sessions():
 
 def migrate(path):
     session = json.loads(path.read_text(encoding='utf-8'))
-    editor_id = session.get('weaponEditorId', '').lower()
     weapon = session.get('weapon', '').lower()
+    editor_id = (session.get('weaponEditorId') or EDITOR_IDS.get(weapon, '')).lower()
     if editor_id not in PRESETS or not weapon:
         return 'skipped (%s)' % (editor_id or 'no weapon')
     changes = []
