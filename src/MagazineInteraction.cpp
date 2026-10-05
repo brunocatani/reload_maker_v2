@@ -12,7 +12,11 @@ bool finite(const QVector3D& p){return std::isfinite(p.x())&&std::isfinite(p.y()
 bool buildMagazineRail(const ReloadRecipe& r,int full,const QString& name,const Transformf& connection,
     const QVector<QVector3D>& body,const QVector<QVector3D>& weapon,MagazineRail& out,QString& error,bool finalApproach,int selectedEmpty,const QVector3D* authoredOutward) {
     error.clear();MagazineRail rail;rail.fullTrack=full;rail.connection=connection;rail.connectionName=name;
-    if(full<0||full>=r.tracks.size()||body.size()<3||weapon.isEmpty()||name.isEmpty()){error="Magazine connection or native geometry is missing.";return false;}
+    // Each missing input is named so an author (or an AI over MCP) knows what to fix.
+    if(full<0||full>=r.tracks.size()){error="The learned reload has no magazine track.";return false;}
+    if(name.isEmpty()){error="The magazine's seated connection could not be resolved.";return false;}
+    if(body.size()<3){error="No magazine body geometry was found under the magazine track.";return false;}
+    if(weapon.isEmpty()){error="No weapon geometry was found around the magazine.";return false;}
     const auto& main=r.tracks[full];
     if(selectedEmpty>=r.tracks.size()||(selectedEmpty>=0&&!r.tracks[selectedEmpty].surface)){error="Empty magazine needs a native surface track.";return false;}
     rail.emptyTrack=selectedEmpty;
