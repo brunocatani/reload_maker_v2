@@ -50,6 +50,14 @@ async def run():
                 result = await call('render_view', view=view, fit=True, zoom=1.5)
                 media = next(c for c in result.content if c.type == 'image')
                 (OUT/(name+'.png')).write_bytes(base64.b64decode(media.data))
+            async def dry_fire():
+                # Slide closed on an empty chamber: the trigger clicks and
+                # nothing else changes (a locked-open slide still refuses).
+                before = (await call('get_simulation_state'))['ammunition']
+                after = await op('fire')
+                assert after['action'] == 'Ready', after['action']
+                for key in ('magazineRounds', 'chambered', 'slideLocked', 'shotsFired'):
+                    assert after['ammunition'][key] == before[key], (key, before[key], after['ammunition'][key])
             def counts(s, mag, chamber, locked):
                 a = s['ammunition']
                 assert (a['magazineRounds'], a['chambered'], a['slideLocked']) == (mag, chamber, locked), a
@@ -113,11 +121,11 @@ async def run():
             await capture('06-slingshot-chambered')
             # A removed magazine leaves one chambered shot; a full manual rack ejects it.
             await op('drop_magazine'); counts(await call('get_simulation_state'),0,True,False)
-            await op('fire'); counts(await finished(),0,False,False); await reject('fire')
-            await op('mag_in'); counts(await finished(),17,False,False); await reject('fire')
+            await op('fire'); counts(await finished(),0,False,False); await dry_fire()
+            await op('mag_in'); counts(await finished(),17,False,False); await dry_fire()
             await op('pull', progress=1); await op('release'); counts(await finished(),16,True,False)
             await op('drop_magazine'); await op('pull', progress=1); await op('release')
-            counts(await finished(),0,False,False); await reject('fire')
+            counts(await finished(),0,False,False); await dry_fire()
             await op('reload'); counts(await finished(),16,True,False)
             exported = await call('export_authored_record', kind='simulation', expected_revision='current')
             data = json.loads(Path(exported['path']).read_text(encoding='utf-8'))

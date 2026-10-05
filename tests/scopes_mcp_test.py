@@ -1,7 +1,9 @@
 """Real MCP workflow with an optic surface-picked in the running editor.
 
-Preserves the current project/draft. Export fixtures remain in local/scopes,
-not in the user's installable profile folder.
+Opens the L118A2 testbed, whose fitted Schmidt & Bender scope has a glass lens,
+and picks the lens itself before the snapshot, so the testbed's saved project
+never keeps the picked profile. Export fixtures remain in local/scopes, not in
+the user's installable profile folder.
 """
 import asyncio
 import copy
@@ -38,12 +40,31 @@ async def run():
                         return state
                     await asyncio.sleep(.05)
                 raise AssertionError('Project load did not complete')
+            await ready()
+            await call('select_testbed', name='l118a2', expected_revision='current')
             state = await ready()
+            original = state['project']
+            await call('save_project', path=str(OUT/'initial.project.json'), expected_revision='current')
+            await op('open')
+            if not (await call('get_scope_state'))['configured']:
+                # Scan the viewport for the sight and pick until a lens resolves.
+                size = await call('part_at', x=0, y=0)
+                picked = False
+                for fy in range(20, 81, 3):
+                    for fx in range(10, 91, 3):
+                        x, y = size['width']*fx/100, size['height']*fy/100
+                        if picked or (await call('part_at', x=x, y=y)).get('label') != 'Sight':
+                            continue
+                        try:
+                            await op('pick', x=x, y=y)
+                        except RuntimeError:
+                            continue
+                        scope = await call('get_scope_state')
+                        picked = scope['configured'] and scope['resolved']
+                assert picked, 'No point on the L118A2 scope resolved a lens'
             baseline = await call('get_scope_state')
             assert baseline['configured'] and baseline['resolved'], 'Pick an optic surface first'
             baseline_pose = await call('inspect_pose')
-            original = state['project']
-            await call('save_project', path=str(OUT/'initial.project.json'), expected_revision='current')
             export_path = None
             export_before = None
             try:

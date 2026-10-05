@@ -1,6 +1,8 @@
-"""Run with two real surface-picked locations in the current project's editor.
+"""Two real surface-picked grab locations on the Glock's slide.
 
-Exercises the running native controller; keeps all test mutations in local/.
+Opens the Glock testbed and snapshots it, then picks two points on the slide
+itself, so the testbed's saved project never keeps them. Exercises the running
+native controller; keeps all test mutations in local/.
 """
 import json
 import sys
@@ -47,10 +49,25 @@ def exported(kind):
     return json.loads(Path(edit('export', kind=kind)['path']).read_text(encoding='utf-8'))
 
 
+ready()
+edit('testbed', name='glock')
 original = ready()['project']
-baseline = points()
-assert len(baseline['points']) >= 2, 'Pick two actual operating-part surfaces first'
 edit('save_project', path=str(OUT / 'original.project.json'))
+op('open')
+# The Receiver slot holds the slide (the operating part) and the frame; a pick
+# on the frame is refused, so keep picking until two points stand.
+size = command('part_at', {'x': 0, 'y': 0})
+for fy in range(30, 71, 3):
+    for fx in range(15, 86, 3):
+        x, y = size['width'] * fx / 100, size['height'] * fy / 100
+        if len(points()['points']) >= 2 or command('part_at', {'x': x, 'y': y}).get('label') != 'Receiver':
+            continue
+        try:
+            op('pick', x=x, y=y)
+        except RuntimeError:
+            pass
+baseline = points()
+assert len(baseline['points']) >= 2, 'Could not pick two points on the slide'
 baseline_pose = command('pose')
 try:
     first = baseline['points'][0]
@@ -79,16 +96,17 @@ try:
     ready()
     for kind in ('simulation', 'reload_bundle'):
         interactions = exported(kind)['authoredInteractions']
-        assert interactions['version'] == 2 and interactions['grabLocations'] == record
+        # Version 3 (2026-10-01) added operating fingers; grab locations are unchanged.
+        assert interactions['version'] == 3 and interactions['grabLocations'] == record, (kind, interactions.get('version'))
     # Wrong-hand rules and deliberate empty configurations must disable acquisition.
-    for point in points()['points']:
-        op('edit', id=point['id'], handMask=1)
-    edit('workspace', index=5)
-    ready()
-    edit('interaction_hand', hand='right')
-    assert not command('state')['interaction']['canGrab']
-    edit('interaction_hand', hand='left')
-    assert command('state')['interaction']['canGrab']
+    # The Glock's preset reloads with the left hand only, so the hand stays
+    # left and the masks change instead: right-only points refuse it.
+    for mask, grabbable in ((2, False), (1, True)):
+        for point in points()['points']:
+            op('edit', id=point['id'], handMask=mask)
+        edit('workspace', index=5)
+        ready()
+        assert command('state')['interaction']['canGrab'] == grabbable, mask
     for point in list(points()['points']):
         op('remove', id=point['id'])
     assert not command('state')['interaction']['canGrab']

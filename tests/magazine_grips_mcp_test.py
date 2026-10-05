@@ -1,6 +1,8 @@
 """Exercise the configured Glock grip library in the running native editor.
 
-Requires the authoring project with six assigned non-drum magazine grips.
+Runs on the Glock testbed, which assigns a fit to all seven magazines. The drum
+has its own fit: the drum exclusion was removed when the owner authored one
+(implementation plan, "Removed the drum model-name exclusion").
 Preserves its configuration, camera, and project path; no new grips are created.
 """
 import hashlib
@@ -44,13 +46,14 @@ def check_hand(grip):
     assert max(abs(a-b) for a,b in zip(actual,expected))<.003,'Wrist stopped following its magazine-local placement'
     return pose
 
-initial=ready();snapshot=OUT/'original.project.json';edit('save_project',{'path':str(snapshot)})
+initial=ready();edit('testbed',{'name':'glock'});initial=ready()
+snapshot=OUT/'original.project.json';edit('save_project',{'path':str(snapshot)})
 pose_hashes={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in (ROOT/'workspace/hand-poses').glob('*.json')}
 slot=next(s['key'] for s in initial['slots'] if s['name']=='Magazine')
 cases=[]
 try:
     edit('workspace',{'index':5});ready()
-    for mod in [0x1000fa4,0x1000fa5,0x100176f,0x1001770,0x1001779,0x100177a]:
+    for mod in [0x1000fa4,0x1000fa5,0x100176f,0x1001770,0x1001779,0x100177a,0x1002e6c]:
         # Selecting the already-installed part is rejected as a no-op edit.
         if next(x['selected'] for x in command('state')['slots'] if x['key']==slot)!=str(mod):
             edit('configure',{'slot':slot,'mod':str(mod)});ready()
@@ -73,9 +76,6 @@ try:
         seated=op('move_magazine',distance=0);assert not seated['magazineGrip']['applied']
         assert seated['ammunition']['magazineRounds']==seated['ammunition']['capacity']
         cases.append({'magazine':hex(mod),'gripId':gid,'capacity':sim['ammunition']['capacity']})
-    edit('configure',{'slot':slot,'mod':str(0x1002e6c)});ready()
-    assert not command('simulation_state')['magazineGrip']['id'],'Drum inherited a stick-magazine grip'
-    op('drop_magazine');assert not op('grab_magazine')['magazineGrip']['applied'];op('cancel_magazine');op('reset')
     edit('configure',{'slot':slot,'mod':str(0x1001770)});ready()
     edit('playback',{'mode':0});op('reload');samples=[]
     for _ in range(8):
@@ -99,10 +99,10 @@ try:
     assert command('state')['magazineGrabGrips']==assigned
     exported=edit('export',{'kind':'reload_bundle'});bundle=json.loads(Path(exported['path']).read_text())
     ids={g['pose']['id'] for g in bundle['grips']}
-    bindings=bundle['magazineGrabBindings'];assert len(bindings)==6
-    assert all(x['gripId'] in ids and not x['ownerModel'].lower().endswith('mag_50rnd.nif') for x in bindings)
+    bindings=bundle['magazineGrabBindings'];assert len(bindings)==7,len(bindings)
+    assert all(x['gripId'] in ids for x in bindings)
     assert pose_hashes=={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in (ROOT/'workspace/hand-poses').glob('*.json')}
-    (OUT/'validated.json').write_text(json.dumps({'cases':cases,'drumExcluded':True,'fixedReloadSamples':len(samples),'bundle':exported['path'],'sourcePosesUnchanged':True},indent=2))
-    print('PASS six magazine grips, free/rail following, reach and hand independence, drum exclusion, fixed/native reload authoring, persistence and self-contained export')
+    (OUT/'validated.json').write_text(json.dumps({'cases':cases,'fixedReloadSamples':len(samples),'bundle':exported['path'],'sourcePosesUnchanged':True},indent=2))
+    print('PASS seven magazine grips including the drum, free/rail following, reach and hand independence, fixed/native reload authoring, persistence and self-contained export')
 finally:
     edit('open_project',{'path':str(snapshot)});ready();edit('save_project',{'path':initial['project']})

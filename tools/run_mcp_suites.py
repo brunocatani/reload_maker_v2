@@ -44,6 +44,11 @@ NEEDS_INPUTS = {
     'portable_tools_test.py': '--application, --workspace and --nif',
     'product_authoring_test.py': '--captures',
     'shared_magazine_mcp_test.py': '--project',
+    # These read the MO2 profile's plugin list and load order. The runner's
+    # editors run outside MO2, where Maker never reads MO2 (owner rule); run
+    # them by hand from Maker launched inside the selected MO2 profile.
+    'player_library_mcp_test.py': 'Maker running inside MO2',
+    'source_browser_mcp_test.py': 'Maker running inside MO2',
 }
 
 # The workspace rule for tests: at most four processes' worth of work at once.

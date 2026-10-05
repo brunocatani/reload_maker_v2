@@ -12,7 +12,11 @@ def run():
         assert not command('installation')['virtualFilesystem'],'Use a normal editor process for the explicit Data test'
         edit('save_project',dict(path=str(work/'before.project.json')))
         edit('base_game',{});state=ready();assert not state['project'],'Base import retained the old save destination'
-        coverage=command('pack_coverage');loaded=coverage['loadedWeapons'];assert len(loaded)>100 and coverage['sourceMode']=='explicit-data'
+        coverage=command('pack_coverage');loaded=coverage['loadedWeapons'];assert coverage['sourceMode']=='explicit-data',coverage['sourceMode']
+        # Non-playable records (companion, creature and dummy weapons) are
+        # hidden with a reason; the base game lists 88 playable weapons.
+        excluded=coverage['weaponFilter']['excluded'];assert len(loaded)>=80 and excluded,(len(loaded),len(excluded))
+        assert all(x['reason'] for x in excluded) and not {x['record'] for x in excluded}&{w['record'] for w in loaded}
         assert all(w['owner'].lower() in ('fallout4.esm','fallout4_vr.esm') for w in loaded)
         definition=json.loads(Path(state['source']).read_text());assert definition['resourceData'] and definition['archives']
         (work/'catalog.json').write_text(json.dumps(coverage,indent=2))
