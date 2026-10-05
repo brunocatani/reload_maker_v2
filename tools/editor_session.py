@@ -132,8 +132,9 @@ class EditorRun:
     def __enter__(self):
         self.protected = snapshot(corpus_files())
         self.started = time.time()
-        self.process = launch_editor()
+        # Set before launching: report() must still describe a failed launch.
         self.restored = []
+        self.process = launch_editor()
         return self
 
     def __exit__(self, *exception):
