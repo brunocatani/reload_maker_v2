@@ -81,6 +81,43 @@ patch('src/glview.cpp', [
      '\t\t// Textures are flushed by the studio when its source changes.\n')],
     finish=lambda value: remove_method(remove_method(value,
         'bool GLView::selectPBRCubeMapForGame('), 'void GLView::selectPBRCubeMap()').replace('#include "ui/widgets/filebrowser.h"', ''))
+# NifSkope gives every billboard the "always face camera" rotation. Laser sights
+# (NiBillboardNode "LaserSightBeam", mode ROTATE_ABOUT_UP) author the beam along
+# the node's local +Y with the spot at +Y 1000, ahead of the barrel; drawn facing
+# the camera, the beam stood vertically on screen (2026-10-04). ROTATE_ABOUT_UP
+# keeps the node's own up axis (local Y) and only turns local Z toward the viewer
+# about it. Other modes keep NifSkope's behaviour.
+patch('src/gl/glnode.h', [
+    ('\tBillboardNode( Scene * scene, const QModelIndex & block );\n\n\tconst Transform & viewTrans() const override;\n};',
+     '\tBillboardNode( Scene * scene, const QModelIndex & block );\n\n\tconst Transform & viewTrans() const override;\n\n'
+     'protected:\n\tvoid updateImpl( const NifModel * nif, const QModelIndex & block ) override;\n\n'
+     '\t//! NiBillboardNode "Billboard Mode"; 1 is ROTATE_ABOUT_UP.\n\tint billboardMode = 0;\n};')])
+patch('src/gl/glnode.cpp', [
+    ('BillboardNode::BillboardNode( Scene * scene, const QModelIndex & iBlock )\n\t: Node( scene, iBlock )\n{\n}\n',
+     'BillboardNode::BillboardNode( Scene * scene, const QModelIndex & iBlock )\n\t: Node( scene, iBlock )\n{\n}\n\n'
+     'void BillboardNode::updateImpl( const NifModel * nif, const QModelIndex & index )\n{\n'
+     '\tNode::updateImpl( nif, index );\n\tif ( iBlock == index )\n\t\tbillboardMode = nif->get<int>( iBlock, "Billboard Mode" );\n}\n'),
+    ('\tt.rotation = Matrix();\n',
+     '\tif ( billboardMode == 1 ) {\n'
+     '\t\t// The columns of a view rotation are the node\'s local axes in view space;\n'
+     '\t\t// view +Z points at the viewer.\n'
+     '\t\tVector3 up( t.rotation( 0, 1 ), t.rotation( 1, 1 ), t.rotation( 2, 1 ) );\n'
+     '\t\tup.normalize();\n'
+     '\t\tVector3 toward = Vector3( 0, 0, 1 ) - up * up[2];\n'
+     '\t\tif ( toward.length() > 1e-4f ) {\n'
+     '\t\t\ttoward.normalize();\n'
+     '\t\t\tconst Vector3 side = Vector3::crossproduct( up, toward );\n'
+     '\t\t\tfor ( int row = 0; row < 3; ++row ) {\n'
+     '\t\t\t\tt.rotation( row, 0 ) = side[row];\n'
+     '\t\t\t\tt.rotation( row, 1 ) = up[row];\n'
+     '\t\t\t\tt.rotation( row, 2 ) = toward[row];\n'
+     '\t\t\t}\n'
+     '\t\t}\n'
+     '\t\t// Seen straight along its up axis the node keeps its own orientation.\n'
+     '\t\t*p = t;\n'
+     '\t\treturn *p;\n'
+     '\t}\n'
+     '\tt.rotation = Matrix();\n')])
 patch('src/gl/renderer.cpp', [
     ('#include "nifskope.h"', ''), ('#include "ui/settingsdialog.h"', ''),
     ('\tconnect( NifSkope::getOptions(), &SettingsDialog::saveSettings, this, &Renderer::updateSettings );', '')])
