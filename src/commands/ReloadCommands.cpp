@@ -75,5 +75,9 @@ namespace reloadmaker
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
                             return saveConfiguredReload(params);
                         } });
+        _commands.add({ "save_all_configurations", CommandAccess::Edit, CommandGate::WhenIdle,
+                        [this](const QJsonObject& params) -> std::optional<QJsonObject> {
+                            return startSaveAllConfigurations(params);
+                        } });
     }
 }

@@ -439,6 +439,19 @@ def save_configured_reload(project: str, expected_revision: int, expected_projec
                    id=pack_id,full=full_model,empty=empty_model),expected_revision)
 
 @mcp.tool()
+def save_all_configurations(project: str, expected_project_sha256: str, expected_revision: int) -> dict:
+    """Save every receiver x operating part x magazine configuration of the loaded
+    weapon into an existing pack project, in one write. Each configuration is
+    assembled, prepared in Operate and captured like save_configured_reload; one
+    saved from identical inputs is reported up to date. Configurations that cannot
+    be prepared or that DIAMOND rejects are reported and do not stop the others.
+    The author's part selection is restored afterwards. Poll pack_job: total/done
+    while capturing, then result.rows (saved, up-to-date, failed) and exceptions.
+    Cancel with pack_job(operation='cancel'); a cancelled job writes nothing.
+    """
+    return command('save_all_configurations',dict(project=project,expected=expected_project_sha256),expected_revision)
+
+@mcp.tool()
 def capture_magazine_world(empty: bool, expected_revision: int) -> dict:
     """Capture the current full/empty loose-magazine presentation from Operate.
     Uses its actual carrier frame, pre-feed payload and native visibility; excludes

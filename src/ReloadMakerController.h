@@ -1128,7 +1128,40 @@ namespace reloadmaker
         [[nodiscard]] QString preparedPartForCollision() const;
         void startCollisionCook(const QString& geometry, const QString& output);
         // Pack jobs and the runtime configuration export (src/areas/packs).
+        [[nodiscard]] QStringList packToolArguments(QString& python, QString& id);
         void cancelPackJob();
+        // Save all configurations (rework 06, src/areas/packs/SaveAllConfigurations.cpp).
+        enum class ConfigurationRole { Receiver, OperatingPart, Magazine };
+        struct ConfigurationChoice
+        {
+            ConfigurationRole role{ ConfigurationRole::Receiver };
+            SlotKey slot{ 0 };
+            std::uint32_t mod{ 0 };
+        };
+        using ConfigurationPlan = QVector<QVector<ConfigurationChoice>>;
+        // The job runs on the GUI thread between events: each step assembles,
+        // prepares or captures one configuration, then yields.
+        struct SaveAllJob
+        {
+            QJsonObject request;                    // project, expected, id
+            QString folder;                         // the captures, named in plan order
+            ConfigurationPlan plan;
+            int next{ 0 };
+            bool assembled{ false };                // plan[next] is selected
+            QSet<QString> captured;                 // selections already captured
+            QHash<SlotKey, std::uint32_t> original; // the author's selection, restored at the end
+            QJsonArray exceptions;
+            int captures{ 0 };
+            bool cancelled{ false };
+        };
+        std::optional<SaveAllJob> _saveAll;
+        QJsonObject startSaveAllConfigurations(const QJsonObject& request);
+        [[nodiscard]] ConfigurationPlan saveAllPlan() const;
+        void continueSaveAll();
+        void captureSaveAllConfiguration(const QVector<ConfigurationChoice>& combination);
+        void finishSaveAll();
+        bool selectConfigurationRecords(const QStringList& records);
+        [[nodiscard]] bool assemblyBusy() const;
         void appendInventoryArguments(QStringList& arguments, const QJsonObject& request) const;
         void appendAuthoringArguments(QStringList& arguments, const QJsonObject& request, const QString& operation) const;
         void startPackProcess(const QString& python, const QStringList& arguments, const QJsonObject& job);

@@ -48,6 +48,11 @@ def main():
     save.add_argument('--id', default='')
     save.add_argument('--full', default='')
     save.add_argument('--empty', default='')
+    batch = packs.add_parser('save-configurations')
+    batch.add_argument('--project', required=True)
+    batch.add_argument('--captures', required=True, help='Folder of captures, saved in file-name order')
+    batch.add_argument('--expected', default='')
+    batch.add_argument('--id', default='')
     args = parser.parse_args(remaining)
     backends = Backends(Path(settings.application), Path(settings.workspace))
     if settings.cancel_file:
@@ -93,6 +98,9 @@ def main():
         elif args.action == 'save-configuration':
             from product_authoring import save_configuration
             result=save_configuration(args.project,args.capture,backends,args.expected,args.id,args.full,args.empty)
+        elif args.action == 'save-configurations':
+            from product_authoring import save_configurations
+            result=save_configurations(args.project,sorted(Path(args.captures).glob('*.json')),backends,args.expected,args.id)
         else:
             from product_export import export_pack
             result = export_pack(args.project, args.output, backends)

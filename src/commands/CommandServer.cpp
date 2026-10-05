@@ -173,6 +173,7 @@ namespace reloadmaker
     {
         require(!_loadThread && !_reloadCapturing && !_rebuildTimer->isActive(),
                 "Source loading, assembly or reload capture is in progress; read state or cancel");
+        require(!_saveAll, "Save all configurations is selecting parts; read pack_job or cancel it");
     }
 
     QJsonObject ReloadMakerController::studioState() const

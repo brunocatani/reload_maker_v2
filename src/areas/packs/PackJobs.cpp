@@ -35,7 +35,7 @@ namespace reloadmaker
             cancelPackJob();
             return _packJob;
         }
-        require(!_packProcess, "A pack job is already running");
+        require(!_packProcess && !_saveAll, "A pack job is already running");
         const bool saving = operation == "save-configuration";
         const bool inventory = operation == "inventory";
         const bool authoring = operation == "export" || operation == "inspect-project" || saving;
@@ -43,13 +43,9 @@ namespace reloadmaker
         require(operation == "build" || operation == "validate" || authoring || cooking || inventory, "Unknown pack operation");
         const auto packs = request["packs"].toArray();
         require(authoring || cooking || inventory || (!packs.isEmpty() && packs.size() <= 256), "Select between one and 256 finished pack folders");
-        const QDir application(QCoreApplication::applicationDirPath());
-        const auto python = application.filePath("runtime/python/python.exe");
-        const auto entry = application.filePath("tools/product_cli.py");
-        require(QFileInfo::exists(python) && QFileInfo::exists(entry), "The bundled object builder is missing. Install the complete Reload Maker tool package.");
-        const auto id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-        _packCancelFile = studioDataPath("local/tmp/pack-" + id + ".cancel");
-        QStringList arguments{ "-B", "-I", entry, "--workspace", studioRoot(), "--cancel-file", _packCancelFile };
+        QString python;
+        QString id;
+        auto arguments = packToolArguments(python, id);
         if (cooking) {
             require(QFileInfo(request["job"].toString()).isFile() && !request["output"].toString().isEmpty(), "Select a frozen asset job and new finished NIF path");
             arguments << (operation == "cook" ? "cook-object" : "prepare-object") << "--job" << request["job"].toString() << "--output" << request["output"].toString();
@@ -78,10 +74,31 @@ namespace reloadmaker
         return _packJob;
     }
 
+    // The bundled tool's interpreter and its leading arguments, with a new
+    // job ID (unless one is given) and cancel file.
+    QStringList ReloadMakerController::packToolArguments(QString& python, QString& id)
+    {
+        const QDir application(QCoreApplication::applicationDirPath());
+        python = application.filePath("runtime/python/python.exe");
+        const auto entry = application.filePath("tools/product_cli.py");
+        require(QFileInfo::exists(python) && QFileInfo::exists(entry), "The bundled object builder is missing. Install the complete Reload Maker tool package.");
+        if (id.isEmpty()) {
+            id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        }
+        _packCancelFile = studioDataPath("local/tmp/pack-" + id + ".cancel");
+        return { "-B", "-I", entry, "--workspace", studioRoot(), "--cancel-file", _packCancelFile };
+    }
+
     // The running tool stops at its next safe point once the cancel file
-    // exists.
+    // exists; a capturing save-all job stops after its current step.
     void ReloadMakerController::cancelPackJob()
     {
+        if (_saveAll) {
+            _saveAll->cancelled = true;
+            _packJob["phase"] = "cancelling";
+            emit packJobChanged();
+            return;
+        }
         if (!_packProcess) {
             return;
         }
@@ -169,6 +186,11 @@ namespace reloadmaker
             process->deleteLater();
             if (success && _packJob["operation"] == "inventory") {
                 updatePackCoverage(result);
+            }
+            // A save-all job's captures only carry the configurations to the
+            // save; the pack project holds the result.
+            if (_packJob["operation"] == "save-all-configurations") {
+                QDir(_packJob["captureFolder"].toString()).removeRecursively();
             }
             emit packJobChanged();
         });
