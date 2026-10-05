@@ -169,6 +169,7 @@ namespace reloadmaker
             return {};
         }
         const bool all = allWeaponsSelected();
+        const auto progress = weaponProgressIndex();
         QVector<SourceWeaponRow> rows;
         for (int index = 0; index < _weaponSelections.size(); ++index) {
             if (!all && !selectionPlugins(index).contains(_browserPlugin, Qt::CaseInsensitive)) {
@@ -185,6 +186,7 @@ namespace reloadmaker
             row.record = selectionRecordKey(index);
             row.winner = winner.isEmpty() ? plugin.fileName : winner;
             row.coverage = coverageLabel(row.record);
+            row.progress = weaponProgressName(progress.value(row.record.toLower(), WeaponProgress::NotStarted));
             rows.append(row);
         }
         return buildSourceWeaponRows(rows, all);

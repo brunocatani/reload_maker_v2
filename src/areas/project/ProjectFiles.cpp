@@ -96,6 +96,7 @@ namespace reloadmaker
                         (plan.contains("magazineGuide") && !readMagazineGuide(plan["magazineGuide"].toObject(), guide, error)) ||
                         (plan.contains("magazineReference") && !readMagazineReference(plan["magazineReference"].toObject(), reference, error)) ||
                         (plan.contains("reviews") && (!plan["reviews"].isObject() || !validAuthoringReviews(plan["reviews"].toObject()))) ||
+                        (plan.contains("checklist") && (!plan["checklist"].isObject() || !validChecklistConfirmations(plan["checklist"].toObject()))) ||
                         (plan.contains("collisionDrafts") &&
                          (!plan["collisionDrafts"].isObject() || !validCollisionDrafts(plan["collisionDrafts"].toObject()))) ||
                         (plan.contains("magazineSetup") && !readMagazineSetup(plan["magazineSetup"].toObject(), magazine, error))) {
@@ -312,6 +313,13 @@ namespace reloadmaker
         if (!currentWeapon()) {
             return studioDataPath("workspace/projects/new.project.json");
         }
+        const auto relative = authoringProjectPath(poseRecordKey(currentWeapon()->formId), sessionSourceContext());
+        return relative.isEmpty() ? QString() : studioDataPath(relative);
+    }
+
+    // The loaded source, as weapon project paths identify it.
+    QJsonObject ReloadMakerController::sessionSourceContext() const
+    {
         QJsonObject source{ { "data", normalizedPath(_gameData) } };
         if (_libraryMode) {
             source["mode"] = "mo2-profile";
@@ -332,8 +340,7 @@ namespace reloadmaker
                 source["resourceData"] = normalizedPath(_package.resourceData);
             }
         }
-        const auto relative = authoringProjectPath(poseRecordKey(currentWeapon()->formId), source);
-        return relative.isEmpty() ? QString() : studioDataPath(relative);
+        return source;
     }
 
     // Changing weapons saves the current project under the previous weapon,
@@ -550,6 +557,7 @@ namespace reloadmaker
             QSettings().setValue("testbeds/" + currentTestbed(), absolute);
         }
         QSettings().setValue("projects/lastProject", absolute);
+        writeWeaponStatus(absolute);
         setStatus("Project saved · " + QFileInfo(path).fileName());
         return true;
     }

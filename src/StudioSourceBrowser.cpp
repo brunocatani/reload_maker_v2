@@ -196,10 +196,32 @@ void ReloadMakerController::refreshWeaponPicker()
     }
     const QSignalBlocker block(_weaponPicker);
     _weaponPicker->clear();
+    // Checklist progress: green complete, yellow draft, plain not started.
+    const auto dot = [](QRgb rgb) {
+        QPixmap pixmap(10, 10);
+        pixmap.fill(Qt::transparent);
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor::fromRgba(rgb));
+        painter.drawEllipse(QRectF(1, 1, 8, 8));
+        return QIcon(pixmap);
+    };
+    const QIcon complete = dot(design::color::done);
+    const QIcon draft = dot(design::color::draft);
     for (const SourceWeaponRow& row : sourceWeaponRows()) {
+        WeaponProgress state = WeaponProgress::NotStarted;
+        (void)parseWeaponProgress(row.progress, state);
+        const int item = _weaponPicker->count();
         _weaponPicker->addItem(row.label, row.index);
-        _weaponPicker->setItemData(_weaponPicker->count() - 1,
-                                   QString("%1\n%2\nWinning record: %3").arg(row.editorId, row.record, row.winner), Qt::ToolTipRole);
+        QString tip = QString("%1\n%2\nWinning record: %3").arg(row.editorId, row.record, row.winner);
+        if (state != WeaponProgress::NotStarted) {
+            const bool done = state == WeaponProgress::Complete;
+            _weaponPicker->setItemIcon(item, done ? complete : draft);
+            _weaponPicker->setItemData(item, QBrush(QColor::fromRgba(done ? design::color::done : design::color::draft)), Qt::ForegroundRole);
+            tip += done ? "\nChecklist complete" : "\nChecklist started, not complete";
+        }
+        _weaponPicker->setItemData(item, tip, Qt::ToolTipRole);
     }
     _weaponPicker->setCurrentIndex(_weaponPicker->findData(_selectedWeapon));
     if (_browserPlugin.isEmpty()) {

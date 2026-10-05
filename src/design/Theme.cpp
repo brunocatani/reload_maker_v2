@@ -124,6 +124,16 @@ QLabel#PanelTitle { font-size:18px; font-weight:600; }
 QLabel#LoadoutTitle { font-size:18px; font-weight:600; }
 QLabel#Hint { color:@textMuted; font-size:12px; }
 QLabel#Callout, QLabel#StatusCard { background:@card; border:1px solid @border; border-radius:8px; padding:10px 12px; color:@textSecondary; }
+QProgressBar#ChecklistProgress { background:@divider; border:0; border-radius:3px; }
+QProgressBar#ChecklistProgress::chunk { background:@done; border-radius:3px; }
+QFrame#ChecklistCard { background:@card; border:1px solid @border; border-radius:8px; }
+QLabel#ChecklistCardTitle { font-size:14px; font-weight:600; }
+QLabel#StateChip { border-radius:10px; padding:2px 9px; font-size:12px; font-weight:500; background:@needsYouFill; color:@needsYou; }
+QLabel#StateChip[tone="confirmed"] { background:@doneFill; color:@done; }
+QLabel#StateChip[tone="detected"] { background:@detectedFill; color:@detected; }
+QLabel#StateChip[tone="na"] { background:@row; color:@textMuted; }
+QLabel#ChecklistBanner { border-radius:8px; padding:8px 10px; font-size:12px; background:@doneFill; color:@done; }
+QLabel#ChecklistBanner[tone="attention"] { background:@card; color:@textSecondary; border:1px solid @border; }
 QLabel#ViewHint { color:@textFaint; font-size:12px; }
 QLabel#ClipPath { color:@textMuted; font-size:12px; }
 QLabel#TimeLabel { color:@text; }
@@ -206,11 +216,11 @@ QStatusBar::item { border:0; }
 )");
             const std::pair<const char*, QRgb> tokens[]{
                 { "@textSecondary", textSecondary }, { "@textDisabled", textDisabled }, { "@textMuted", textMuted }, { "@textFaint", textFaint },
-                { "@text", text }, { "@ground", ground }, { "@header", header }, { "@panel", panel }, { "@card", card }, { "@rowHover", rowHover },
+                { "@text", text }, { "@ground", ground }, { "@header", header }, { "@panel", panel }, { "@card", card }, { "@rowHover", rowHover }, { "@row", row },
                 { "@borderStrong", borderStrong }, { "@border", border }, { "@divider", divider }, { "@inputBorder", inputBorder }, { "@input", input },
                 { "@menuBorder", menuBorder }, { "@menu", menu }, { "@section", section }, { "@primaryHover", primaryHover }, { "@primary", primary },
                 { "@onPrimary", onPrimary }, { "@selected", selected }, { "@buttonHover", buttonHover }, { "@buttonBorder", buttonBorder },
-                { "@button", button }, { "@accent", accent }, { "@done", done }, { "@needsYouFill", needsYouFill }, { "@needsYou", needsYou },
+                { "@button", button }, { "@accent", accent }, { "@doneFill", doneFill }, { "@done", done }, { "@needsYouFill", needsYouFill }, { "@needsYou", needsYou },
                 { "@chipFill", chipFill }, { "@chipText", chipText }, { "@detectedFill", detectedFill }, { "@detected", detected },
             };
             // Longer names first, so @textSecondary is not read as @text.

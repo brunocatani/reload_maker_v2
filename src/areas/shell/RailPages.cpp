@@ -165,5 +165,7 @@ namespace reloadmaker
             _handPoseHeader->setTitle(title);
             _handPoseDock->setWindowTitle(title);
         }
+        // The open checklist section follows the builder step.
+        refreshChecklistUi();
     }
 }

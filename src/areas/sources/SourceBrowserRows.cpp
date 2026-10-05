@@ -105,6 +105,7 @@ namespace reloadmaker
                 { "index", row.index },
                 { "name", row.label },
                 { "record", row.record },
+                { "progress", row.progress },
             });
         }
         return {

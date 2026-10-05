@@ -89,9 +89,22 @@ namespace reloadmaker::design
         update();
     }
 
+    void ChecklistRow::setIndent(int pixels)
+    {
+        _indent = pixels;
+        updateGeometry();
+        update();
+    }
+
+    void ChecklistRow::setTrailingColor(QRgb rgb)
+    {
+        _trailingColor = rgb;
+        update();
+    }
+
     QSize ChecklistRow::sizeHint() const
     {
-        return { 240, _subtitle.isEmpty() ? 38 : 52 };
+        return { 240, !_subtitle.isEmpty() ? 52 : _indent > 0 ? 32 : 38 };
     }
 
     void ChecklistRow::enterEvent(QEnterEvent* event)
@@ -124,7 +137,7 @@ namespace reloadmaker::design
             painter.drawRoundedRect(frame, 6, 6);
         }
         const bool enabled = isEnabled();
-        const qreal markerX = 10;
+        const qreal markerX = 10 + _indent;
         const qreal centerY = height() / 2.0;
         const QRectF marker(markerX, centerY - 9, 18, 18);
         if (_marker == Marker::Number) {
@@ -149,7 +162,7 @@ namespace reloadmaker::design
         const qreal textX = markerX + 18 + 10;
         const qreal trailingWidth = _trailing.isEmpty() ? 0 : QFontMetricsF(uiFont(kSmallPx)).horizontalAdvance(_trailing) + 12;
         const QRectF textArea(textX, 0, width() - textX - trailingWidth - 10, height());
-        painter.setFont(uiFont(kBodyPx, isChecked() ? QFont::DemiBold : QFont::Normal));
+        painter.setFont(uiFont(_indent > 0 ? kSmallPx + 1 : kBodyPx, isChecked() ? QFont::DemiBold : QFont::Normal));
         painter.setPen(qcolor(enabled ? color::text : color::textDisabled));
         if (_subtitle.isEmpty()) {
             painter.drawText(textArea, Qt::AlignVCenter | Qt::AlignLeft, painter.fontMetrics().elidedText(text(), Qt::ElideRight, int(textArea.width())));
@@ -163,7 +176,7 @@ namespace reloadmaker::design
         }
         if (!_trailing.isEmpty()) {
             painter.setFont(uiFont(kSmallPx));
-            painter.setPen(qcolor(color::textMuted));
+            painter.setPen(qcolor(_trailingColor ? _trailingColor : color::textMuted));
             painter.drawText(QRectF(width() - trailingWidth - 10, 0, trailingWidth, height()), Qt::AlignVCenter | Qt::AlignRight, _trailing);
         }
     }

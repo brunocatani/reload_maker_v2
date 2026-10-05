@@ -58,6 +58,9 @@ namespace reloadmaker::design
         void setSubtitle(const QString& subtitle);
         void setTrailing(const QString& trailing);
         void setMarker(Marker marker, int number = 0);
+        // Item rows sit indented under their section, one line high.
+        void setIndent(int pixels);
+        void setTrailingColor(QRgb rgb);
         [[nodiscard]] QSize sizeHint() const override;
 
     protected:
@@ -69,6 +72,8 @@ namespace reloadmaker::design
         QString _subtitle;
         QString _trailing;
         Marker _marker{ Marker::Number };
+        int _indent{ 0 };
+        QRgb _trailingColor{ 0 };
         int _number{ 0 };
         bool _hovered{ false };
     };

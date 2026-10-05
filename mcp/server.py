@@ -467,6 +467,29 @@ def authoring_roadmap(operation: str = 'state', index: int | None = None,
     return command('roadmap', dict(operation=operation, index=index, id=id), expected_revision)
 
 @mcp.tool()
+def checklist_state() -> dict:
+    """The weapon's checklist for the current configuration: items from its
+    behavior preset (a manual bolt gets its cycle between shots, a bolt driven
+    by a charging handle only follows it), each with state needs-you,
+    detected, confirmed or not-applicable, its value, evidence and whether it
+    was rechecked here or kept from a saved confirmation. summary.progress is
+    not-started, draft or complete. evaluated is false until the weapon, its
+    learned reload and its operating parts are available.
+    """
+    return command('checklist_state')
+
+@mcp.tool()
+def checklist(operation: str, id: str, expected_revision: int) -> dict:
+    """Confirm, unconfirm, skip or unskip one checklist item by id, or assign
+    a behavior preset with operation preset and a preset id. confirm records
+    the item's current inputs; a later change returns it for review. Items
+    checked only in Operate (magazine presentation and guide) are checked
+    there and the builder step is shown again. skip marks an optional item
+    not applicable. Confirmations save with the project.
+    """
+    return command('checklist', dict(operation=operation, id=id), expected_revision)
+
+@mcp.tool()
 def get_installation() -> dict:
     """Inspect game/Creation Kit roots, MO2 profiles, capabilities and active VFS status."""
     return command('installation')

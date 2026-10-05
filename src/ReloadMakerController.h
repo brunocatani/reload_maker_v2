@@ -28,6 +28,7 @@
 #include "areas/collisions/CollisionWorkshop.h"
 #include "areas/sources/SourceBrowserRows.h"
 #include "commands/CommandRegistry.h"
+#include "domain/checklist/Checklist.h"
 
 #include <QHash>
 #include <QJsonArray>
@@ -80,7 +81,8 @@ namespace reloadmaker
     class GripViewport;
     class MagazineViewport;
     class CollisionPanel;
-    namespace design { class PanelHeader; }
+    namespace design { class PanelHeader; class ChecklistRow; }
+    struct WeaponPreset;
     class ReloadMakerController final : public QObject
     {
         Q_OBJECT
@@ -325,6 +327,7 @@ namespace reloadmaker
         // Project files (src/areas/project).
         bool saveSession(const QString& path = {});
         QString suggestedSessionPath() const;
+        QJsonObject sessionSourceContext() const;
         bool beginWeaponProject(int selectedIndex);
         QJsonObject animationSourceIdentity() const;
         [[nodiscard]] QJsonObject projectRecord() const;
@@ -390,6 +393,65 @@ namespace reloadmaker
         bool _magazineWorldPreview{false};
         QJsonObject _preparedPart;
         void showAuthoringRoadmap();
+    public:
+        // The weapon's checklist (areas/checklist): items from its preset's
+        // weapon model, detected and confirmed. `evaluated` is false until the
+        // weapon, its learned reload and its operating parts are available.
+        struct ChecklistView
+        {
+            const WeaponPreset* preset{ nullptr };
+            QVector<ChecklistItemStatus> items;
+            ChecklistSummary summary;
+            bool evaluated{ false };
+            QString problem;
+        };
+        ChecklistView checklistView() const;
+        QJsonObject checklistState() const;
+        QJsonObject checklistCommand(const QJsonObject& request);
+    private:
+        const WeaponPreset* checklistPreset() const;
+        QHash<QString, ChecklistObservation> checklistObservations(const WeaponPreset& preset) const;
+        QJsonObject checklistConfirmations() const;
+        void prepareChecklistEvidence();
+        bool buildOperatingRig(QString& error);
+        // The learned reload whose rig could not be built, and why; the
+        // checklist does not retry it until the reload is learned again.
+        QString _checklistRigRecipe, _checklistRigError;
+        void createChecklistPanel();
+        void refreshChecklistUi();
+        void runChecklistCommand(const QJsonObject& request);
+        QString checklistRefreshKey() const;
+        // Each weapon project folder holds status.json beside it: the
+        // checklist progress per configuration, so the weapon list can show
+        // complete, draft and untouched weapons without opening projects.
+        void writeWeaponStatus(const QString& projectPath);
+        QHash<QString, WeaponProgress> weaponProgressIndex() const;
+        QWidget* _checklistList{nullptr};
+        QLabel* _checklistCount{nullptr};
+        QProgressBar* _checklistProgress{nullptr};
+        QLabel* _checklistBanner{nullptr};
+        QButtonGroup* _checklistItemButtons{nullptr};
+        std::array<design::ChecklistRow*, 6> _checklistSectionRows{};
+        std::array<QWidget*, 6> _checklistSectionBoxes{};
+        QHash<QString, design::ChecklistRow*> _checklistItemRows;
+        QStringList _checklistItemIds;
+        QString _selectedChecklistItem;
+        bool _checklistFireOpen{ false };
+        QString _checklistShownKey;
+        QTimer* _checklistTimer{nullptr};
+        QFrame* _checklistCard{nullptr};
+        QLabel* _checklistCardSection{nullptr};
+        QLabel* _checklistCardTitle{nullptr};
+        QLabel* _checklistCardState{nullptr};
+        QLabel* _checklistCardOwner{nullptr};
+        QLabel* _checklistCardValue{nullptr};
+        QLabel* _checklistCardEvidence{nullptr};
+        QLabel* _checklistCardMessage{nullptr};
+        QComboBox* _checklistPresetChoice{nullptr};
+        QPushButton* _checklistConfirm{nullptr};
+        QPushButton* _checklistSkip{nullptr};
+        QPushButton* _checklistUndo{nullptr};
+        QPushButton* _checklistOpen{nullptr};
         QJsonObject homeState() const;
         QJsonObject chooseHomeRole(const QString&);
         bool openBaseGame();

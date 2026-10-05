@@ -47,6 +47,7 @@ namespace reloadmaker::design
         inline constexpr QRgb detectedFill = 0xff1d2b44;
         inline constexpr QRgb needsYou = 0xffffb562;
         inline constexpr QRgb needsYouFill = 0xff43311a;
+        inline constexpr QRgb draft = 0xffe6d06a; // weapon list: started, not complete
         inline constexpr QRgb selection = 0xfff0c785;
         inline constexpr QRgb selectionFill = 0xff3a3022;
         inline constexpr QRgb error = 0xffff9a8f;

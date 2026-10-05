@@ -52,6 +52,7 @@ namespace reloadmaker
         QString record;     // "Plugin.esp:000F9B"
         QString winner;     // plugin whose record wins the load order
         QString coverage;   // authored-coverage note, may be empty
+        QString progress;   // checklist progress: not-started, draft or complete
         QString label;      // filled by buildSourceWeaponRows
     };
 

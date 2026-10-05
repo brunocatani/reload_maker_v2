@@ -49,7 +49,7 @@ set(RELOADMAKER_GLOCK_PACKAGE "F:/fo4dev/personal_devtools/reload_maker/example_
 set(simulation_fixtures "${CMAKE_SOURCE_DIR}/tests/fixtures/simulation")
 set(reloadmaker_suites HkxReader Resources Pose SceneBinding Configuration Library Installation Authoring HandPose
     PartGrip GripViewport Mechanism ReloadRecipe Simulation Ammunition ActionCatalog Sound GrabLocations ScopeProfile
-    Collision WeaponModel)
+    Collision WeaponModel Checklist)
 foreach(suite IN LISTS reloadmaker_suites)
   set(suite_arguments "")
   if(suite STREQUAL "Simulation")
@@ -57,7 +57,7 @@ foreach(suite IN LISTS reloadmaker_suites)
         "${simulation_fixtures}/ru556-reload-recipe.json" "${simulation_fixtures}/m1a-reload-recipe.json")
   elseif(suite STREQUAL "Ammunition")
     set(suite_arguments "${RELOADMAKER_GLOCK_PACKAGE}/Glock19x.esp")
-  elseif(suite STREQUAL "WeaponModel")
+  elseif(suite STREQUAL "WeaponModel" OR suite STREQUAL "Checklist")
     set(suite_arguments "${CMAKE_SOURCE_DIR}/assets/presets")
   endif()
   add_test(NAME ${suite}

@@ -206,33 +206,7 @@ void ReloadMakerController::createUi() {
     _leftStack = new QStackedWidget(left);
     leftLayout->addWidget(_leftStack, 1);
 
-    _checklistPanel = new QWidget(_leftStack);
-    auto* checklistLayout = new QVBoxLayout(_checklistPanel);
-    checklistLayout->setContentsMargins(10, 14, 10, 0);
-    checklistLayout->setSpacing(2);
-    auto* checklistTitle = sectionLabel("Reload builder", _checklistPanel);
-    checklistTitle->setContentsMargins(6, 0, 0, 0);
-    checklistLayout->addWidget(checklistTitle);
-    auto* checklistHint = hintLabel("Everything the reload needs except its sounds, step by step.", _checklistPanel);
-    checklistHint->setContentsMargins(6, 0, 0, 10);
-    checklistLayout->addWidget(checklistHint);
-    _builderStepButtons = new QButtonGroup(this);
-    struct StepRow { BuilderStep step; const char* title; const char* subtitle; };
-    const StepRow steps[]{
-        {BuilderStep::Reload, "Learned reload", "Source reload and part timing"},
-        {BuilderStep::PartGrips, "Part grips", "Hands on the magazine and parts"},
-        {BuilderStep::Mechanisms, "Mechanisms", "Moving parts, pulls, linked parts"},
-        {BuilderStep::GrabPoints, "Grab points", "Where hands may grab a part"},
-        {BuilderStep::Magazines, "Magazines", "Full and empty world models"},
-    };
-    for (const auto& row : steps) {
-        auto* button = new ChecklistRow(row.title, _checklistPanel);
-        button->setSubtitle(row.subtitle);
-        button->setMarker(ChecklistRow::Marker::Number, int(row.step) + 1);
-        _builderStepButtons->addButton(button, int(row.step));
-        checklistLayout->addWidget(button);
-    }
-    checklistLayout->addStretch(1);
+    createChecklistPanel();
     _leftStack->addWidget(_checklistPanel);
 
     auto* loadoutPanel = new QWidget(_leftStack);

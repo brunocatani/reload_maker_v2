@@ -83,16 +83,26 @@ namespace reloadmaker
             setStatus("Learning the reload first; try again when it finishes.", true);
             return false;
         }
-        if (!_simulationRig) {
-            SimulationRig rig;
-            QString error;
-            if (!buildCurrentSimulationRig(rig, error)) {
-                setStatus(error, true);
-                return false;
-            }
-            _simulationRig = rig;
-            resolveOperatingFingers();
+        QString error;
+        if (!buildOperatingRig(error)) {
+            setStatus(error, true);
+            return false;
         }
+        return true;
+    }
+
+    // Builds the operating rig from the learned reload when it is missing.
+    bool ReloadMakerController::buildOperatingRig(QString& error)
+    {
+        if (_simulationRig) {
+            return true;
+        }
+        SimulationRig rig;
+        if (!buildCurrentSimulationRig(rig, error)) {
+            return false;
+        }
+        _simulationRig = rig;
+        resolveOperatingFingers();
         return true;
     }
 
