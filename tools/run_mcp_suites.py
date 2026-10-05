@@ -15,6 +15,7 @@ timings, for recording a new baseline.
 """
 import argparse
 import json
+import os
 import re
 import shutil
 import statistics
@@ -54,6 +55,7 @@ MIRRORED_CODE = ('tests', 'mcp', 'tools')
 COOK_SUITES = ('live_pack_mcp_test.py', 'magazine_piece_mcp_test.py', 'magazine_world_mcp_test.py',
                'visible_geometry_mcp_test.py')
 STALE_EDITOR_TIMEOUT_SECONDS = 60
+RESIDENT_MEMORY_MB = 16 * 1024
 
 
 def editor_suites():
@@ -235,7 +237,9 @@ def run_parallel_editor_suites(groups, logs):
                      '--summary', 'worker-%d.json' % index]
         for name in group:
             arguments += ['--suite', name]
-        children.append((worker, group, subprocess.Popen(arguments, cwd=str(worker))))
+        # The owner's 16 GB budget for kept sources is split between the editors.
+        environment = dict(os.environ, RELOADMAKER_RESIDENT_MB=str(RESIDENT_MEMORY_MB // len(groups)))
+        children.append((worker, group, subprocess.Popen(arguments, cwd=str(worker), env=environment)))
     results = []
     workers = []
     for index, (worker, group, child) in enumerate(children):

@@ -104,11 +104,18 @@ namespace reloadmaker
         _reloadBase = _stateBaselineLocalPose;
         ReloadRecipe recipe;
         QString error;
-        if (!readReloadSource(expected, recipe, error) || !addReloadTracks(recipe, error)) {
+        bool read = false;
+        {
+            StageClock clock(_loadTimings, "reload.read");
+            read = readReloadSource(expected, recipe, error) && addReloadTracks(recipe, error);
+        }
+        if (!read) {
             setStatus(error, true);
             return;
         }
         _reloadRecipe = std::move(recipe);
+        _reloadCaptureClock.start();
+        _reloadSamplingMilliseconds = 0;
         _reloadCaptureFrame = 0;
         _reloadCapturing = true;
         showReloadCaptureStarted(expected);
@@ -261,6 +268,8 @@ namespace reloadmaker
             return;
         }
         QString error;
+        QElapsedTimer batchClock;
+        batchClock.start();
         WeaponLocalSampler sampler(_skeleton, _nodeBindings, _reloadScenePlan, _weaponBoneIndex);
         sampler.setBaseline(_reloadBase);
         auto& recipe = *_reloadRecipe;
@@ -280,6 +289,7 @@ namespace reloadmaker
                 recipe.tracks[i].poses.append(sampler.nodePose(_reloadTrackNodes[i]));
             }
         }
+        _reloadSamplingMilliseconds += batchClock.elapsed();
         _reloadProgress->setValue(_reloadCaptureFrame);
         if (_reloadCaptureFrame < recipe.frames) {
             return;
@@ -292,11 +302,18 @@ namespace reloadmaker
     void ReloadMakerController::finishReloadCapture(QString& error)
     {
         auto& recipe = *_reloadRecipe;
+        _loadTimings.add(QStringLiteral("reload.capture"), _reloadCaptureClock.elapsed());
+        _loadTimings.add(QStringLiteral("reload.sampling"), _reloadSamplingMilliseconds);
         _reloadCaptureTimer->stop();
         _reloadCapturing = false;
         _reloadProgress->hide();
         _reloadAnalyze->setEnabled(true);
-        if (!identifyReloadRecipe(recipe, error)) {
+        bool identified = false;
+        {
+            StageClock clock(_loadTimings, "reload.identify");
+            identified = identifyReloadRecipe(recipe, error);
+        }
+        if (!identified) {
             invalidateReloadCapture();
             setStatus("Reload capture is invalid: " + error, true);
             return;

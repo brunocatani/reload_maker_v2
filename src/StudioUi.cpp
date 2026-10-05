@@ -137,7 +137,7 @@ void ReloadMakerController::createUi() {
     connect(_sourceMenu->addAction("Open ordered source set…"),&QAction::triggered,this,[this]{const auto path=QFileDialog::getOpenFileName(_window,"Open ordered source set",studioDataPath("workspace"),"Source set (*.reloadsources.json)");if(!path.isEmpty())openPackage(path);});
     connect(_sourceMenu->addAction("Open base game and loose Data"),&QAction::triggered,this,[this]{(void)openBaseGame();});
     _sourceMenu->addSeparator();
-    connect(_sourceMenu->addAction("Reload source files"),&QAction::triggered,this,[this]{if(_libraryMode)startLibraryLoad();else openPackage(_packageText);});
+    connect(_sourceMenu->addAction("Reload source files"),&QAction::triggered,this,&ReloadMakerController::reloadSourceFiles);
     connect(_sourceMenu,&QMenu::aboutToShow,this,[this,dynamicSource,developmentSource]{dynamicSource->setChecked(_libraryMode);developmentSource->setChecked(!_libraryMode&&!_package.sourcePath.isEmpty());});
     mainMenu->addSeparator();
     connect(mainMenu->addAction("Setup && tools…"),&QAction::triggered,this,&ReloadMakerController::showSetup);

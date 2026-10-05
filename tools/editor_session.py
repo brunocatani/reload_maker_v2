@@ -5,6 +5,7 @@ records the last opened project in its settings. Automated checks snapshot those
 files first and restore any that changed once the editor has closed.
 """
 import configparser
+import os
 import subprocess
 import sys
 import time
@@ -58,7 +59,11 @@ def launch_editor():
     previous_endpoint = ENDPOINT.read_text(encoding='utf-8') if ENDPOINT.exists() else ''
     # Tests choose their own projects; restoring the last one could need MO2. Unattended keeps
     # the desktop's pointer, keyboard and focus out of the run, and the editor behind other windows.
-    process = subprocess.Popen([str(EXECUTABLE), '--project', str(ROOT), '--no-restore', '--unattended'], cwd=str(ROOT))
+    arguments = [str(EXECUTABLE), '--project', str(ROOT), '--no-restore', '--unattended']
+    # Parallel suite runners share one memory budget for sources kept loaded.
+    if os.environ.get('RELOADMAKER_RESIDENT_MB'):
+        arguments += ['--resident-memory-mb', os.environ['RELOADMAKER_RESIDENT_MB']]
+    process = subprocess.Popen(arguments, cwd=str(ROOT))
     deadline = time.monotonic() + STARTUP_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         current = ENDPOINT.read_text(encoding='utf-8') if ENDPOINT.exists() else ''

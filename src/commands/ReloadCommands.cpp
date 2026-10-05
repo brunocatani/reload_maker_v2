@@ -2,6 +2,7 @@
 #include "commands/CommandSupport.h"
 
 #include <QJsonDocument>
+#include <QTimer>
 
 
 namespace reloadmaker
@@ -36,6 +37,23 @@ namespace reloadmaker
 
         _commands.add({ "roadmap", CommandAccess::Edit, CommandGate::Always,
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> { return roadmapCommand(params); } });
+
+        _commands.add({ "revision", CommandAccess::Read, CommandGate::Always,
+                        [this](const QJsonObject&) -> std::optional<QJsonObject> {
+                            // A cheap idle check for clients that would otherwise poll the full state.
+                            return QJsonObject{ { "busy", bool(_loadThread) || _reloadCapturing || _reloadCaptureQueued || _rebuildTimer->isActive() },
+                                                { "lastError", _lastError } };
+                        } });
+
+        _commands.add({ "load_timings", CommandAccess::Read, CommandGate::Always,
+                        [this](const QJsonObject& params) -> std::optional<QJsonObject> {
+                            auto result = _loadTimings.json(qint64(params["since"].toDouble(0)));
+                            const auto resident = residentState();
+                            for (auto it = resident.begin(); it != resident.end(); ++it) {
+                                result.insert(it.key(), it.value());
+                            }
+                            return result;
+                        } });
 
         _commands.add({ "checklist_state", CommandAccess::Read, CommandGate::Always,
                         [this](const QJsonObject&) -> std::optional<QJsonObject> { return checklistState(); } });

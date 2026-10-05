@@ -539,6 +539,7 @@ namespace reloadmaker
             setStatus("Save projects inside the Reload Maker V2 workspace.", true);
             return false;
         }
+        StageClock clock(_loadTimings, "project.save");
         auto record = projectRecord();
         QString message;
         if (!appendProjectDrafts(record, message)) {
@@ -573,6 +574,7 @@ namespace reloadmaker
             setStatus("Finish or cancel the current load first.", true);
             return;
         }
+        StageClock clock(_loadTimings, "project.read");
         QFile file(path);
         if (!file.open(QIODevice::ReadOnly) || file.size() > kMaximumProjectBytes) {
             setStatus("Cannot read this project.", true);
@@ -606,9 +608,9 @@ namespace reloadmaker
             _requestedMo2Profile = record["mo2Profile"].toString();
         }
         if (record["library"].toBool()) {
-            startLibraryLoad();
+            startLibraryLoad(true);
         } else {
-            startPackageLoad(record["package"].toString(), record["gameData"].toString());
+            startPackageLoad(record["package"].toString(), record["gameData"].toString(), false, true);
         }
     }
 
@@ -832,6 +834,7 @@ namespace reloadmaker
         }
         const auto record = _pendingSession;
         _pendingSession = {};
+        StageClock clock(_loadTimings, "project.restore");
         if (!selectProjectWeapon(record)) {
             return;
         }

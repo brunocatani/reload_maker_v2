@@ -5,6 +5,7 @@
 // source.
 #include "ReloadMakerController.h"
 #include "LibraryResources.h"
+#include "areas/sources/PackageLoad.h"
 #include "StudioWindow.h"
 
 #include <QCoreApplication>
@@ -25,33 +26,6 @@ namespace reloadmaker
     namespace
     {
         using Progress = std::function<void(const QString&)>;
-
-        struct PackageLoad
-        {
-            PreparedPackage package;
-            ResourceArchive resources;
-            ResourceArchive meshes;
-            ResourceArchive animations;
-            ResourceArchive sounds;
-            QVector<PluginContent> plugins;
-            QHash<QString, QString> referenceNames;  // ammunition and keyword names by lower-case record
-            QHash<QString, SoundDescriptor> referenceSounds; // by lower-case record
-            QVector<SoundMapping> referenceSoundMappings;
-            QSet<QString> referenceSoundKeywords;     // lower-case records
-            QString data;
-            QString error;
-            bool cancelled{ false };
-        };
-
-        // The game's Data folder for a folder that is either Data itself or the game root.
-        QString referenceDataFolder(const QString& dataPath)
-        {
-            const QString data = QDir(dataPath).absolutePath();
-            if (QFileInfo(QDir(data).filePath("Data")).isDir()) {
-                return QDir(data).filePath("Data");
-            }
-            return data;
-        }
 
         // Base-game meshes and animations are required; sounds are optional.
         bool openReferenceArchives(PackageLoad& load, const QString& data, const Progress& progress,
@@ -121,7 +95,11 @@ namespace reloadmaker
                         continue;
                     }
                     progress("Reading ammunition and keyword catalog: " + master);
-                    const PluginContent catalog = EspReader::read(file, cancelled, true);
+                    PluginContent catalog;
+                    {
+                        StageClock clock(load.timings, "source.referenceCatalog " + master);
+                        catalog = EspReader::read(file, cancelled, true);
+                    }
                     for (const auto& sound : catalog.sounds) {
                         const auto descriptor = soundDescriptor(catalog, sound);
                         load.referenceSounds.insert(descriptor.record.toLower(), descriptor);
@@ -156,28 +134,48 @@ namespace reloadmaker
             // directory; masters and the INI language are looked up there.
             const QString data = referenceDataFolder(dataPath);
             load.data = dataPath.isEmpty() ? QString() : data;
-            if (!dataPath.isEmpty() && !openReferenceArchives(load, data, progress, cancelled)) {
-                return;
+            {
+                StageClock clock(load.timings, "source.referenceArchives");
+                if (!dataPath.isEmpty() && !openReferenceArchives(load, data, progress, cancelled)) {
+                    return;
+                }
             }
             if (!path.isEmpty() && !cancelled()) {
                 progress("Preparing package…");
-                load.package = PackageSource::prepare(path);
+                {
+                    StageClock clock(load.timings, "source.prepare");
+                    load.package = PackageSource::prepare(path);
+                }
                 if (!load.package.ok()) {
                     load.error = load.package.error;
                     return;
                 }
                 progress("Indexing package resources…");
-                QVector<PluginContent> catalogs = includePackageMasters(readPackagePlugins(load.package, progress, cancelled),
-                                                                        data, cancelled, load.error);
-                if (!load.error.isEmpty() || !openPackageResources(load, catalogs, cancelled)) {
-                    return;
+                QVector<PluginContent> own;
+                {
+                    StageClock clock(load.timings, "source.plugins");
+                    own = readPackagePlugins(load.package, progress, cancelled);
+                }
+                QVector<PluginContent> catalogs;
+                {
+                    StageClock clock(load.timings, "source.masters");
+                    catalogs = includePackageMasters(own, data, cancelled, load.error);
+                }
+                {
+                    StageClock clock(load.timings, "source.resources");
+                    if (!load.error.isEmpty() || !openPackageResources(load, catalogs, cancelled)) {
+                        return;
+                    }
                 }
                 const QDir game(QFileInfo(data).absolutePath());
                 const QString language = sourceLanguage({ game.filePath("Fallout4_Default.ini"), game.filePath("Fallout4.ini") });
-                for (PluginContent& plugin : catalogs) {
-                    EspReader::resolveNames(plugin, language, [&load](const QString& resource, QString& error) {
-                        return load.resources.read(resource, error);
-                    });
+                {
+                    StageClock clock(load.timings, "source.names");
+                    for (PluginContent& plugin : catalogs) {
+                        EspReader::resolveNames(plugin, language, [&load](const QString& resource, QString& error) {
+                            return load.resources.read(resource, error);
+                        });
+                    }
                 }
                 if (load.package.plugins.isEmpty()) {
                     load.plugins = std::move(catalogs);
@@ -191,6 +189,7 @@ namespace reloadmaker
                 }
                 readReferenceCatalogs(load, data, progress, cancelled);
             }
+            load.stamp = sourceStamp(packageStampFiles(load.package, load.plugins, load.data));
             load.cancelled = cancelled();
         }
 
@@ -283,7 +282,10 @@ namespace reloadmaker
         startPackageLoad(path, _gameDataText, true);
     }
 
-    void ReloadMakerController::startPackageLoad(const QString& path, const QString& dataPath, bool newDocument)
+    // With `reuse` (opening a project), the installed or a resident copy of
+    // the same source is installed again when none of its files changed;
+    // otherwise, and for every explicit open, the source is read.
+    void ReloadMakerController::startPackageLoad(const QString& path, const QString& dataPath, bool newDocument, bool reuse)
     {
         if (_loadThread) {
             return;
@@ -292,12 +294,34 @@ namespace reloadmaker
             return;
         }
         auto result = std::make_shared<PackageLoad>();
+        const QString key = packageSourceKey(path, dataPath);
+        std::shared_ptr<PackageLoad> resident = takeResidentPackage(key);
+        if (!reuse) {
+            resident.reset();
+        }
+        const bool current = reuse && !_libraryMode && _packageResources.isOpen() && !_packageStamp.isEmpty() &&
+                             packageSourceKey(_package.sourcePath, _gameData) == key;
+        const QStringList currentFiles = current ? packageStampFiles(_package, _plugins, _gameData) : QStringList{};
+        const QByteArray currentStamp = _packageStamp;
         setLoading(true, "Opening source and reference assets…");
         const Progress progress = [this](const QString& message) {
             QMetaObject::invokeMethod(this, [this, message]() { _loadingLabel->setText(message); }, Qt::QueuedConnection);
         };
-        _loadThread = QThread::create([result, path, dataPath, progress]() {
+        _loadThread = QThread::create([result, resident, current, currentFiles, currentStamp, path, dataPath, progress]() {
             try {
+                StageClock clock(result->timings, "source.load");
+                if (current && sourceStamp(currentFiles) == currentStamp) {
+                    result->reuseCurrent = true;
+                    result->timings.add(QStringLiteral("source.reused installed"), 0);
+                    return;
+                }
+                if (resident && sourceStamp(packageStampFiles(resident->package, resident->plugins, resident->data)) == resident->stamp) {
+                    LoadTimings timings = std::move(result->timings);
+                    *result = std::move(*resident);
+                    result->timings = std::move(timings);
+                    result->timings.add(QStringLiteral("source.reused resident"), 0);
+                    return;
+                }
                 loadPackage(*result, path, dataPath, progress);
             } catch (const std::exception& exception) {
                 result->error = QString::fromUtf8(exception.what());
@@ -323,11 +347,19 @@ namespace reloadmaker
                 return;
             }
 
+            _loadTimings.append(result->timings);
+            StageClock install(_loadTimings, "source.install");
             if (newDocument) {
                 _sessionPath.clear();
             }
             setLibraryResources(nullptr);
-            clearAssetCaches();
+            if (result->reuseCurrent) {
+                takeCurrentPackage(*result);
+            } else if (_libraryMode || packageSourceKey(_package.sourcePath, _gameData) != packageSourceKey(result->package.sourcePath, result->data)) {
+                // A changed source read again replaces its old copy instead of parking it.
+                parkCurrentPackage();
+            }
+            clearAssetCaches(result->reuseCurrent);
             _libraryMode = false;
             _package = result->package;
             _packageResources = std::move(result->resources);
@@ -340,6 +372,7 @@ namespace reloadmaker
             _referenceSounds = std::move(result->referenceSounds);
             _referenceSoundMappings = std::move(result->referenceSoundMappings);
             _referenceSoundKeywords = std::move(result->referenceSoundKeywords);
+            _packageStamp = std::move(result->stamp);
             nameAttachPointsFromMasters(_plugins, _referenceNames);
             _packageText = _package.sourcePath;
             _gameDataText = _gameData;

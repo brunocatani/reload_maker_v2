@@ -479,10 +479,20 @@ namespace reloadmaker
         resetAssemblyState(reuseGeometry);
 
         QString error;
-        if (!rebuildAnimationActions(error)) {
+        bool animations = false;
+        {
+            StageClock clock(_loadTimings, "rebuild.animations");
+            animations = rebuildAnimationActions(error);
+        }
+        if (!animations) {
             appendDiagnostic(QStringLiteral("ANIMATION unavailable: %1 — configuration preview remains available").arg(error));
         }
-        if (!loadFirstPersonSkeleton(error)) {
+        bool skeleton = false;
+        {
+            StageClock clock(_loadTimings, "rebuild.skeleton");
+            skeleton = loadFirstPersonSkeleton(error);
+        }
+        if (!skeleton) {
             setStatus(error, true);
             return;
         }
@@ -491,14 +501,29 @@ namespace reloadmaker
             setStatus(QStringLiteral("NifSkope render model is unavailable."), true);
             return;
         }
-        if (!reuseGeometry && !assembleScene(*destination, *weapon, geometrySignature, error)) {
+        bool assembled = true;
+        if (!reuseGeometry) {
+            StageClock clock(_loadTimings, "rebuild.assemble");
+            assembled = assembleScene(*destination, *weapon, geometrySignature, error);
+        }
+        if (!assembled) {
             setStatus(error, true);
             return;
         }
-        if (!showReadyPose(sameWeapon, previousAction, error)) {
+        bool ready = false;
+        {
+            StageClock clock(_loadTimings, "rebuild.readyPose");
+            ready = showReadyPose(sameWeapon, previousAction, error);
+        }
+        if (!ready) {
             setStatus(error, true);
             return;
         }
+        _loadTimings.add(reuseGeometry ? QStringLiteral("rebuild.total scene-reused") : QStringLiteral("rebuild.total"), rebuildClock.elapsed());
+        _loadTimings.add(QStringLiteral("rebuild.decode"), _decodeMilliseconds);
+        _loadTimings.add(QStringLiteral("rebuild.copy"), _copyMilliseconds);
+        _loadTimings.add(QStringLiteral("rebuild.paste"), _pasteMilliseconds);
+        _loadTimings.add(QStringLiteral("rebuild.sourceDecodes"), _sourceMisses);
         appendDiagnostic(QStringLiteral("CONFIGURATION %1 ms · %2 · %3 source decodes (warm data retained)")
             .arg(rebuildClock.elapsed()).arg(reuseGeometry ? QStringLiteral("scene reused") : QStringLiteral("assembled from source cache"))
             .arg(_sourceMisses));
@@ -603,15 +628,28 @@ namespace reloadmaker
                                               const QString& geometrySignature, QString& error)
     {
         _geometrySignature.clear();
-        if (!attachFirstPersonArms(destination, error) || !attachWeaponModels(destination, weapon, error)) {
-            return false;
+        {
+            StageClock clock(_loadTimings, "rebuild.arms");
+            if (!attachFirstPersonArms(destination, error)) {
+                return false;
+            }
+        }
+        {
+            StageClock clock(_loadTimings, "rebuild.weapon");
+            if (!attachWeaponModels(destination, weapon, error)) {
+                return false;
+            }
         }
         // An incomplete loadout still shows, but is reassembled next time.
         bool complete = true;
-        if (!attachObjectMods(destination, complete, error)) {
-            return false;
+        {
+            StageClock clock(_loadTimings, "rebuild.mods");
+            if (!attachObjectMods(destination, complete, error)) {
+                return false;
+            }
         }
         QString detail;
+        StageClock bindClock(_loadTimings, "rebuild.bind");
         if (!buildNodeBindings(detail)) {
             error = QStringLiteral("Cannot bind assembled parts: %1").arg(detail);
             return false;

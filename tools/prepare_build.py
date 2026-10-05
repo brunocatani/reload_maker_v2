@@ -67,7 +67,18 @@ patch('src/glview.cpp', [
     ('NifSkope::fileExtensions()', 'QStringList{QStringLiteral("nif")}'),
     ('\t\tauto ns = qobject_cast<NifSkope *>( graphicsView->parent() );\n\t\tif ( ns )\n\t\t\tns->openFiles( draggedNifs );',
      '\t\t// Source selection belongs to the studio, never a generic NIF window.'),
-    ('\temit paintUpdate();', '\tglProjection();\n\temit paintUpdate();')],
+    ('\temit paintUpdate();', '\tglProjection();\n\temit paintUpdate();'),
+    # An unattended (automated) editor never waits for the display between
+    # commands; the interactive editor keeps V-Sync.
+    ('\tfmt.setSwapInterval( DEBUG_FRAME_TIME ? 0 : 1 );',
+     '\tfmt.setSwapInterval( ( DEBUG_FRAME_TIME || qApp->property( "unattended" ).toBool() ) ? 0 : 1 );'),
+    # setNifFolder flushes every texture, so each recompile (every part swap)
+    # loaded all textures again on the next frame (about 0.5 s on the Glock,
+    # 2026-10-04). The studio flushes textures itself when its source changes
+    # (clearAssetCaches -> GLView::flush); a recompile of the same source
+    # keeps them.
+    ('\t\ttextures->setNifFolder( model->getFolder() );\n',
+     '\t\t// Textures are flushed by the studio when its source changes.\n')],
     finish=lambda value: remove_method(remove_method(value,
         'bool GLView::selectPBRCubeMapForGame('), 'void GLView::selectPBRCubeMap()').replace('#include "ui/widgets/filebrowser.h"', ''))
 patch('src/gl/renderer.cpp', [

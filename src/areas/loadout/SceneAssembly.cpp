@@ -58,7 +58,7 @@ namespace reloadmaker
 
     // Drops everything derived from the current source: decoded caches, the
     // assembled scene and the per-weapon authoring state built on it.
-    void ReloadMakerController::clearAssetCaches()
+    void ReloadMakerController::clearAssetCaches(bool keepTextures)
     {
         _scopeProfiles.clear();
         _grabLocations.clear();
@@ -124,7 +124,9 @@ namespace reloadmaker
         if (_slotOverlay) { _slotOverlay->setCallouts({}); }
         if (_partPicker) { _partPicker->setParts({}); }
         if (auto* model = activeModel()) { model->clear(); }
-        _window->getGLView()->flush();
+        if (!keepTextures) {
+            _window->getGLView()->flush();
+        }
         refreshPartGripChoices();
         refreshPartGripList();
         updateHandPoseControls();

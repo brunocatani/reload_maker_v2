@@ -2,6 +2,7 @@
 // connected: the MO2 profile the editor runs in, a hand-off that relaunches
 // the editor inside another MO2 profile, and the base game outside MO2.
 #include "ReloadMakerController.h"
+#include "areas/sources/PackageLoad.h"
 #include "InstallationSetup.h"
 #include "LibraryResources.h"
 #include "StudioPaths.h"
@@ -255,7 +256,7 @@ namespace reloadmaker
         return true;
     }
 
-    void ReloadMakerController::startLibraryLoad()
+    void ReloadMakerController::startLibraryLoad(bool reuse)
     {
         if (_loadThread) {
             return;
@@ -278,7 +279,23 @@ namespace reloadmaker
             }, Qt::QueuedConnection);
         };
         // The worker reads only the values copied above and fills `result`.
-        _loadThread = QThread::create([result, instance, data, launch, progress, requested]() {
+        auto timings = std::make_shared<LoadTimings>();
+        // Opening a project from the installed profile installs it again when
+        // its profile files and enabled plugins and archives are unchanged.
+        struct Reuse
+        {
+            bool installed{ false };
+            QByteArray stamp;
+        };
+        auto reuseState = std::make_shared<Reuse>();
+        const bool installed = reuse && _libraryMode && _packageResources.isOpen() && !_libraryStamp.isEmpty() && _launchSnapshot.valid() &&
+                               (requested.isEmpty() || requested == _launchSnapshot.profileName);
+        const QByteArray installedStamp = _libraryStamp;
+        const QByteArray installedFingerprint = _launchSnapshot.fingerprint;
+        const QString installedInstance = _launchSnapshot.instancePath;
+        _loadThread = QThread::create([result, timings, reuseState, installed, installedStamp, installedFingerprint, installedInstance, instance, data,
+                                       launch, progress, requested]() {
+            StageClock clock(*timings, "library.load");
             try {
                 const LoadOrderSnapshot snapshot = readLoadOrderSnapshot(instance, data, requested);
                 if (!snapshot.valid()) {
@@ -289,13 +306,21 @@ namespace reloadmaker
                     result->error = "MO2 profile/load order changed since this viewer attached. Relaunch through MO2 so virtual files and plugin order match.";
                     return;
                 }
+                reuseState->stamp = sourceStamp(libraryStampFiles(snapshot));
+                if (installed && snapshot.instancePath == installedInstance && snapshot.fingerprint == installedFingerprint &&
+                    reuseState->stamp == installedStamp) {
+                    reuseState->installed = true;
+                    timings->add(QStringLiteral("library.reused installed"), 0);
+                    return;
+                }
                 *result = loadOrderLibrary(snapshot, progress, []() { return QThread::currentThread()->isInterruptionRequested(); });
             } catch (const std::exception& exception) {
                 result->error = QString::fromUtf8(exception.what());
             }
         });
         _loadThread->setParent(this);
-        connect(_loadThread, &QThread::finished, this, [this, result]() {
+        connect(_loadThread, &QThread::finished, this, [this, result, timings, reuseState]() {
+            _loadTimings.append(*timings);
             result->cancelled |= _loadThread->isInterruptionRequested();
             _loadThread->deleteLater();
             _loadThread = nullptr;
@@ -321,18 +346,31 @@ namespace reloadmaker
                 setStatus(result->error, true);
                 return;
             }
+            StageClock install(_loadTimings, "library.install");
+            if (reuseState->installed) {
+                setLibraryResources(nullptr);
+                LoadOrderLibrary current;
+                current.snapshot = _launchSnapshot;
+                current.catalog = std::move(_plugins.first());
+                current.plugins = _libraryPlugins;
+                current.resources = std::move(_packageResources);
+                installLibrary(current, true);
+                return;
+            }
             installLibrary(*result);
+            _libraryStamp = reuseState->stamp;
         });
         _loadThread->start();
     }
 
-    void ReloadMakerController::installLibrary(LoadOrderLibrary& library)
+    void ReloadMakerController::installLibrary(LoadOrderLibrary& library, bool keepTextures)
     {
         setLibraryResources(nullptr);
+        parkCurrentPackage();
         if (_pendingSession.isEmpty()) {
             _sessionPath.clear();
         }
-        clearAssetCaches();
+        clearAssetCaches(keepTextures);
         _libraryMode = true;
         _launchSnapshot = library.snapshot;
         _gameData = library.snapshot.dataPath;

@@ -29,6 +29,7 @@
 #include "areas/sources/SourceBrowserRows.h"
 #include "commands/CommandRegistry.h"
 #include "domain/checklist/Checklist.h"
+#include "LoadTimings.h"
 
 #include <QHash>
 #include <QJsonArray>
@@ -82,6 +83,7 @@ namespace reloadmaker
     class MagazineViewport;
     class CollisionPanel;
     namespace design { class PanelHeader; class ChecklistRow; }
+    struct PackageLoad;
     struct WeaponPreset;
     class ReloadMakerController final : public QObject
     {
@@ -1126,13 +1128,24 @@ namespace reloadmaker
         // Scopes views.
         void showScopeTargets();
         void showSelectedScopeTarget();
-        void startLibraryLoad();
-        void installLibrary(LoadOrderLibrary& library);
+        void startLibraryLoad(bool reuse = false);
+        void installLibrary(LoadOrderLibrary& library, bool keepTextures = false);
         void setLoading(bool loading, const QString& message = {});
         // From setLoading(true) until setLoading(false); the load thread
         // starts just after the first and ends just before the second.
         bool _sourceLoading{ false };
-        void startPackageLoad(const QString& path, const QString& dataPath,bool newDocument=false);
+        void startPackageLoad(const QString& path, const QString& dataPath, bool newDocument = false, bool reuse = false);
+        // Resident sources (areas/sources/ResidentSources.cpp).
+        void takeCurrentPackage(PackageLoad& load);
+        void parkCurrentPackage();
+        std::shared_ptr<PackageLoad> takeResidentPackage(const QString& key);
+        void evictResidentSources();
+        void clearResidentSources();
+        void reloadSourceFiles();
+        QJsonObject residentState() const;
+        QHash<QString, std::shared_ptr<PackageLoad>> _residentPackages; // by packageSourceKey
+        QStringList _residentOrder;                                   // least recently used first
+        QByteArray _packageStamp, _libraryStamp;                      // of the installed source
         [[nodiscard]] const ResourceArchive& referenceMeshes() const;
         void applyStyle();
         void setStatus(const QString& message, bool error = false);
@@ -1154,7 +1167,8 @@ namespace reloadmaker
         QVector<RemappedAttachment> _remappedAttachments;
         [[nodiscard]] bool recordPartAlignment(int firstBlock, int lastBlock, int anchorBone, QString& error);
         void scheduleRebuild();
-        void clearAssetCaches();
+        // keepTextures: the same source is installed again, so its textures stay valid.
+        void clearAssetCaches(bool keepTextures = false);
         [[nodiscard]] WeaponConfiguration* configuration();
         [[nodiscard]] const WeaponConfiguration* configuration() const;
         void refreshAnimations();
@@ -1425,6 +1439,11 @@ namespace reloadmaker
         qint64 _copyMilliseconds{0};
         qint64 _pasteMilliseconds{0};
         qint64 _decodeMilliseconds{0};
+        // Stage times of loads, rebuilds, reload learning and Operate
+        // preparation (MCP load_timings).
+        LoadTimings _loadTimings;
+        QElapsedTimer _reloadCaptureClock;
+        qint64 _reloadSamplingMilliseconds{0};
         SlotKey _focusedSlot{0};
         HkxClip _clip;
         HkxClip _readyClip;

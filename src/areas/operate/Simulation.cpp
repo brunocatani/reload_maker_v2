@@ -65,9 +65,15 @@ namespace reloadmaker
         if (_simulationActive) {
             return;
         }
+        StageClock total(_loadTimings, "operate.prepare");
         SimulationRig rig;
         _simulationError.clear();
-        if (!buildCurrentSimulationRig(rig, _simulationError)) {
+        bool built = false;
+        {
+            StageClock clock(_loadTimings, "operate.rig");
+            built = buildCurrentSimulationRig(rig, _simulationError);
+        }
+        if (!built) {
             updateSimulationControls();
             return;
         }
@@ -79,7 +85,12 @@ namespace reloadmaker
             return;
         }
         _simulationAmmo = resolveWeaponAmmunition(*currentPlugin(), *currentWeapon(), *configuration(), _referenceNames);
-        if (!prepareMechanismMotion()) {
+        bool motion = false;
+        {
+            StageClock clock(_loadTimings, "operate.mechanismMotion");
+            motion = prepareMechanismMotion();
+        }
+        if (!motion) {
             updateSimulationControls();
             return;
         }
@@ -93,18 +104,29 @@ namespace reloadmaker
         _simulationActive = true;
         _reloadPreviewTimer->stop();
         _reloadPlaying = false;
-        if (!selectSimulationClip(false, false)) {
+        bool clip = false;
+        {
+            StageClock clock(_loadTimings, "operate.clip");
+            clip = selectSimulationClip(false, false);
+        }
+        if (!clip) {
             stopSimulation();
             updateSimulationControls();
             return;
         }
-        prepareMagazineInteraction();
+        {
+            StageClock clock(_loadTimings, "operate.magazine");
+            prepareMagazineInteraction();
+        }
         if (isGlockConfiguration()) {
             _interactionHand = PoseHand::Left;
         }
         resolveMagazineGrabGrip();
         resolveOperatingFingers();
-        prepareSounds();
+        {
+            StageClock clock(_loadTimings, "operate.sounds");
+            prepareSounds();
+        }
         (void)applyPose(0);
         _magazineViewport->setActive(true);
         _simulationDrive->clearCurve();

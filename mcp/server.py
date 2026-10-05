@@ -30,7 +30,7 @@ def command(method: str, params: dict | None = None, revision: int | None = None
         raise RuntimeError('Invalid editor endpoint; reopen this workspace')
     if Path(endpoint.get('workspace','')).resolve()!=ROOT:
         raise RuntimeError('The endpoint belongs to another workspace')
-    if method=='state': _session=endpoint['session']
+    if method in ('state','revision'): _session=endpoint['session']
     elif _session is not None and _session!=endpoint['session']:
         raise RuntimeError('Editor session changed; read state before editing')
     request = {'method':method, 'params':params or {}}
@@ -465,6 +465,15 @@ def authoring_roadmap(operation: str = 'state', index: int | None = None,
     if operation not in ('state', 'check-sources') and expected_revision is None:
         raise ValueError('Read the current revision before editing roadmap state')
     return command('roadmap', dict(operation=operation, index=index, id=id), expected_revision)
+
+@mcp.tool()
+def load_timings(since: int = 0) -> dict:
+    """Wall time of each loading stage after sequence number `since`: source
+    load stages (archives, plugins, masters, names, reference catalogs),
+    install, project read/save/restore, weapon rebuild stages, reload learning
+    and Operate preparation. Pass the returned `next` to read only newer ones.
+    """
+    return command('load_timings', dict(since=since))
 
 @mcp.tool()
 def checklist_state() -> dict:

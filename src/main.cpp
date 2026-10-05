@@ -40,10 +40,12 @@ int main(int argc, char* argv[]) {
     parser.addOption({"library", "Open installed library in MO2 context"});
     parser.addOption({"no-restore", "Start without restoring the last project"});
     parser.addOption({"unattended", "Automated run: open in the background and ignore the desktop's mouse, keyboard and focus"});
+    parser.addOption({"resident-memory-mb", "Memory budget for sources kept loaded after switching away (default 16384)", "megabytes"});
     parser.addPositionalArgument("package", "Read-only mod folder or ZIP", "[package]");
     parser.process(app);
     if(parser.isSet("unattended")){app.setProperty("unattended",true);new reloadmaker::UnattendedRun(app);}
     app.setProperty("requestedMo2Profile",parser.value("mo2-profile"));
+    if(parser.isSet("resident-memory-mb"))app.setProperty("residentMemoryMb",parser.value("resident-memory-mb").toLongLong());
     if(parser.isSet("source-receipt")) {
         const auto snapshot=reloadmaker::readLoadOrderSnapshot(parser.value("mo2-instance"),parser.value("game-data"),parser.value("mo2-profile"));
         const bool virtualized=reloadmaker::insideMo2VirtualFilesystem();
