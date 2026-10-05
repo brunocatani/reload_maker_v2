@@ -3,6 +3,7 @@
 // saving and exporting the profile.
 #include "ReloadMakerController.h"
 
+#include <QJsonArray>
 #include <algorithm>
 
 namespace reloadmaker
@@ -58,6 +59,24 @@ namespace reloadmaker
         refreshSoundsUi();
     }
 
+    QJsonObject ReloadMakerController::fireSoundState() const
+    {
+        QJsonArray layers;
+        for (const auto& layer : _fireSound.layers) {
+            layers.append(QJsonObject{ { "record", layer.record }, { "editorId", layer.editorId }, { "samples", int(layer.files.size()) } });
+        }
+        QJsonObject loop;
+        if (_fireSound.loop) {
+            QJsonArray rates;
+            for (const auto& sample : _fireSound.loop->ratesOfFire) {
+                rates.append(sample.rpm);
+            }
+            loop = { { "record", _fireSound.loop->record }, { "editorId", _fireSound.loop->editorId }, { "ratesOfFire", rates } };
+        }
+        return { { "mapping", _fireSoundMapping }, { "layers", layers }, { "loop", loop }, { "looping", _audio.looping() },
+                 { "context", QJsonArray::fromStringList(_fireSoundContext) }, { "error", _fireSoundError } };
+    }
+
     // Muting stops what is playing.
     void ReloadMakerController::setSoundsMuted(bool muted)
     {
@@ -97,7 +116,8 @@ namespace reloadmaker
     {
         return { { "profile", soundProfileJson(_soundProfile) }, { "audio", _audio.state() },  { "muted", _soundsMuted },
                  { "dirty", _soundsDirty },                      { "error", _soundError },     { "lastCue", _lastSound },
-                 { "eventsTriggered", double(_soundEventCount) } };
+                 { "eventsTriggered", double(_soundEventCount) },
+                 { "fire", fireSoundState() } };
     }
 
     // Only a profile that passes the saved-format checks is exported.

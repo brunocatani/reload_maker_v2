@@ -16,6 +16,11 @@ public:
     bool cache(const QString& key,const QByteArray& wave,QString& error);
     bool play(const QString& key,float gain,QString& error);
     bool contains(const QString& key) const;
+    // One looping voice beside the one-shot voices (an automatic weapon's
+    // rate-of-fire sample); starting a loop replaces the previous one.
+    bool loop(const QString& key,float gain,QString& error);
+    void stopLoop();
+    bool looping() const;
     void stop();
     void clear();
     QJsonObject state() const;

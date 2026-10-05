@@ -342,6 +342,9 @@ namespace reloadmaker
         _simulationDrive->clearCurve();
         resetSoundTracking(false);
         playSourceSounds(_clip, -.0001f, 0);
+        if (fire) {
+            playShotSound();
+        }
         startSimulationClock();
         return true;
     }

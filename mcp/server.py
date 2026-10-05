@@ -282,7 +282,8 @@ def get_sound_state() -> dict:
 def configure_sound(operation: str, expected_revision: int, id: str = '', record: str | None = None,
                     trigger: str | None = None, progress: float | None = None, gain: float | None = None,
                     enabled: bool | None = None) -> dict:
-    """Edit, play, stop, save or mute original reload sounds. Movement progress is 0..1; gain 0..2. Save persists this weapon/reload set."""
+    """Edit, play, stop, save or mute original reload sounds. Movement progress is 0..1; gain 0..2. Save persists this weapon/reload set.
+    play with id 'fire' auditions the weapon's own fire sound (get_sound_state 'fire'), which the game plays and packs never include."""
     params={'operation':operation,'id':id}
     for key,value in {'record':record,'trigger':trigger,'progress':progress,'gain':gain,'enabled':enabled}.items():
         if value is not None:params[key]=value

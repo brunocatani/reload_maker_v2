@@ -165,6 +165,7 @@ namespace reloadmaker {
         QSet<QString> loaded;
         QHash<std::uint32_t, WeaponRecord> weapons;
         QHash<std::uint32_t, SoundRecord> sounds;
+        QHash<std::uint32_t, SoundKeywordMapping> soundMappings;
         QHash<std::uint32_t, ObjectModRecord> mods;
         QHash<std::uint32_t, AnimationSubgraphRecord> graphs;
         try {
@@ -197,7 +198,7 @@ namespace reloadmaker {
                     if(!origin.contributors.contains(plugin.fileName,Qt::CaseInsensitive))origin.contributors.append(plugin.fileName); };
                 for (const auto raw : plugin.deletedRecords) {
                     const auto id = resolve(raw);
-                    weapons.remove(id); sounds.remove(id);mods.remove(id); graphs.remove(id); result.keywordNames.remove(id);result.nodeRemaps.remove(id);result.ammoNames.remove(id); winner(id);
+                    weapons.remove(id); sounds.remove(id);soundMappings.remove(id);result.soundKeywords.remove(id);mods.remove(id); graphs.remove(id); result.keywordNames.remove(id);result.nodeRemaps.remove(id);result.ammoNames.remove(id); winner(id);
                 }
                 for (auto weapon : plugin.weapons) {
                     weapon.formId = resolve(weapon.formId);
@@ -222,8 +223,12 @@ namespace reloadmaker {
                     const auto id = resolve(it.key()); winner(id); result.keywordNames.insert(id, it.value());
                     result.nodeRemaps.remove(id);
                     if(plugin.nodeRemaps.contains(it.key()))result.nodeRemaps.insert(id,plugin.nodeRemaps.value(it.key()));
+                    result.soundKeywords.remove(id);
+                    if(plugin.soundKeywords.contains(it.key()))result.soundKeywords.insert(id);
                 }
-                for(auto sound:plugin.sounds){sound.formId=resolve(sound.formId);winner(sound.formId);sounds.insert(sound.formId,std::move(sound));}
+                for(auto sound:plugin.sounds){sound.formId=resolve(sound.formId);remap(sound.children);winner(sound.formId);sounds.insert(sound.formId,std::move(sound));}
+                for(auto mapping:plugin.soundMappings){mapping.formId=resolve(mapping.formId);mapping.descriptor=resolve(mapping.descriptor);remap(mapping.keywords);
+                    winner(mapping.formId);soundMappings.insert(mapping.formId,std::move(mapping));}
                 for(auto it=plugin.ammoNames.cbegin();it!=plugin.ammoNames.cend();++it){const auto id=resolve(it.key());winner(id);result.ammoNames.insert(id,it.value());}
                 loaded.insert(plugin.fileName.toLower());
                 result.sourcePlugins.append(plugin.fileName);
@@ -236,7 +241,7 @@ namespace reloadmaker {
                 }
             }
             result.weapons = weapons.values(); result.objectMods = mods.values(); result.animationSubgraphs = graphs.values();
-            result.sounds=sounds.values();
+            result.sounds=sounds.values();result.soundMappings=soundMappings.values();
             const auto byId = [](const auto& a, const auto& b) { return a.formId < b.formId; };
             std::sort(result.weapons.begin(), result.weapons.end(), byId);
             std::sort(result.objectMods.begin(), result.objectMods.end(), byId);

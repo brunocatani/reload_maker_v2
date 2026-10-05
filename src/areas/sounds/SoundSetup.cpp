@@ -19,6 +19,12 @@ namespace reloadmaker
     void ReloadMakerController::prepareSounds()
     {
         if (!currentWeapon() || !currentPlugin() || !_reloadRecipe || !_simulationRig) {
+            // No stale fire sound from the previous weapon.
+            endFireLoop();
+            _fireSound = {};
+            _fireSoundMapping.clear();
+            _fireSoundError.clear();
+            _fireSoundContext.clear();
             return;
         }
         if (!_soundProfile.weapon.isEmpty()) {
@@ -55,6 +61,7 @@ namespace reloadmaker
             addSoundCue(sources, "bolt-release", "Bolt catch release", "bolt_release", 0, edid);
         }
         resolveSoundDescriptors();
+        resolveFireSound();
         cacheSourceSounds(_reloadClip);
         _soundsDirty = false;
         resetSoundTracking();
@@ -64,16 +71,21 @@ namespace reloadmaker
     // The reference sounds plus every plugin's sound descriptors, by record.
     void ReloadMakerController::buildSoundCatalog()
     {
-        _soundCatalog = _referenceSounds;
+        _soundDescriptors = _referenceSounds;
         for (const auto& plugin : _plugins) {
             for (const auto& s : plugin.sounds) {
-                SoundCue c;
-                c.record = recordIdentity(plugin, s.formId);
-                c.editorId = s.editorId;
-                c.files = s.files;
-                c.attenuationDb = s.attenuationDb;
-                _soundCatalog[c.record.toLower()] = c;
+                const auto descriptor = soundDescriptor(plugin, s);
+                _soundDescriptors[descriptor.record.toLower()] = descriptor;
             }
+        }
+        _soundCatalog.clear();
+        for (auto it = _soundDescriptors.cbegin(); it != _soundDescriptors.cend(); ++it) {
+            SoundCue c;
+            c.record = it->record;
+            c.editorId = it->editorId;
+            c.files = it->files;
+            c.attenuationDb = it->attenuationDb;
+            _soundCatalog.insert(it.key(), c);
         }
     }
 

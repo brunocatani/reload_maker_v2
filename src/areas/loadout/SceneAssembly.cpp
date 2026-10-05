@@ -68,6 +68,13 @@ namespace reloadmaker
         _soundTracking = false;
         _soundCatalog.clear();
         _referenceSounds.clear();
+        _referenceSoundMappings.clear();
+        _referenceSoundKeywords.clear();
+        _soundDescriptors.clear();
+        _fireSound = {};
+        _fireSoundMapping.clear();
+        _fireSoundError.clear();
+        _fireSoundContext.clear();
         _soundProfile = {};
         _savedSounds.clear();
         _soundsDirty = false;

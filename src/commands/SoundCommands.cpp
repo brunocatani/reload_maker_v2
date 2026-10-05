@@ -28,7 +28,10 @@ namespace reloadmaker
                 index = i;
             }
         }
-        if (operation == "play") {
+        if (operation == "play" && id == "fire") {
+            // The game's fire sound is auditioned by id; it is not a cue.
+            require(playFireSound(), _fireSoundError.isEmpty() ? _soundError : _fireSoundError);
+        } else if (operation == "play") {
             require(playSoundCue(index), _soundError);
         } else if (operation == "stop") {
             _audio.stop();

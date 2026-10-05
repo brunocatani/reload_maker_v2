@@ -1,7 +1,10 @@
 #pragma once
 
+#include "SoundProfile.h"
+
 #include <QByteArray>
 #include <QHash>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -22,6 +25,18 @@ namespace reloadmaker
         QString editorId;
         QStringList files;
         float attenuationDb{0};
+        SoundDescriptorType type{SoundDescriptorType::Standard};
+        QVector<std::uint32_t> children;       // Compound DNAM, file-local
+        QVector<RateOfFireSample> ratesOfFire; // AutoWeapon INTV/FNAM pairs
+        QVector<SoundCondition> conditions;    // CTDA
+    };
+    // KSSM: the descriptor the engine plays for a shot whose Sound keyword
+    // context holds every listed keyword (xEdit wbDefinitionsFO4 KSSM).
+    struct SoundKeywordMapping {
+        std::uint32_t formId{0};
+        QString editorId;
+        std::uint32_t descriptor{0};
+        QVector<std::uint32_t> keywords;
     };
     struct AmmoProperty {
         std::uint16_t property{0};
@@ -91,6 +106,8 @@ namespace reloadmaker
         QStringList masters;
         QVector<WeaponRecord> weapons;
         QVector<SoundRecord> sounds;
+        QVector<SoundKeywordMapping> soundMappings;
+        QSet<std::uint32_t> soundKeywords; // KYWD whose TNAM type is 6, Sound
         QVector<ObjectModRecord> objectMods;
         QVector<AnimationSubgraphRecord> animationSubgraphs;
         QHash<std::uint32_t, QString> keywordNames;
@@ -120,6 +137,8 @@ namespace reloadmaker
         static void resolveNames(PluginContent& plugin, const QString& language,
             const std::function<QByteArray(const QString&, QString&)>& readResource);
     };
+    // A sound record in record identities, its children lower case.
+    [[nodiscard]] SoundDescriptor soundDescriptor(const PluginContent& plugin, const SoundRecord& sound);
     [[nodiscard]] QString recordIdentity(const PluginContent& plugin,std::uint32_t formId);
     [[nodiscard]] QString weaponAuthoringExclusion(const WeaponRecord& weapon);
 }

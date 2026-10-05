@@ -13,7 +13,7 @@ struct AudioPreview::Impl {
     struct Sample {WAVEFORMATEX format{};QByteArray pcm;};
     struct Voice {IXAudio2SourceVoice* native{};std::shared_ptr<Sample> sample;};
     IXAudio2* engine{};IXAudio2MasteringVoice* master{};
-    std::array<Voice,32> voices{};QHash<QString,std::shared_ptr<Sample>> samples;
+    std::array<Voice,32> voices{};Voice looping{};QHash<QString,std::shared_ptr<Sample>> samples;
     bool com{};quint64 played{};QString error;
     bool start(){
         if(engine)return true;
@@ -62,7 +62,20 @@ bool AudioPreview::play(const QString& key,float gain,QString& error){
     }
     error="All 32 preview voices are busy.";return false;
 }
-void AudioPreview::stop(){for(auto& v:impl_->voices)if(v.native){v.native->DestroyVoice();v={};}}
+bool AudioPreview::loop(const QString& key,float gain,QString& error){
+    error.clear();if(!std::isfinite(gain)||gain<0||gain>2){error="Invalid preview volume.";return false;}
+    const auto found=impl_->samples.constFind(key);if(found==impl_->samples.cend()){error="Sound sample is not prepared.";return false;}
+    if(!impl_->start()){error=impl_->error;return false;}stopLoop();
+    auto& v=impl_->looping;v.sample=*found;auto hr=impl_->engine->CreateSourceVoice(&v.native,&v.sample->format);
+    XAUDIO2_BUFFER buffer{};buffer.Flags=XAUDIO2_END_OF_STREAM;buffer.AudioBytes=UINT32(v.sample->pcm.size());buffer.pAudioData=reinterpret_cast<const BYTE*>(v.sample->pcm.constData());
+    buffer.LoopCount=XAUDIO2_LOOP_INFINITE;
+    if(SUCCEEDED(hr))hr=v.native->SetVolume(gain);if(SUCCEEDED(hr))hr=v.native->SubmitSourceBuffer(&buffer);if(SUCCEEDED(hr))hr=v.native->Start();
+    if(FAILED(hr)){if(v.native)v.native->DestroyVoice();v={};error=QString("Sound playback failed (0x%1).").arg(quint32(hr),8,16,QChar('0'));return false;}
+    ++impl_->played;return true;
+}
+bool AudioPreview::looping() const{return impl_->looping.native!=nullptr;}
+void AudioPreview::stopLoop(){auto& v=impl_->looping;if(v.native){v.native->DestroyVoice();v={};}}
+void AudioPreview::stop(){for(auto& v:impl_->voices)if(v.native){v.native->DestroyVoice();v={};}stopLoop();}
 void AudioPreview::clear(){stop();impl_->samples.clear();}
 QJsonObject AudioPreview::state() const {int active=0;for(const auto& v:impl_->voices)if(v.native){XAUDIO2_VOICE_STATE s{};v.native->GetState(&s);if(s.BuffersQueued)++active;}
     return {{"ready",bool(impl_->engine)},{"played",double(impl_->played)},{"activeVoices",active},{"cachedSamples",impl_->samples.size()},{"error",impl_->error}};}

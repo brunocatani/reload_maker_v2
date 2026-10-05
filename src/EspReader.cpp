@@ -154,8 +154,8 @@ namespace reloadmaker
             }
             // A full Data library includes the base ESM. Skip irrelevant payloads
             // before decompression/copying, while still checking record bounds.
-            if ((state.referenceCatalogOnly && type!="TES4" && type!="AMMO" && type!="KYWD" && type!="SNDR") ||
-                (type != "TES4" && type != "WEAP" && type != "OMOD" && type != "KYWD" && type != "RACE" && type!="AMMO" && type!="SNDR")) {
+            if ((state.referenceCatalogOnly && type!="TES4" && type!="AMMO" && type!="KYWD" && type!="SNDR" && type!="KSSM") ||
+                (type != "TES4" && type != "WEAP" && type != "OMOD" && type != "KYWD" && type != "RACE" && type!="AMMO" && type!="SNDR" && type!="KSSM")) {
                 return dataStart + static_cast<qsizetype>(dataSize);
             }
             QByteArray recordData = file.mid(dataStart, static_cast<qsizetype>(dataSize));
@@ -352,6 +352,12 @@ namespace reloadmaker
         return best;
     }
 
+    SoundDescriptor soundDescriptor(const PluginContent& plugin,const SoundRecord& sound) {
+        SoundDescriptor result;result.record=recordIdentity(plugin,sound.formId);result.editorId=sound.editorId;result.type=sound.type;
+        result.files=sound.files;result.attenuationDb=sound.attenuationDb;result.ratesOfFire=sound.ratesOfFire;result.conditions=sound.conditions;
+        for(const auto child:sound.children)result.children.append(recordIdentity(plugin,child).toLower());
+        return result;
+    }
     QString recordIdentity(const PluginContent& plugin,std::uint32_t formId) {
         if(!formId)return {};
         const auto found=plugin.origins.constFind(formId);
@@ -467,10 +473,29 @@ namespace reloadmaker
                     pendingWeapons.append(std::move(pending));
                 } else if(record.type=="SNDR") {
                     SoundRecord sound; sound.formId=record.formId;sound.editorId=textSubrecord(record,"EDID",false);
-                    for(const auto& sub:record.subrecords)if(sub.type=="ANAM")sound.files.append(decodeText(sub.data));
+                    // CNAM descriptor type: Compound 0x54651A43, AutoWeapon 0xED157AE3 (xEdit).
+                    if(const auto* c=firstSubrecord(record,"CNAM");c&&c->data.size()==4){const auto type=readLittle<std::uint32_t>(c->data,0);
+                        sound.type=type==0x54651A43u?SoundDescriptorType::Compound:type==0xED157AE3u?SoundDescriptorType::AutoWeapon:SoundDescriptorType::Standard;}
+                    int rpm=0;
+                    for(const auto& sub:record.subrecords) {
+                        if(sub.type=="ANAM")sound.files.append(decodeText(sub.data));
+                        else if(sub.type=="DNAM"&&sub.data.size()==4)sound.children.append(readLittle<std::uint32_t>(sub.data,0));
+                        else if(sub.type=="INTV"&&sub.data.size()==4)rpm=int(readLittle<std::uint32_t>(sub.data,0));
+                        else if(sub.type=="FNAM"&&rpm>0){sound.ratesOfFire.append({rpm,decodeText(sub.data)});rpm=0;}
+                        // CTDA: type byte, three unused, comparison float, function index.
+                        else if(sub.type=="CTDA"&&sub.data.size()>=10)
+                            sound.conditions.append({static_cast<std::uint8_t>(sub.data[0]),readLittle<std::uint16_t>(sub.data,8),readLittle<float>(sub.data,4)});
+                    }
                     // Standard SNDR BNAM: frequency bytes, priority, attenuation (hundredths dB).
                     if(const auto* b=firstSubrecord(record,"BNAM");b&&b->data.size()>=6)sound.attenuationDb=readLittle<std::uint16_t>(b->data,4)/100.f;
                     content.sounds.append(std::move(sound));
+                } else if(record.type=="KSSM") {
+                    SoundKeywordMapping mapping;mapping.formId=record.formId;mapping.editorId=textSubrecord(record,"EDID",false);
+                    for(const auto& sub:record.subrecords) {
+                        if(sub.type=="DNAM"&&sub.data.size()==4)mapping.descriptor=readLittle<std::uint32_t>(sub.data,0);
+                        else if(sub.type=="KNAM"&&sub.data.size()==4)mapping.keywords.append(readLittle<std::uint32_t>(sub.data,0));
+                    }
+                    content.soundMappings.append(std::move(mapping));
                 } else if(record.type=="AMMO") {
                     QString label=textSubrecord(record,"FULL",localized);
                     if(label.isEmpty()||label.startsWith("String "))label=textSubrecord(record,"EDID",false);
@@ -485,6 +510,7 @@ namespace reloadmaker
                         editorId.startsWith("remapNode_",Qt::CaseInsensitive)&&split>10&&split+3<editorId.size()&&
                         !editorId.mid(10,split-10).startsWith("P-",Qt::CaseInsensitive))
                         content.nodeRemaps.insert(record.formId,{editorId.mid(10,split-10),editorId.mid(split+1)});
+                    if(kind&&kind->data.size()==4&&readLittle<std::uint32_t>(kind->data,0)==6)content.soundKeywords.insert(record.formId);
                     // P-* sources remap connection metadata (e.g. the Glock's
                     // laser mount), not a node inside the incoming model.
                     QString label = textSubrecord(record, QByteArrayLiteral("FULL"), localized);

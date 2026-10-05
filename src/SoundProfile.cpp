@@ -5,6 +5,72 @@
 #include <cmath>
 
 namespace reloadmaker {
+namespace {
+// FO4 CTDA: the operator is the top three type bits; the low bits are the OR,
+// alias, global, pack-data and swap flags (xEdit wbCTDA).
+bool previewCondition(const SoundCondition& condition,bool& holds){
+    constexpr std::uint16_t isInInterior=300;
+    if((condition.type&0x1f)!=0||condition.function!=isInInterior)return false;
+    const float value=0; // the preview stands outdoors
+    switch(condition.type>>5){
+    case 0:holds=value==condition.value;return true;
+    case 1:holds=value!=condition.value;return true;
+    case 2:holds=value>condition.value;return true;
+    case 3:holds=value>=condition.value;return true;
+    case 4:holds=value<condition.value;return true;
+    case 5:holds=value<=condition.value;return true;
+    default:return false;
+    }
+}
+bool expand(const QHash<QString,SoundDescriptor>& descriptors,const QString& record,int depth,FireSoundPlan& plan,QString& error){
+    const auto found=descriptors.constFind(record.toLower());
+    if(found==descriptors.cend()){error="Missing sound descriptor "+record;return false;}
+    const auto& descriptor=found.value();
+    for(const auto& condition:descriptor.conditions){
+        bool holds=false;
+        if(!previewCondition(condition,holds)){error=QString("%1 has a condition the preview cannot evaluate (function %2)").arg(descriptor.editorId).arg(condition.function);return false;}
+        if(!holds)return true; // not played outdoors
+    }
+    if(descriptor.type==SoundDescriptorType::AutoWeapon){
+        if(descriptor.ratesOfFire.isEmpty()){error=descriptor.editorId+" has no rate-of-fire samples";return false;}
+        if(plan.loop&&plan.loop->record!=descriptor.record){error=descriptor.editorId+" layers two automatic loops";return false;}
+        plan.loop=descriptor;return true;
+    }
+    if(descriptor.type==SoundDescriptorType::Compound){
+        // Bounded: compounds nest a level or two in practice; a cycle fails.
+        if(depth>=4){error=descriptor.editorId+" nests compound sounds too deeply";return false;}
+        for(const auto& child:descriptor.children)if(!expand(descriptors,child,depth+1,plan,error))return false;
+        return true;
+    }
+    if(descriptor.files.isEmpty()){error=descriptor.editorId+" has no samples";return false;}
+    plan.layers.append(descriptor);return true;
+}
+}
+bool planFireSound(const QHash<QString,SoundDescriptor>& descriptors,const QString& record,FireSoundPlan& plan,QString& error){
+    plan={};error.clear();
+    if(!expand(descriptors,record,0,plan,error)){plan={};return false;}
+    if(plan.layers.isEmpty()&&!plan.loop){error="Nothing in "+record+" plays outdoors";return false;}
+    return true;
+}
+const RateOfFireSample* nearestRateOfFire(const SoundDescriptor& descriptor,float rpm){
+    const RateOfFireSample* best=nullptr;
+    for(const auto& sample:descriptor.ratesOfFire)if(!best||std::abs(sample.rpm-rpm)<std::abs(best->rpm-rpm))best=&sample;
+    return best;
+}
+const SoundMapping* chooseSoundMapping(const QVector<SoundMapping>& mappings,const QSet<QString>& context,QString& error){
+    const SoundMapping* best=nullptr;bool tied=false;error.clear();
+    for(const auto& mapping:mappings){
+        if(mapping.keywords.isEmpty()||mapping.descriptor.isEmpty()||!context.contains(mapping.keywords))continue;
+        if(!best||mapping.keywords.size()>best->keywords.size()||(mapping.keywords.size()==best->keywords.size()&&mapping.loadOrder>best->loadOrder)){best=&mapping;tied=false;}
+        else if(mapping.keywords.size()==best->keywords.size()&&mapping.loadOrder==best->loadOrder&&mapping.descriptor!=best->descriptor)tied=true;
+    }
+    if(!best){error="No sound keyword mapping matches this weapon's sound keywords.";return nullptr;}
+    if(tied){
+        QStringList names;for(const auto& mapping:mappings)if(mapping.keywords.size()==best->keywords.size()&&mapping.loadOrder==best->loadOrder&&context.contains(mapping.keywords))names<<mapping.editorId;
+        error="Sound keyword mappings match this weapon equally: "+names.join(", ");return nullptr;
+    }
+    return best;
+}
 QStringList soundTriggers(){return {"opening","closing","extraction","insertion","magazine_release","magazine_seated","magazine_grab","dry_fire","bolt_release"};}
 QString soundTriggerLabel(const QString& trigger){
     static const QStringList labels{"Pulling back / unlocking","Moving forward / locking","Magazine moving out","Magazine moving in","Magazine release","Magazine seated","Magazine grabbed","Empty trigger press","Bolt catch release"};

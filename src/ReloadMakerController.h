@@ -235,6 +235,10 @@ namespace reloadmaker
         QDockWidget* _collisionsDock{};
         void createSoundsUi();
         void prepareSounds();
+        // The game's own fire sound for the configured weapon (FireSound.cpp).
+        void resolveFireSound();
+        bool playFireSound();
+        QJsonObject fireSoundState() const;
         void refreshSoundsUi();
         void editSoundCue();
         bool saveSounds();
@@ -249,7 +253,21 @@ namespace reloadmaker
         QJsonObject soundState() const;
         QJsonObject exportSounds() const;
         QString soundProfileKey() const;
-        QHash<QString,SoundCue> _referenceSounds,_soundCatalog;
+        // Package masters' sound descriptors; every descriptor in reach, and
+        // the cue catalog derived from them, by lower-case record identity.
+        QHash<QString,SoundDescriptor> _referenceSounds,_soundDescriptors;
+        QHash<QString,SoundCue> _soundCatalog;
+        // Package masters' sound keyword mappings and Sound keywords, by
+        // lower-case record identity (the MO2 library holds them in _plugins).
+        QVector<SoundMapping> _referenceSoundMappings;
+        QSet<QString> _referenceSoundKeywords;
+        // Played once per shot in Operate; never part of the exported pack,
+        // because the game plays its own fire sound.
+        FireSoundPlan _fireSound;
+        QString _fireSoundMapping,_fireSoundError;
+        QStringList _fireSoundContext;
+        void playShotSound();
+        void endFireLoop();
         QHash<QString,SoundProfile> _savedSounds;
         SoundProfile _soundProfile;
         SoundCueGate _soundGate;
@@ -269,6 +287,7 @@ namespace reloadmaker
         QCheckBox* _soundMute{};
         QLabel* _soundInfo{};
         QLabel* _soundStatus{};
+        QLabel* _fireSoundInfo{};
         void createFingerEditor();
         void refreshFingerEditor();
         void editFinger(int joint, const Quaternionf& rotation);

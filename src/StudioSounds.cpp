@@ -40,6 +40,11 @@ void ReloadMakerController::createSoundsUi(){
     layout->addSpacing(8);
     auto* save=new QPushButton("Save sounds");save->setObjectName("PrimaryButton");layout->addWidget(save);
     auto* test=new QPushButton("Test in Operate");layout->addWidget(test);
+    // The game plays the fire sound; it is listed so it can be heard, not authored.
+    layout->addSpacing(8);layout->addWidget(design::sectionLabel("Fire, played by the game",panel));
+    _fireSoundInfo=design::hintLabel({},panel);layout->addWidget(_fireSoundInfo);
+    auto* fire=new QPushButton("Play fire sound");layout->addWidget(fire);
+    connect(fire,&QPushButton::clicked,this,[this]{(void)playFireSound();});
     _soundMute=new QCheckBox("Mute preview");layout->addWidget(_soundMute);
     auto* collision=new QLabel("Ground and object impacts use the game's collision materials. Releasing a magazine does not play a ground-impact sound.\n\nOpening: 0% closed → 100% rear. Closing runs back to 0%. Magazine insertion: 0% entry → 100% seated.");collision->setWordWrap(true);collision->setObjectName("Hint");layout->addWidget(collision);layout->addStretch();
     auto* scroll=new QScrollArea;scroll->setWidgetResizable(true);scroll->setFrameShape(QFrame::NoFrame);scroll->setWidget(panel);_soundsDock->setWidget(scroll);_window->addDockWidget(Qt::RightDockWidgetArea,_soundsDock);_soundsDock->hide();
@@ -72,6 +77,12 @@ void ReloadMakerController::refreshSoundsUi(){
         _soundInfo->setText(c.record.isEmpty()?"Choose an original sound to enable this action.":QString("%1 sample(s)%2").arg(c.files.size()).arg(c.sourceSeconds>=0?QString(" · source cue at %1 s").arg(c.sourceSeconds,0,'f',3):QString()));
         _soundInfo->setToolTip(c.record+"\n"+c.files.join('\n'));
     }else _soundInfo->setText("Prepare a weapon in Operate to import its sounds.");
+    {QStringList names,detail;
+        for(const auto& layer:_fireSound.layers){names<<layer.editorId;detail<<layer.record+"\n  "+layer.files.join("\n  ");}
+        if(_fireSound.loop){names<<_fireSound.loop->editorId+" (automatic loop)";detail<<_fireSound.loop->record;}
+        _fireSoundInfo->setText(!names.isEmpty()?QString("%1 · from %2. Operate plays it on every shot; packs leave it to the game.").arg(names.join(" + "),_fireSoundMapping)
+            :!_fireSoundError.isEmpty()?_fireSoundError:QString("Prepare a weapon in Operate to find its fire sound."));
+        _fireSoundInfo->setToolTip(detail.join('\n'));}
     _soundStatus->setText(!_soundError.isEmpty()?_soundError:_soundsDirty?"Unsaved sound changes":QString("%1 cues · last cue: %2").arg(_soundProfile.cues.size()).arg(_lastSound.isEmpty()?"none":_lastSound));
     _editingSoundUi=false;
 }

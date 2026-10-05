@@ -35,7 +35,9 @@ namespace reloadmaker
             ResourceArchive sounds;
             QVector<PluginContent> plugins;
             QHash<QString, QString> referenceNames;  // ammunition and keyword names by lower-case record
-            QHash<QString, SoundCue> referenceSounds; // by lower-case record
+            QHash<QString, SoundDescriptor> referenceSounds; // by lower-case record
+            QVector<SoundMapping> referenceSoundMappings;
+            QSet<QString> referenceSoundKeywords;     // lower-case records
             QString data;
             QString error;
             bool cancelled{ false };
@@ -121,12 +123,20 @@ namespace reloadmaker
                     progress("Reading ammunition and keyword catalog: " + master);
                     const PluginContent catalog = EspReader::read(file, cancelled, true);
                     for (const auto& sound : catalog.sounds) {
-                        SoundCue cue;
-                        cue.record = recordIdentity(catalog, sound.formId);
-                        cue.editorId = sound.editorId;
-                        cue.files = sound.files;
-                        cue.attenuationDb = sound.attenuationDb;
-                        load.referenceSounds.insert(cue.record.toLower(), cue);
+                        const auto descriptor = soundDescriptor(catalog, sound);
+                        load.referenceSounds.insert(descriptor.record.toLower(), descriptor);
+                    }
+                    for (const auto& mapping : catalog.soundMappings) {
+                        // Masters rank below the package, in the order first met.
+                        SoundMapping value{ recordIdentity(catalog, mapping.formId).toLower(), mapping.editorId,
+                                            recordIdentity(catalog, mapping.descriptor).toLower(), {}, int(read.size()) };
+                        for (const auto keyword : mapping.keywords) {
+                            value.keywords.insert(recordIdentity(catalog, keyword).toLower());
+                        }
+                        load.referenceSoundMappings.append(std::move(value));
+                    }
+                    for (const auto keyword : catalog.soundKeywords) {
+                        load.referenceSoundKeywords.insert(recordIdentity(catalog, keyword).toLower());
                     }
                     for (auto it = catalog.ammoNames.cbegin(); it != catalog.ammoNames.cend(); ++it) {
                         load.referenceNames.insert(recordIdentity(catalog, it.key()).toLower(), it.value());
@@ -328,6 +338,8 @@ namespace reloadmaker
             _plugins = std::move(result->plugins);
             _referenceNames = std::move(result->referenceNames);
             _referenceSounds = std::move(result->referenceSounds);
+            _referenceSoundMappings = std::move(result->referenceSoundMappings);
+            _referenceSoundKeywords = std::move(result->referenceSoundKeywords);
             nameAttachPointsFromMasters(_plugins, _referenceNames);
             _packageText = _package.sourcePath;
             _gameDataText = _gameData;

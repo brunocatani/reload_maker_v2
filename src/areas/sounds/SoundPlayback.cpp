@@ -140,6 +140,14 @@ namespace reloadmaker
                 (void)playSound(_soundProfile.cues[i]);
             }
         };
+        // Automatic shots after the first, which startNativeAction plays;
+        // shots inside one tick sound once. A burst's loop ends with it.
+        if (_simulation.shotsFired > old.shotsFired) {
+            playShotSound();
+        }
+        if (_simulation.action != SimulationAction::Fire) {
+            endFireLoop();
+        }
         const auto animated = [](SimulationAction action) { return action == SimulationAction::Fire || action == SimulationAction::Reload; };
         if (!animated(old.action) && !animated(_simulation.action)) {
             if (_simulation.mechanism == WeaponMechanism::Ar15 && old.slideLocked && !_simulation.slideLocked && _simulation.inputProgress() <= .001f) {
