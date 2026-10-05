@@ -68,12 +68,12 @@
     "kind": "reload-maker-v2-project",
     "library": false,
     "magazineGrabGrips": {
-        "glock19x.esp:000f9b|glock19x.esp:000fa4": "b57f362d-dab0-4b22-9667-fef82d977a20",
-        "glock19x.esp:000f9b|glock19x.esp:000fa5": "92cef74b-721e-4f16-b79f-13e8bedf2385",
-        "glock19x.esp:000f9b|glock19x.esp:00176f": "c70f306e-6e36-4cd4-bff3-eba70544298b",
-        "glock19x.esp:000f9b|glock19x.esp:001770": "0134fbff-7e38-47b1-9d31-b627fc5d292c",
-        "glock19x.esp:000f9b|glock19x.esp:001779": "682e0873-d7b7-42ac-815a-1a9afc22586d",
-        "glock19x.esp:000f9b|glock19x.esp:00177a": "34f92f8b-3f40-4c82-a889-551b7121a116"
+        "glock19x.esp:000f9b|glock19x.esp:000fa4|left": "b57f362d-dab0-4b22-9667-fef82d977a20",
+        "glock19x.esp:000f9b|glock19x.esp:000fa5|left": "92cef74b-721e-4f16-b79f-13e8bedf2385",
+        "glock19x.esp:000f9b|glock19x.esp:00176f|left": "c70f306e-6e36-4cd4-bff3-eba70544298b",
+        "glock19x.esp:000f9b|glock19x.esp:001770|left": "0134fbff-7e38-47b1-9d31-b627fc5d292c",
+        "glock19x.esp:000f9b|glock19x.esp:001779|left": "682e0873-d7b7-42ac-815a-1a9afc22586d",
+        "glock19x.esp:000f9b|glock19x.esp:00177a|left": "34f92f8b-3f40-4c82-a889-551b7121a116"
     },
     "magazineInteraction": {
         "animationSeconds": 0.6,

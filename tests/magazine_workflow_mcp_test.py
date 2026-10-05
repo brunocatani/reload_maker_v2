@@ -105,10 +105,11 @@ try:
     assert new_id != old_id and not saved['magazineEditor']['unsaved'], saved['magazineEditor']
     assert len(saved['magazineGrabGrips']) == len(before)
     persisted = json.loads(working.read_text(encoding='utf-8'))
-    # Fits are assigned per hand; the save replaces the legacy key without a hand.
+    # Fits are assigned per hand; no key without a hand survives a save.
     key = next(k for k, v in before.items() if v == old_id)
-    assert persisted['magazineGrabGrips'][key + '|' + saved['magazineEditor']['hand']] == new_id
-    assert key not in persisted['magazineGrabGrips'], 'Superseded legacy assignment kept'
+    base = key.rsplit('|', 1)[0] if key.endswith(('|left', '|right')) else key
+    assert persisted['magazineGrabGrips'][base + '|' + saved['magazineEditor']['hand']] == new_id
+    assert base not in persisted['magazineGrabGrips'], 'Superseded legacy assignment kept'
     edit('workspace', index=5); ready()
     edit('simulate', operation='drop_magazine');edit('simulate', operation='grab_magazine')
     assert command('simulation_state')['magazineGrip']['id'] == new_id
@@ -117,7 +118,7 @@ try:
 
     # Save a default; another magazine's explicit fit must remain unchanged.
     save('weapon_default')
-    custom_33 = before[next(k for k in before if k.endswith(':001779'))]
+    custom_33 = before[next(k for k in before if k.split('|')[1].endswith(':001779'))]
     select(0x1001779)
     assert command('state')['magazineEditor']['gripId'] == custom_33
     edit('configure_magazine'); edit('use_default_magazine_grip')
