@@ -1,6 +1,7 @@
 // The domain detectors against event lists copied from the testbeds' native
 // clips (rework 14). Each case pins the value today's weapon behavior uses.
 #include "domain/detectors/ClipEvents.h"
+#include "domain/detectors/MagazinePieces.h"
 #include "domain/detectors/PresetProposal.h"
 
 #include <QCoreApplication>
@@ -92,6 +93,43 @@ namespace
         twice.last().id = QStringLiteral("copy");
         check(!proposePreset({ false, true }, twice).preset, "Two matching presets produced a proposal");
     }
+
+    // Shape and material names from the testbeds' magazines. Each case is
+    // the role today's per-weapon rules gave the piece.
+    void magazinePieceRoles()
+    {
+        check(nameWords(QStringLiteral("338BrassProjectileINC")) == QStringList{ "338", "brass", "projectile", "inc" }, "Digit and camel words");
+        check(nameWords(QStringLiteral("HandmadeARReceiver:77")) == QStringList{ "handmade", "ar", "receiver", "77" }, "Acronym words");
+        struct Piece
+        {
+            const char* name;
+            const char* material;
+            bool cartridge;
+        };
+        const Piece pieces[] = {
+            { "Mag:0", "Glock19x\\Glock19x\\Magazine.BGSM", false },
+            { "Bullet:0", "Glock19x\\Glock19x\\Magazine.BGSM", true }, // the round shares the magazine's material
+            { "MagSecond:0", "Glock19x\\Glock19x\\Magazine.BGSM", false },
+            { "MagBullet:1", "RU556\\Attachments\\Bullet.BGSM", true },
+            { "Mag:0", "RU556\\Attachments\\Mag_P-Mag20.BGSM", false },
+            { "MagFollower:0", "M1A_404\\M1A\\M1A.BGSM", false },
+            { "Bullet:1", "M1A_404\\M1A\\M1A_Bullet.BGSM", true },
+            { "L118A2_magazine_10rds:0", "Weapons\\L118\\Mag10.bgsm", false }, // "rds" is not read
+            { "ammo_338_LM_v009:0", "Weapons\\L118\\338Brass.BGSM", true },
+            { "Magazine_Ext001:0", "Weapons\\Timberwolf\\MagExt.bgsm", false },
+            { "CasingA:0", "Weapons\\HuntingRifle\\308Casings.BGSM", true },
+            { "Mag_30", "serviceRifle\\HeffyM16\\AR15_Mag30rd.bgsm", false },
+            { "smgMag", "Weapons\\ServiceRifle\\serviceriflemagsmg.bgsm", false },
+            { "Shape:3", "Weapons\\MK18\\Ammo\\556.bgsm", true },      // an ammunition folder
+            { "Shape:4", "Weapons\\Ammo\\Rifles\\Mag.bgsm", false },   // only the folder holding the file counts
+        };
+        for (const auto& piece : pieces) {
+            const bool cartridge = proposeMagazinePieceRole(QLatin1String(piece.name), QLatin1String(piece.material)).cartridge;
+            check(cartridge == piece.cartridge, QStringLiteral("Piece role: %1 / %2").arg(QLatin1String(piece.name), QLatin1String(piece.material)));
+        }
+        const auto evidence = proposeMagazinePieceRole(QStringLiteral("CasingA:0"), {}).evidence;
+        check(evidence.contains(QLatin1String("CasingA:0")) && evidence.contains(QLatin1String("casing")), "Evidence: " + evidence);
+    }
 }
 
 int main(int argc, char** argv)
@@ -103,7 +141,8 @@ int main(int argc, char** argv)
         }
         magazineEvents();
         presetProposals(QString::fromLocal8Bit(argv[1]));
-        QTextStream(stdout) << "PASS magazine events from clip sound names, preset proposals from records\n";
+        magazinePieceRoles();
+        QTextStream(stdout) << "PASS magazine events from clip sound names, preset proposals from records, magazine piece roles from names\n";
         return 0;
     } catch (const std::exception& e) {
         QTextStream(stderr) << e.what() << '\n';

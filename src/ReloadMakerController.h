@@ -29,6 +29,7 @@
 #include "areas/sources/SourceBrowserRows.h"
 #include "commands/CommandRegistry.h"
 #include "domain/checklist/Checklist.h"
+#include "domain/detectors/MagazinePieces.h"
 #include "domain/weapon/WeaponOverrides.h"
 #include "LoadTimings.h"
 
@@ -510,7 +511,6 @@ namespace reloadmaker
         bool isAr15Configuration() const;
         bool isMk18Configuration() const;
         bool isSrepConfiguration() const;
-        bool isSrepEmbeddedMagazine() const;
         bool isMk18OverhaulConfiguration() const;
         bool isM1AConfiguration() const;
         bool isThanatosConfiguration() const;
@@ -630,11 +630,22 @@ namespace reloadmaker
         bool loadMagazineSetup();
         bool resolveMagazineConnection(MagazineConnection& connection);
         bool collectMagazineGeometry(QVector<QVector3D>& body, QVector<QVector3D>& frame, QVector<MagazineShape>& shapes);
-        bool isSrepSpareMagazineShape(QModelIndex node) const;
+        // How the magazine sits in the weapon (rework 14, items 5 and 7): a
+        // part attached inside the carrier bone, a magazine model that brings
+        // its own carrier bone, or geometry built into the receiver's carrier.
+        enum class MagazineMount { Installed, SuppliesCarrier, BuiltIn };
+        struct MagazineMountInfo
+        {
+            MagazineMount mount{ MagazineMount::SuppliesCarrier };
+            QString evidence;
+        };
+        MagazineMountInfo magazineMount(const QModelIndex& carrier) const;
+        bool magazineBuiltIn() const;
+        QString parkedMagazinePath() const;
+        PieceRoleProposal magazinePieceProposal(const QModelIndex& shape) const;
         bool buildMagazineMotion(const QVector<QVector3D>& body, MagazineRail& rail);
         bool buildNativeMagazineMotion(const QVector<QVector3D>& body, MagazineRail& rail);
         void classifyMagazineShapes(const QVector<MagazineShape>& shapes, const MagazineRail& rail, bool& emptyBody, bool& fullBody);
-        bool isMagazineCartridge(const MagazineShape& shape, bool isEmpty) const;
         bool applyMagazinePieceRoles(const MagazineRail& rail);
         bool magazineSettingsBusy() const;
         void checkMagazineSetup(const MagazineSetup& value) const;
@@ -644,7 +655,8 @@ namespace reloadmaker
         void updateMagazinePose();
         std::optional<MagazineRail> _magazineRail;
         QString _magazineError;
-        struct MagazineVisual {QPersistentModelIndex node;int flags{0};bool empty{false};int track{-1};bool cartridge{false};bool nativeOnly{false};};
+        // parked: a native spare outside the magazine that the runtime hides.
+        struct MagazineVisual {QPersistentModelIndex node;int flags{0};bool empty{false};int track{-1};bool cartridge{false};bool nativeOnly{false};bool parked{false};};
         QVector<MagazineVisual> _magazineVisuals;
         // Steps of the Operate simulation (src/areas/operate/).
         bool buildSrepSimulationRig(SimulationRig& rig, QString& error);

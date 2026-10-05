@@ -42,27 +42,6 @@ namespace reloadmaker
                hasEditorId(weapon, QLatin1String("SREP_XM16E1"));
     }
 
-    // An SREP SMG receiver carries its magazine inside the receiver model.
-    bool ReloadMakerController::isSrepEmbeddedMagazine() const
-    {
-        if (!isSrepConfiguration()) {
-            return false;
-        }
-        const auto* config = configuration();
-        if (!config) {
-            return false;
-        }
-        for (const auto id : config->activeMods()) {
-            const auto* mod = config->mod(id);
-            if (mod &&
-                mod->editorId.contains(QStringLiteral("receiver_"), Qt::CaseInsensitive) &&
-                mod->editorId.contains(QStringLiteral("SMG"), Qt::CaseInsensitive)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     bool ReloadMakerController::isMk18Configuration() const
     {
         const auto* weapon = currentWeapon();

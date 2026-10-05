@@ -3,7 +3,10 @@
 #include "ReloadMakerController.h"
 #include "MagazineReference.h"
 #include "ReloadBundle.h"
+#include "areas/loadout/SceneTree.h"
 #include "model/nifmodel.h"
+
+#include <algorithm>
 
 
 namespace reloadmaker
@@ -24,9 +27,10 @@ namespace reloadmaker
     }
 
     // Index of the magazine's hand anchor, or -1 when it is missing or
-    // ambiguous. A saved magazine reference names it. Otherwise it is the one
-    // grab-capable anchor that is an installed part (rifles other than the
-    // MK18 and embedded SREP magazines) or is named WeaponMagazine.
+    // ambiguous. A saved magazine reference names it. Otherwise a magazine
+    // part attached inside the WeaponMagazine bone is grabbed as that part;
+    // a magazine model that brings its own WeaponMagazine bone, or one built
+    // into the receiver, is grabbed by that bone.
     int ReloadMakerController::currentMagazineAnchor() const
     {
         const auto saved = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineReference").toObject();
@@ -48,24 +52,38 @@ namespace reloadmaker
             }
             return found;
         }
-        const bool installedPart = isRifleConfiguration() && !isMk18Configuration() && !isSrepEmbeddedMagazine();
-        int result = -1;
+        auto* model = activeModel();
+        if (!model) {
+            return -1;
+        }
+        QVector<int> carriers;
         for (int i = 0; i < _handPoseAnchors.size(); ++i) {
             const auto& anchor = _handPoseAnchors[i].description;
-            if (!magazineGrabSupported(anchor)) {
+            if (magazineGrabSupported(anchor) && anchor.anchorName.compare("WeaponMagazine", Qt::CaseInsensitive) == 0) {
+                carriers.append(i);
+            }
+        }
+        int installed = -1;
+        for (int i = 0; i < _handPoseAnchors.size(); ++i) {
+            const auto& anchor = _handPoseAnchors[i];
+            if (!magazineGrabSupported(anchor.description) || anchor.description.anchorKind != "installed-part") {
                 continue;
             }
-            const bool candidate = installedPart ? anchor.anchorKind == "installed-part"
-                                                 : anchor.anchorName.compare("WeaponMagazine", Qt::CaseInsensitive) == 0;
-            if (!candidate) {
+            const bool inCarrier = std::any_of(carriers.cbegin(), carriers.cend(), [&](int carrier) {
+                return anchor.node != _handPoseAnchors[carrier].node && isWithinBlock(*model, anchor.node, _handPoseAnchors[carrier].node);
+            });
+            if (!inCarrier) {
                 continue;
             }
-            if (result >= 0) {
+            if (installed >= 0) {
                 return -1;
             }
-            result = i;
+            installed = i;
         }
-        return result;
+        if (installed >= 0) {
+            return installed;
+        }
+        return carriers.size() == 1 ? carriers.front() : -1;
     }
 
     // Block names from the root down to `leaf`, joined by '/'. An unnamed

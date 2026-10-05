@@ -496,6 +496,12 @@ def weapon_properties_state() -> dict:
     reload clip's sound names, with any ambiguity. insertion is how the
     magazine goes in: straight, or native-curve along the clip; source says
     whether the weapon's own choice or its preset decided.
+    magazine (once Operate is prepared) is how the magazine sits: installed
+    (a part attached inside the carrier bone), supplies-carrier (the magazine
+    model brings its own carrier bone) or built-in (the receiver holds it),
+    with evidence; pieces lists each magazine shape with its proposed role
+    (body, cartridge from round/casing/ammo names, or parked spare) and why.
+    A saved magazine setup overrides the proposed roles.
     """
     return command('weapon_properties_state')
 

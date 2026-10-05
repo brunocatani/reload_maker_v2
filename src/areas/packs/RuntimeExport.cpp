@@ -64,6 +64,47 @@ namespace reloadmaker
         return path.join('/');
     }
 
+    // The node holding every parked spare piece, as a runtime path: the
+    // deepest node above all of them, written as the reload track carrying it
+    // plus the node names below that track. Empty without a parked spare.
+    QString ReloadMakerController::parkedMagazinePath() const
+    {
+        auto* model = activeModel();
+        QVector<QModelIndex> common; // ancestors shared by every piece, deepest first
+        bool first = true;
+        for (const auto& visual : _magazineVisuals) {
+            if (!visual.parked || !visual.node.isValid()) {
+                continue;
+            }
+            QVector<QModelIndex> ancestors;
+            for (auto node = model->getBlockIndex(model->getParent(visual.node)); node.isValid() && ancestors.size() < model->getBlockCount();
+                 node = model->getBlockIndex(model->getParent(node))) {
+                ancestors.append(node);
+            }
+            if (first) {
+                common = ancestors;
+                first = false;
+            } else {
+                common.erase(std::remove_if(common.begin(), common.end(), [&](const QModelIndex& node) { return !ancestors.contains(node); }), common.end());
+            }
+        }
+        if (first) {
+            return {};
+        }
+        QStringList below;
+        for (const auto& node : common) {
+            for (int track = 0; track < _reloadTrackNodes.size(); ++track) {
+                if (QModelIndex(_sceneNodes[_reloadTrackNodes[track]]) == node) {
+                    const auto path = runtimeTrackPath(track);
+                    return below.isEmpty() ? path : path + '/' + below.join('/');
+                }
+            }
+            below.prepend(model->get<QString>(node, "Name"));
+        }
+        require(false, "The parked spare magazine is outside the weapon's animated bones");
+        return {};
+    }
+
     // Requires a seated, idle Operate session with spring return (manual
     // bolts excepted), resolved errors, a concrete receiver and a magazine
     // record, the operating fingers of both hands and the operating grab
@@ -310,10 +351,8 @@ namespace reloadmaker
         addRuntimeMagazineReference(magazine, anchor);
         addRuntimeMagazineParts(magazine);
         addRuntimeMagazineHiding(magazine);
-        if (isSrepEmbeddedMagazine()) {
-            magazine["parkedMagazinePath"] = "Weapon/WeaponOptics2/MagHelperRotate/MagHelper";
-        } else if (isMk18Configuration()) {
-            magazine["parkedMagazinePath"] = "Weapon/WeaponExtra3";
+        if (const auto parked = parkedMagazinePath(); !parked.isEmpty()) {
+            magazine["parkedMagazinePath"] = parked;
         }
         return magazine;
     }
@@ -380,13 +419,13 @@ namespace reloadmaker
             require(invertUniformTransform(full.poses[frame], inv), "Invalid payload carrier");
             return composed(composed(full.poses[0], inv), track.poses[frame]);
         };
-        // These assemblies synthesize timing-only magazine bones absent from their
-        // native meshes. Other established templates retain their complete chain.
-        const bool nativeSurfacesOnly = isMk18Configuration() || isSrepConfiguration();
+        // A magazine bone with no geometry below it is timing-only: posing it
+        // changes nothing the player sees, and a bone Maker added for a
+        // passive attachment does not exist in the game (rework 14, item 8).
         for (int index = 0; index < recipe.tracks.size(); ++index) {
             const auto& track = recipe.tracks[index];
             const bool magazinePart = _magazineSetup ? runtimeFullTrack(index) : track.anchor.anchorName.startsWith("WeaponMagazine");
-            if (!magazinePart || (nativeSurfacesOnly && !track.surface)) {
+            if (!magazinePart || !track.surface) {
                 continue;
             }
             const int frame = sampledMagazinePayload() ? _m1aLoadedMagazineFrame : 0;
@@ -551,7 +590,7 @@ namespace reloadmaker
             if (type == WeaponMechanism::Ar15 && isSrepConfiguration()) {
                 header["manualBoltFromReload"] = true;
             }
-            if (isSrepEmbeddedMagazine()) {
+            if (magazineBuiltIn()) {
                 header["embeddedMagazineReceivers"] = QJsonArray{ receiverKey };
             }
         }

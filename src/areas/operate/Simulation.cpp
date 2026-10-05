@@ -146,18 +146,20 @@ namespace reloadmaker
         const auto* config = configuration();
         auto* model = activeModel();
         _simulationMagazineSlot = 0;
-        // Rifles other than the MK18 and embedded SREP magazines find the
-        // magazine by its installed hand anchor rather than by its record.
-        const bool installedMagazine = isRifleConfiguration() && !isMk18Configuration() && !isSrepEmbeddedMagazine();
-        const int magazineAnchor = installedMagazine ? currentMagazineAnchor() : -1;
-        if ((rig.magazineBranchOnly || isSrepEmbeddedMagazine()) && model) {
+        // An installed magazine part is found by its hand anchor; a magazine
+        // model that brings its carrier bone, by the carrier's record; one
+        // built into the receiver (or a pistol's magazine branch) is the
+        // carrier itself.
+        const int magazineAnchor = currentMagazineAnchor();
+        const bool installedMagazine = magazineAnchor >= 0 && _handPoseAnchors[magazineAnchor].description.anchorKind == "installed-part";
+        if ((rig.magazineBranchOnly || magazineBuiltIn()) && model) {
             const auto node = _sceneNodes[_reloadTrackNodes[rig.magazine]];
             _simulationVisibility.append({ node, model->get<int>(node, "Flags") });
         } else if (config && model) {
             for (auto it = _partRoots.cbegin(); it != _partRoots.cend(); ++it) {
                 bool match = false;
                 if (installedMagazine) {
-                    match = magazineAnchor >= 0 && it.value() == _handPoseAnchors[magazineAnchor].node;
+                    match = it.value() == _handPoseAnchors[magazineAnchor].node;
                 } else {
                     match = poseRecordKey(config->selected(it.key())).compare(owner.ownerRecord, Qt::CaseInsensitive) == 0;
                 }

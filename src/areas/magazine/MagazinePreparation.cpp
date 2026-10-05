@@ -15,6 +15,8 @@
 
 #include <QSet>
 #include <algorithm>
+#include <cmath>
+#include <numeric>
 
 namespace reloadmaker
 {
@@ -110,8 +112,8 @@ namespace reloadmaker
 
     // Where the seated magazine connects, in world space: an authored frame in
     // the magazine carrier, the carrier itself for a magazine branch inside a
-    // shared receiver (or an embedded SREP magazine), or else the magazine
-    // model's connect point on its attachment parent.
+    // shared receiver or a magazine built into the receiver, or else the
+    // magazine model's connect point on its attachment parent.
     bool ReloadMakerController::resolveMagazineConnection(MagazineConnection& connection)
     {
         const auto& rig = *_simulationRig;
@@ -136,7 +138,7 @@ namespace reloadmaker
             connection.authored = true;
             return true;
         }
-        if (rig.magazineBranchOnly || isSrepEmbeddedMagazine()) {
+        if (rig.magazineBranchOnly || magazineBuiltIn()) {
             connection.name = rig.magazineBranchOnly ? "Magazine carrier" : "P-Mag";
             return sceneNodeWorld(carrierNode, connection.frame, _magazineError);
         }
@@ -165,44 +167,68 @@ namespace reloadmaker
     // World-space vertices of the magazine body (shapes under the magazine
     // carrier track) and of the surrounding weapon frame, for the rail's
     // clearance. Every shape under a hidden magazine root is recorded with
-    // its deepest owning magazine track for classification.
+    // its deepest owning magazine track for classification; one on another
+    // track is the magazine model's parked spare. Outside the magazine, a
+    // copy of a body shape (same material and vertex count) on a track the
+    // reload moves is a parked spare too (rework 14, item 6).
     bool ReloadMakerController::collectMagazineGeometry(QVector<QVector3D>& body, QVector<QVector3D>& frame, QVector<MagazineShape>& shapes)
     {
         auto* model = activeModel();
         auto* scene = _window->getGLView()->getScene();
         const auto& rig = *_simulationRig;
         const auto trackNode = [this](int track) { return _sceneNodes[_reloadTrackNodes[track]]; };
+        const auto deepestTrack = [&](const QModelIndex& index, const QVector<int>& among) {
+            int owner = -1;
+            for (const int track : among) {
+                if (isWithinBlock(*model, index, trackNode(track)) && (owner < 0 || isWithinBlock(*model, trackNode(track), trackNode(owner)))) {
+                    owner = track;
+                }
+            }
+            return owner;
+        };
+        QVector<int> allTracks(_reloadRecipe->tracks.size());
+        std::iota(allTracks.begin(), allTracks.end(), 0);
+        const auto moves = [&](int track) {
+            if (track < 0) {
+                return false;
+            }
+            const auto& poses = _reloadRecipe->tracks[track].poses;
+            return std::any_of(poses.cbegin(), poses.cend(), [&](const Transformf& pose) {
+                return reloadPoseDistance(pose, poses.front()) > .01f || std::abs(pose.scale.x - poses.front().scale.x) > 1e-4f;
+            });
+        };
+        const auto inMagazine = [&](const QModelIndex& index) {
+            return std::any_of(_simulationVisibility.cbegin(), _simulationVisibility.cend(),
+                               [&](const auto& entry) { return isWithinBlock(*model, index, entry.first); });
+        };
+        const auto signature = [&](const Shape* shape, const QModelIndex& index) {
+            const auto shader = model->getBlockIndex(model->getLink(index, "Shader Property"));
+            return qMakePair(model->get<QString>(shader, "Name").toLower(), int(shape->verts.size()));
+        };
+        QSet<QPair<QString, int>> bodySignatures;
+        for (auto* shape : scene->shapes) {
+            if (shape) {
+                const auto index = model->getBlockIndex(shape->id());
+                if (inMagazine(index) && isWithinBlock(*model, index, trackNode(rig.magazine))) {
+                    bodySignatures.insert(signature(shape, index));
+                }
+            }
+        }
         for (auto* shape : scene->shapes) {
             if (!shape) {
                 continue;
             }
             const auto index = model->getBlockIndex(shape->id());
-            if (isSrepEmbeddedMagazine() && isSrepSpareMagazineShape(index)) {
-                _magazineVisuals.append({ index, model->get<int>(index, "Flags"), false, -1, false, true });
-                continue;
-            }
-            bool magazine = false;
-            for (const auto& [root, flags] : _simulationVisibility) {
-                if (isWithinBlock(*model, index, root)) {
-                    magazine = true;
-                    break;
-                }
-            }
+            const bool magazine = inMagazine(index);
             int owner = -1;
             if (magazine) {
-                for (const int track : rig.magazineTracks) {
-                    if (isWithinBlock(*model, index, trackNode(track)) && (owner < 0 || isWithinBlock(*model, trackNode(track), trackNode(owner)))) {
-                        owner = track;
-                    }
+                owner = deepestTrack(index, rig.magazineTracks);
+                if (owner < 0) {
+                    owner = deepestTrack(index, allTracks);
                 }
-            }
-            if (magazine && owner < 0 && isMk18Configuration()) {
-                for (int track = 0; track < _reloadRecipe->tracks.size(); ++track) {
-                    if (_reloadRecipe->tracks[track].anchor.anchorName == "WeaponExtra3" && isWithinBlock(*model, index, trackNode(track))) {
-                        owner = track;
-                        break;
-                    }
-                }
+            } else if (bodySignatures.contains(signature(shape, index)) && moves(deepestTrack(index, allTracks))) {
+                _magazineVisuals.append({ index, model->get<int>(index, "Flags"), false, -1, false, true, true });
+                continue;
             }
             if (magazine && owner >= 0) {
                 shapes.append({ index, owner });
@@ -234,19 +260,6 @@ namespace reloadmaker
             }
         }
         return true;
-    }
-
-    // The SREP's spare magazine sits under MagHelper and only animates.
-    bool ReloadMakerController::isSrepSpareMagazineShape(QModelIndex node) const
-    {
-        auto* model = activeModel();
-        for (int depth = 0; node.isValid() && depth < model->getBlockCount(); ++depth) {
-            if (model->get<QString>(node, "Name") == "MagHelper") {
-                return true;
-            }
-            node = model->getBlockIndex(model->getParent(node));
-        }
-        return false;
     }
 
     // The magazine's visible movement along the rail: the clip's insertion
@@ -322,47 +335,10 @@ namespace reloadmaker
             if (shape.track == rig.magazine) {
                 fullBody = true;
             }
-            _magazineVisuals.append({ shape.node, model->get<int>(shape.node, "Flags"), isEmpty, shape.track, isMagazineCartridge(shape, isEmpty),
-                                      isMk18Configuration() && !rig.magazineTracks.contains(shape.track) });
+            const bool parked = !rig.magazineTracks.contains(shape.track);
+            _magazineVisuals.append({ shape.node, model->get<int>(shape.node, "Flags"), isEmpty, shape.track, magazinePieceProposal(shape.node).cartridge,
+                                      parked, parked });
         }
-    }
-
-    // Cartridge shapes hide when the magazine is empty. Rifles name their
-    // rounds; pistols treat every non-body magazine shape as a round. MK18
-    // ammo is recognized by material, SREP casings and bullets by name, and
-    // bolt-action round stacks by their MagHelperNode ancestor.
-    bool ReloadMakerController::isMagazineCartridge(const MagazineShape& shape, bool isEmpty) const
-    {
-        auto* model = activeModel();
-        const auto name = model->get<QString>(shape.node, "Name");
-        bool cartridge = false;
-        if (isRifleConfiguration()) {
-            cartridge = name.startsWith(isM1AConfiguration() ? "Bullet:" : "MagBullet:", Qt::CaseInsensitive);
-        } else {
-            cartridge = !isEmpty && shape.track != _simulationRig->magazine;
-        }
-        if (isMk18Configuration()) {
-            const auto shader = model->getBlockIndex(model->getLink(shape.node, "Shader Property"));
-            auto material = model->get<QString>(shader, "Name");
-            material.replace('\\', '/');
-            cartridge |= material.contains("/MK18/Ammo/", Qt::CaseInsensitive);
-        }
-        if (isSrepConfiguration()) {
-            cartridge |= name.startsWith("Casing", Qt::CaseInsensitive) || name.startsWith("Bullet", Qt::CaseInsensitive);
-        }
-        if (isBoltActionConfiguration()) {
-            // The source culls this static round stack and Child1's top round
-            // on an empty reload. Magazine body/follower helpers are separate.
-            auto node = QModelIndex(shape.node);
-            for (int depth = 0; node.isValid() && depth < model->getBlockCount(); ++depth) {
-                if (model->get<QString>(node, "Name").compare("MagHelperNode", Qt::CaseInsensitive) == 0) {
-                    cartridge = true;
-                    break;
-                }
-                node = model->getBlockIndex(model->getParent(node));
-            }
-        }
-        return cartridge;
     }
 
     // The saved setup's role for every magazine piece (body, cartridge or

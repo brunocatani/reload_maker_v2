@@ -7,6 +7,7 @@
 #include "areas/properties/PropertyInputs.h"
 #include "commands/CommandSupport.h"
 #include "domain/detectors/PresetProposal.h"
+#include "model/nifmodel.h"
 
 #include <QJsonArray>
 
@@ -153,6 +154,22 @@ namespace reloadmaker
             result["magazineEvents"] = QJsonObject{ { "entry", eventJson(magazine.entrySeconds, magazine.entry) },
                                                     { "removal", eventJson(magazine.removalSeconds, magazine.removal) },
                                                     { "ambiguities", QJsonArray::fromStringList(magazine.ambiguities) } };
+        }
+        if (auto* model = activeModel(); model && _simulationRig && _reloadRecipe && _simulationRig->magazine >= 0 && _simulationRig->magazine < _reloadTrackNodes.size()) {
+            const auto mount = magazineMount(_sceneNodes[_reloadTrackNodes[_simulationRig->magazine]]);
+            QJsonArray pieces;
+            for (const auto& visual : _magazineVisuals) {
+                if (!visual.node.isValid()) {
+                    continue;
+                }
+                const auto proposal = magazinePieceProposal(visual.node);
+                pieces.append(QJsonObject{ { "name", model->get<QString>(visual.node, "Name") },
+                                           { "proposed", proposal.cartridge ? "cartridge" : visual.parked ? "parked spare" : "body" },
+                                           { "evidence", proposal.evidence }, { "parked", visual.parked } });
+            }
+            result["magazine"] = QJsonObject{ { "mount", mount.mount == MagazineMount::Installed ? "installed"
+                                                         : mount.mount == MagazineMount::BuiltIn ? "built-in" : "supplies-carrier" },
+                                              { "evidence", mount.evidence }, { "pieces", pieces } };
         }
         return result;
     }
