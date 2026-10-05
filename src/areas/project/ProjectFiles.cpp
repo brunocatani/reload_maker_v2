@@ -731,8 +731,9 @@ namespace reloadmaker
                 _scopeProfiles.insert(it.key(), profile);
             }
         }
-        const QString hand = record["interactionHand"].toString(isM1AConfiguration() ? "right" : "left");
-        _interactionHand = hand == "right" && !isGlockConfiguration() ? PoseHand::Right : PoseHand::Left;
+        const QString hand = record["interactionHand"].toString(defaultMagazineHand() == PoseHand::Right ? "right" : "left");
+        const PoseHand wanted = hand == "right" ? PoseHand::Right : PoseHand::Left;
+        _interactionHand = magazineHandAllowed(wanted) ? wanted : defaultMagazineHand();
         _grabLocations.clear();
         const auto locations = record["grabLocations"].toObject();
         for (auto it = locations.begin(); it != locations.end(); ++it) {

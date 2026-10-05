@@ -157,7 +157,7 @@ namespace reloadmaker
 
         // Learned reload.
         o["weapon.preset"] = found(preset.label,
-                                   assignedTemplate().isEmpty() ? _presetProposal.evidence + QStringLiteral(" Confirming assigns the preset to the weapon.")
+                                   assignedTemplate().isEmpty() ? presetProposal().evidence + QStringLiteral(" Confirming assigns the preset to the weapon.")
                                                                 : QStringLiteral("Assigned to this weapon."),
                                    { { "template", preset.id } });
         QJsonObject sources;
@@ -273,12 +273,12 @@ namespace reloadmaker
                                            : missing(QStringLiteral("Choose operating fingers in Grab points."));
         }
 
-        // Magazine hand fits: both hands, except the pistol's reload hand.
+        // Magazine hand fits for every hand the preset loads with.
         if (o.contains("feed.fits")) {
             QStringList fitted;
             QString problem;
             for (const auto hand : { PoseHand::Left, PoseHand::Right }) {
-                if (hand == PoseHand::Right && pistol) {
+                if (!magazineHandAllowed(hand)) {
                     continue;
                 }
                 QString error;
@@ -383,11 +383,11 @@ namespace reloadmaker
         if (!view.preset) {
             view.problem = !currentWeapon() ? QStringLiteral("Load a weapon to see its checklist.")
                            : !reloadPresetsError().isEmpty() ? QStringLiteral("Behavior presets are unavailable: ") + reloadPresetsError()
-                                                             : QStringLiteral("Choose this weapon's behavior preset. ") + _presetProposal.problem;
+                                                             : QStringLiteral("Choose this weapon's behavior preset. ") + presetProposal().problem;
             // Only the preset can be chosen until there is one.
             if (currentWeapon() && reloadPresetsError().isEmpty()) {
                 ChecklistObservation choose;
-                choose.problem = _presetProposal.problem;
+                choose.problem = presetProposal().problem;
                 view.items = evaluateChecklist({ presetChecklistItem() }, { { QStringLiteral("weapon.preset"), choose } }, {});
                 view.summary = summarizeChecklist(view.items);
             }

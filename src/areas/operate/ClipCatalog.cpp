@@ -270,7 +270,7 @@ namespace reloadmaker
             }
             QString resource = resolveAnimationPath(clip.animationPath);
             if (kind->baseReload && _glockNoExtender) {
-                const auto alternative = glockNoExtenderPath();
+                const auto alternative = noExtenderReloadPath();
                 if (!alternative.isEmpty()) {
                     resource = alternative;
                 } else {

@@ -258,8 +258,8 @@ namespace reloadmaker
             return false;
         }
         PartGrip grip = *_partGripDraft;
-        if (isGlockConfiguration() && grip.pose.hand != PoseHand::Left) {
-            setStatus("Glock magazines use the left hand.", true);
+        if (!magazineHandAllowed(grip.pose.hand)) {
+            setStatus(magazineHandRule(), true);
             return false;
         }
         _interactionHand = grip.pose.hand;

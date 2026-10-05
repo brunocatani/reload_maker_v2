@@ -6,6 +6,7 @@
     "model": {
         "feed": {
             "container": "detachable",
+            "hands": [ "left" ],
             "loadingPoints": [ { "id": "magwell", "unit": "container", "destination": "container" } ]
         },
         "mechanisms": [

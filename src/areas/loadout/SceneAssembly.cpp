@@ -112,7 +112,6 @@ namespace reloadmaker
         _clipCache.clear();
         _animationReadHashes.clear();
         _assignedMechanism.reset();
-        _presetProposal = {};
         _graphCache.clear();
         _skeleton = {};
         _geometrySignature.clear();

@@ -121,11 +121,20 @@ namespace reloadmaker
     [[nodiscard]] QString insertionPathName(InsertionPath path);
     [[nodiscard]] std::optional<InsertionPath> insertionPathFromName(const QString& name);
 
+    enum class Hand
+    {
+        Left,
+        Right,
+    };
+
     struct Feed
     {
         ContainerKind container{ ContainerKind::None };
         QVector<LoadingPoint> loadingPoints; // in loading order
         InsertionPath insertion{ InsertionPath::Straight };
+        // The hands that may load the feed, the default first. A pistol
+        // reloads with its off hand while the firing hand keeps the grip.
+        QVector<Hand> hands{ Hand::Left, Hand::Right };
     };
 
     enum class FireMotion

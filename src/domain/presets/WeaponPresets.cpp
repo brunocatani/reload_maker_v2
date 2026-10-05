@@ -37,6 +37,7 @@ namespace reloadmaker
             { "projectile", UnitKind::Projectile }, { "belt-lead", UnitKind::BeltLead } };
         constexpr std::pair<const char*, LoadDestination> destinationNames[] = {
             { "container", LoadDestination::Container }, { "feed-tray", LoadDestination::FeedTray } };
+        constexpr std::pair<const char*, Hand> handNames[] = { { "left", Hand::Left }, { "right", Hand::Right } };
         constexpr std::pair<const char*, MechanismKind> kindNames[] = {
             { "slide", MechanismKind::Slide }, { "charging-handle", MechanismKind::ChargingHandle },
             { "operating-handle", MechanismKind::OperatingHandle }, { "reciprocating-bolt", MechanismKind::ReciprocatingBolt },
@@ -108,6 +109,20 @@ namespace reloadmaker
             if (!parseName(feed["container"], containerNames, model.feed.container) || points.size() > kListLimit ||
                 mechanisms.size() > kListLimit || !decodeFire(json["fire"].toObject(), model.fire)) {
                 return false;
+            }
+            if (feed.contains("hands")) {
+                const QJsonArray hands = feed["hands"].toArray();
+                if (!feed["hands"].isArray() || hands.size() > 2) {
+                    return false;
+                }
+                model.feed.hands.clear();
+                for (const QJsonValue& value : hands) {
+                    Hand hand{};
+                    if (!parseName(value, handNames, hand)) {
+                        return false;
+                    }
+                    model.feed.hands.append(hand);
+                }
             }
             if (feed.contains("insertion")) {
                 const auto insertion = insertionPathFromName(feed["insertion"].toString());

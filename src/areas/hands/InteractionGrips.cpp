@@ -100,15 +100,17 @@ namespace reloadmaker
         return true;
     }
 
+    // The operated part's name in grip assignment keys, from the mechanism.
     QString ReloadMakerController::operatingGroup() const
     {
-        if (isAr15Configuration()) {
-            return "charging_handle";
+        switch (simulationMechanism()) {
+        case WeaponMechanism::Ar15: return "charging_handle";
+        case WeaponMechanism::BoltAction:
+        case WeaponMechanism::ReciprocatingBolt: return "bolt";
+        case WeaponMechanism::M1A: return "operating_handle";
+        case WeaponMechanism::PistolSlide: break;
         }
-        if (isBoltActionConfiguration() || isThanatosConfiguration() || isSrepConfiguration()) {
-            return "bolt";
-        }
-        return isM1AConfiguration() ? "operating_handle" : "slide";
+        return "slide";
     }
 
     // The hand anchor of the rig's operating part, or -1.
@@ -130,8 +132,8 @@ namespace reloadmaker
     // operating fingers follow; an open magazine fit reopens for the hand.
     bool ReloadMakerController::setInteractionHand(PoseHand hand)
     {
-        if (isGlockConfiguration() && hand != PoseHand::Left) {
-            setStatus("The Glock uses a right firing hand and left reload hand.", true);
+        if (!magazineHandAllowed(hand)) {
+            setStatus(magazineHandRule(), true);
             return false;
         }
         if (_simulation.action != SimulationAction::Idle || _simulation.magazine.carried()) {
@@ -159,8 +161,9 @@ namespace reloadmaker
     bool ReloadMakerController::mirrorMagazineGrip()
     {
         const int anchor = currentMagazineAnchor();
-        if (anchor < 0 || isGlockConfiguration()) {
-            setStatus("Opposite-hand magazines are available on the rifle testbeds.", true);
+        const PoseHand opposite = _interactionHand == PoseHand::Left ? PoseHand::Right : PoseHand::Left;
+        if (anchor < 0 || !magazineHandAllowed(opposite)) {
+            setStatus(anchor < 0 ? QStringLiteral("This weapon has no magazine to fit.") : magazineHandRule(), true);
             return false;
         }
         QString error;

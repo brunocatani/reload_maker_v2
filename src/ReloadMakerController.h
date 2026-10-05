@@ -478,16 +478,20 @@ namespace reloadmaker
         // Weapon properties (areas/properties): the author's per-weapon
         // overrides by weapon record, and the values the code reads.
         QHash<QString, WeaponOverrides> _weaponOverrides;
-        // The preset Maker proposes from the records until one is assigned;
-        // refreshed with each rebuild of the configuration.
+        // The preset Maker proposes from the records until one is assigned,
+        // kept for the configuration it was read from.
         struct ProposedPreset
         {
-            QString preset, evidence, problem;
-        } _presetProposal;
-        void refreshPresetProposal();
+            QString configuration, preset, evidence, problem;
+        };
+        mutable ProposedPreset _presetProposal;
+        const ProposedPreset& presetProposal() const;
         const WeaponPreset* proposedPreset() const;
         WeaponOverrides currentWeaponOverrides() const;
         InsertionPath magazineInsertionPath() const;
+        bool magazineHandAllowed(PoseHand hand) const;
+        PoseHand defaultMagazineHand() const;
+        QString magazineHandRule() const;
         void setWeaponProperty(const QString& name, const QJsonValue& value);
         mutable QHash<QString,QString> _animationReadHashes;
         QJsonObject packCommand(const QJsonObject&);
@@ -566,7 +570,7 @@ namespace reloadmaker
         int _m1aLoadedMagazineFrame{0};
         HandPosePlacement simulationMagazineAnchor() const;
         Transformf _magazineGrabBridge{};
-        QString glockNoExtenderPath() const;
+        QString noExtenderReloadPath() const;
         void prepareSimulation();
         void stopSimulation();
         void updateSimulationControls();

@@ -123,8 +123,8 @@ void ReloadMakerController::refreshHeader() {
     _presetChip->setText(preset.isEmpty()?QStringLiteral("No behavior preset"):QStringLiteral("Preset: ")+preset+(detected?QStringLiteral(" · detected"):QString()));
     _presetChip->setProperty("tone",preset.isEmpty()?QStringLiteral("warning"):detected?QStringLiteral("detected"):QString());
     _presetChip->setToolTip(!reloadPresetsError().isEmpty()?QStringLiteral("Behavior presets are unavailable: ")+reloadPresetsError()
-        :preset.isEmpty()?QStringLiteral("Choose one in the Reload checklist. ")+_presetProposal.problem
-        :detected?QStringLiteral("Maker proposes this preset: ")+_presetProposal.evidence+QStringLiteral(" Confirm or change it in the Reload checklist.")
+        :preset.isEmpty()?QStringLiteral("Choose one in the Reload checklist. ")+presetProposal().problem
+        :detected?QStringLiteral("Maker proposes this preset: ")+presetProposal().evidence+QStringLiteral(" Confirm or change it in the Reload checklist.")
         :QStringLiteral("Behavior preset chosen for this weapon."));
     _presetChip->style()->unpolish(_presetChip);_presetChip->style()->polish(_presetChip);
     _presetChip->setVisible(weapon!=nullptr);

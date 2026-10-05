@@ -72,6 +72,9 @@ namespace reloadmaker
             if (feed.insertion == InsertionPath::NativeCurve && feed.container != ContainerKind::Detachable) {
                 problems << QStringLiteral("Only a detachable container follows its clip's insertion curve");
             }
+            if (feed.hands.isEmpty() || feed.hands.size() > 2 || (feed.hands.size() == 2 && feed.hands[0] == feed.hands[1])) {
+                problems << QStringLiteral("The feed needs one or both hands, each once");
+            }
         }
 
         // Follows drivenBy links between mechanisms; a loop means no part is

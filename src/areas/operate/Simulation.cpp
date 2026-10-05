@@ -118,8 +118,8 @@ namespace reloadmaker
             StageClock clock(_loadTimings, "operate.magazine");
             prepareMagazineInteraction();
         }
-        if (isGlockConfiguration()) {
-            _interactionHand = PoseHand::Left;
+        if (!magazineHandAllowed(_interactionHand)) {
+            _interactionHand = defaultMagazineHand();
         }
         resolveMagazineGrabGrip();
         resolveOperatingFingers();
@@ -181,7 +181,7 @@ namespace reloadmaker
         };
         _glockReloadRackAt = -1;
         _glockReloadFeedAt = -1;
-        if (isGlockConfiguration()) {
+        if (simulationMechanism() == WeaponMechanism::PistolSlide) {
             // Racked when the slide nears full travel; fed at the following
             // reloadComplete marker.
             const auto& motion = _reloadRecipe->tracks[rig.slide].poses;
@@ -200,7 +200,7 @@ namespace reloadmaker
                 }
             }
             if (_glockReloadFeedAt < 0) {
-                _simulationError = "The Glock reload has no completion marker after its slide cycle.";
+                _simulationError = "The pistol reload has no reloadComplete marker after its slide cycle.";
                 return false;
             }
         }

@@ -310,6 +310,19 @@ namespace
         for (const WeaponPreset& preset : presets) {
             check((preset.model.feed.insertion == InsertionPath::NativeCurve) == curved.contains(preset.id), preset.id + ": insertion path");
         }
+        // A pistol reloads with the off hand; the rocking-handle rifle starts right.
+        for (const WeaponPreset& preset : presets) {
+            const QVector<Hand> expected = preset.id == QLatin1String("pistol.slide-detachable.v1") ? QVector<Hand>{ Hand::Left }
+                                           : preset.id == QLatin1String("rifle.operating-handle-rocking.v1") ? QVector<Hand>{ Hand::Right, Hand::Left }
+                                                                                                              : QVector<Hand>{ Hand::Left, Hand::Right };
+            check(preset.model.feed.hands == expected, preset.id + ": loading hands");
+        }
+        WeaponModel twice = presets.first().model;
+        twice.feed.hands = { Hand::Left, Hand::Left };
+        check(validateWeaponModel(twice).join(' ').contains("each once"), "A repeated loading hand accepted");
+        twice.feed.hands.clear();
+        check(!validateWeaponModel(twice).isEmpty(), "A feed without hands accepted");
+
         WeaponModel fixed = presets.first().model;
         fixed.feed.container = ContainerKind::Fixed;
         fixed.feed.insertion = InsertionPath::NativeCurve;

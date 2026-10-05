@@ -323,7 +323,7 @@ namespace reloadmaker
     {
         QString error;
         for (const auto hand : { PoseHand::Left, PoseHand::Right }) {
-            if (hand == PoseHand::Right && _simulationRig->mechanism == WeaponMechanism::PistolSlide) {
+            if (!magazineHandAllowed(hand)) {
                 continue;
             }
             const auto grip = magazineGripFor(weapon, anchor, _partGrips, _magazineGrabGrips, _magazineGrabDefaults, error, hand);

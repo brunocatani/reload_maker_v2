@@ -104,7 +104,7 @@ namespace reloadmaker
         ammunition["roundsEjected"] = _simulation.roundsEjected;
         ammunition["canFire"] = _simulation.canFire();
         result["ammunition"] = ammunition;
-        if (isGlockConfiguration()) {
+        if (simulationMechanism() == WeaponMechanism::PistolSlide) {
             result["reloadProfile"] = glockReloadProfile();
         }
         if (_simulationRig && _reloadRecipe) {
@@ -117,7 +117,8 @@ namespace reloadmaker
         return result;
     }
 
-    // The Glock reload's rack and feed moments and the reload variant in use.
+    // A pistol reload's rack and feed moments and the reload variant in use.
+    // The export keeps the key the Glock testbed first gave it.
     QJsonObject ReloadMakerController::glockReloadProfile() const
     {
         return {
@@ -125,7 +126,7 @@ namespace reloadmaker
             { "rackSeconds", _glockReloadRackAt },
             { "feedSeconds", _glockReloadFeedAt },
             { "noExtender", _glockNoExtender },
-            { "noExtenderAvailable", !glockNoExtenderPath().isEmpty() },
+            { "noExtenderAvailable", !noExtenderReloadPath().isEmpty() },
             { "startedLoaded", _simulation.reloadStartedLoaded },
             { "startedOpen", _simulation.reloadStartedOpen },
             { "cycled", _simulation.reloadCycled },
@@ -295,7 +296,7 @@ namespace reloadmaker
         if (isRifleConfiguration() && !addRifleExport(result)) {
             return {};
         }
-        if (isGlockConfiguration()) {
+        if (simulationMechanism() == WeaponMechanism::PistolSlide) {
             result["glockReloadProfile"] = glockReloadProfile();
         }
         if (isBoltActionConfiguration()) {

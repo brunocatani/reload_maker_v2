@@ -104,8 +104,8 @@ namespace reloadmaker
         if (params.contains("reloadNoExtender")) {
             require(params["reloadNoExtender"].isBool(), "reloadNoExtender must be a boolean");
             require(!params.contains("slot"), "Select parts before choosing the optional reload clip");
-            require(!params["reloadNoExtender"].toBool() || !glockNoExtenderPath().isEmpty(),
-                    "NoExtender requires the standard Glock magazine and a QuickHands set");
+            require(!params["reloadNoExtender"].toBool() || !noExtenderReloadPath().isEmpty(),
+                    "This animation set has no NoExtender reload");
             setGlockNoExtender(params["reloadNoExtender"].toBool());
         }
         // The rebuild below assembles the new body.

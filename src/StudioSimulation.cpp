@@ -72,8 +72,8 @@ void ReloadMakerController::createSimulationUi() {
     layout->addWidget(design::hintLabel("Drag the slide or the magazine in the view to operate them by hand, as in VR.",panel));
     _simulationSpring=new QCheckBox("Slide returns when released",panel);_simulationSpring->setChecked(_slideSpringReturn);layout->addWidget(_simulationSpring);
     connect(_simulationSpring,&QCheckBox::toggled,this,[this](bool enabled){setSlideSpringReturn(enabled);});
-    _simulationNoExtender=new QCheckBox("QuickHands: standard magazine grip",panel);layout->addWidget(_simulationNoExtender);
-    _simulationNoExtender->setToolTip("Use the package's optional NoExtender reload with the unextended standard magazine and a QuickHands animation set.");
+    _simulationNoExtender=new QCheckBox("NoExtender reload (unextended magazine)",panel);layout->addWidget(_simulationNoExtender);
+    _simulationNoExtender->setToolTip("Use the animation set's optional NoExtender reload. QuickHands sets ship it for the unextended standard magazine.");
     connect(_simulationNoExtender,&QCheckBox::toggled,this,[this](bool enabled){setGlockNoExtender(enabled);rebuildWeapon();});
 
     section("Magazine");
@@ -138,11 +138,11 @@ void ReloadMakerController::updateSimulationControls() {
     _simulationSpring->setText(isAr15Configuration()?"Charging handle returns when released":ar?"Bolt returns when released":"Slide returns when released");
     _simulationFire->setToolTip(ar&&_simulationAmmo.automatic?"Press for one shot; hold for automatic fire.":"Fire one shot.");
     _simulationDrive->setInstructions(bolt?"Grab the bolt · pull back to lift and open · push forward to close and lock · releasing holds its position":isM1AConfiguration()||isThanatosConfiguration()?"Pull the operating handle to rack · Bolt release closes the action · background drag orbits":ar?"Grab the charging handle to rack · Bolt release closes the bolt · hold Fire for automatic fire":"Grab the slide to rack it · linked parts follow · background drag orbits");
-    const bool glock=isGlockConfiguration();
-    _simulationNoExtender->setVisible(glock);_simulationNoExtender->setEnabled(!busy&&!_loadThread&&!_reloadCapturing&&!glockNoExtenderPath().isEmpty());
+    const bool noExtender=!noExtenderReloadPath().isEmpty(),pistol=simulationMechanism()==WeaponMechanism::PistolSlide;
+    _simulationNoExtender->setVisible(noExtender||_glockNoExtender);_simulationNoExtender->setEnabled(!busy&&!_loadThread&&!_reloadCapturing&&noExtender);
     {const QSignalBlocker block(_simulationNoExtender);_simulationNoExtender->setChecked(_glockNoExtender);}
-    _simulationSource->setVisible(glock||ar);
-    if((glock||ar)&&_reloadRecipe) {
+    _simulationSource->setVisible(pistol||ar);
+    if((pistol||ar)&&_reloadRecipe) {
         const auto path=_reloadRecipe->source["animation"].toString();
         const auto relative=path.section(isL118Configuration()?"l118/":bolt?"c14timb/":isThanatosConfiguration()?"diam107/":isM1AConfiguration()?"m1aanims/":isMk18Configuration()?"mk18anims/":isSrepConfiguration()?"srep/":ar?"ru556anims/":"glock19xanims/",1);
         _simulationSource->setText("Reload source · "+relative+" · "+(bolt?"manual bolt action":_simulationAmmo.automatic?"automatic receiver":"semi-automatic receiver"));
@@ -180,7 +180,7 @@ void ReloadMakerController::updateSimulationControls() {
 }
 void ReloadMakerController::updateInteractionGripUi() {
     const bool free=_simulation.action==SimulationAction::Idle&&!_simulation.magazine.carried();
-    for(auto* picker:{_interactionHandPicker,_magazineHandPicker,_operatingHandPicker})if(picker){const QSignalBlocker block(picker);picker->setCurrentIndex(int(_interactionHand));picker->setEnabled(!isGlockConfiguration()&&free&&!_loadThread&&!_reloadCapturing);}
+    for(auto* picker:{_interactionHandPicker,_magazineHandPicker,_operatingHandPicker})if(picker){const QSignalBlocker block(picker);picker->setCurrentIndex(int(_interactionHand));picker->setEnabled(magazineHandAllowed(PoseHand::Left)&&magazineHandAllowed(PoseHand::Right)&&free&&!_loadThread&&!_reloadCapturing);}
     const auto& fingers=_operatingFingers[int(_interactionHand)];
     if(_operatingGripStatus)_operatingGripStatus->setText(!_operatingFingerError.isEmpty()?_operatingFingerError:fingers?
         "Fingers only · "+fingers->name+(fingers->source["operatingMirrored"].toBool()?" · mirrored for this hand":"")+"\nWrist position and angle stay live.":"No operating finger pose assigned. Select a saved pose below.");

@@ -21,24 +21,10 @@ namespace reloadmaker
         return hasEditorId(currentWeapon(), QLatin1String("WPNGlock19x"));
     }
 
-    // The optional QuickHands reload that holds the unextended standard
-    // magazine. Empty unless that magazine and the QuickHands set are active.
-    QString ReloadMakerController::glockNoExtenderPath() const
+    // The animation set's optional NoExtender reload (QuickHands sets ship
+    // one for the unextended magazine); empty when the set has none.
+    QString ReloadMakerController::noExtenderReloadPath() const
     {
-        if (!isGlockConfiguration()) {
-            return {};
-        }
-        const auto mods = configuredObjectMods();
-        const bool standardMagazine = std::any_of(mods.cbegin(), mods.cend(), [this](const ObjectModRecord* mod) {
-            return normalizeNifPath(mod->modelPath).endsWith(QStringLiteral("/glock19x/glock19x_mag.nif"), Qt::CaseInsensitive);
-        });
-        if (!standardMagazine) {
-            return {};
-        }
-        const QString reload = resolveAnimationPath(QStringLiteral("WPNReload.hkx"));
-        if (!reload.endsWith(QStringLiteral("/glock19xanims/quickhands/wpnreload.hkx"), Qt::CaseInsensitive)) {
-            return {};
-        }
         return resolveAnimationPath(QStringLiteral("WPNReloadNoExtender.hkx"));
     }
 

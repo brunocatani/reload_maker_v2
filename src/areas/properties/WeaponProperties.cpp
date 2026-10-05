@@ -31,24 +31,25 @@ namespace reloadmaker
 
     using commands::require;
 
-    void ReloadMakerController::refreshPresetProposal()
+    const ReloadMakerController::ProposedPreset& ReloadMakerController::presetProposal() const
     {
-        _presetProposal = {};
-        if (!currentWeapon() || !currentPlugin() || !configuration()) {
-            return;
+        const auto key = authoringRecordKey();
+        if (_presetProposal.configuration != key) {
+            _presetProposal = { key, {}, {}, {} };
+            if (!key.isEmpty()) {
+                const auto ammunition = resolveWeaponAmmunition(*currentPlugin(), *currentWeapon(), *configuration(), _referenceNames);
+                const auto proposal = proposePreset({ currentWeapon()->boltAction, ammunition.pistol }, reloadPresets());
+                _presetProposal = { key, proposal.preset ? proposal.preset->id : QString(), proposal.evidence, proposal.problem };
+            }
         }
-        const auto ammunition = resolveWeaponAmmunition(*currentPlugin(), *currentWeapon(), *configuration(), _referenceNames);
-        const auto proposal = proposePreset({ currentWeapon()->boltAction, ammunition.pistol }, reloadPresets());
-        _presetProposal = { proposal.preset ? proposal.preset->id : QString(), proposal.evidence, proposal.problem };
+        return _presetProposal;
     }
 
     const WeaponPreset* ReloadMakerController::proposedPreset() const
     {
-        if (_presetProposal.preset.isEmpty()) {
-            return nullptr;
-        }
+        const auto& proposal = presetProposal();
         for (const auto& preset : reloadPresets()) {
-            if (preset.id == _presetProposal.preset) {
+            if (!proposal.preset.isEmpty() && preset.id == proposal.preset) {
                 return &preset;
             }
         }
@@ -68,6 +69,25 @@ namespace reloadmaker
         }
         const auto* preset = checklistPreset();
         return preset ? preset->model.feed.insertion : InsertionPath::Straight;
+    }
+
+    // The preset's loading hands; both until a preset is known.
+    bool ReloadMakerController::magazineHandAllowed(PoseHand hand) const
+    {
+        const auto* preset = checklistPreset();
+        return !preset || preset->model.feed.hands.contains(hand == PoseHand::Left ? Hand::Left : Hand::Right);
+    }
+
+    PoseHand ReloadMakerController::defaultMagazineHand() const
+    {
+        const auto* preset = checklistPreset();
+        return preset && preset->model.feed.hands.first() == Hand::Right ? PoseHand::Right : PoseHand::Left;
+    }
+
+    QString ReloadMakerController::magazineHandRule() const
+    {
+        return defaultMagazineHand() == PoseHand::Left ? QStringLiteral("This weapon's preset loads magazines with the left hand only.")
+                                                       : QStringLiteral("This weapon's preset loads magazines with the right hand only.");
     }
 
     // Sets or clears (null) one per-weapon property and prepares Operate again.
@@ -119,8 +139,9 @@ namespace reloadmaker
         }
         QJsonObject result{ { "clips", clips } };
         if (currentWeapon()) {
-            result["preset"] = QJsonObject{ { "assigned", assignedTemplate() }, { "proposed", _presetProposal.preset },
-                                            { "evidence", _presetProposal.evidence }, { "problem", _presetProposal.problem } };
+            const auto& proposal = presetProposal();
+            result["preset"] = QJsonObject{ { "assigned", assignedTemplate() }, { "proposed", proposal.preset },
+                                            { "evidence", proposal.evidence }, { "problem", proposal.problem } };
         }
         if (currentWeapon()) {
             const auto chosen = currentWeaponOverrides().insertion;

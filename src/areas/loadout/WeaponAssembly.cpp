@@ -466,7 +466,6 @@ namespace reloadmaker
         const bool sameWeapon = _renderedWeapon == _selectedWeapon;
         const PluginContent* plugin = currentPlugin();
         const WeaponRecord* weapon = currentWeapon();
-        refreshPresetProposal();
         if (!plugin || !weapon || !_packageResources.isOpen()) {
             return;
         }
