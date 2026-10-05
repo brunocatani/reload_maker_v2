@@ -276,6 +276,9 @@ namespace reloadmaker
         _simulationError.clear();
         bool accepted = false;
         if (action == "reset") {
+            // Reset starts clean: a press left held (an MCP trigger_down with
+            // no trigger_up) would otherwise swallow the next press.
+            _simulationTriggerDown = false;
             _simulation.reset();
             resetSoundTracking();
             _simulationTimer->stop();

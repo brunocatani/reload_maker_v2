@@ -108,7 +108,7 @@ try:
         print('PASS magazine',choice['name'],flush=True)
     for choice in slots['Receiver']['choices']:
         select(slots['Receiver'],choice);s=op('reset');op('trigger_down');s=op('step',seconds=3)
-        assert not s['ammunition']['automatic'] and s['ammunition']['shotsFired']==1 and s['boltAction']['spentCase']
+        assert not s['ammunition']['automatic'] and s['ammunition']['shotsFired']==1 and s['boltAction']['spentCase'],(choice['name'],s['action'],s['ammunition'],s['boltAction'])
         results['receivers'].append(choice['record'])
     for choice in slots['Ammo']['choices']:
         select(slots['Ammo'],choice);s=op('reset');assert s['ammunition']['resolved'],s['ammunition']['error']
