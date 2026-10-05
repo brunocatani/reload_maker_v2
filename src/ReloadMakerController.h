@@ -860,7 +860,7 @@ namespace reloadmaker
         std::array<std::optional<HandPose>,2> _operatingFingers;
         QString _operatingFingerError;
         QComboBox* _operatingFingerPicker{};
-        QString operatingGripKey(PoseHand hand) const;
+        QString operatingGripKey(PoseHand hand, bool modelOverride) const;
         void resolveOperatingFingers();
         bool useOperatingFingers(const QString& id);
         QLabel* _operatingGripStatus{nullptr};

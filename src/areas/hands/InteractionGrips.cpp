@@ -11,22 +11,23 @@
 
 namespace reloadmaker
 {
-    // Assignments are per weapon, operating group, the operating part's model
-    // and hand: a receiver that brings its own handle or bolt model keeps its
-    // own fingers. Keys saved before the model was part of every key were
-    // rewritten once by tools/migrate_testbeds.py.
-    QString ReloadMakerController::operatingGripKey(PoseHand hand) const
+    // Assignments are per weapon, operating group and hand. The weapon-wide
+    // assignment is the default for every receiver; a receiver that brings
+    // its own handle or bolt model can override it with an assignment keyed
+    // by that model (rework 14, item 20).
+    QString ReloadMakerController::operatingGripKey(PoseHand hand, bool modelOverride) const
     {
         QString key = poseRecordKey(currentWeapon()->formId) + "|" + operatingGroup();
         const int anchor = operatingAnchor();
-        if (anchor >= 0) {
+        if (modelOverride && anchor >= 0) {
             key += "|" + normalizeNifPath(_handPoseAnchors[anchor].description.ownerModel);
         }
         return handAssignmentKey(key, hand);
     }
 
-    // The operating finger pose for each hand: its own assignment, else the
-    // other hand's mirrored. The source can be a saved hand pose or a grip.
+    // The operating finger pose for each hand: its own assignment (the part
+    // model's, else the weapon's), else the other hand's mirrored. The source
+    // can be a saved hand pose or a grip.
     void ReloadMakerController::resolveOperatingFingers()
     {
         _operatingFingers = {};
@@ -35,10 +36,14 @@ namespace reloadmaker
         if (!currentWeapon() || operatingAnchor() < 0) {
             return;
         }
+        const auto assigned = [this](PoseHand hand) {
+            const auto id = _savedOperatingGrips.value(operatingGripKey(hand, true));
+            return id.isEmpty() ? _savedOperatingGrips.value(operatingGripKey(hand, false)) : id;
+        };
         for (const auto hand : { PoseHand::Left, PoseHand::Right }) {
-            auto id = _savedOperatingGrips.value(operatingGripKey(hand));
+            auto id = assigned(hand);
             if (id.isEmpty()) {
-                id = _savedOperatingGrips.value(operatingGripKey(hand == PoseHand::Left ? PoseHand::Right : PoseHand::Left));
+                id = assigned(hand == PoseHand::Left ? PoseHand::Right : PoseHand::Left);
             }
             if (id.isEmpty()) {
                 continue;
@@ -67,8 +72,9 @@ namespace reloadmaker
         }
     }
 
-    // Assigns a saved pose's fingers to the reload hand on the operating part
-    // and saves the project; a failure restores the previous assignment.
+    // Assigns a saved pose's fingers to the reload hand on the operating part's
+    // model, and makes it the weapon's default when the weapon has none yet,
+    // then saves the project; a failure restores the previous assignments.
     bool ReloadMakerController::useOperatingFingers(const QString& id)
     {
         if (operatingAnchor() < 0 || (_simulationActive && (_simulation.action != SimulationAction::Idle || _simulation.magazine.carried()))) {
@@ -81,9 +87,14 @@ namespace reloadmaker
             setStatus("Select a saved finger pose from the library.", true);
             return false;
         }
-        const auto key = operatingGripKey(_interactionHand);
+        const auto key = operatingGripKey(_interactionHand, true);
+        const auto fallback = operatingGripKey(_interactionHand, false);
         const auto previous = _savedOperatingGrips.value(key);
+        const bool newDefault = !_savedOperatingGrips.contains(fallback);
         _savedOperatingGrips[key] = id;
+        if (newDefault) {
+            _savedOperatingGrips[fallback] = id;
+        }
         resolveOperatingFingers();
         if (!_operatingFingerError.isEmpty() || !saveSession()) {
             const auto error = _operatingFingerError.isEmpty() ? _lastError : _operatingFingerError;
@@ -91,6 +102,9 @@ namespace reloadmaker
                 _savedOperatingGrips.remove(key);
             } else {
                 _savedOperatingGrips[key] = previous;
+            }
+            if (newDefault) {
+                _savedOperatingGrips.remove(fallback);
             }
             resolveOperatingFingers();
             setStatus(error, true);

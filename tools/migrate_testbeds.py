@@ -6,12 +6,6 @@ behavior preset each testbed ran with, and the per-weapon properties where
 the testbed differed from its preset's default. After it has run, the editor
 no longer needs to recognize any weapon by name.
 
-It also adds the operating part's model to operating finger keys
-("weapon|group|hand" becomes "weapon|group|model|hand"); only the MK18 and
-SREP keys carried the model before (rework 14, item 20). Any project can hold
-those keys, so that rewrite covers every project in workspace/ and in the
-testbed project folders as well.
-
 It edits, in place, every session the testbed switcher can open: the paths
 saved in the settings file and the default projects in workspace/. Running it
 again changes nothing.
@@ -58,17 +52,6 @@ PROPERTIES = {
     'diam107': {'insertion': 'native-curve'},
 }
 
-# The model of each testbed's operating part (its receiver's), read from the
-# editor at 0d92784. Thanatos cannot load here (DLCRobot.esm is missing), so
-# its key stays as it is until its model is known.
-OPERATING_MODELS = {
-    'glock19x.esp:000f9b|slide': 'meshes/weapons/glock19x/glock19x/glock19x.nif',
-    'ru556.esp:000f99|charging_handle': 'meshes/weapons/ru556/ru556/ru556_receiver.nif',
-    'm1a.esp:000f9a|operating_handle': 'meshes/weapons/m1a_404/m1a/m1a_receiver.nif',
-    'l118a2.esp:00206c|bolt': 'meshes/weapons/timberwolf/timberwolfreceiver.nif',
-    'l118a2.esp:000002|bolt': 'meshes/weapons/l118/l118a2receiver.nif',
-}
-
 
 def sessions():
     settings = configparser.ConfigParser(interpolation=None)
@@ -85,69 +68,33 @@ def sessions():
     return unique
 
 
-def scope_operating_grips(session, changes):
-    grips = session.get('operatingGrips', {})
-    for key in list(grips):
-        parts = key.split('|')
-        if len(parts) != 3:
-            continue
-        model = OPERATING_MODELS.get('|'.join(parts[:2]))
-        if not model:
-            changes.append('kept unscoped ' + key)
-            continue
-        scoped = '|'.join(parts[:2] + [model, parts[2]])
-        value = grips.pop(key)
-        grips.setdefault(scoped, value)
-        changes.append('scoped ' + key)
-
-
-def projects(testbeds):
-    """Every other project file: workspace/ and the folders holding testbed projects."""
-    folders = {ROOT / 'workspace'} | {path.parent for path in testbeds if not path.resolve().is_relative_to((ROOT / 'workspace').resolve())}
-    known = {path.resolve() for path in testbeds}
-    found = []
-    for folder in sorted(folders):
-        for path in sorted(folder.rglob('*.project.json')):
-            if path.resolve() not in known:
-                known.add(path.resolve())
-                found.append(path)
-    return found
-
-
-def migrate(path, testbed=True):
+def migrate(path):
     session = json.loads(path.read_text(encoding='utf-8'))
     editor_id = session.get('weaponEditorId', '').lower()
     weapon = session.get('weapon', '').lower()
+    if editor_id not in PRESETS or not weapon:
+        return 'skipped (%s)' % (editor_id or 'no weapon')
     changes = []
-    if testbed and editor_id in PRESETS and weapon:
-        templates = session.setdefault('reloadTemplates', {})
-        if templates.get(weapon) != PRESETS[editor_id]:
-            templates[weapon] = PRESETS[editor_id]
-            changes.append('preset ' + PRESETS[editor_id])
-        wanted = PROPERTIES.get(editor_id)
-        if wanted:
-            properties = session.setdefault('weaponProperties', {})
-            current = properties.get(weapon, {})
-            if any(current.get(key) != value for key, value in wanted.items()):
-                properties[weapon] = {**current, **wanted}
-                changes.append('properties %s' % wanted)
-    scope_operating_grips(session, changes)
-    if not [c for c in changes if not c.startswith('kept')]:
-        return ', '.join(changes) or 'unchanged'
+    templates = session.setdefault('reloadTemplates', {})
+    if templates.get(weapon) != PRESETS[editor_id]:
+        templates[weapon] = PRESETS[editor_id]
+        changes.append('preset ' + PRESETS[editor_id])
+    wanted = PROPERTIES.get(editor_id)
+    if wanted:
+        properties = session.setdefault('weaponProperties', {})
+        current = properties.get(weapon, {})
+        if any(current.get(key) != value for key, value in wanted.items()):
+            properties[weapon] = {**current, **wanted}
+            changes.append('properties %s' % wanted)
+    if not changes:
+        return 'unchanged'
     path.write_text(json.dumps(session, indent=4, sort_keys=True, ensure_ascii=False) + '\n', encoding='utf-8')
     return ', '.join(changes)
 
 
 def main():
-    testbeds = sessions()
-    for path in testbeds:
+    for path in sessions():
         print('%s: %s' % (path, migrate(path)))
-    for path in projects(testbeds):
-        try:
-            result = migrate(path, testbed=False)
-        except (ValueError, OSError) as error:
-            result = 'skipped (%s)' % error
-        print('%s: %s' % (path, result))
     return 0
 
 
