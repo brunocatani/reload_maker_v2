@@ -2,18 +2,34 @@
 // these projects and deletes the testbed picker.
 #include "ReloadMakerController.h"
 #include "StudioPaths.h"
+#include "areas/sources/Testbeds.h"
 #include <QFileInfo>
 #include <QSettings>
 #include <QTimer>
+#include <algorithm>
+#include <iterator>
 
 namespace reloadmaker {
-QString ReloadMakerController::currentTestbed() const {
-    if(isSrepConfiguration()) {
-        const auto name=currentWeapon()->editorId.toLower();
-        return name=="srep_ar10"?"srep-ar10":name=="srep_xm16e1"?"srep-xm16e1":name.endsWith("honeybadger")?"srep-honeybadger":"srep-service";
+// The testbed of the open weapon: the one whose saved project holds this
+// weapon record. MK18 and its overhaul share a record, so a shared record
+// takes the testbed opened from the record's winning plugin (rework 14,
+// item 25).
+QString ReloadMakerController::currentTestbed() {
+    const auto* weapon=currentWeapon();
+    if(!weapon||!currentPlugin())return {};
+    if(!_testbedSourcesLoaded)refreshDevelopmentSources();
+    const auto record=poseRecordKey(weapon->formId);
+    const auto winner=currentPlugin()->origins.value(weapon->formId).winner;
+    QString found;
+    int matches=0;
+    for(const auto& value:_testbedSources) {
+        const auto entry=value.toObject();
+        if(entry["weapon"].toString().compare(record,Qt::CaseInsensitive)!=0)continue;
+        if(entry["plugin"].toString().compare(winner,Qt::CaseInsensitive)==0)return entry["id"].toString();
+        found=entry["id"].toString();
+        ++matches;
     }
-    const auto name=currentWeapon()?currentWeapon()->editorId.toLower():QString();
-    return isGlockConfiguration()?"glock":isMk18Configuration()?(isMk18OverhaulConfiguration()?"mk18-empire":"mk18"):name=="wpnru556"?"ru556":name=="wpnm1a"?"m1a":isThanatosConfiguration()?"thanatos":isL118Configuration()?"l118a2":name=="c14timberwolf"?"timberwolf":QString();
+    return matches==1?found:QString();
 }
 QString ReloadMakerController::testbedProject(const QString& name) const {
     if(name.startsWith("srep-"))return studioDataPath("workspace/"+name+"-native-reload.project.json");
@@ -25,8 +41,7 @@ QString ReloadMakerController::testbedProject(const QString& name) const {
 
 bool ReloadMakerController::selectTestbed(const QString& name) {
     if(_loadThread||_reloadCapturing||_rebuildTimer->isActive()){setStatus("Wait for the current weapon to finish loading.",true);return false;}
-    if(name!="glock"&&name!="ru556"&&name!="m1a"&&name!="timberwolf"&&name!="l118a2"&&name!="thanatos"&&name!="mk18"&&name!="mk18-empire"&&
-       name!="srep-service"&&name!="srep-honeybadger"&&name!="srep-ar10"&&name!="srep-xm16e1"){setStatus("Unknown weapon testbed.",true);return false;}
+    if(std::none_of(std::begin(kTestbedIds),std::end(kTestbedIds),[&](const char* testbed){return name==QLatin1String(testbed);})){setStatus("Unknown weapon testbed.",true);return false;}
     const auto current=currentTestbed();
     const auto defaultProject=testbedProject(name);
     const auto project=QSettings().value("testbeds/"+name,defaultProject).toString();

@@ -508,14 +508,8 @@ namespace reloadmaker
         void createSimulationUi();
         bool authorReloadGrips();
         void createSimulationViewport();
-        bool isGlockConfiguration() const;
         bool isAr15Configuration() const;
-        bool isMk18Configuration() const;
-        bool isSrepConfiguration() const;
-        bool isMk18OverhaulConfiguration() const;
         bool isM1AConfiguration() const;
-        bool isThanatosConfiguration() const;
-        bool isL118Configuration() const;
         WeaponMechanism simulationMechanism() const;
         bool isBoltActionConfiguration() const;
         bool prepareBoltActionMotion();
@@ -525,7 +519,7 @@ namespace reloadmaker
         QVector<Transformf> _boltFiredPose;
         QJsonObject _boltCycleSource;
         bool isRifleConfiguration() const;
-        QString currentTestbed() const;
+        QString currentTestbed();
         QString testbedProject(const QString& name) const;
         bool prepareRifleMotion();
         bool buildCurrentSimulationRig(SimulationRig&,QString&);
@@ -1226,6 +1220,7 @@ namespace reloadmaker
         [[nodiscard]] QByteArray readAnimationResource(const QString& resourcePath,
                                                        QString& error) const;
         [[nodiscard]] QString resolveAnimationPath(const QString& graphAnimationPath) const;
+        [[nodiscard]] QString animationSetRelativePath(const QString& path) const;
         [[nodiscard]] bool rebuildAnimationActions(QString& error);
         bool loadBehaviorGraph(const QString& requestedPath, int depth, HkxBehaviorGraph& combined,
                                QSet<QString>& visited, QString& error);

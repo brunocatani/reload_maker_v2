@@ -126,6 +126,20 @@ namespace reloadmaker
         return {};
     }
 
+    // The path below the animation set's own folder (the shortest search folder
+    // holding it), for display; the whole path when no search folder holds it.
+    QString ReloadMakerController::animationSetRelativePath(const QString& path) const
+    {
+        int base = -1;
+        for (const QString& searchPath : _animationSearchPaths) {
+            const QString directory = meshesPath(ResourceArchive::normalizeResourcePath(searchPath)) + '/';
+            if (path.startsWith(directory, Qt::CaseInsensitive) && (base < 0 || directory.size() < base)) {
+                base = directory.size();
+            }
+        }
+        return base < 0 ? path : path.mid(base);
+    }
+
     // Rebuilds _animationActions for the selected configuration: the graph's
     // Ready pose first, then every authored clip the graph lists, ordered by
     // action family.

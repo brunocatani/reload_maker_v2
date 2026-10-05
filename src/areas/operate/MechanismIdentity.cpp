@@ -1,6 +1,5 @@
 // Which operating mechanism the simulation runs for the open weapon: the
-// assigned or proposed preset's. The remaining weapon-name checks are
-// replaced by weapon properties (rework 14).
+// assigned or proposed preset's. No weapon is recognized by name (rework 14).
 #include "ReloadMakerController.h"
 #include "ReloadTemplates.h"
 
@@ -8,19 +7,6 @@
 
 namespace reloadmaker
 {
-    namespace
-    {
-        bool hasEditorId(const WeaponRecord* weapon, QLatin1String editorId)
-        {
-            return weapon && weapon->editorId.compare(editorId, Qt::CaseInsensitive) == 0;
-        }
-    }
-
-    bool ReloadMakerController::isGlockConfiguration() const
-    {
-        return hasEditorId(currentWeapon(), QLatin1String("WPNGlock19x"));
-    }
-
     // The animation set's optional NoExtender reload (QuickHands sets ship
     // one for the unextended magazine); empty when the set has none.
     QString ReloadMakerController::noExtenderReloadPath() const
@@ -33,43 +19,9 @@ namespace reloadmaker
         return simulationMechanism() == WeaponMechanism::Ar15;
     }
 
-    bool ReloadMakerController::isSrepConfiguration() const
-    {
-        const auto* weapon = currentWeapon();
-        return hasEditorId(weapon, QLatin1String("SREP_ServiceRifle")) ||
-               hasEditorId(weapon, QLatin1String("SREP_ServiceRifle_Unique_HoneyBadger")) ||
-               hasEditorId(weapon, QLatin1String("SREP_AR10")) ||
-               hasEditorId(weapon, QLatin1String("SREP_XM16E1"));
-    }
-
-    bool ReloadMakerController::isMk18Configuration() const
-    {
-        const auto* weapon = currentWeapon();
-        return hasEditorId(weapon, QLatin1String("WPNMK18")) || hasEditorId(weapon, QLatin1String("WPNMK18UNIQUE"));
-    }
-
-    bool ReloadMakerController::isMk18OverhaulConfiguration() const
-    {
-        if (!isMk18Configuration()) {
-            return false;
-        }
-        const QString winner = currentPlugin()->origins.value(currentWeapon()->formId).winner;
-        return winner.compare(QStringLiteral("MK18AttachmentOverhaul.esp"), Qt::CaseInsensitive) == 0;
-    }
-
     bool ReloadMakerController::isM1AConfiguration() const
     {
         return simulationMechanism() == WeaponMechanism::M1A;
-    }
-
-    bool ReloadMakerController::isThanatosConfiguration() const
-    {
-        return hasEditorId(currentWeapon(), QLatin1String("DiaM107"));
-    }
-
-    bool ReloadMakerController::isL118Configuration() const
-    {
-        return hasEditorId(currentWeapon(), QLatin1String("L118A2"));
     }
 
     bool ReloadMakerController::isBoltActionConfiguration() const

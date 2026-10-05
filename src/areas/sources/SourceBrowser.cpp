@@ -4,6 +4,7 @@
 #include "ReloadMakerController.h"
 #include "InstallationSetup.h"
 #include "StudioWindow.h"
+#include "areas/sources/Testbeds.h"
 
 #include <QComboBox>
 #include <QDir>
@@ -19,10 +20,6 @@ namespace reloadmaker
 {
     namespace
     {
-        constexpr const char* kTestbedIds[] = {
-            "glock", "ru556", "m1a", "timberwolf", "l118a2", "thanatos",
-            "mk18", "mk18-empire", "srep-service", "srep-honeybadger", "srep-ar10", "srep-xm16e1",
-        };
         constexpr qint64 kProjectSizeLimit = 64 * 1024 * 1024;
         constexpr qint64 kSourceDefinitionSizeLimit = 64 * 1024;
 
