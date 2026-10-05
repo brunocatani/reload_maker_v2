@@ -3,6 +3,7 @@
 // source's sounds and timings, the saved profile when there is one, and
 // each cue's current descriptor files.
 #include "ReloadMakerController.h"
+#include "areas/properties/PropertyInputs.h"
 #include "areas/sounds/SoundFiles.h"
 
 #include <algorithm>
@@ -45,20 +46,16 @@ namespace reloadmaker
             sources.cyclePath = _boltCycleSource["animation"].toString();
             sources.cycle = HkxReader::readClip(readAnimationResource(sources.cyclePath, error), error);
         }
-        addDefaultSoundCues(sources);
+        const auto defaults = defaultSoundCues(sources);
+        addDefaultSoundCues(sources, defaults);
         if (_savedSounds.contains(key)) {
             _soundProfile = _savedSounds.value(key);
             _soundProfile.magazine = magazine;
         }
+        // A bolt catch released by hand: profiles saved before this cue existed get it too.
         const bool boltRelease = std::any_of(_soundProfile.cues.cbegin(), _soundProfile.cues.cend(), [](const auto& c) { return c.id == "bolt-release"; });
-        if ((isAr15Configuration() || isSrepConfiguration()) && !boltRelease) {
-            QString edid = "WPNRU556BoltRelease";
-            if (isSrepConfiguration()) {
-                edid = "WPNRU556MagCatch";
-            } else if (isMk18Configuration()) {
-                edid = mk18SoundVariant("WPNMK18BoltCatchPress", "WPNMK18BoltCatchSlap");
-            }
-            addSoundCue(sources, "bolt-release", "Bolt catch release", "bolt_release", 0, edid);
+        if (const auto release = defaults.sounds.value("bolt-release"); !release.isEmpty() && !boltRelease) {
+            addSoundCue(sources, "bolt-release", "Bolt catch release", "bolt_release", 0, release);
         }
         resolveSoundDescriptors();
         resolveFireSound();
@@ -110,19 +107,6 @@ namespace reloadmaker
         return found;
     }
 
-    // MK18 reload clips may play the alternate sound instead.
-    QString ReloadMakerController::mk18SoundVariant(const QString& original, const QString& alternate) const
-    {
-        if (isMk18Configuration()) {
-            for (const auto& a : _reloadClip.annotations) {
-                if (a.text.compare("SoundPlay." + alternate, Qt::CaseInsensitive) == 0) {
-                    return alternate;
-                }
-            }
-        }
-        return original;
-    }
-
     // One cue, enabled when its sound has samples. Its source time comes from
     // the reload clip (or the bolt cycle clip); bolt cycle cues take their
     // movement progress from the cycle's opening or closing curve.
@@ -159,76 +143,43 @@ namespace reloadmaker
         _soundProfile.cues.append(c);
     }
 
-    // The default cues in display order, with the source sound each testbed
-    // plays for them. P2-08 replaces these weapon checks with detection.
-    void ReloadMakerController::addDefaultSoundCues(const SoundCueSources& sources)
+    // The default sound of each cue, read from the clips' sounds and the
+    // catalog's conventional names (rework 14, item 22).
+    DefaultSoundCues ReloadMakerController::defaultSoundCues(const SoundCueSources& sources) const
     {
-        const bool glock = isGlockConfiguration();
-        const bool ru = isAr15Configuration();
-        const bool m1a = isM1AConfiguration();
-        const bool bolt = isBoltActionConfiguration();
-        const bool mk18 = isMk18Configuration();
-        const bool srep = isSrepConfiguration();
-        const bool thanatos = isThanatosConfiguration();
-        const bool l118 = isL118Configuration();
-        QString prefix;
-        if (glock) {
-            prefix = "WPNGlock19x";
-        } else if (mk18) {
-            prefix = "WPNMK18";
-        } else if (ru || srep) {
-            prefix = "WPNRU556";
-        } else if (m1a) {
-            prefix = "WPNM1A";
-        } else if (thanatos) {
-            prefix = "WPNM107";
-        } else if (l118) {
-            prefix = "L115A3_";
-        } else if (bolt) {
-            prefix = "C14_";
+        CueAction action = CueAction::Slide;
+        switch (simulationMechanism()) {
+        case WeaponMechanism::PistolSlide: action = CueAction::Slide; break;
+        case WeaponMechanism::Ar15: action = CueAction::ChargingHandle; break;
+        case WeaponMechanism::ReciprocatingBolt: action = CueAction::ReciprocatingBolt; break;
+        case WeaponMechanism::M1A: action = CueAction::OperatingHandle; break;
+        case WeaponMechanism::BoltAction: action = CueAction::BoltAction; break;
         }
-        const auto pick = [](bool condition, const QString& yes, const QString& no) { return condition ? yes : no; };
+        const auto catalogHas = [this](const QString& editorId) {
+            return std::count_if(_soundCatalog.cbegin(), _soundCatalog.cend(), [&](const SoundCue& c) {
+                       return c.editorId.compare(editorId, Qt::CaseInsensitive) == 0;
+                   }) == 1;
+        };
+        return detectSoundCues(clipEvents(_reloadClip), clipEvents(sources.cycle), action, catalogHas);
+    }
 
-        addSoundCue(sources, "unlock", "Bolt unlock", "opening", .01f, pick(bolt, prefix + "BoltUnlatch", ""), bolt);
-        QString pull = prefix + (glock ? "SlideBack" : ru || srep ? "Boltopen" : "BoltBack");
-        if (mk18) {
-            pull = "WPNRifleIstvanReloadBoltOpen";
-        }
-        addSoundCue(sources, "pull", "Slide / handle pull", "opening", .035f, pull, bolt);
+    // The default cues in display order. Bolt actions time their operating
+    // cues in the bolt cycle clip.
+    void ReloadMakerController::addDefaultSoundCues(const SoundCueSources& sources, const DefaultSoundCues& defaults)
+    {
+        const bool bolt = isBoltActionConfiguration();
+        const auto sound = [&](const char* id) { return defaults.sounds.value(QLatin1String(id)); };
+        addSoundCue(sources, "unlock", "Bolt unlock", "opening", .01f, sound("unlock"), bolt);
+        addSoundCue(sources, "pull", "Slide / handle pull", "opening", .035f, sound("pull"), bolt);
         addSoundCue(sources, "rear", "Rear stop", "opening", 1, "", bolt);
-        QString forward = prefix + (glock ? "SlideForward" : ru || srep ? "Boltclose" : thanatos ? "Boltrelease" : "BoltForward");
-        if (mk18) {
-            forward = "WPNRifleIstvanReloadBoltClose";
-        }
-        addSoundCue(sources, "forward", "Forward return", "closing", .975f, forward, bolt);
-        addSoundCue(sources, "lock", "Bolt lock", "closing", 0, pick(bolt, prefix + "BoltLatch", ""), bolt);
-        addSoundCue(sources, "mag-release", "Magazine release", "magazine_release", 0, pick(bolt || thanatos, prefix + "MagRelease", ""));
-        addSoundCue(sources, "mag-out", "Magazine withdrawal", "extraction", .035f, mk18SoundVariant(prefix + "MagOut", "WPNMK18MagOut141"));
-        QString grab;
-        if (srep) {
-            grab = "WPNRU556ClothMagIn";
-        } else if (mk18) {
-            grab = "WPNMK18ClothGrabMag";
-        } else if (m1a) {
-            grab = prefix + "Grab";
-        }
-        addSoundCue(sources, "mag-grab", "Magazine grabbed", "magazine_grab", 0, grab);
-        QString entry;
-        if (srep) {
-            entry = "WPNRU556Magin";
-        } else if (glock) {
-            entry = prefix + "MagIns1";
-        } else if (l118) {
-            entry = prefix + "ReloadMagIn";
-        } else if (bolt || mk18) {
-            entry = prefix + "MagInserting";
-        } else if (thanatos) {
-            entry = prefix + "Magin";
-        }
-        addSoundCue(sources, "mag-entry", "Magazine entering", "insertion", .02f, entry);
-        addSoundCue(sources, "mag-insert", "Magazine insertion", "insertion", .65f, pick(glock, prefix + "MagIns2", ""));
-        const QString seat = srep ? QString("WPNRU556MagSlap") : mk18SoundVariant(prefix + (thanatos ? "Magslam" : "MagIn"), "WPNMK18MagIn141");
-        addSoundCue(sources, "mag-seat", "Magazine seated", "magazine_seated", 1, seat);
+        addSoundCue(sources, "forward", "Forward return", "closing", .975f, sound("forward"), bolt);
+        addSoundCue(sources, "lock", "Bolt lock", "closing", 0, sound("lock"), bolt);
+        addSoundCue(sources, "mag-release", "Magazine release", "magazine_release", 0, sound("mag-release"));
+        addSoundCue(sources, "mag-out", "Magazine withdrawal", "extraction", .035f, sound("mag-out"));
+        addSoundCue(sources, "mag-grab", "Magazine grabbed", "magazine_grab", 0, sound("mag-grab"));
+        addSoundCue(sources, "mag-entry", "Magazine entering", "insertion", .02f, sound("mag-entry"));
+        addSoundCue(sources, "mag-insert", "Magazine insertion", "insertion", .65f, sound("mag-insert"));
+        addSoundCue(sources, "mag-seat", "Magazine seated", "magazine_seated", 1, sound("mag-seat"));
         const auto dryKey = recordIdentity(*currentPlugin(), currentWeapon()->attackFailSound).toLower();
         const auto dry = _soundCatalog.value(dryKey);
         addSoundCue(sources, "dry", "Dry fire", "dry_fire", 0, dry.editorId);

@@ -3,6 +3,7 @@
 #include "domain/detectors/ClipEvents.h"
 #include "domain/detectors/MagazinePieces.h"
 #include "domain/detectors/PresetProposal.h"
+#include "domain/detectors/DefaultSoundCues.h"
 
 #include <QCoreApplication>
 #include <QTextStream>
@@ -130,6 +131,82 @@ namespace
         const auto evidence = proposeMagazinePieceRole(QStringLiteral("CasingA:0"), {}).evidence;
         check(evidence.contains(QLatin1String("CasingA:0")) && evidence.contains(QLatin1String("casing")), "Evidence: " + evidence);
     }
+
+    // The testbeds' reload and bolt cycle sounds, and the cues the per-weapon
+    // tables gave them. RU556 also gets its cloth magazine sound as the grab.
+    void expectCues(const char* weapon, const QVector<ClipEvent>& reload, const QVector<ClipEvent>& cycle, CueAction action,
+                    const QStringList& catalog, const QHash<QString, QString>& expected)
+    {
+        const auto has = [&](const QString& sound) { return catalog.contains(sound, Qt::CaseInsensitive); };
+        const auto cues = detectSoundCues(reload, cycle, action, has);
+        for (auto it = expected.cbegin(); it != expected.cend(); ++it) {
+            check(cues.sounds.value(it.key()).compare(it.value(), Qt::CaseInsensitive) == 0,
+                  QStringLiteral("%1 %2: %3 instead of %4").arg(QLatin1String(weapon), it.key(), cues.sounds.value(it.key()), it.value()));
+        }
+        for (auto it = cues.sounds.cbegin(); it != cues.sounds.cend(); ++it) {
+            check(expected.contains(it.key()) || it.value().isEmpty(), QStringLiteral("%1 %2: unexpected %3").arg(QLatin1String(weapon), it.key(), it.value()));
+        }
+    }
+
+    void soundCues()
+    {
+        expectCues("Glock",
+                   sounds({ { .03f, "WPNGlock19xClothStart" }, { .23f, "WPNGlock19xClothMagOut" }, { .33f, "WPNGlock19xMagOut" }, { .97f, "WPNGlock19xMagIns1" },
+                            { 1.17f, "WPNGlock19xMagIns2" }, { 1.43f, "WPNGlock19xMagIn" }, { 1.67f, "WPNGlock19xClothGunRotate" }, { 2.1f, "WPNGlock19xSlideRel" },
+                            { 2.5f, "WPNGlock19xClothEnd" } }),
+                   {}, CueAction::Slide, { "WPNGlock19xSlideBack", "WPNGlock19xSlideForward" },
+                   { { "pull", "WPNGlock19xSlideBack" }, { "forward", "WPNGlock19xSlideForward" }, { "mag-out", "WPNGlock19xMagOut" },
+                     { "mag-entry", "WPNGlock19xMagIns1" }, { "mag-insert", "WPNGlock19xMagIns2" }, { "mag-seat", "WPNGlock19xMagIn" } });
+        expectCues("RU556",
+                   sounds({ { .47f, "WPNRU556ClothMagout" }, { .77f, "WPNRU556Magout" }, { 1.6f, "WPNRU556ClothMagIn" }, { 2.27f, "WPNRU556MagIn" },
+                            { 3.3f, "WPNRU556Boltopen" }, { 3.73f, "WPNRU556Boltclose" } }),
+                   {}, CueAction::ChargingHandle, { "WPNRU556BoltRelease" },
+                   { { "pull", "WPNRU556Boltopen" }, { "forward", "WPNRU556Boltclose" }, { "mag-out", "WPNRU556Magout" }, { "mag-grab", "WPNRU556ClothMagIn" },
+                     { "mag-seat", "WPNRU556MagIn" }, { "bolt-release", "WPNRU556BoltRelease" } });
+        expectCues("M1A",
+                   sounds({ { 0.f, "WPNM1AStartReload" }, { .37f, "WPNM1AMagOut" }, { .87f, "WPNM1AGrab" }, { 1.4f, "WPNM1AMagIn" }, { 2.37f, "WPNM1ABoltBack" },
+                            { 2.53f, "WPNM1ABoltForward" }, { 2.8f, "WPNM1AEndReload" } }),
+                   {}, CueAction::OperatingHandle, {},
+                   { { "pull", "WPNM1ABoltBack" }, { "forward", "WPNM1ABoltForward" }, { "mag-out", "WPNM1AMagOut" }, { "mag-grab", "WPNM1AGrab" },
+                     { "mag-seat", "WPNM1AMagIn" } });
+        // The SREP's charging handle and bolt make no sound in its reload; the
+        // catalog supplies the RU556 sounds it shares.
+        expectCues("SREP",
+                   sounds({ { .17f, "WPNRU556ClothMagout" }, { .4f, "WPNRU556Magout" }, { .97f, "WPNRU556ClothMagIn" }, { 1.53f, "WPNRU556Magin" },
+                            { 2.17f, "WPNRU556MagSlap" }, { 2.2f, "WPNRU556Clothforward" }, { 3.1f, "WPNRU556MagCatch" } }),
+                   {}, CueAction::ReciprocatingBolt, { "WPNRU556Boltopen", "WPNRU556BoltBack", "WPNRU556BoltClose", "WPNRU556BoltRelease" },
+                   { { "pull", "WPNRU556Boltopen" }, { "forward", "WPNRU556BoltClose" }, { "mag-out", "WPNRU556Magout" }, { "mag-grab", "WPNRU556ClothMagIn" },
+                     { "mag-entry", "WPNRU556Magin" }, { "mag-seat", "WPNRU556MagSlap" }, { "bolt-release", "WPNRU556MagCatch" } });
+        expectCues("Timberwolf",
+                   sounds({ { 0.f, "C14_ReloadStart" }, { .67f, "C14_MagSlap1" }, { 1.3f, "C14_ReloadMagOut" }, { 1.33f, "C14_MagOut" }, { 1.33f, "C14_MagRelease" },
+                            { 1.83f, "C14_ReloadMagPouch" }, { 2.47f, "C14_ReloadMagIn" }, { 2.93f, "C14_MagInserting" }, { 3.07f, "C14_MagIn" },
+                            { 3.4f, "C14_ReloadMagSlap" }, { 3.57f, "C14_MagSlap2" }, { 4.17f, "C14_ReloadBolt" }, { 4.67f, "C14_BoltUnlatch" },
+                            { 4.83f, "C14_BoltBack" }, { 5.07f, "C14_BoltForward" }, { 5.37f, "C14_BoltLatch" } }),
+                   sounds({ { .3f, "C14_ReloadMagSlap" }, { .45f, "C14_BoltUnlatch" }, { .5f, "C14_BoltBack" }, { .53f, "C14_ReloadBolt" },
+                            { .72f, "C14_BoltForward" }, { .9f, "C14_BoltLatch" } }),
+                   CueAction::BoltAction, {},
+                   { { "unlock", "C14_BoltUnlatch" }, { "pull", "C14_BoltBack" }, { "forward", "C14_BoltForward" }, { "lock", "C14_BoltLatch" },
+                     { "mag-release", "C14_MagRelease" }, { "mag-out", "C14_MagOut" }, { "mag-entry", "C14_MagInserting" }, { "mag-seat", "C14_MagIn" } });
+        expectCues("L118A2",
+                   sounds({ { .35f, "L115A3_BoltUnlatch" }, { .45f, "L115A3_BoltBackEmpty" }, { .48f, "L115A3_ReloadBoltBack" }, { .87f, "L115A3_ReloadGrab" },
+                            { 1.25f, "L115A3_MagOut" }, { 1.27f, "L115A3_ReloadMagOut" }, { 1.72f, "L115A3_ReloadMagSwap" }, { 2.6f, "L115A3_ReloadMagIn" },
+                            { 2.82f, "L115A3_MagIn" }, { 3.37f, "L115A3_ReloadGrab" }, { 3.58f, "L115A3_BoltForward" }, { 3.6f, "L115A3_ReloadBoltForward" },
+                            { 3.77f, "L115A3_BoltLatch" } }),
+                   sounds({ { .17f, "L115A3_ReloadGrab" }, { .53f, "L115A3_BoltUnlatch" }, { .58f, "L115A3_BoltBack" }, { .67f, "L115A3_ReloadBoltBack" },
+                            { .78f, "L115A3_ReloadBoltForward" }, { .82f, "L115A3_BoltForward" }, { 1.02f, "L115A3_BoltLatch" } }),
+                   CueAction::BoltAction, { "L115A3_MagRelease" },
+                   { { "unlock", "L115A3_BoltUnlatch" }, { "pull", "L115A3_BoltBack" }, { "forward", "L115A3_BoltForward" }, { "lock", "L115A3_BoltLatch" },
+                     { "mag-release", "L115A3_MagRelease" }, { "mag-out", "L115A3_MagOut" }, { "mag-entry", "L115A3_ReloadMagIn" }, { "mag-seat", "L115A3_MagIn" } });
+        // A numbered variant still names its cue; a reload-layer bolt sound
+        // stands in when no plain one plays.
+        const auto variant = detectSoundCues(sounds({ { .2f, "WPNXMagOut141" }, { .9f, "WPNXMagInserting" }, { 1.1f, "WPNXMagIn141" },
+                                                      { 2.f, "WPNRifleReloadBoltOpen" }, { 2.4f, "WPNRifleReloadBoltClose" } }),
+                                             {}, CueAction::ChargingHandle, [](const QString&) { return false; });
+        check(variant.sounds.value("mag-out") == QLatin1String("WPNXMagOut141") && variant.prefix == QLatin1String("WPNX") &&
+                  variant.sounds.value("mag-seat") == QLatin1String("WPNXMagIn141") && variant.sounds.value("pull") == QLatin1String("WPNRifleReloadBoltOpen") &&
+                  variant.sounds.value("forward") == QLatin1String("WPNRifleReloadBoltClose"),
+              "Numbered or reload-layer sounds were not read");
+    }
 }
 
 int main(int argc, char** argv)
@@ -142,7 +219,9 @@ int main(int argc, char** argv)
         magazineEvents();
         presetProposals(QString::fromLocal8Bit(argv[1]));
         magazinePieceRoles();
-        QTextStream(stdout) << "PASS magazine events from clip sound names, preset proposals from records, magazine piece roles from names\n";
+        soundCues();
+        QTextStream(stdout) << "PASS magazine events from clip sound names, preset proposals from records, magazine piece roles from names, "
+                               "default sound cues from clip sounds\n";
         return 0;
     } catch (const std::exception& e) {
         QTextStream(stderr) << e.what() << '\n';

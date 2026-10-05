@@ -29,6 +29,7 @@
 #include "areas/sources/SourceBrowserRows.h"
 #include "commands/CommandRegistry.h"
 #include "domain/checklist/Checklist.h"
+#include "domain/detectors/DefaultSoundCues.h"
 #include "domain/detectors/MagazinePieces.h"
 #include "domain/weapon/WeaponOverrides.h"
 #include "LoadTimings.h"
@@ -1113,10 +1114,10 @@ namespace reloadmaker
         void setSoundsMuted(bool muted);
         void buildSoundCatalog();
         SoundCue findSoundByEditorId(const QString& edid);
-        [[nodiscard]] QString mk18SoundVariant(const QString& original, const QString& alternate) const;
         void addSoundCue(const SoundCueSources& sources, const char* id, const char* label, const char* trigger, float progress,
                          const QString& edid, bool bolt = false);
-        void addDefaultSoundCues(const SoundCueSources& sources);
+        [[nodiscard]] DefaultSoundCues defaultSoundCues(const SoundCueSources& sources) const;
+        void addDefaultSoundCues(const SoundCueSources& sources, const DefaultSoundCues& defaults);
         void resolveSoundDescriptors();
         // Sounds views.
         [[nodiscard]] SoundCueForm soundCueForm() const;
