@@ -54,6 +54,11 @@ namespace reloadmaker
             const int index = currentMagazineAnchor();
             return index >= 0 && sameGripAnchor(placement, _handPoseAnchors[index].description) ? index : -1;
         }
+        // A frame exactly on the magazine's carrier is that magazine, whatever
+        // the carrier is called (the USP's WeaponMagazineChild2 helper pivot).
+        if (const int current = currentMagazineAnchor(); current >= 0 && sameGripAnchor(placement, _handPoseAnchors[current].description)) {
+            return current;
+        }
         if (placement.anchorName != "WeaponMagazine" && placement.anchorName != "WeaponExtra3") {
             return -1;
         }
