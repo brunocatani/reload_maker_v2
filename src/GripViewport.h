@@ -1,6 +1,7 @@
 #pragma once
 #include "GripViewportMath.h"
 #include "SlotOverlay.h"
+#include "viewport/DepthOverlay.h"
 #include <QPolygonF>
 
 namespace reloadmaker {
@@ -53,6 +54,9 @@ namespace reloadmaker {
         QVector3D _dragPivot,_dragDirection,_dragRadial;
         float _dragParameter{0};
         float _dragPrecision{1};
+        bool _dragSnap{false};
+        DepthOverlay _overlay;
+        DepthOverlay _pivotMarker;
         float _dragAngle{0},_dragLastAngle{0};
         bool _simulating{false},_simulationRotation{false};
         bool _teaching{false},_workshop{false},_workshopHand{false},_pointAuthoring{false};

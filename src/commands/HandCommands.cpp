@@ -1,4 +1,5 @@
 #include "ReloadMakerController.h"
+#include "GripViewport.h"
 #include "commands/CommandSupport.h"
 
 #include <QComboBox>
@@ -62,6 +63,14 @@ namespace reloadmaker
         _commands.add({ "save_hand_pose", CommandAccess::Edit, CommandGate::WhenIdle,
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
                             saveHandPoseFromCommand(params);
+                            return std::nullopt;
+                        } });
+
+        // The viewport's Move / Rotate handles for the grip being placed.
+        _commands.add({ "grip_tool", CommandAccess::Edit, CommandGate::WhenIdle,
+                        [this](const QJsonObject& params) -> std::optional<QJsonObject> {
+                            require(params["tool"] == "move" || params["tool"] == "rotate", "Choose the move or rotate tool");
+                            _gripViewport->setRotationTool(params["tool"] == "rotate");
                             return std::nullopt;
                         } });
 

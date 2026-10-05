@@ -18,6 +18,14 @@ namespace reloadmaker {
             const auto t=std::clamp(((p.x()-a.x())*d.x()+(p.y()-a.y())*d.y())/n,0.,1.);
             return float(QLineF(p,a+d*t).length());
         }
+        // Ctrl+drag steps of a placement edit (not of Operate drags, which test
+        // the mechanism itself).
+        constexpr float kSnapDegrees=15.f;
+        constexpr float kSnapUnits=.5f;
+        float snapped(float value,float step){return std::round(value/step)*step;}
+        // Opacity of handle parts behind the weapon or the hands. The handles
+        // start at the palm, inside the hand being placed, so they stay usable.
+        constexpr float kHiddenHandleAlpha=.55f;
     }
     GripViewport::GripViewport(GLView* view,QObject* parent):QObject(parent),_view(view) {
         _view->installEventFilter(this);
@@ -76,17 +84,18 @@ namespace reloadmaker {
                 if(simulationDrag){simulationDrag(_dragAngle*_dragPrecision);}
                 return;
             }
-            hand=rotateGripAbout(_dragHand,vec(_dragPivot),vec(_dragDirection),angle*_dragPrecision);
+            hand=rotateGripAbout(_dragHand,vec(_dragPivot),vec(_dragDirection),_dragSnap?snapped(angle,kSnapDegrees):angle*_dragPrecision);
         } else {
             QVector3D delta;
             if(_dragAxis==3) {
                 QVector3D plane; if(!gripPlanePoint(ray,_dragPivot,_dragDirection,plane)) return; delta=plane-_dragRadial;
+                if(_dragSnap)delta={snapped(delta.x(),kSnapUnits),snapped(delta.y(),kSnapUnits),snapped(delta.z(),kSnapUnits)};
             } else {
                 float parameter; if(!gripAxisParameter(ray,_dragPivot,_dragDirection,parameter)) return;
                 if(_simulating){if(simulationDrag)simulationDrag((parameter-_dragParameter)*_dragPrecision);return;}
-                delta=_dragDirection*(parameter-_dragParameter);
+                delta=_dragDirection*(_dragSnap?snapped(parameter-_dragParameter,kSnapUnits):parameter-_dragParameter);
             }
-            hand.translation=vec(v(_dragHand.translation)+delta*_dragPrecision);
+            hand.translation=vec(v(_dragHand.translation)+delta*(_dragSnap?1.f:_dragPrecision));
         }
         edited(hand);
     }
@@ -143,7 +152,9 @@ namespace reloadmaker {
             else if(button==4) {if(end) end();}
             else if(_picking) {if(surfacePicked) surfacePicked(position);}
             else if(handle>=0) {_dragPrecision=mouse->modifiers().testFlag(Qt::ShiftModifier)?.1f:1.f;(void)beginDrag(_handles[handle],position);}
-        } else if(type==QEvent::MouseMove && _active && _dragAxis>=0 && mouse->buttons().testFlag(Qt::LeftButton)) drag(position);
+        } else if(type==QEvent::MouseMove && _active && _dragAxis>=0 && mouse->buttons().testFlag(Qt::LeftButton)) {
+            _dragSnap=!_simulating&&mouse->modifiers().testFlag(Qt::ControlModifier);drag(position);
+        }
         if(type==QEvent::MouseButtonRelease || mouse->buttons()==Qt::NoButton) finishDrag(false);
         return true;
     }
@@ -171,7 +182,7 @@ namespace reloadmaker {
         }
         const QString hint=_teaching?QStringLiteral("Part: %1 · drag arrows to set travel, rings to set rotation · Save keeps the part and hand · Test checks grab and release").arg(_partName):
             _simulating?QStringLiteral("Testing %1 · grab or drag its handle · releasing tests its rule · Edit returns to its endpoints").arg(_partName):_picking?QStringLiteral("Click the weapon surface · Esc cancels"):
-            QStringLiteral("Arrows move · rings rotate · the centre square moves in the screen plane · Shift+drag for precision · background drag orbits");
+            QStringLiteral("Arrows move · rings rotate · the centre square moves in the screen plane · Shift+drag for precision · Ctrl+drag snaps to 15° / 0.5 units · background drag orbits");
         design::paintViewportHint(painter,{16,52},size.width()-32,hint);
         painter.setFont(design::uiFont(design::kSmallPx));
         if(!_hasGrip&&!_simulating) return;
@@ -192,32 +203,44 @@ namespace reloadmaker {
         const QColor colors[]{QColor("#ef7468"),QColor("#9cca75"),QColor("#6ba5e8"),QColor("#efcf99")};
         const Vec3f units[]{{1,0,0},{0,1,0},{0,0,1}};
         const bool rotate=_simulating?_simulationRotation:_rotate;
+        // Handles are drawn in the GL frame, depth-tested against the weapon and
+        // hands; their projected lines stay the hit-test shapes.
+        _overlay.begin(camera,QSizeF(size.width()*dpr,size.height()*dpr));
+        const float stroke=2.f*float(dpr);
         for(int axis=0;axis<(_teaching?3:_simulating?1:4) && !_picking;++axis) {
             const auto direction=_teaching?v(rotated(_teachingFrame.rotation,units[axis])).normalized():_simulating?_simulationAxis:axis==3?centerRay.direction:v(rotated(_reference.rotation,units[axis])).normalized();
             const int colorIndex=_simulating&&!_teaching?_simulationAxisIndex:axis;
             painter.setPen(QPen(colors[colorIndex],2)); painter.setBrush(colors[colorIndex]);
             if(!rotate && axis<3) {
                 QPointF tip; if(!projectGripPoint(camera,size,pivot+direction*radius,tip) || QLineF(center,tip).length()<15) continue;
-                painter.drawLine(center,tip); const QLineF line(center,tip); const auto unit=(tip-center)/line.length(),side=QPointF(-unit.y(),unit.x());
-                painter.drawPolygon(QPolygonF{tip,tip-unit*11+side*4,tip-unit*11-side*4});
+                const QLineF line(center,tip); const auto unit=(tip-center)/line.length();
+                _overlay.addPolyline({pivot,pivot+direction*radius},stroke,colors[colorIndex]);
+                _overlay.addArrowHead(pivot,pivot+direction*radius,11.f*float(dpr),4.f*float(dpr),colors[colorIndex]);
                 painter.drawText(tip+QPointF(5,-5),QStringList{"X","Y","Z"}[colorIndex]); _handles.append({axis,direction,QPolygonF{center+unit*12,tip},false});
             } else if(rotate) {
                 if(std::abs(QVector3D::dotProduct(centerRay.direction,direction))<.06f) continue;
                 auto basis=QVector3D::crossProduct(direction,QVector3D(0,0,1));
                 if(basis.lengthSquared()<.01f) basis=QVector3D::crossProduct(direction,QVector3D(0,1,0));
                 basis.normalize(); const auto other=QVector3D::crossProduct(direction,basis).normalized();
-                QPolygonF ring; const float scale=axis==3?1.22f:1.f;
+                QPolygonF ring; QVector<QVector3D> world; const float scale=axis==3?1.22f:1.f;
                 for(int segment=0;segment<=64;++segment) {
                     const float angle=float(segment)*6.28318530718f/64; QPointF p;
-                    if(projectGripPoint(camera,size,pivot+(basis*std::cos(angle)+other*std::sin(angle))*radius*scale,p)) ring.append(p);
+                    const auto point=pivot+(basis*std::cos(angle)+other*std::sin(angle))*radius*scale;
+                    world.append(point);if(projectGripPoint(camera,size,point,p)) ring.append(p);
                 }
-                painter.setBrush(Qt::NoBrush); painter.drawPolyline(ring); _handles.append({axis,direction,ring,true});
+                _overlay.addPolyline(world,stroke,colors[colorIndex]); _handles.append({axis,direction,ring,true});
             }
         }
         if(!rotate && !_picking && !_simulating) {
-            const QRectF box(center-QPointF(6,6),QSizeF(12,12)); painter.setPen(colors[3]); painter.setBrush(QColor("#443522")); painter.drawRect(box);
+            const QRectF box(center-QPointF(6,6),QSizeF(12,12));
+            // The pivot marks the point being edited: drawn over everything.
+            _pivotMarker.begin(camera,QSizeF(size.width()*dpr,size.height()*dpr));
+            _pivotMarker.addBox(pivot,6.f*float(dpr),colors[3]); _pivotMarker.addBox(pivot,4.5f*float(dpr),QColor("#443522"));
             _handles.append({3,centerRay.direction,QPolygonF{box.topLeft(),box.topRight(),box.bottomRight(),box.bottomLeft(),box.topLeft()},false});
         }
+        painter.beginNativePainting(); _overlay.draw(kHiddenHandleAlpha);
+        if(!rotate && !_picking && !_simulating)_pivotMarker.draw(1.f);
+        painter.endNativePainting();
         if(_surface&&!_simulating) {
             QPointF point; if(projectGripPoint(camera,size,v(*_surface),point)) {
                 painter.setPen(QPen(QColor("#f0c785"),1.5)); painter.setBrush(Qt::NoBrush); painter.drawEllipse(point,4,4);

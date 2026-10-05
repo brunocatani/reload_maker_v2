@@ -439,6 +439,12 @@ def save_configured_reload(project: str, expected_revision: int, expected_projec
                    id=pack_id,full=full_model,empty=empty_model),expected_revision)
 
 @mcp.tool()
+def grip_tool(tool: str, expected_revision: int) -> dict:
+    """Switch the viewport handles of the grip being placed: 'move' (arrows and the
+    screen-plane square) or 'rotate' (rings)."""
+    return command('grip_tool',dict(tool=tool),expected_revision)
+
+@mcp.tool()
 def save_all_configurations(project: str, expected_project_sha256: str, expected_revision: int) -> dict:
     """Save every receiver x operating part x magazine configuration of the loaded
     weapon into an existing pack project, in one write. Each configuration is
