@@ -4,6 +4,7 @@
 #include <xaudio2.h>
 #include <QtEndian>
 #include <QHash>
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
@@ -11,7 +12,7 @@
 namespace reloadmaker {
 struct AudioPreview::Impl {
     struct Sample {WAVEFORMATEX format{};QByteArray pcm;};
-    struct Voice {IXAudio2SourceVoice* native{};std::shared_ptr<Sample> sample;};
+    struct Voice {IXAudio2SourceVoice* native{};std::shared_ptr<Sample> sample;quint64 order{};};
     IXAudio2* engine{};IXAudio2MasteringVoice* master{};
     std::array<Voice,32> voices{};Voice looping{};QHash<QString,std::shared_ptr<Sample>> samples;
     bool com{};quint64 played{};QString error;
@@ -53,14 +54,20 @@ bool AudioPreview::play(const QString& key,float gain,QString& error){
     error.clear();if(!std::isfinite(gain)||gain<0||gain>2){error="Invalid preview volume.";return false;}
     const auto found=impl_->samples.constFind(key);if(found==impl_->samples.cend()){error="Sound sample is not prepared.";return false;}
     if(!impl_->start()){error=impl_->error;return false;}impl_->reap();
-    for(auto& v:impl_->voices)if(!v.native){
-        v.sample=*found;auto hr=impl_->engine->CreateSourceVoice(&v.native,&v.sample->format);
-        XAUDIO2_BUFFER buffer{};buffer.Flags=XAUDIO2_END_OF_STREAM;buffer.AudioBytes=UINT32(v.sample->pcm.size());buffer.pAudioData=reinterpret_cast<const BYTE*>(v.sample->pcm.constData());
-        if(SUCCEEDED(hr))hr=v.native->SetVolume(gain);if(SUCCEEDED(hr))hr=v.native->SubmitSourceBuffer(&buffer);if(SUCCEEDED(hr))hr=v.native->Start();
-        if(FAILED(hr)){if(v.native)v.native->DestroyVoice();v={};error=QString("Sound playback failed (0x%1).").arg(quint32(hr),8,16,QChar('0'));return false;}
-        ++impl_->played;return true;
+    // Simulated time can run faster than playback (a long step fires many
+    // shots at once). As in the game's audio engine, a new sound then takes
+    // over the voice of the oldest one-shot instead of failing.
+    auto slot=std::find_if(impl_->voices.begin(),impl_->voices.end(),[](const Impl::Voice& v){return !v.native;});
+    if(slot==impl_->voices.end()){
+        slot=std::min_element(impl_->voices.begin(),impl_->voices.end(),[](const Impl::Voice& a,const Impl::Voice& b){return a.order<b.order;});
+        slot->native->DestroyVoice();*slot={};
     }
-    error="All 32 preview voices are busy.";return false;
+    auto& v=*slot;v.order=impl_->played+1;
+    v.sample=*found;auto hr=impl_->engine->CreateSourceVoice(&v.native,&v.sample->format);
+    XAUDIO2_BUFFER buffer{};buffer.Flags=XAUDIO2_END_OF_STREAM;buffer.AudioBytes=UINT32(v.sample->pcm.size());buffer.pAudioData=reinterpret_cast<const BYTE*>(v.sample->pcm.constData());
+    if(SUCCEEDED(hr))hr=v.native->SetVolume(gain);if(SUCCEEDED(hr))hr=v.native->SubmitSourceBuffer(&buffer);if(SUCCEEDED(hr))hr=v.native->Start();
+    if(FAILED(hr)){if(v.native)v.native->DestroyVoice();v={};error=QString("Sound playback failed (0x%1).").arg(quint32(hr),8,16,QChar('0'));return false;}
+    ++impl_->played;return true;
 }
 bool AudioPreview::loop(const QString& key,float gain,QString& error){
     error.clear();if(!std::isfinite(gain)||gain<0||gain>2){error="Invalid preview volume.";return false;}
