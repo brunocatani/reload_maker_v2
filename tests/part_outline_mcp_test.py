@@ -68,9 +68,12 @@ def run():
         outlined=selection_pixels()
         assert outlined>200,('Outline not drawn',outlined)
         for _ in range(3):command('render',dict(view='current'))
-        gpu=viewport()['highlightGpuMs']
+        timing=viewport();gpu=timing['highlightGpuMs']
         assert 0<gpu<1.0,('Outline GPU time',gpu)
-        print('PASS part outlines:',len(owners),'shapes in',len(set(owners.values())),'parts; receiver outline',outlined,'px;','%.3f ms'%gpu,flush=True)
+        # The scene timer measures what one more camera on the scene would cost.
+        assert 0<timing['sceneCpuMs']<50 and 0<timing['sceneGpuMs']<50,('Scene timing',timing['sceneCpuMs'],timing['sceneGpuMs'])
+        print('PASS part outlines:',len(owners),'shapes in',len(set(owners.values())),'parts; receiver outline',outlined,'px;','%.3f ms'%gpu,
+              '; scene %.3f ms CPU, %.3f ms GPU'%(timing['sceneCpuMs'],timing['sceneGpuMs']),flush=True)
     finally:
         session.write_bytes(session_bytes)
         Path(original).write_bytes(original_bytes);edit('open_project',dict(path=original));ready()

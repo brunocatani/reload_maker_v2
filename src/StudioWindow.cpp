@@ -67,5 +67,7 @@ QJsonObject GLView::studioDiagnostics() const {
         {"meshes",meshes},{"fieldOfView",cfg.fov},{"navigationScale",axis},{"distance",Dist},{"zoom",Zoom},{"position",QJsonArray{Pos[0],Pos[1],Pos[2]}},
         {"rotation",QJsonArray{Rot[0],Rot[1],Rot[2]}},{"width",width()},{"height",height()},
         // GPU time of the latest measured part-outline pass; -1 before the first.
-        {"highlights",highlights},{"ghosts",ghosts},{"highlightGpuMs",reloadMakerHighlightMs}};
+        {"highlights",highlights},{"ghosts",ghosts},{"highlightGpuMs",reloadMakerHighlightMs},
+        // Scene transform and draw of the latest measured frame; -1 before the first.
+        {"sceneGpuMs",reloadMakerSceneGpuMs},{"sceneCpuMs",reloadMakerSceneCpuMs}};
 }
