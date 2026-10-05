@@ -34,7 +34,9 @@ def run():
     edit('testbed',dict(name='glock'));session=Path(ready()['project']);session_bytes=session.read_bytes()
     try:
         state=ready()
-        pose=next(p for p in state['handPoses'] if p['hand']=='left')['id']
+        # A Glock pose: the library lists the newest first, and a pose authored
+        # for another weapon puts the rings inside the Glock's slide.
+        pose=next(p for p in state['handPoses'] if p['hand']=='left' and p['name'].lower().startswith('glock'))['id']
         edit('start_grip',dict(poseId=pose,anchor=0));ready()
         try:edit('grip_tool',dict(tool='scale'))
         except RuntimeError:pass
