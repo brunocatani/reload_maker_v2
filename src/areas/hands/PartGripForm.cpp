@@ -95,7 +95,7 @@ namespace reloadmaker
         if (grip.weaponRecord.compare(record, Qt::CaseInsensitive) != 0) {
             return false;
         }
-        if (_showGripHistory || !magazineGrabSupported(grip.pose.placement)) {
+        if (_showGripHistory || (!magazineGrabSupported(grip.pose.placement) && magazineGrabAnchor(grip.pose.placement) < 0)) {
             return true;
         }
         return _magazineGrabGrips.values().contains(grip.pose.id) || _magazineGrabDefaults.values().contains(grip.pose.id);

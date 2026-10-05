@@ -44,12 +44,13 @@ namespace reloadmaker
         }
     }
 
-    // Index of the magazine anchor the placement belongs to, or -1. Rifles
-    // and weapons with a magazine reference use that one anchor; pistols
-    // match a grab-capable magazine of the same record and model.
+    // Index of the magazine anchor the placement belongs to, or -1. When the
+    // anchor decides the magazine, that one anchor; otherwise (a pistol
+    // magazine that brings its own bone) a grab-capable magazine of the
+    // same record and model.
     int ReloadMakerController::magazineGrabAnchor(const HandPosePlacement& placement) const
     {
-        if (isRifleConfiguration() || _authoringRecords.value(authoringRecordKey()).toObject().contains("magazineReference")) {
+        if (magazineAnchorDecides()) {
             const int index = currentMagazineAnchor();
             return index >= 0 && sameGripAnchor(placement, _handPoseAnchors[index].description) ? index : -1;
         }

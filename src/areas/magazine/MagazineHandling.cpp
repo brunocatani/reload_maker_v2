@@ -2,7 +2,6 @@
 // in the hand, along the insertion rail, or cancelled back to its start.
 #include "ReloadMakerController.h"
 #include "MagazineReference.h"
-#include "ReloadBundle.h"
 #include "areas/loadout/SceneTree.h"
 #include "model/nifmodel.h"
 
@@ -13,11 +12,11 @@
 namespace reloadmaker
 {
     // The magazine's hand anchor: the configured or installed magazine anchor
-    // for rifles and for any weapon with a saved magazine reference, otherwise
-    // the rig's magazine track.
+    // when that anchor decides the magazine, otherwise the rig's magazine
+    // track.
     HandPosePlacement ReloadMakerController::simulationMagazineAnchor() const
     {
-        if (isRifleConfiguration() || _authoringRecords.value(authoringRecordKey()).toObject().contains("magazineReference")) {
+        if (magazineAnchorDecides()) {
             const int index = currentMagazineAnchor();
             return index >= 0 ? _handPoseAnchors[index].description : HandPosePlacement{};
         }
@@ -27,11 +26,28 @@ namespace reloadmaker
         return {};
     }
 
+    // Whether the hand anchor decides the magazine rather than the rig's
+    // magazine track: rifles, a saved magazine reference, and a magazine
+    // mounted into the receiver's bone. The last is the usual pistol build
+    // (vanilla's included); the track there belongs to the receiver, whose
+    // record cannot name the magazine.
+    bool ReloadMakerController::magazineAnchorDecides() const
+    {
+        if (isRifleConfiguration() || _authoringRecords.value(authoringRecordKey()).toObject().contains("magazineReference")) {
+            return true;
+        }
+        const int index = currentMagazineAnchor();
+        return index >= 0 && _handPoseAnchors[index].description.anchorKind == QLatin1String("installed-part");
+    }
+
     // Index of the magazine's hand anchor, or -1 when it is missing or
-    // ambiguous. A saved magazine reference names it. Otherwise a magazine
-    // part attached inside the WeaponMagazine bone is grabbed as that part;
-    // a magazine model that brings its own WeaponMagazine bone, or one built
-    // into the receiver, is grabbed by that bone.
+    // ambiguous. A saved magazine reference names it. Otherwise, when the
+    // WeaponMagazine bone belongs to the frame (the receiver the export
+    // names, or the weapon's own model), the magazine is the part mounted
+    // into that bone: the outermost installed part inside it. A magazine
+    // model that brings its own bone, or one built into the receiver with
+    // nothing mounted, is grabbed by that bone. Parts nested in a magazine
+    // (the Timberwolf's rounds model) are never the magazine.
     int ReloadMakerController::currentMagazineAnchor() const
     {
         const auto saved = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineReference").toObject();
@@ -59,21 +75,37 @@ namespace reloadmaker
         }
         QVector<int> carriers;
         for (int i = 0; i < _handPoseAnchors.size(); ++i) {
-            const auto& anchor = _handPoseAnchors[i].description;
-            if (magazineGrabSupported(anchor) && anchor.anchorName.compare("WeaponMagazine", Qt::CaseInsensitive) == 0) {
+            if (_handPoseAnchors[i].description.anchorName.compare("WeaponMagazine", Qt::CaseInsensitive) == 0) {
                 carriers.append(i);
             }
         }
+        const auto* weapon = currentWeapon();
+        const auto* receiver = resolvedReceiverObjectMod();
+        const QString weaponKey = weapon ? poseRecordKey(weapon->formId) : QString();
+        const QString receiverKey = receiver ? poseRecordKey(receiver->formId) : QString();
+        const auto framed = [&](int carrier) {
+            const auto& owner = _handPoseAnchors[carrier].description.ownerRecord;
+            return !owner.isEmpty() && (owner.compare(weaponKey, Qt::CaseInsensitive) == 0 || owner.compare(receiverKey, Qt::CaseInsensitive) == 0);
+        };
+        const auto inside = [&](int part, int container) {
+            return _handPoseAnchors[part].node != _handPoseAnchors[container].node &&
+                   isWithinBlock(*model, _handPoseAnchors[part].node, _handPoseAnchors[container].node);
+        };
+        const auto installedPart = [&](int i) { return _handPoseAnchors[i].description.anchorKind == QLatin1String("installed-part"); };
         int installed = -1;
         for (int i = 0; i < _handPoseAnchors.size(); ++i) {
-            const auto& anchor = _handPoseAnchors[i];
-            if (!magazineGrabSupported(anchor.description) || anchor.description.anchorKind != "installed-part") {
+            if (!installedPart(i)) {
                 continue;
             }
-            const bool inCarrier = std::any_of(carriers.cbegin(), carriers.cend(), [&](int carrier) {
-                return anchor.node != _handPoseAnchors[carrier].node && isWithinBlock(*model, anchor.node, _handPoseAnchors[carrier].node);
-            });
-            if (!inCarrier) {
+            const auto carrier = std::find_if(carriers.cbegin(), carriers.cend(), [&](int c) { return framed(c) && inside(i, c); });
+            if (carrier == carriers.cend()) {
+                continue;
+            }
+            bool nested = false;
+            for (int j = 0; j < _handPoseAnchors.size() && !nested; ++j) {
+                nested = j != i && installedPart(j) && inside(j, *carrier) && inside(i, j);
+            }
+            if (nested) {
                 continue;
             }
             if (installed >= 0) {

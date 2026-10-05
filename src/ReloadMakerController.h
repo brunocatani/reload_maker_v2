@@ -580,6 +580,7 @@ namespace reloadmaker
         int _m1aEmptyMagazineFrame{0};
         int _m1aLoadedMagazineFrame{0};
         HandPosePlacement simulationMagazineAnchor() const;
+        bool magazineAnchorDecides() const;
         Transformf _magazineGrabBridge{};
         QString noExtenderReloadPath() const;
         void prepareSimulation();
