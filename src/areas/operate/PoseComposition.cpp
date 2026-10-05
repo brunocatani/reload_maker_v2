@@ -22,6 +22,7 @@ namespace reloadmaker
     // failure the clip is unloaded and _poseError names the reason.
     bool ReloadMakerController::applyPose(const float timeSeconds)
     {
+        _posedSeconds = timeSeconds;
         NifModel* model = activeModel();
         Scene* scene = _window->getGLView()->getScene();
         _poseError = QStringLiteral("Missing model, skeleton, scene or binding");

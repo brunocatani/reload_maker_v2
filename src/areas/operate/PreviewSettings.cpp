@@ -42,8 +42,9 @@ namespace reloadmaker
         noteDocumentChange("slide spring return");
     }
 
-    // A view option: not saved, and it changes no document state. Re-posing
-    // records the native poses (or clears the ghosts) for the current state.
+    // A view option: not saved, and it changes neither the document nor the
+    // simulation. Posing the current frame again records the native poses (or
+    // clears the ghosts) without touching the simulation's state.
     void ReloadMakerController::setNativeGhost(bool enabled)
     {
         if (enabled == _nativeGhost) {
@@ -52,8 +53,11 @@ namespace reloadmaker
         _nativeGhost = enabled;
         showChecked(_simulationGhost, enabled);
         if (_simulationActive) {
-            const bool handHeld = _simulation.action == SimulationAction::Held || _simulation.grab();
-            (void)applyPose(handHeld ? 0.0f : simulationPoseSeconds());
+            (void)applyPose(_posedSeconds);
+        }
+        if (enabled) {
+            setStatus(QStringLiteral("Source pose shown: a part whose motion here differs from the source animation is drawn again, "
+                                     "tinted, where the animation has it. Pull the slide or handle to compare."));
         }
     }
 

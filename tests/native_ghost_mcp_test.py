@@ -34,6 +34,15 @@ def run():
     edit('testbed',dict(name='srep-service'));session=Path(ready()['project']);session_bytes=session.read_bytes()
     try:
         operate('srep-service')
+        # Switching the option is a view change: at rest it must leave the
+        # simulation ready (an earlier build grabbed the handle here).
+        ready_state=edit('simulate',dict(operation='reset'))
+        toggled=edit('simulate',dict(operation='ghost',enabled=True))
+        assert toggled['action']==ready_state['action'] and toggled['slide']==ready_state['slide'],('Toggling the ghost changed the simulation',ready_state['action'],toggled['action'])
+        edit('simulate',dict(operation='ghost',enabled=False))
+        assert edit('simulate',dict(operation='fire'))['action']!=ready_state['action'],'The weapon does not fire after toggling the ghost'
+        for _ in range(80):
+            if edit('simulate',dict(operation='step',seconds=.05))['action']==ready_state['action']:break
         state=edit('simulate',dict(operation='pull',progress=.6))
         assert state['nativeGhost'] is False and not ghosts(),('Ghost not off by default',state['nativeGhost'],ghosts())
         plain=render()

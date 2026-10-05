@@ -1582,6 +1582,7 @@ namespace reloadmaker
         float _clipBlendInSeconds{ 0.0f };
         float _clipBlendOutSeconds{ 0.0f };
         float _playbackTime{ 0.0f };
+        float _posedSeconds{ 0.0f };  // clip time of the pose last applied, so a view option can redraw that frame
         float _playbackRate{ 1.0f };
         QElapsedTimer _playbackClock;
         bool _playing{ false };
