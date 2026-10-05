@@ -13,7 +13,7 @@ OUT=ROOT/'evidence/sights'
 OUT.mkdir(parents=True,exist_ok=True)
 
 def edit(method,params):
-    return command(method,params,command('state')['revision'])
+    return command(method,params,command('revision')['revision'])
 
 def ready():
     for _ in range(600):

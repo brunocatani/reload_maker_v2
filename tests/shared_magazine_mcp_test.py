@@ -54,7 +54,7 @@ def run(fixture):
         (work/'failure.json').write_text(json.dumps(dict(simulation=command('simulation_state'),setup=command('operating_setup_state')),indent=2),encoding='utf-8')
         print('Failure evidence:',work,flush=True);raise
     finally:
-        command('open_project',dict(path=original),command('state')['revision']);ready()
+        command('open_project',dict(path=original),command('revision')['revision']);ready()
 
 
 if __name__=='__main__':

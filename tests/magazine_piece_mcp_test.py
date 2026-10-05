@@ -44,10 +44,10 @@ def run():
             write(work/'result.json',dict(ok=True,sourceFullPieces=count,configuredFullPieces=count-1,models=models,pack=str(pack)))
             print('PASS piece exclusion, both cooked states, matched receipts and native runtime validation:',work,flush=True)
         finally:
-            project.write_bytes(saved);command('open_project',dict(path=str(project)),command('state')['revision']);ready()
+            project.write_bytes(saved);command('open_project',dict(path=str(project)),command('revision')['revision']);ready()
             edit('save_project',dict(path=str(project)));project.write_bytes(saved)
     finally:
-        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('state')['revision']);ready()
+        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('revision')['revision']);ready()
         edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
 
 if __name__=='__main__':run()

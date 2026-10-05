@@ -43,11 +43,11 @@ def run(names):
                 edit('magazine_guide',dict(operation='reset'));ready();restored=simulation();assert restored.pop('magazineInteraction')==a and restored==before
                 results.append(dict(testbed=name,visualPreserved=True,reopen=True,reset=True));print('PASS',name,flush=True)
             finally:
-                project.write_bytes(saved);command('open_project',dict(path=str(project)),command('state')['revision']);ready()
+                project.write_bytes(saved);command('open_project',dict(path=str(project)),command('revision')['revision']);ready()
                 edit('save_project',dict(path=str(project)));project.write_bytes(saved)
         (work/'result.json').write_text(json.dumps(dict(ok=True,results=results),indent=2));print('Evidence:',work,flush=True)
     finally:
-        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('state')['revision']);ready()
+        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('revision')['revision']);ready()
         edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
 
 if __name__=='__main__':

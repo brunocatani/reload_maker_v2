@@ -40,10 +40,10 @@ def run(names):
                     results.append(dict(testbed=name,presentation=folder.name,result=result,shapes=prepared['shapes']))
                     print('PASS',name,folder.name,prepared['shapes'],'shapes',result['hulls'],'hulls',flush=True)
             finally:
-                project.write_bytes(saved);command('open_project',{'path':str(project)},command('state')['revision']);ready()
+                project.write_bytes(saved);command('open_project',{'path':str(project)},command('revision')['revision']);ready()
         (work/'result.json').write_text(json.dumps(dict(ok=True,results=results),indent=2));print('Evidence:',work,flush=True)
     finally:
-        Path(original).write_bytes(original_bytes);command('open_project',{'path':original},command('state')['revision']);ready()
+        Path(original).write_bytes(original_bytes);command('open_project',{'path':original},command('revision')['revision']);ready()
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--testbed',action='append')

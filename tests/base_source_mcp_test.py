@@ -33,7 +33,7 @@ def run():
     except Exception:
         (work/'failure.json').write_text(json.dumps(dict(state=command('state'),diagnostics=command('diagnostics')),indent=2));print('Failure evidence:',work,flush=True);raise
     finally:
-        Path(original).write_bytes(saved);command('open_project',dict(path=original),command('state')['revision']);ready()
+        Path(original).write_bytes(saved);command('open_project',dict(path=original),command('revision')['revision']);ready()
         edit('save_project',dict(path=original));Path(original).write_bytes(saved)
 
 if __name__=='__main__':run()

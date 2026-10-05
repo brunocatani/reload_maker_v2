@@ -13,21 +13,23 @@ OUT=ROOT/'evidence/glock-variants/validated'
 OUT.mkdir(parents=True,exist_ok=True)
 coverage={'profiles':[],'equipment':[],'cycles':[]}
 
-def edit(method,params):return command(method,params,command('state')['revision'])
+def edit(method,params):return command(method,params,command('revision')['revision'])
 def op(name,**params):return edit('simulate',dict(operation=name,**params))
 def ready():
-    for _ in range(1200):
-        s=command('state')
-        if not s['busy']:
-            assert not s['lastError'],s['lastError']
-            return s
-        time.sleep(.025)
+    # The revision command is the cheap idle check; the full state is read once idle.
+    for _ in range(6000):
+        current=command('revision')
+        if not current['busy']:
+            assert not current['lastError'],current['lastError']
+            return command('state')
+        time.sleep(.005)
     raise AssertionError('Assembly/capture timeout')
 def finished():
+    # A step answers with the same simulation state as simulation_state.
+    s=command('simulation_state')
     for _ in range(500):
-        s=command('simulation_state')
         if s['action']=='Ready' and s['magazine']['phase'] not in ('Full magazine in','Empty magazine out','Loaded magazine out'):return s
-        op('step',seconds=.02)  # commands advance simulated time only by stepping
+        s=op('step',seconds=.02)  # commands advance simulated time only by stepping
     raise AssertionError(('Action timeout',s))
 def choose(slot,mod):
     current=next(x for x in command('state')['slots'] if x['key']==slot)

@@ -30,6 +30,6 @@ def main():
         (work/'result.json').write_text(json.dumps(dict(ok=True,audit=audit,stale=stale),indent=2))
         print('PASS fresh source inspection, scoped pack requirements and unchanged editor authoring:',work)
     finally:
-        Path(original).write_bytes(saved);command('open_project',{'path':original},command('state')['revision']);ready()
+        Path(original).write_bytes(saved);command('open_project',{'path':original},command('revision')['revision']);ready()
 
 if __name__=='__main__':main()

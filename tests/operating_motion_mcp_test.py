@@ -41,10 +41,10 @@ def run():
             (work/'result.json').write_text(json.dumps(dict(ok=True,nativeClipPreserved=True,manualMovementExported=True,reopen=True),indent=2))
             print('PASS alternate native clip, real manual movement, runtime export/reopen and original behavior restoration:',work,flush=True)
         finally:
-            project.write_bytes(saved);command('open_project',dict(path=str(project)),command('state')['revision']);ready()
+            project.write_bytes(saved);command('open_project',dict(path=str(project)),command('revision')['revision']);ready()
             edit('save_project',dict(path=str(project)));project.write_bytes(saved)
     finally:
-        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('state')['revision']);ready()
+        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('revision')['revision']);ready()
         edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
         for file in created:
             path=Path(file).resolve();assert path.parent==(ROOT/'workspace/part-mechanisms').resolve() and path.stem==identity

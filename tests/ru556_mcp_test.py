@@ -10,7 +10,7 @@ sys.path.insert(0,str(ROOT/'mcp'))
 from server import command
 OUT=ROOT/'evidence/ru556';OUT.mkdir(parents=True,exist_ok=True)
 
-def edit(method,**params):return command(method,params,command('state')['revision'])
+def edit(method,**params):return command(method,params,command('revision')['revision'])
 def op(operation,**params):return edit('simulate',operation=operation,**params)
 def ready():
     end=time.monotonic()+45

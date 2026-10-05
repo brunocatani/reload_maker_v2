@@ -39,10 +39,10 @@ def run():
             edit('roadmap',dict(operation='unreview',index=7));assert statuses()[7]['status']=='ready'
             (work/'result.json').write_text(json.dumps(dict(ok=True,steps=after),indent=2));print('PASS native readiness, precise guide/collision invalidation, camera independence and project resume:',work,flush=True)
         finally:
-            project.write_bytes(saved);command('open_project',dict(path=str(project)),command('state')['revision']);ready()
+            project.write_bytes(saved);command('open_project',dict(path=str(project)),command('revision')['revision']);ready()
             edit('save_project',dict(path=str(project)));project.write_bytes(saved)
     finally:
-        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('state')['revision']);ready()
+        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('revision')['revision']);ready()
         edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
 
 if __name__=='__main__':run()

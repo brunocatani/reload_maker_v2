@@ -80,12 +80,12 @@ def main(names,editor_project=None):
             except Exception as error:
                 errors.append(dict(testbed=name,error=str(error)));print('FAIL',name,str(error),flush=True)
             finally:
-                project.write_bytes(saved);command('open_project',{'path':str(project)},command('state')['revision']);ready()
+                project.write_bytes(saved);command('open_project',{'path':str(project)},command('revision')['revision']);ready()
                 edit('save_project',{'path':str(project)});project.write_bytes(saved)
         write(work/'result.json',dict(ok=not errors,results=results,errors=errors));print('Evidence:',work,flush=True)
         assert not errors,errors
     finally:
-        Path(original).write_bytes(original_bytes);command('open_project',{'path':original},command('state')['revision']);ready()
+        Path(original).write_bytes(original_bytes);command('open_project',{'path':original},command('revision')['revision']);ready()
         edit('save_project',{'path':original});Path(original).write_bytes(original_bytes)
 
 if __name__=='__main__':

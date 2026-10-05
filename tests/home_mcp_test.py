@@ -34,7 +34,7 @@ def run(pack,application=None):
         process.terminate();process.wait(timeout=20);process=start()
         resumed=server.command('home');assert resumed['role']=='player' and resumed['visible']
         assert not resumed['playerNeedsCreationKit'] and not resumed['playerNeedsSourceScene'] and not server.command('state')['weapons']
-        job=server.command('pack_job',dict(operation='build',packs=[str(pack)],installation=str(workspace/'installation'),initialize=True),server.command('state')['revision'])
+        job=server.command('pack_job',dict(operation='build',packs=[str(pack)],installation=str(workspace/'installation'),initialize=True),server.command('revision')['revision'])
         deadline=time.monotonic()+180
         while time.monotonic()<deadline:
             state=server.command('pack_job');assert state['id']==job['id']

@@ -43,11 +43,11 @@ def run():
         print('PASS independent ESP/weapon source projects, autosave on switching and exact restored simulation:',work,flush=True)
     finally:
         for name,path in old_paths.items():
-            path.write_bytes(old_bytes[name]);command('open_project',dict(path=str(path)),command('state')['revision']);ready();edit('save_project',dict(path=str(path)));path.write_bytes(old_bytes[name])
+            path.write_bytes(old_bytes[name]);command('open_project',dict(path=str(path)),command('revision')['revision']);ready();edit('save_project',dict(path=str(path)));path.write_bytes(old_bytes[name])
         for path,data in destinations.items():
             assert path.resolve().is_relative_to((ROOT/'workspace/projects').resolve())
             if data is None:path.unlink(missing_ok=True)
             else:path.write_bytes(data)
-        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('state')['revision']);ready();edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
+        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('revision')['revision']);ready();edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
 
 if __name__=='__main__':run()

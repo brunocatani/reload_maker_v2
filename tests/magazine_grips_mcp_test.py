@@ -14,7 +14,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'mcp'))
 from server import command
 OUT=ROOT/'evidence/magazine-grips/regression';OUT.mkdir(parents=True,exist_ok=True)
-def edit(method,params):return command(method,params,command('state')['revision'])
+def edit(method,params):return command(method,params,command('revision')['revision'])
 def op(name,**params):return edit('simulate',dict(operation=name,**params))
 def ready():
     for _ in range(1000):

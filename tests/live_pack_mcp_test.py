@@ -49,8 +49,8 @@ def run():
             (work/'result.json').write_text(json.dumps(dict(ok=True,saved=replaced,exported=exported,built=built,screens=screens),indent=2))
             print('PASS live configuration, full/empty carrier models, replacement save, publication, local ESP and mismatched-state rejection:',work,flush=True)
         finally:
-            canonical.write_bytes(saved);command('open_project',{'path':str(canonical)},command('state')['revision']);ready()
+            canonical.write_bytes(saved);command('open_project',{'path':str(canonical)},command('revision')['revision']);ready()
     finally:
-        Path(original).write_bytes(original_bytes);command('open_project',{'path':original},command('state')['revision']);ready()
+        Path(original).write_bytes(original_bytes);command('open_project',{'path':original},command('revision')['revision']);ready()
 
 if __name__=='__main__':run()

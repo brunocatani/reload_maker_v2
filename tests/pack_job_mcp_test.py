@@ -40,7 +40,7 @@ def run():
         pointer=Path(temporary)/'current.json'
         preserved=pointer.read_bytes()
         params['initialize']=False
-        job=command('pack_job',params,command('state')['revision'])
+        job=command('pack_job',params,command('revision')['revision'])
         command('pack_job',dict(operation='cancel'))
         cancelled=finish(job['id'])
         assert cancelled['phase']=='failed' and 'cancelled' in cancelled['error'],cancelled

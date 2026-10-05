@@ -54,9 +54,9 @@ def run():
             edit('magazine_setup',dict(operation='reset'));ready();assert simulation()==before
             print('PASS authored translation/rotation, independent straight guide, frozen runtime path and reopen:',work,flush=True)
         finally:
-            project.write_bytes(saved);command('open_project',dict(path=str(project)),command('state')['revision']);ready();edit('save_project',dict(path=str(project)));project.write_bytes(saved)
+            project.write_bytes(saved);command('open_project',dict(path=str(project)),command('revision')['revision']);ready();edit('save_project',dict(path=str(project)));project.write_bytes(saved)
     finally:
-        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('state')['revision']);ready();edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
+        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('revision')['revision']);ready();edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
         for file in created:
             path=Path(file).resolve();assert path.parent==(ROOT/'workspace/part-mechanisms').resolve() and path.stem==identity;path.unlink()
 

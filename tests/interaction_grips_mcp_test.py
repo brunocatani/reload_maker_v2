@@ -7,7 +7,7 @@ from server import command
 OUT=ROOT/'evidence/interaction-grips';OUT.mkdir(parents=True,exist_ok=True)
 def edit(m,**p):
     for attempt in range(5):
-        try:return command(m,p,command('state')['revision'])
+        try:return command(m,p,command('revision')['revision'])
         except RuntimeError as e:
             if 'Stale' not in str(e) or attempt==4:raise
 def op(operation,**p):return edit('simulate',operation=operation,**p)

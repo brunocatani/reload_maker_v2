@@ -35,10 +35,10 @@ def run():
             (work/'result.json').write_text(json.dumps(dict(ok=True,inputTravel=cycle['inputTravel'],ejectProgress=cycle['ejectProgress']),indent=2))
             print('PASS authored lift/open/close/lock cycle, full-opening ejection and original Timberwolf restoration:',work,flush=True)
         finally:
-            project.write_bytes(saved);command('open_project',dict(path=str(project)),command('state')['revision']);ready()
+            project.write_bytes(saved);command('open_project',dict(path=str(project)),command('revision')['revision']);ready()
             edit('save_project',dict(path=str(project)));project.write_bytes(saved)
     finally:
-        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('state')['revision']);ready()
+        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('revision')['revision']);ready()
         edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
         for file in created:
             path=Path(file).resolve();assert path.parent==(ROOT/'workspace/part-mechanisms').resolve() and path.stem==identity;path.unlink()

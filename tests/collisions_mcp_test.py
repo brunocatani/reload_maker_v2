@@ -19,7 +19,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 def edit(method, **params):
     for attempt in range(5):
         try:
-            return command(method, params, command('state')['revision'])
+            return command(method, params, command('revision')['revision'])
         except RuntimeError as error:
             if 'Stale document revision' not in str(error) or attempt == 4:
                 raise

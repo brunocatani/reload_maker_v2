@@ -20,7 +20,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 created = set()
 
 def edit(method, **params):
-    return command(method, params, command('state')['revision'])
+    return command(method, params, command('revision')['revision'])
 
 def ready():
     end = time.monotonic() + 40

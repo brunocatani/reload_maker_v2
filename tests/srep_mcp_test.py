@@ -10,15 +10,17 @@ from server import command
 OUT=ROOT/'local/srep';SNAP=OUT/'validated';SNAP.mkdir(parents=True,exist_ok=True)
 EMBEDDED={'1CAS_ServiceRifle.esp:'+n for n in ('00c7ba','00c7bd','00c80c')}
 
-def ready():
-    for _ in range(2400):
-        state=command('state')
-        if not state['busy']:
-            assert not state['lastError'],state['lastError'];return state
-        time.sleep(.025)
+def idle():
+    # The revision command is the cheap idle check; the full state is read only when needed.
+    for _ in range(12000):
+        current=command('revision')
+        if not current['busy']:
+            assert not current['lastError'],current['lastError'];return current['revision']
+        time.sleep(.005)
     raise AssertionError('Source capture timed out')
+def ready():idle();return command('state')
 
-def edit(method,**params):return command(method,params,ready()['revision'])
+def edit(method,**params):return command(method,params,idle())
 def op(operation,**params):return edit('simulate',operation=operation,**params)
 def select(record):
     state=ready();slot=next(s for s in state['slots'] if any(c['record']==record for c in s['choices']))

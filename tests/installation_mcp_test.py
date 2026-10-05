@@ -41,12 +41,12 @@ def run():
     except RuntimeError as exc:
         assert 'profile folder' in str(exc), str(exc)
     assert command('installation')['settings'] == before
-    result = command('configure_installation', setup, command('state')['revision'])
+    result = command('configure_installation', setup, command('revision')['revision'])
     assert result['gameReady'] and result['collisionReady'] and result['profileReady'], result
     assert command('state')['project'] == original['project']
     output = dict(setup=result)
     if args.reconnect:
-        command('connect_profile', revision=command('state')['revision'])
+        command('connect_profile', revision=command('revision')['revision'])
         until = time.monotonic() + 40
         while time.monotonic() < until:
             try:

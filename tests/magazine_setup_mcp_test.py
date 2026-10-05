@@ -45,11 +45,11 @@ def run(names):
                 edit('magazine_setup',dict(operation='reset'));ready();assert runtime()==profile
                 results.append(name);print('PASS',name,flush=True)
             finally:
-                project.write_bytes(saved);command('open_project',dict(path=str(project)),command('state')['revision']);ready()
+                project.write_bytes(saved);command('open_project',dict(path=str(project)),command('revision')['revision']);ready()
                 edit('save_project',dict(path=str(project)));project.write_bytes(saved)
         write(work/'result.json',dict(ok=True,testbeds=results));print('Evidence:',work,flush=True)
     finally:
-        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('state')['revision']);ready()
+        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('revision')['revision']);ready()
         edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
 
 if __name__=='__main__':

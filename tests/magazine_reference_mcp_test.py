@@ -43,12 +43,12 @@ def run(names):
                 edit('magazine_reference',dict(operation='reset'));ready();close(before,simulation())
                 results.append(dict(testbed=name,fitPreserved=True,connectionReopen=True));print('PASS',name,flush=True)
             finally:
-                project.write_bytes(saved);command('open_project',dict(path=str(project)),command('state')['revision']);ready();edit('save_project',dict(path=str(project)));project.write_bytes(saved)
+                project.write_bytes(saved);command('open_project',dict(path=str(project)),command('revision')['revision']);ready();edit('save_project',dict(path=str(project)));project.write_bytes(saved)
         (work/'result.json').write_text(json.dumps(dict(ok=True,results=results),indent=2),encoding='utf-8');print('Evidence:',work,flush=True)
     except Exception:
         (work/'failure.json').write_text(json.dumps(dict(state=command('state'),reference=command('magazine_reference_state')),indent=2),encoding='utf-8');raise
     finally:
-        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('state')['revision']);ready();edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
+        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('revision')['revision']);ready();edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--testbed',action='append');run(p.parse_args().testbed or ['glock','ru556','m1a','timberwolf','srep-service'])

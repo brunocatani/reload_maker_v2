@@ -40,7 +40,7 @@ def run():
                 edit('source_policy',dict(operation='reset',key=state['key']));ready();assert command('source_policy_state')['policy']==expected
                 results.append(dict(testbed=name,policy=expected));print('PASS',name,flush=True)
             finally:
-                project.write_bytes(saved);command('open_project',dict(path=str(project)),command('state')['revision']);ready();edit('save_project',dict(path=str(project)));project.write_bytes(saved)
+                project.write_bytes(saved);command('open_project',dict(path=str(project)),command('revision')['revision']);ready();edit('save_project',dict(path=str(project)));project.write_bytes(saved)
     finally:
         Path(original).write_bytes(original_bytes);edit('open_project',dict(path=original));ready();edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
     (work/'result.json').write_text(json.dumps(dict(ok=True,results=results),indent=2),encoding='utf-8');print('Evidence:',work,flush=True)
