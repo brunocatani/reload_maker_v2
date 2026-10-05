@@ -57,6 +57,16 @@ def policy_identity(policy):
     return marker,*groups
 
 
+def presentation_identity(setup):
+    """What a magazine's cooked models depend on in its presentation setup.
+    recipeId only binds the setup to one reload capture; every receiver has
+    its own, yet they share the magazine's pieces and so its models. It
+    counts only when the payload is posed from that capture's frames."""
+    if isinstance(setup,dict) and not setup.get('sampledPayload'):
+        return {key:value for key,value in setup.items() if key!='recipeId'}
+    return setup
+
+
 def input_hash(snapshot):
     """Everything a configuration is saved from: the capture holds the source
     checksums, the authored setup and the hand fits it uses."""
@@ -149,7 +159,7 @@ def apply_capture(draft,capture,full='',empty=''):
         for key in snapshot['profileHeader']['embeddedMagazineReceivers']:
             if form_key(key) not in {form_key(k) for k in records}:records.append(key)
     prior_magazine=next((m for m in documents['magazines']['magazines'] if form_key(m['record'])==magazine),None)
-    if prior_magazine and prior_magazine.get('presentationSetup')!=snapshot['magazine'].get('presentationSetup'):
+    if prior_magazine and presentation_identity(prior_magazine.get('presentationSetup'))!=presentation_identity(snapshot['magazine'].get('presentationSetup')):
         require(full and empty,'Magazine presentation changed; recapture and cook both world models before saving')
     replace_record(documents['magazines']['magazines'],snapshot['magazine'],lambda p:form_key(p['record']))
     replace_record(documents['sounds']['profiles'],snapshot['sounds'],lambda p:(form_key(p['weapon']),form_key(p['magazine'])))
@@ -177,7 +187,7 @@ def apply_capture(draft,capture,full='',empty=''):
                     'Finished model belongs to another weapon, magazine, presentation or reference frame')
             require(source.get('sourceRecipeId')==snapshot['magazine'].get('sourceRecipeId'),
                     'Magazine motion changed; recapture both world models for this configured reload')
-            require(source.get('presentationSetup')==snapshot['magazine'].get('presentationSetup'),
+            require(presentation_identity(source.get('presentationSetup'))==presentation_identity(snapshot['magazine'].get('presentationSetup')),
                     'Magazine model was cooked with another body/payload presentation')
             require(all(current_resources.get(r['path'].replace('\\','/').lower())==r['sha256'] for r in source['sources']['resources']),
                     'World model source bytes differ from the configured reload')

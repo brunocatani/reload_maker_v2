@@ -31,7 +31,7 @@ from editor_session import PYTHON, ROOT, SETTINGS, EditorRun, corpus_files, edit
 TESTS = ROOT / 'tests'
 SUITE_TIMEOUT_SECONDS = 1800
 
-OFFLINE = ('coverage_test.py', 'source_requirements_test.py')
+OFFLINE = ('coverage_test.py', 'presentation_identity_test.py', 'source_requirements_test.py')
 
 # Suites with required command-line inputs that are not yet configured.
 NEEDS_INPUTS = {
