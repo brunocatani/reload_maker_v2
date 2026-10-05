@@ -109,6 +109,24 @@ def configure_weapon(changes: dict, expected_revision: int) -> dict:
     return command('configure',changes,expected_revision)
 
 @mcp.tool()
+def annotations() -> dict:
+    """Pins: notes pointed at parts (open or resolved), with part, anchor shape, author,
+    whether the part is installed in the current configuration (placed) and its viewport
+    position (screen, logical pixels)."""
+    return command('annotations')
+
+@mcp.tool()
+def annotation(operation: str, expected_revision: int, id: str = '', text: str = '',
+               x: float | None = None, y: float | None = None, reference: str = '') -> dict:
+    """Pin operations: add(x, y viewport pixels on a part, text), edit(id, text),
+    resolve(id, reference: what resolved it, for example the property you changed),
+    reopen(id), remove(id). Pins you add are recorded as written by the AI."""
+    params={'operation':operation,'id':id,'text':text,'reference':reference}
+    if x is not None: params['x']=x
+    if y is not None: params['y']=y
+    return command('annotation',params,expected_revision)
+
+@mcp.tool()
 def part_at(x: float, y: float) -> dict:
     """Which installed part a click at viewport pixel (x, y) would select: slot key, slot label and part name, or slot null. Also returns the viewport width and height in the same logical pixels."""
     return command('part_at',{'x':x,'y':y})

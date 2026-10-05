@@ -133,6 +133,17 @@ namespace reloadmaker
             return true;
         }
 
+        bool validProjectPins(const QJsonObject& record, QString& message)
+        {
+            QVector<Pin> pins;
+            QString error;
+            if (!readPins(record["annotations"], pins, error)) {
+                message = "Invalid saved pins: " + error;
+                return false;
+            }
+            return true;
+        }
+
         // Optic, grab location and sound profiles, each stored under its own key.
         bool validProjectProfiles(const QJsonObject& record, QString& message)
         {
@@ -443,6 +454,9 @@ namespace reloadmaker
             record["weaponProperties"] = weaponProperties;
         }
         record["sourcePolicies"] = _sourcePolicies;
+        if (!_pins.isEmpty()) {
+            record["annotations"] = pinsJson();
+        }
         if (const auto* config = configuration()) {
             record["recordChoices"] = config->savedChoices(*currentPlugin());
         }
@@ -614,7 +628,8 @@ namespace reloadmaker
             return;
         }
         QString message;
-        if (!validProjectAssignments(record, message) || !validProjectProfiles(record, message) || !validProjectGrips(record, message) ||
+        if (!validProjectAssignments(record, message) || !validProjectPins(record, message) || !validProjectProfiles(record, message) ||
+            !validProjectGrips(record, message) ||
             !validProjectDrafts(record, message)) {
             setStatus(message, true);
             return;
@@ -703,6 +718,7 @@ namespace reloadmaker
             _authoringRecords.insert(it.key(), saved);
         }
         _reloadTemplateAssignments = record["reloadTemplates"].toObject();
+        restorePins(record);
         _weaponOverrides.clear();
         const auto weaponProperties = record["weaponProperties"].toObject();
         for (auto it = weaponProperties.begin(); it != weaponProperties.end(); ++it) {

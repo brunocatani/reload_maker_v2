@@ -1,6 +1,7 @@
 #include "ReloadMakerController.h"
 #include "GripViewport.h"
 #include "viewport/PartPicker.h"
+#include "viewport/PinOverlay.h"
 #include "StudioWindow.h"
 #include "glview.h"
 #include <QDockWidget>
@@ -65,6 +66,7 @@ namespace reloadmaker {
         if(_slotOverlay) _slotOverlay->setActive(loadoutPageActive() && _showPartLabels && !active);
         // Clicking the model selects parts on the loadout page, unless the grip tools own the viewport.
         if(_partPicker) _partPicker->setActive(loadoutPageActive() && !active);
+        if(_pinOverlay) _pinOverlay->setActive(loadoutPageActive() && !active);
         if(points){
             const auto g=currentGrabLocations();const int i=_grabLocationList?_selectedGrabLocation:-1,a=operatingAnchor();
             Transformf reference;QString error;

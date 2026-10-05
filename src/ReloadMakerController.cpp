@@ -4,6 +4,7 @@
 #include "PoseEvaluator.h"
 #include "SlotOverlay.h"
 #include "viewport/PartPicker.h"
+#include "viewport/PinOverlay.h"
 #include "LibraryResources.h"
 #include "LoadoutView.h"
 #include "areas/operate/PlaybackTimeline.h"
@@ -91,12 +92,17 @@ namespace reloadmaker
         _partPicker = new PartPicker(_window->getGLView(), this);
         _partPicker->selected = [this](SlotKey slot) { focusSlot(slot); };
         _partPicker->activated = [this](SlotKey slot) { showLoadoutChoices(slot); };
-        _partPicker->contextRequested = [this](SlotKey slot, QPoint position) { showPartMenu(slot, position); };
+        _partPicker->contextRequested = [this](SlotKey slot, QPoint position, QPointF point) { showPartMenu(slot, position, point); };
         _partPicker->describe = [this](SlotKey slot) { return describePart(slot); };
         _slotOverlay = new SlotOverlay(_window->getGLView(), this);
         _slotOverlay->selected = [this](SlotKey slot) { focusSlot(slot); };
         createGripViewport();
         createSimulationViewport();
+        // Installed last, so a press on a pin is the pin's before the Operate
+        // drive or the part picker sees it.
+        _pinOverlay = new PinOverlay(_window->getGLView(), this);
+        _pinOverlay->selected = [this](const QString& id) { selectPin(id); };
+        _pinOverlay->contextRequested = [this](const QString& id, QPoint position) { showPinMenu(id, position); };
         setWorkspace(OperateWorkspace);
         startCommandServer();
         _window->prepareClose = [this] { if(_packProcess){setStatus("Finish or cancel the pack build before closing.",true);return false;}return saveSession(); };
@@ -226,7 +232,7 @@ namespace reloadmaker
         scrollToFocusedSlot();
     }
 
-    void ReloadMakerController::showPartMenu(SlotKey key, QPoint globalPosition)
+    void ReloadMakerController::showPartMenu(SlotKey key, QPoint globalPosition, QPointF viewportPoint)
     {
         const auto* config = configuration();
         const auto* slot = config ? config->slot(key) : nullptr;
@@ -241,8 +247,18 @@ namespace reloadmaker
         auto* change = menu.addAction(QStringLiteral("Change %1…").arg(slot->label.toLower()));
         // Same rule as showLoadoutChoices: no loadout edits while the scene is rebuilding.
         change->setEnabled(!_loadThread && !_reloadCapturing && !_rebuildTimer->isActive());
-        if (menu.exec(globalPosition) == change) {
+        // The pin's anchor is taken now, before the menu's event loop lets an
+        // animation move the part.
+        QString pinError;
+        const auto anchor = pinAnchorAt(viewportPoint, pinError);
+        auto* pin = menu.addAction(QStringLiteral("Add pin here…"));
+        pin->setEnabled(anchor.has_value());
+        pin->setToolTip(pinError);
+        const auto* chosen = menu.exec(globalPosition);
+        if (chosen == change) {
             showLoadoutChoices(key);
+        } else if (chosen == pin) {
+            askNewPin(*anchor);
         }
     }
 
@@ -317,6 +333,7 @@ namespace reloadmaker
             parts.append(std::move(part));
         }
         _partPicker->setParts(std::move(parts));
+        refreshPins();
     }
 
     // Shows the catalog in the clip list. A new catalog has nothing selected.

@@ -30,6 +30,7 @@
 #include "commands/CommandRegistry.h"
 #include "domain/checklist/Checklist.h"
 #include "domain/detectors/DefaultSoundCues.h"
+#include "viewport/Pins.h"
 #include "domain/detectors/MagazinePieces.h"
 #include "domain/weapon/WeaponOverrides.h"
 #include "LoadTimings.h"
@@ -82,6 +83,8 @@ namespace reloadmaker
     class ReloadGraph;
     class SlotOverlay;
     class PartPicker;
+    class PinOverlay;
+    struct PinMarker;
     class GripViewport;
     class MagazineViewport;
     class CollisionPanel;
@@ -350,6 +353,8 @@ namespace reloadmaker
         bool selectProjectWeapon(const QJsonObject& record);
         void restoreProjectLoadout(const QJsonObject& record);
         void restoreProjectAuthoring(const QJsonObject& record);
+        void restorePins(const QJsonObject& record);
+        [[nodiscard]] QJsonArray pinsJson() const;
         void restoreProjectPose(const QJsonObject& record, QString& error);
         void restoreProjectView(const QJsonObject& record);
 
@@ -373,6 +378,7 @@ namespace reloadmaker
         void registerCollisionCommands();
         void registerScopeCommands();
         void registerPackCommands();
+        void registerAnnotationCommands();
         QJsonObject diagnosticsState() const;
         QJsonObject poseState() const;
         QJsonObject importAuthoredRecords(const QJsonArray& paths);
@@ -1233,7 +1239,22 @@ namespace reloadmaker
         void refreshAttachments();
         void showLoadoutChoices(SlotKey key);
         void focusSlot(SlotKey key);
-        void showPartMenu(SlotKey key, QPoint globalPosition);
+        void showPartMenu(SlotKey key, QPoint globalPosition, QPointF viewportPoint);
+
+        // Point-and-note pins (src/areas/project/Annotations.cpp).
+        [[nodiscard]] std::optional<Pin> pinAnchorAt(QPointF point, QString& error) const;
+        [[nodiscard]] QPersistentModelIndex pinShape(const Pin& pin) const;
+        [[nodiscard]] PinMarker pinMarker(int index) const;
+        [[nodiscard]] int pinIndex(const QString& id) const;
+        void refreshPins();
+        bool addPin(Pin anchor, const QString& text, QString& error);
+        bool editPin(const QString& id, const QString& text, QString& error);
+        bool setPinResolved(const QString& id, bool resolved, const QString& resolution, QString& error);
+        bool removePin(const QString& id, QString& error);
+        void selectPin(const QString& id);
+        void showPinMenu(const QString& id, QPoint globalPosition);
+        void askNewPin(const Pin& anchor);
+        [[nodiscard]] QJsonObject annotationsState() const;
         [[nodiscard]] QString describePart(SlotKey key) const;
         void scrollToFocusedSlot();
         void refreshSlotCallouts();
@@ -1477,6 +1498,9 @@ namespace reloadmaker
         QTimer* _rebuildTimer{ nullptr };
         SlotOverlay* _slotOverlay{ nullptr };
         PartPicker* _partPicker{ nullptr };
+        PinOverlay* _pinOverlay{ nullptr };
+        QVector<Pin> _pins;          // saved with the project, in display order
+        QString _selectedPin;        // view state only
         QHash<SlotKey, QPersistentModelIndex> _partRoots;
         QHash<SlotKey, QVector<QPersistentModelIndex>> _partSurfaces;
         // Append-only assembly block IDs, discarded on source/config rebuild.

@@ -45,6 +45,7 @@ namespace reloadmaker
         registerCollisionCommands();
         registerScopeCommands();
         registerPackCommands();
+        registerAnnotationCommands();
     }
 
     void ReloadMakerController::startCommandServer()

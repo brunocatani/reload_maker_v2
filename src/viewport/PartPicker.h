@@ -50,10 +50,11 @@ namespace reloadmaker
         void doubleClick(QPointF point);
 
         // Left click selects, double-click opens the slot's choices and a right
-        // click asks for the part's context menu at a global screen position.
+        // click asks for the part's context menu at a global screen position;
+        // it also passes the viewport point that was clicked.
         std::function<void(SlotKey)> selected;
         std::function<void(SlotKey)> activated;
-        std::function<void(SlotKey, QPoint)> contextRequested;
+        std::function<void(SlotKey, QPoint, QPointF)> contextRequested;
         // Short description shown while hovering a part.
         std::function<QString(SlotKey)> describe;
 

@@ -22,15 +22,17 @@ namespace reloadmaker
     {
     public:
         [[nodiscard]] bool captured() const { return _captured; }
+        // captureButtons: the buttons whose press on a label starts the capture.
         bool consume(QEvent::Type type, Qt::MouseButton button,
-                     Qt::MouseButtons buttons, bool labelHit = false)
+                     Qt::MouseButtons buttons, bool labelHit = false,
+                     Qt::MouseButtons captureButtons = Qt::LeftButton)
         {
             if (type == QEvent::FocusOut || type == QEvent::WindowDeactivate || type == QEvent::UngrabMouse) {
                 _captured = false;
                 return false;
             }
             if (type == QEvent::MouseButtonPress || type == QEvent::MouseButtonDblClick) {
-                if (!_captured && labelHit && button == Qt::LeftButton) { _captured = true; }
+                if (!_captured && labelHit && captureButtons.testFlag(button)) { _captured = true; }
                 return _captured;
             }
             if (!_captured) { return false; }

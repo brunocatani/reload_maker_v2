@@ -178,7 +178,8 @@ namespace reloadmaker
                 // viewport has finished handling this release, so its button
                 // state never stays latched behind them.
                 const auto position = mouse->globalPosition().toPoint();
-                QTimer::singleShot(0, this, [this, slot = *slot, position] { contextRequested(slot, position); });
+                const auto point = mouse->position();
+                QTimer::singleShot(0, this, [this, slot = *slot, position, point] { contextRequested(slot, position, point); });
             }
             break;
         }
