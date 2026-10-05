@@ -18,6 +18,8 @@ namespace reloadmaker
     {
         // Fraction of the operating part's travel at which a reload counts as racked.
         constexpr float kRackTravelFraction = 0.95f;
+        // Below this fraction of its travel the slide is at rest.
+        constexpr float kRestTravelFraction = 0.05f;
     }
 
     // Selects the native clip for the simulation state: the first catalog
@@ -184,20 +186,30 @@ namespace reloadmaker
         _glockReloadRackAt = -1;
         _glockReloadFeedAt = -1;
         if (simulationMechanism() == WeaponMechanism::PistolSlide) {
-            // Racked when the slide nears full travel; fed at the following
-            // reloadComplete marker.
+            // Racked when the slide nears full travel; fed at the rack's
+            // reloadComplete marker. Animators may place it while the slide is
+            // still travelling back (the 1911 marks it a frame early), so a
+            // marker counts from the moment that stroke leaves rest, and the
+            // feed never comes before the rack: fed first, the rack would
+            // eject the round it just chambered.
             const auto& motion = _reloadRecipe->tracks[rig.slide].poses;
             const auto& rest = motion[rig.closedFrame];
             const float travel = reloadPoseDistance(rest, motion[rig.openFrame]);
+            float strokeStart = -1;
             for (int frame = 0; frame < motion.size(); ++frame) {
                 if (reloadPoseDistance(rest, motion[frame]) >= travel * kRackTravelFraction) {
                     _glockReloadRackAt = frameSeconds(frame);
+                    int start = frame;
+                    while (start > 0 && reloadPoseDistance(rest, motion[start - 1]) > travel * kRestTravelFraction) {
+                        --start;
+                    }
+                    strokeStart = frameSeconds(start);
                     break;
                 }
             }
             for (const auto& event : _reloadClip.annotations) {
-                if (event.text.compare("reloadComplete", Qt::CaseInsensitive) == 0 && event.timeSeconds >= _glockReloadRackAt) {
-                    _glockReloadFeedAt = event.timeSeconds;
+                if (event.text.compare("reloadComplete", Qt::CaseInsensitive) == 0 && event.timeSeconds >= strokeStart) {
+                    _glockReloadFeedAt = std::max(event.timeSeconds, _glockReloadRackAt);
                     break;
                 }
             }
