@@ -106,9 +106,11 @@ namespace reloadmaker
             return nullptr;
         }
         const QString assigned = assignedTemplate();
-        const QString id = assigned.isEmpty() ? templateIdentity(simulationMechanism()) : assigned;
+        if (assigned.isEmpty()) {
+            return proposedPreset();
+        }
         for (const auto& preset : reloadPresets()) {
-            if (preset.id == id) {
+            if (preset.id == assigned) {
                 return &preset;
             }
         }
@@ -155,7 +157,7 @@ namespace reloadmaker
 
         // Learned reload.
         o["weapon.preset"] = found(preset.label,
-                                   assignedTemplate().isEmpty() ? QStringLiteral("Maker matched this weapon's mechanism. Confirming assigns the preset to the weapon.")
+                                   assignedTemplate().isEmpty() ? _presetProposal.evidence + QStringLiteral(" Confirming assigns the preset to the weapon.")
                                                                 : QStringLiteral("Assigned to this weapon."),
                                    { { "template", preset.id } });
         QJsonObject sources;
@@ -381,7 +383,14 @@ namespace reloadmaker
         if (!view.preset) {
             view.problem = !currentWeapon() ? QStringLiteral("Load a weapon to see its checklist.")
                            : !reloadPresetsError().isEmpty() ? QStringLiteral("Behavior presets are unavailable: ") + reloadPresetsError()
-                                                             : QStringLiteral("No behavior preset matches this weapon yet.");
+                                                             : QStringLiteral("Choose this weapon's behavior preset. ") + _presetProposal.problem;
+            // Only the preset can be chosen until there is one.
+            if (currentWeapon() && reloadPresetsError().isEmpty()) {
+                ChecklistObservation choose;
+                choose.problem = _presetProposal.problem;
+                view.items = evaluateChecklist({ presetChecklistItem() }, { { QStringLiteral("weapon.preset"), choose } }, {});
+                view.summary = summarizeChecklist(view.items);
+            }
             return view;
         }
         view.items = evaluateChecklist(checklistItems(view.preset->model), checklistObservations(*view.preset), checklistConfirmations());

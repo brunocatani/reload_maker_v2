@@ -406,20 +406,21 @@ namespace reloadmaker
         _checklistCardMessage->setText(message);
         _checklistCardMessage->setVisible(!message.isEmpty());
 
-        // The preset is confirmed by choosing it.
+        // The preset is confirmed by choosing it; without a proposal the
+        // author picks one from the list.
         const bool preset = item.item.id == QLatin1String("weapon.preset");
-        _checklistPresetChoice->setVisible(preset && view.preset);
-        if (preset && view.preset) {
+        _checklistPresetChoice->setVisible(preset);
+        if (preset) {
             const QSignalBlocker block(_checklistPresetChoice);
             const QString chosen = _checklistPresetChoice->currentData().toString();
             _checklistPresetChoice->clear();
             for (const auto& entry : reloadPresets()) {
                 _checklistPresetChoice->addItem(entry.label, entry.id);
             }
-            const int keep = _checklistPresetChoice->findData(chosen.isEmpty() ? view.preset->id : chosen);
+            const int keep = _checklistPresetChoice->findData(!chosen.isEmpty() ? chosen : view.preset ? view.preset->id : QString());
             _checklistPresetChoice->setCurrentIndex(std::max(0, keep));
         }
-        const bool otherPreset = preset && view.preset && _checklistPresetChoice->currentData().toString() != view.preset->id;
+        const bool otherPreset = preset && (!view.preset || _checklistPresetChoice->currentData().toString() != view.preset->id);
         _checklistConfirm->setVisible(item.canConfirm || otherPreset || (!item.rechecked && item.state != ChecklistState::NotApplicable));
         _checklistConfirm->setText(otherPreset ? QStringLiteral("Use this preset")
                                    : !item.rechecked ? QStringLiteral("Check in Operate")

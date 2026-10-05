@@ -59,7 +59,7 @@ namespace reloadmaker
             items.append({ id, section, subsystem, owner, mandatory, title, mechanism });
         };
 
-        add("weapon.preset", S::LearnedReload, Sub::Weapon, O::Auto, true, "Behavior preset");
+        items.append(presetChecklistItem());
         add("weapon.reload", S::LearnedReload, Sub::Weapon, O::Auto, true, "Reload learned");
         add("weapon.sources", S::LearnedReload, Sub::Weapon, O::Auto, true, "Source files recorded");
 
@@ -117,6 +117,11 @@ namespace reloadmaker
         add("fire.sound", S::Fire, Sub::Fire, O::Auto, false, "Fire sound");
         add("sounds.reload", S::Fire, Sub::Feed, O::Auto, false, "Reload sounds");
         return items;
+    }
+
+    ChecklistItem presetChecklistItem()
+    {
+        return { "weapon.preset", ChecklistSection::LearnedReload, ChecklistSubsystem::Weapon, ChecklistOwner::Auto, true, "Behavior preset", {} };
     }
 
     QString checklistFingerprint(const QString& item, const QJsonObject& inputs)

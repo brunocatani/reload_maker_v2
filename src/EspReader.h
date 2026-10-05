@@ -75,6 +75,7 @@ namespace reloadmaker
         int ammoCapacity{0};
         bool ammoDataKnown{false};
         bool automatic{false};
+        bool boltAction{false}; // cycled by hand after each shot
         std::uint32_t recordFlags{0}, dataFlags{0};
     };
 

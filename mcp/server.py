@@ -466,7 +466,9 @@ def checklist_state() -> dict:
     not-started, draft or complete. evaluated is false until the weapon, its
     learned reload and its operating parts are available. presets lists the
     supported behavior presets; presetAssigned says whether one is assigned to
-    the weapon (otherwise preset is the one Maker matched).
+    the weapon. Otherwise preset is the one Maker proposes from the records (a
+    bolt action, a pistol), or empty with only the weapon.preset item when the
+    records do not tell; assign one with checklist operation preset.
     """
     return command('checklist_state')
 
@@ -488,6 +490,8 @@ def weapon_properties_state() -> dict:
     """What Maker read from the open configuration, which the editor uses in
     place of weapon names. clips lists the reload, fire and cycle clips with
     their events (sound plays, ejection, weaponfire, culling).
+    preset is the assigned preset and the one proposed from the records, with
+    the evidence or the reason there is no proposal.
     magazineEvents is the magazine entry and removal Maker read from the
     reload clip's sound names, with any ambiguity. insertion is how the
     magazine goes in: straight, or native-curve along the clip; source says

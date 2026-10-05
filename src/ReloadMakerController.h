@@ -478,6 +478,14 @@ namespace reloadmaker
         // Weapon properties (areas/properties): the author's per-weapon
         // overrides by weapon record, and the values the code reads.
         QHash<QString, WeaponOverrides> _weaponOverrides;
+        // The preset Maker proposes from the records until one is assigned;
+        // refreshed with each rebuild of the configuration.
+        struct ProposedPreset
+        {
+            QString preset, evidence, problem;
+        } _presetProposal;
+        void refreshPresetProposal();
+        const WeaponPreset* proposedPreset() const;
         WeaponOverrides currentWeaponOverrides() const;
         InsertionPath magazineInsertionPath() const;
         void setWeaponProperty(const QString& name, const QJsonValue& value);

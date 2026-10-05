@@ -1,10 +1,12 @@
 // The domain detectors against event lists copied from the testbeds' native
 // clips (rework 14). Each case pins the value today's weapon behavior uses.
 #include "domain/detectors/ClipEvents.h"
+#include "domain/detectors/PresetProposal.h"
 
 #include <QCoreApplication>
 #include <QTextStream>
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
@@ -66,14 +68,42 @@ namespace
         expectMagazine("unrelated", unrelated, -1.f, -1.f);
         check(playedSound({ 0.f, QStringLiteral("soundplay.X") }) == QLatin1String("X"), "SoundPlay prefix is case-sensitive");
     }
+
+    // The bolt-action testbeds carry the record flag, the Glock a pistol
+    // keyword; the rifles' records do not name their action.
+    void presetProposals(const QString& directory)
+    {
+        QVector<WeaponPreset> presets;
+        QString error;
+        check(loadWeaponPresets(directory, presets, error), error);
+        const auto id = [&](ActionEvidence evidence) {
+            const auto proposal = proposePreset(evidence, presets);
+            check(proposal.preset ? proposal.problem.isEmpty() && !proposal.evidence.isEmpty() : !proposal.problem.isEmpty(), "Proposal without a reason");
+            return proposal.preset ? proposal.preset->id : QString();
+        };
+        check(id({ true, false }) == QLatin1String("sniper.manual-bolt-detachable.v1"), "Bolt action: " + id({ true, false }));
+        check(id({ false, true }) == QLatin1String("pistol.slide-detachable.v1"), "Pistol: " + id({ false, true }));
+        check(id({ true, true }) == QLatin1String("sniper.manual-bolt-detachable.v1"), "The record's bolt action decides first");
+        check(id({}).isEmpty(), "A rifle got a guessed preset");
+        const auto pistol = std::find_if(presets.cbegin(), presets.cend(), [](const WeaponPreset& p) { return p.id == QLatin1String("pistol.slide-detachable.v1"); });
+        check(pistol != presets.cend(), "No pistol preset");
+        auto twice = presets;
+        twice.append(*pistol);
+        twice.last().id = QStringLiteral("copy");
+        check(!proposePreset({ false, true }, twice).preset, "Two matching presets produced a proposal");
+    }
 }
 
 int main(int argc, char** argv)
 {
     QCoreApplication application(argc, argv);
     try {
+        if (argc < 2) {
+            throw std::runtime_error("usage: DetectorTests <assets/presets>");
+        }
         magazineEvents();
-        QTextStream(stdout) << "PASS magazine events from clip sound names\n";
+        presetProposals(QString::fromLocal8Bit(argv[1]));
+        QTextStream(stdout) << "PASS magazine events from clip sound names, preset proposals from records\n";
         return 0;
     } catch (const std::exception& e) {
         QTextStream(stderr) << e.what() << '\n';

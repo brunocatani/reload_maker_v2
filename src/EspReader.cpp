@@ -455,6 +455,9 @@ namespace reloadmaker
                         pending.weapon.ammoCapacity=readLittle<std::uint16_t>(d->data,52);
                         pending.weapon.dataFlags=readLittle<std::uint32_t>(d->data,48);
                         pending.weapon.automatic=(pending.weapon.dataFlags&0x8000u)!=0;
+                        // Bolt Action: set on the C14 and L118A2 records and on
+                        // none of the eight other testbed weapons (2026-10-05).
+                        pending.weapon.boltAction=(pending.weapon.dataFlags&0x400000u)!=0;
                         // FO4 DNAM is packed: animation type and damage leave
                         // the attack-fail SNDR unaligned at byte 85 (xEdit).
                         if(d->data.size()>=89)pending.weapon.attackFailSound=readLittle<std::uint32_t>(d->data,85);

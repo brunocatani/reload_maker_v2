@@ -65,6 +65,8 @@ namespace reloadmaker
 
     // The items `model` needs, in display order.
     [[nodiscard]] QVector<ChecklistItem> checklistItems(const WeaponModel& model);
+    // The behavior preset item, the only one before a preset is chosen.
+    [[nodiscard]] ChecklistItem presetChecklistItem();
 
     // What the detectors found for one item.
     struct ChecklistObservation

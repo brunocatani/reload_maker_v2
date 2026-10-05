@@ -1,8 +1,8 @@
-// Which operating mechanism the simulation runs for the open weapon. The
-// named weapons are the testbeds built before behavior templates existed; an
-// assigned template (_assignedMechanism) overrides the checks it covers. P2
-// replaces these name checks with the weapon's configured subsystems.
+// Which operating mechanism the simulation runs for the open weapon: the
+// assigned or proposed preset's. The remaining weapon-name checks are
+// replaced by weapon properties (rework 14).
 #include "ReloadMakerController.h"
+#include "ReloadTemplates.h"
 
 #include <algorithm>
 
@@ -44,16 +44,7 @@ namespace reloadmaker
 
     bool ReloadMakerController::isAr15Configuration() const
     {
-        if (_assignedMechanism) {
-            return *_assignedMechanism == WeaponMechanism::Ar15;
-        }
-        const auto* weapon = currentWeapon();
-        if (!weapon) {
-            return false;
-        }
-        // The SREP AR-10 is a reciprocating bolt; the other SREP rifles are AR-15s.
-        const bool srepAr15 = isSrepConfiguration() && !hasEditorId(weapon, QLatin1String("SREP_AR10"));
-        return srepAr15 || isMk18Configuration() || hasEditorId(weapon, QLatin1String("WPNRU556"));
+        return simulationMechanism() == WeaponMechanism::Ar15;
     }
 
     bool ReloadMakerController::isSrepConfiguration() const
@@ -103,10 +94,7 @@ namespace reloadmaker
 
     bool ReloadMakerController::isM1AConfiguration() const
     {
-        if (_assignedMechanism) {
-            return *_assignedMechanism == WeaponMechanism::M1A;
-        }
-        return hasEditorId(currentWeapon(), QLatin1String("WPNM1A"));
+        return simulationMechanism() == WeaponMechanism::M1A;
     }
 
     bool ReloadMakerController::isThanatosConfiguration() const
@@ -121,28 +109,21 @@ namespace reloadmaker
 
     bool ReloadMakerController::isBoltActionConfiguration() const
     {
-        if (_assignedMechanism) {
-            return *_assignedMechanism == WeaponMechanism::BoltAction;
-        }
-        return hasEditorId(currentWeapon(), QLatin1String("C14Timberwolf")) || isL118Configuration();
+        return simulationMechanism() == WeaponMechanism::BoltAction;
     }
 
+    // The assigned preset's mechanism, else the proposed one. A weapon with
+    // neither reads as a pistol slide until the author picks; Operate needs
+    // an assigned preset either way.
     WeaponMechanism ReloadMakerController::simulationMechanism() const
     {
         if (_assignedMechanism) {
             return *_assignedMechanism;
         }
-        if (isBoltActionConfiguration()) {
-            return WeaponMechanism::BoltAction;
-        }
-        if (isM1AConfiguration()) {
-            return WeaponMechanism::M1A;
-        }
-        if (isAr15Configuration()) {
-            return WeaponMechanism::Ar15;
-        }
-        if (isThanatosConfiguration() || isSrepConfiguration()) {
-            return WeaponMechanism::ReciprocatingBolt;
+        if (const auto* proposed = proposedPreset()) {
+            if (const auto mechanism = templateMechanism(proposed->id)) {
+                return *mechanism;
+            }
         }
         return WeaponMechanism::PistolSlide;
     }

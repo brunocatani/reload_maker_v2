@@ -117,14 +117,15 @@ void ReloadMakerController::refreshHeader() {
     // A preset the author chose is confirmed; otherwise Maker's own guess
     // shows as detected, the checklist's two states.
     const QString assigned=weapon?assignedTemplate():QString();
-    const QString current=assigned.isEmpty()&&weapon?templateIdentity(simulationMechanism()):assigned;
-    QString preset;
-    for(const auto& item:reloadPresets())if(item.id==current){preset=item.label;break;}
+    const auto* chosen=weapon?checklistPreset():nullptr;
+    const QString preset=chosen?chosen->label:QString();
     const bool detected=assigned.isEmpty();
     _presetChip->setText(preset.isEmpty()?QStringLiteral("No behavior preset"):QStringLiteral("Preset: ")+preset+(detected?QStringLiteral(" · detected"):QString()));
     _presetChip->setProperty("tone",preset.isEmpty()?QStringLiteral("warning"):detected?QStringLiteral("detected"):QString());
-    _presetChip->setToolTip(preset.isEmpty()?QStringLiteral("Behavior presets are unavailable: ")+reloadPresetsError()
-        :detected?QStringLiteral("Maker detected this preset. Confirm or change it in Menu › Author reload."):QStringLiteral("Behavior preset chosen for this weapon."));
+    _presetChip->setToolTip(!reloadPresetsError().isEmpty()?QStringLiteral("Behavior presets are unavailable: ")+reloadPresetsError()
+        :preset.isEmpty()?QStringLiteral("Choose one in the Reload checklist. ")+_presetProposal.problem
+        :detected?QStringLiteral("Maker proposes this preset: ")+_presetProposal.evidence+QStringLiteral(" Confirm or change it in the Reload checklist.")
+        :QStringLiteral("Behavior preset chosen for this weapon."));
     _presetChip->style()->unpolish(_presetChip);_presetChip->style()->polish(_presetChip);
     _presetChip->setVisible(weapon!=nullptr);
 }

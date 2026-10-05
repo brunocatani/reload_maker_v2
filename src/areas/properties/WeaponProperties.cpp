@@ -3,8 +3,10 @@
 // reads these properties instead of weapon names.
 #include "ReloadMakerController.h"
 #include "ReloadTemplates.h"
+#include "WeaponAmmunition.h"
 #include "areas/properties/PropertyInputs.h"
 #include "commands/CommandSupport.h"
+#include "domain/detectors/PresetProposal.h"
 
 #include <QJsonArray>
 
@@ -28,6 +30,30 @@ namespace reloadmaker
     }
 
     using commands::require;
+
+    void ReloadMakerController::refreshPresetProposal()
+    {
+        _presetProposal = {};
+        if (!currentWeapon() || !currentPlugin() || !configuration()) {
+            return;
+        }
+        const auto ammunition = resolveWeaponAmmunition(*currentPlugin(), *currentWeapon(), *configuration(), _referenceNames);
+        const auto proposal = proposePreset({ currentWeapon()->boltAction, ammunition.pistol }, reloadPresets());
+        _presetProposal = { proposal.preset ? proposal.preset->id : QString(), proposal.evidence, proposal.problem };
+    }
+
+    const WeaponPreset* ReloadMakerController::proposedPreset() const
+    {
+        if (_presetProposal.preset.isEmpty()) {
+            return nullptr;
+        }
+        for (const auto& preset : reloadPresets()) {
+            if (preset.id == _presetProposal.preset) {
+                return &preset;
+            }
+        }
+        return nullptr;
+    }
 
     WeaponOverrides ReloadMakerController::currentWeaponOverrides() const
     {
@@ -92,6 +118,10 @@ namespace reloadmaker
                                       { "events", eventsJson(clip) }, { "error", clip.valid() ? QString() : error } });
         }
         QJsonObject result{ { "clips", clips } };
+        if (currentWeapon()) {
+            result["preset"] = QJsonObject{ { "assigned", assignedTemplate() }, { "proposed", _presetProposal.preset },
+                                            { "evidence", _presetProposal.evidence }, { "problem", _presetProposal.problem } };
+        }
         if (currentWeapon()) {
             const auto chosen = currentWeaponOverrides().insertion;
             result["insertion"] = QJsonObject{ { "value", insertionPathName(magazineInsertionPath()) },
