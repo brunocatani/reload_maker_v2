@@ -63,7 +63,7 @@ bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& err
         if(!reloadPoseVisible(p)){error="The slide disappears within its source motion.";return false;}
         const float d=reloadPoseDistance(rest,p);distance.append(d);travel=std::max(travel,d);
     }
-    if(travel<.15f){error="The reload has no measurable slide stroke.";return false;}
+    if(travel<kCompleteStroke){error="The reload has no measurable slide stroke.";return false;}
     // The last open-to-closed stroke avoids the spare-magazine relocation in
     // an empty reload's opening frames. No weapon-specific frame numbers.
     if(selected&&selected->openFrame>=0){rig.openFrame=selected->openFrame;rig.closedFrame=selected->closedFrame;
@@ -111,6 +111,57 @@ Transformf simulationTrackPose(const ReloadRecipe& r,const SimulationRig& rig,in
     const float frame=rig.closedFrame+(rig.openFrame-rig.closedFrame)*std::clamp(progress,0.f,1.f);
     if(!rig.authoredCurves.contains(track)&&!(track==rig.slide&&!rig.derivedHandle.isEmpty())&&!(track==rig.bolt&&!rig.derivedBolt.isEmpty()))return reloadTrackPose(r,track,r.duration*frame/(r.frames-1));
     const auto& curve=simulationTrackCurve(r,rig,track);const int a=int(frame),b=std::min(a+1,int(curve.size()-1));return interpolatedTransform(curve[a],curve[b],frame-a);
+}
+float reloadTrackStroke(const ReloadRecipe& r,int track) {
+    float stroke=0;
+    if(track<0||track>=r.tracks.size()||r.tracks[track].poses.isEmpty())return stroke;
+    const auto& poses=r.tracks[track].poses;
+    for(const auto& pose:poses)stroke=std::max(stroke,reloadPoseDistance(pose,poses.back()));
+    return stroke;
+}
+int surfaceTrack(const ReloadRecipe& r,const QString& anchorName) {
+    int found=-1;
+    for(int i=0;i<r.tracks.size();++i) {
+        if(!r.tracks[i].surface||r.tracks[i].anchor.anchorName.compare(anchorName,Qt::CaseInsensitive)!=0)continue;
+        if(found>=0)return -1;
+        found=i;
+    }
+    return found;
+}
+QVector<int> boltDrivenTracks(const ReloadRecipe& r,const SimulationRig& rig) {
+    QVector<int> driven;
+    const bool ar15=rig.mechanism==WeaponMechanism::Ar15;
+    if((!ar15&&rig.mechanism!=WeaponMechanism::ReciprocatingBolt)||rig.bolt<0)return driven;
+    const float boltStroke=reloadTrackStroke(r,rig.bolt);
+    if(boltStroke<kCompleteStroke)return driven;
+    const float handleStroke=ar15?reloadTrackStroke(r,rig.slide):0.f;
+    const auto distances=[&](int track){
+        QVector<double> values;values.reserve(r.frames);
+        for(const auto& pose:r.tracks[track].poses)values.append(reloadPoseDistance(pose,r.tracks[track].poses.back()));
+        return values;
+    };
+    const auto correlation=[](const QVector<double>& a,const QVector<double>& b){
+        double ma=0,mb=0;for(int i=0;i<a.size();++i){ma+=a[i];mb+=b[i];}ma/=a.size();mb/=b.size();
+        double ab=0,aa=0,bb=0;for(int i=0;i<a.size();++i){ab+=(a[i]-ma)*(b[i]-mb);aa+=(a[i]-ma)*(a[i]-ma);bb+=(b[i]-mb)*(b[i]-mb);}
+        return aa>0&&bb>0?ab/std::sqrt(aa*bb):0.0;
+    };
+    const auto bolt=distances(rig.bolt);
+    const auto handle=ar15?distances(rig.slide):QVector<double>();
+    for(int i=0;i<r.tracks.size();++i) {
+        if(i==rig.slide||i==rig.bolt||!r.tracks[i].surface||rig.magazineTracks.contains(i)||rig.slideTracks.contains(i))continue;
+        const float stroke=reloadTrackStroke(r,i);
+        if(stroke<=.01f)continue;
+        const auto part=distances(i);
+        int moving=0,withBolt=0,withHandle=0;
+        for(int f=0;f<r.frames;++f) {
+            if(part[f]<=.1*stroke)continue;
+            ++moving;
+            withBolt+=bolt[f]>.1*boltStroke?1:0;
+            withHandle+=handleStroke>.01f&&handle[f]>.1*handleStroke?1:0;
+        }
+        if(moving>0&&withBolt>=.8*moving&&withHandle<=.2*moving&&correlation(part,bolt)>=.7)driven.append(i);
+    }
+    return driven;
 }
 QJsonObject simulationRigJson(const ReloadRecipe& r,const SimulationRig& rig,bool springReturn) {
     const auto records=[&](const QVector<int>& indices) {

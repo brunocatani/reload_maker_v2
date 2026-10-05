@@ -565,6 +565,8 @@ namespace reloadmaker
         int _rifleBoltOpen{0};
         float _rifleBoltDuration{0},_rifleFireInterval{0},_rifleSingleDuration{0};
         QString _rifleBoltSource;
+        // The fire cycle replays the reload's bolt stroke (the fire clip has none).
+        bool _rifleBoltFromReloadStroke{ false };
         SlotKey _simulationMagazineSlot{0};
         int _m1aEmptyMagazineFrame{0};
         int _m1aLoadedMagazineFrame{0};
@@ -659,8 +661,9 @@ namespace reloadmaker
         struct MagazineVisual {QPersistentModelIndex node;int flags{0};bool empty{false};int track{-1};bool cartridge{false};bool nativeOnly{false};bool parked{false};};
         QVector<MagazineVisual> _magazineVisuals;
         // Steps of the Operate simulation (src/areas/operate/).
-        bool buildSrepSimulationRig(SimulationRig& rig, QString& error);
-        bool buildMk18SimulationRig(SimulationRig& rig, QString& error);
+        bool rejectOwnReloadAttachments(QString& error) const;
+        bool buildBoltDrivenRig(SimulationRig& rig, QString& error);
+        bool manualBoltFromReload() const;
         bool measureRifleFireInterval(const HkxClip& single, const AnimationAction* automatic, QString& error);
         bool sampleRifleFireBolt(const HkxClip& base, const HkxClip& clip, QString& error);
         bool useReloadBoltStroke(const HkxClip& singleFire);

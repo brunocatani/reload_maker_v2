@@ -16,10 +16,6 @@ namespace reloadmaker
     {
         // Native clips are sampled at this rate when no recipe frame count applies.
         constexpr float kSamplesPerSecond = 120.0f;
-        // reloadPoseDistance (game units plus 3 x radians) below which a bolt
-        // path is static or partial rather than a complete stroke.
-        constexpr float kCompleteBoltStroke = 0.15f;
-
         int sampleCount(float seconds)
         {
             return int(std::ceil(seconds * kSamplesPerSecond)) + 1;
@@ -49,20 +45,28 @@ namespace reloadmaker
         return buildConfiguredSimulationRig(setup, rig, error);
     }
 
+    // The rig from the captured reload (rework 14, items 9-13). An AR-15
+    // reload that never moves the charging handle derives the handle from the
+    // bolt's stroke. Parts that move only with the bolt follow it.
     bool ReloadMakerController::buildSourceSimulationRig(SimulationRig& rig, QString& error)
     {
-        if (isSrepConfiguration()) {
-            return buildSrepSimulationRig(rig, error);
+        if (!rejectOwnReloadAttachments(error)) {
+            return false;
         }
-        if (isMk18Configuration()) {
-            return buildMk18SimulationRig(rig, error);
+        const auto& recipe = *_reloadRecipe;
+        const auto mechanism = simulationMechanism();
+        const int handle = surfaceTrack(recipe, QStringLiteral("WeaponExtra1"));
+        const bool staticHandle = mechanism == WeaponMechanism::Ar15 && handle >= 0 && reloadTrackStroke(recipe, handle) <= .01f;
+        if (!(staticHandle ? buildBoltDrivenRig(rig, error) : buildSimulationRig(recipe, rig, error, mechanism))) {
+            return false;
         }
-        return buildSimulationRig(*_reloadRecipe, rig, error, simulationMechanism());
+        rig.slideTracks += boltDrivenTracks(recipe, rig);
+        return true;
     }
 
-    // SREP's native bolt cycles while its separate charging handle is static.
-    // Derive only the manual handle translation from that measured bolt stroke.
-    bool ReloadMakerController::buildSrepSimulationRig(SimulationRig& rig, QString& error)
+    // Underbarrel modes with their own reload graph cannot take a physical
+    // rifle reload. Still named by record until rework 14 item 15.
+    bool ReloadMakerController::rejectOwnReloadAttachments(QString& error) const
     {
         for (const auto id : configuration()->activeMods()) {
             const auto* mod = configuration()->mod(id);
@@ -71,43 +75,29 @@ namespace reloadmaker
                 return false;
             }
         }
-        if (!buildSimulationRig(*_reloadRecipe, rig, error, simulationMechanism(), isAr15Configuration())) {
-            return false;
-        }
-        const auto& tracks = _reloadRecipe->tracks;
-        for (int i = 0; i < tracks.size(); ++i) {
-            if (tracks[i].surface && tracks[i].anchor.anchorName == QLatin1String("WeaponExtra2")) {
-                rig.slideTracks.append(i);
-            }
-        }
         return true;
     }
 
-    // The MK18 handle is derived from the reload's bolt stroke. Tactical and
-    // double-magazine clips may never cycle the bolt; their magazine and hands
-    // stay native and the manual action uses the standard MK18 empty reload.
-    bool ReloadMakerController::buildMk18SimulationRig(SimulationRig& rig, QString& error)
+    // An AR-15 whose reload never moves the charging handle: the handle
+    // follows the bolt's stroke. A reload that never strokes the bolt either
+    // (a tactical reload) takes the stroke from the weapon's standard reload;
+    // its magazine and hands stay native.
+    bool ReloadMakerController::buildBoltDrivenRig(SimulationRig& rig, QString& error)
     {
         const auto& recipe = *_reloadRecipe;
-        int bolt = -1;
-        for (int i = 0; i < recipe.tracks.size(); ++i) {
-            if (recipe.tracks[i].anchor.anchorName == QLatin1String("WeaponBolt")) {
-                bolt = i;
-            }
-        }
+        const int bolt = surfaceTrack(recipe, QStringLiteral("WeaponBolt"));
         if (bolt < 0) {
-            error = "MK18 has no native bolt binding.";
+            error = "The reload has no native bolt binding.";
             return false;
         }
-        const auto& boltPoses = recipe.tracks[bolt].poses;
-        float stroke = 0;
-        for (const auto& pose : boltPoses) {
-            stroke = std::max(stroke, reloadPoseDistance(pose, boltPoses.back()));
+        if (reloadTrackStroke(recipe, bolt) >= kCompleteStroke) {
+            return buildSimulationRig(recipe, rig, error, WeaponMechanism::Ar15, true);
         }
-        if (stroke >= kCompleteBoltStroke) {
-            return buildSimulationRig(recipe, rig, error, simulationMechanism(), true);
+        const QString path = resolveAnimationPath(QStringLiteral("WPNReload.hkx"));
+        if (path.isEmpty() || ResourceArchive::normalizeResourcePath(path) == ResourceArchive::normalizeResourcePath(recipe.source["animation"].toString())) {
+            error = "This reload moves neither the charging handle nor the bolt, and the weapon has no standard reload to take the bolt stroke from.";
+            return false;
         }
-        const QString path = "meshes/actors/character/_1stperson/animations/mk18anims/wpnreload.hkx";
         const auto bytes = readAnimationResource(path, error);
         const auto clip = HkxReader::readClip(bytes, error);
         const auto base = HkxReader::readClip(readAnimationResource(recipe.source["baseline"].toString(), error), error);
@@ -130,7 +120,7 @@ namespace reloadmaker
             }
             poses.append(sampler.nodePose(_reloadTrackNodes[bolt]));
         }
-        if (!buildSimulationRig(recipe, rig, error, simulationMechanism(), true, poses)) {
+        if (!buildSimulationRig(recipe, rig, error, WeaponMechanism::Ar15, true, poses)) {
             return false;
         }
         rig.mechanicalSource = {
@@ -141,6 +131,15 @@ namespace reloadmaker
         return true;
     }
 
+    // An AR-15 bolt worked by hand follows its reload track rather than the
+    // fire cycle: it drives a derived handle and the fire clip has its own
+    // stroke (with a replayed reload stroke the two are the same path).
+    bool ReloadMakerController::manualBoltFromReload() const
+    {
+        return _simulationRig && _simulationRig->mechanism == WeaponMechanism::Ar15 && !_simulationRig->derivedHandle.isEmpty() &&
+               !_rifleBoltFromReloadStroke;
+    }
+
     // Rifle firing: the cadence from the native fire clips, and the bolt cycle
     // the firing pose replays. Errors go to _simulationError.
     bool ReloadMakerController::prepareRifleMotion()
@@ -149,6 +148,7 @@ namespace reloadmaker
         _rifleBoltOpen = 0;
         _rifleFireInterval = 0;
         _rifleBoltSource.clear();
+        _rifleBoltFromReloadStroke = false;
         const auto single = std::find_if(_animationActions.cbegin(), _animationActions.cend(), [](const auto& action) {
             return action.family == ActionFamily::Fire && !action.automatic;
         });
@@ -190,11 +190,18 @@ namespace reloadmaker
                 break;
             }
         }
-        const bool staticMk18Bolt = _simulationRig->presetFire && isMk18Configuration() && travel < kCompleteBoltStroke;
-        if (staticMk18Bolt || _simulationRig->fireFromStroke) {
+        // A fire clip that never strokes the bolt replays the reload's stroke
+        // (rework 14, item 14), as an authored "stroke" fire mode does.
+        const auto& rig = *_simulationRig;
+        bool reloadStrokes = false;
+        if (rig.bolt >= 0) {
+            const auto& reloadBolt = simulationTrackCurve(*_reloadRecipe, rig, rig.bolt);
+            reloadStrokes = reloadPoseDistance(reloadBolt[rig.closedFrame], reloadBolt[rig.openFrame]) >= kCompleteStroke;
+        }
+        if ((rig.presetFire && travel < kCompleteStroke && reloadStrokes) || rig.fireFromStroke) {
             return useReloadBoltStroke(clip);
         }
-        if (travel < kCompleteBoltStroke || closed < 0) {
+        if (travel < kCompleteStroke || closed < 0) {
             _simulationError = "Single-fire source has no complete bolt stroke.";
             return false;
         }
@@ -277,7 +284,7 @@ namespace reloadmaker
         return true;
     }
 
-    // The MK18 fires with a static bolt track. Its native reload supplies the
+    // A bolt the fire clip leaves static: the native reload supplies the
     // complete stroke; replay that measured path, closed to open and back, at
     // the firing cadence.
     bool ReloadMakerController::useReloadBoltStroke(const HkxClip& singleFire)
@@ -292,8 +299,8 @@ namespace reloadmaker
         for (int frame = rig.openFrame + 1; frame <= rig.closedFrame; ++frame) {
             _rifleBoltCycle.append(source[frame]);
         }
-        if (_rifleBoltOpen < 1 || reloadPoseDistance(_rifleBoltCycle.front(), _rifleBoltCycle[_rifleBoltOpen]) < kCompleteBoltStroke) {
-            _simulationError = "MK18 native reload has no complete bolt stroke.";
+        if (_rifleBoltOpen < 1 || reloadPoseDistance(_rifleBoltCycle.front(), _rifleBoltCycle[_rifleBoltOpen]) < kCompleteStroke) {
+            _simulationError = "The native reload has no complete bolt stroke.";
             return false;
         }
         _rifleBoltDuration = _rifleFireInterval;
@@ -301,6 +308,7 @@ namespace reloadmaker
         _rifleBoltSource = rig.derivedBolt.isEmpty()
             ? _reloadRecipe->source["animation"].toString()
             : rig.mechanicalSource["animation"].toString();
+        _rifleBoltFromReloadStroke = true;
         return true;
     }
 

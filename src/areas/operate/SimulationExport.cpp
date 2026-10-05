@@ -358,7 +358,7 @@ namespace reloadmaker
             { "poses", poses },
         };
         result["automaticFireInterval"] = _rifleFireInterval;
-        if (isSrepConfiguration() && isAr15Configuration()) {
+        if (manualBoltFromReload()) {
             result["manualBoltFromReload"] = true;
         }
         if (m1a) {

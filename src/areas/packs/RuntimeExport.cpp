@@ -270,8 +270,8 @@ namespace reloadmaker
                            { "sourcePath", a.anchorPath },
                            { "runtimePath", runtimeTrackPath(index) },
                            { "poses", runtimeCurve(poses, rig.openFrame, rig.closedFrame) } };
-        if (type == WeaponMechanism::Ar15 && isSrepConfiguration() && a.anchorName == "WeaponExtra2") {
-            track["boltFollower"] = true;
+        if (type == WeaponMechanism::Ar15 && index != rig.slide && rig.slideTracks.contains(index)) {
+            track["boltFollower"] = true; // a part the bolt drives
         }
         if (_magazineSetup ? runtimePayloadTrack(index) : type == WeaponMechanism::M1A && a.anchorName.startsWith("WeaponMagazineChild")) {
             const auto normalized = [&](int frame) {
@@ -587,7 +587,7 @@ namespace reloadmaker
                     }
                 }
             }
-            if (type == WeaponMechanism::Ar15 && isSrepConfiguration()) {
+            if (manualBoltFromReload()) {
                 header["manualBoltFromReload"] = true;
             }
             if (magazineBuiltIn()) {

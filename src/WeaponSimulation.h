@@ -76,4 +76,20 @@ namespace reloadmaker {
     const QVector<Transformf>& simulationTrackCurve(const ReloadRecipe&,const SimulationRig&,int track);
     Transformf simulationTrackPose(const ReloadRecipe& recipe, const SimulationRig& rig, int track, float progress);
     QJsonObject simulationRigJson(const ReloadRecipe& recipe, const SimulationRig& rig, bool springReturn);
+    // A full bolt or slide stroke moves at least this far (game units plus 3 x radians).
+    constexpr float kCompleteStroke = .15f;
+    // The largest distance of a track from its last pose over the recipe.
+    float reloadTrackStroke(const ReloadRecipe& recipe, int track);
+    // The surface track bound to a native animation bone, or -1 when there is
+    // none or more than one. The rig's default roles use these names.
+    int surfaceTrack(const ReloadRecipe& recipe, const QString& anchorName);
+    // Parts the bolt drives (rework 14, item 9): surface tracks outside the
+    // magazine and the operating tracks that move only while the bolt is
+    // away from rest (at least 80% of their displaced frames; for an AR-15,
+    // at most 20% with the charging handle displaced) and whose distance from
+    // rest follows the bolt's (correlation at least 0.7). A spare magazine
+    // carried while the bolt is locked back moves with it but not like it.
+    // Empty unless the rig is an AR-15 or a reciprocating bolt with a
+    // complete bolt stroke.
+    QVector<int> boltDrivenTracks(const ReloadRecipe& recipe, const SimulationRig& rig);
 }

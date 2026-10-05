@@ -75,8 +75,8 @@ namespace reloadmaker
         if (isBoltActionConfiguration()) {
             applyBoltActionTargets(targets);
         }
-        const bool reciprocatingSrep = isSrepConfiguration() && simulationMechanism() == WeaponMechanism::ReciprocatingBolt;
-        if (reciprocatingSrep && _simulation.action == SimulationAction::Fire) {
+        // A reciprocating bolt fires along its sampled fire cycle, as an AR-15's does.
+        if (simulationMechanism() == WeaponMechanism::ReciprocatingBolt && _simulation.action == SimulationAction::Fire) {
             targets.insert(_reloadTrackNodes[_simulationRig->bolt], rifleFireBoltPose());
         }
         if (!addMagazineRoundTargets(targets)) {
@@ -117,8 +117,8 @@ namespace reloadmaker
     }
 
     // AR-15: the bolt and charging handle move independently. Outside native
-    // reloads the handle follows its own input; the SREP's other operating
-    // parts follow the bolt.
+    // reloads the handle follows its own input; parts the bolt drives (the
+    // rig's other slide tracks) follow the bolt.
     void ReloadMakerController::addAr15Targets(QHash<int, Transformf>& targets, bool holdOpen) const
     {
         const auto& rig = *_simulationRig;
@@ -128,9 +128,6 @@ namespace reloadmaker
         }
         const float handle = _simulation.action == SimulationAction::Fire ? 0.f : _simulation.handle;
         targets.insert(_reloadTrackNodes[rig.slide], simulationTrackPose(*_reloadRecipe, rig, rig.slide, handle));
-        if (!isSrepConfiguration()) {
-            return;
-        }
         const float bolt = _simulation.slideLocked ? 1.f : _simulation.slide;
         for (const int track : rig.slideTracks) {
             if (track != rig.slide) {
@@ -139,20 +136,19 @@ namespace reloadmaker
         }
     }
 
-    // During a reload the MK18 and SREP bolts follow their own reload track;
-    // other AR-15 bolts follow the charging handle's travel in the clip.
+    // A bolt that drives a derived charging handle follows its own reload
+    // track, in the clip and when worked by hand; other AR-15 bolts follow
+    // the charging handle's travel in the clip and the fire cycle by hand.
     Transformf ReloadMakerController::ar15BoltPose(bool holdOpen) const
     {
         const auto& rig = *_simulationRig;
         const auto& recipe = *_reloadRecipe;
+        const bool boltDrivesHandle = !rig.derivedHandle.isEmpty();
         if (_simulation.action == SimulationAction::Fire) {
             return rifleFireBoltPose();
         }
-        if (_simulation.action == SimulationAction::Reload && (isMk18Configuration() || isSrepConfiguration())) {
-            if (!holdOpen) {
-                return reloadTrackPose(recipe, rig.bolt, _simulation.seconds);
-            }
-            return isSrepConfiguration() ? simulationTrackPose(recipe, rig, rig.bolt, 1) : rifleBoltPose(1);
+        if (_simulation.action == SimulationAction::Reload && boltDrivesHandle) {
+            return holdOpen ? simulationTrackPose(recipe, rig, rig.bolt, 1) : reloadTrackPose(recipe, rig.bolt, _simulation.seconds);
         }
         if (_simulation.action == SimulationAction::Reload) {
             const auto& handlePoses = recipe.tracks[rig.slide].poses;
@@ -161,7 +157,7 @@ namespace reloadmaker
             const float progress = holdOpen ? 1.f : std::clamp(reloadPoseDistance(handlePoses[rig.closedFrame], handle) / travel, 0.f, 1.f);
             return rifleBoltPose(progress);
         }
-        if (isSrepConfiguration()) {
+        if (boltDrivesHandle) {
             return simulationTrackPose(recipe, rig, rig.bolt, _simulation.slide);
         }
         return rifleBoltPose(_simulation.slide);

@@ -298,6 +298,34 @@ void ar15Fixture(const QString& path) {
     const auto& bolt=staticHandle.tracks[0].poses;
     for(int f=0;f<recipe.frames;++f){const auto& h=rig.derivedHandle[f];check(std::abs((h.translation.y-rest.translation.y)-(bolt[f].translation.y-bolt.back().translation.y))<.0001f,"Derived handle lost native bolt travel");}
     check(reloadPoseDistance(staticHandle.tracks[1].poses.front(),rest)==0&&!simulationRigJson(staticHandle,rig,true)["derivedHandleMotion"].toObject().isEmpty(),"Static source was mutated or derivation provenance lost");
+    // Rework 14, items 9 and 11: strokes and the parts a bolt drives. The
+    // RU556 reload strokes its handle, never its bolt, so nothing follows the bolt.
+    check(reloadTrackStroke(recipe,1)>3.8f&&reloadTrackStroke(recipe,0)<kCompleteStroke&&reloadTrackStroke(staticHandle,1)==0,"RU556 reload strokes");
+    check(surfaceTrack(recipe,"WeaponExtra1")==1&&surfaceTrack(recipe,"weaponbolt")==0&&surfaceTrack(recipe,"WeaponMissing")<0,"Native bone tracks");
+    SimulationRig plain;check(buildSimulationRig(recipe,plain,error,WeaponMechanism::Ar15),error);
+    check(boltDrivenTracks(recipe,plain).isEmpty(),"A part followed the RU556's static bolt");
+    // A release that moves only while the bolt is back is driven by it; one
+    // that moves while the bolt rests is not.
+    const auto releaseRest=staticHandle.tracks[2].poses.back();
+    // A part that moves while the bolt is back but against its travel (a
+    // spare carried during a locked-back reload) is not.
+    auto driven=staticHandle,independent=staticHandle,opposed=staticHandle;
+    float boltStroke=0;
+    for(const auto& pose:bolt)boltStroke=std::max(boltStroke,reloadPoseDistance(pose,bolt.back()));
+    for(int f=0;f<recipe.frames;++f) {
+        const float boltTravel=reloadPoseDistance(bolt[f],bolt.back());
+        driven.tracks[2].poses[f]=releaseRest;driven.tracks[2].poses[f].translation.z+=.2f*boltTravel;
+        independent.tracks[2].poses[f]=releaseRest;independent.tracks[2].poses[f].translation.z+=boltTravel<.01f&&f<recipe.frames-1?.5f:0.f;
+        opposed.tracks[2].poses[f]=releaseRest;opposed.tracks[2].poses[f].translation.z+=boltTravel>.2f*boltStroke?10*(1-boltTravel/boltStroke)+1:0.f;
+    }
+    SimulationRig drivenRig,independentRig,opposedRig;
+    check(buildSimulationRig(driven,drivenRig,error,WeaponMechanism::Ar15,true)&&buildSimulationRig(independent,independentRig,error,WeaponMechanism::Ar15,true)&&
+          buildSimulationRig(opposed,opposedRig,error,WeaponMechanism::Ar15,true),error);
+    check(boltDrivenTracks(driven,drivenRig)==QVector<int>({2}),"A part moving only with the bolt was not driven");
+    check(boltDrivenTracks(independent,independentRig).isEmpty(),"A part moving while the bolt rests was driven");
+    check(boltDrivenTracks(opposed,opposedRig).isEmpty(),"A part moving against the bolt's travel was driven");
+    SimulationRig m1aRig=drivenRig;m1aRig.mechanism=WeaponMechanism::M1A;
+    check(boltDrivenTracks(driven,m1aRig).isEmpty(),"An M1A rig took bolt-driven parts");
 }
 void m1aFixture(const QString& path) {
     QFile file(path);check(file.open(QIODevice::ReadOnly),"Missing M1A fixture");
