@@ -20,10 +20,10 @@ def run():
         assert candidates,'Native 10mm source weapon missing'
         selected=min(candidates,key=lambda w:len(w['editorId']))
         edit('select_weapon',dict(index=selected['index']));ready();edit('workspace',dict(index=5));ready()
-        before=command('simulation_state');assert 'Choose a behavior template' in before['error'],before
+        before=command('simulation_state');assert "Confirm this weapon's behavior preset" in before['error'],before
         edit('checklist',dict(operation='preset',id='pistol.slide-detachable.v1'));ready()
         assert command('checklist_state')['presetAssigned']
-        assert 'Choose a behavior template' not in command('simulation_state')['error']
+        assert 'behavior preset' not in command('simulation_state')['error']
         edit('checklist',dict(operation='confirm',id='weapon.sources'))
         base=work/'base.project.json';edit('save_project',dict(path=str(base)))
         evidence=next(v['sources'] for v in json.loads(base.read_text(encoding='utf-8'))['authoringRoadmaps'].values() if 'sources' in v)

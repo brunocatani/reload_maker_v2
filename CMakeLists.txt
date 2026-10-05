@@ -49,7 +49,7 @@ set(RELOADMAKER_GLOCK_PACKAGE "F:/fo4dev/personal_devtools/reload_maker/example_
 set(simulation_fixtures "${CMAKE_SOURCE_DIR}/tests/fixtures/simulation")
 set(reloadmaker_suites HkxReader Resources Pose SceneBinding Configuration Library Installation Authoring HandPose
     PartGrip GripViewport Mechanism ReloadRecipe Simulation Ammunition ActionCatalog Sound GrabLocations ScopeProfile
-    Collision WeaponModel Checklist)
+    Collision WeaponModel Checklist Detector)
 foreach(suite IN LISTS reloadmaker_suites)
   set(suite_arguments "")
   if(suite STREQUAL "Simulation")

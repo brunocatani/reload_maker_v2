@@ -484,6 +484,26 @@ def checklist(operation: str, id: str, expected_revision: int) -> dict:
     return command('checklist', dict(operation=operation, id=id), expected_revision)
 
 @mcp.tool()
+def weapon_properties_state() -> dict:
+    """What Maker read from the open configuration, which the editor uses in
+    place of weapon names. clips lists the reload, fire and cycle clips with
+    their events (sound plays, ejection, weaponfire, culling).
+    magazineEvents is the magazine entry and removal Maker read from the
+    reload clip's sound names, with any ambiguity. insertion is how the
+    magazine goes in: straight, or native-curve along the clip; source says
+    whether the weapon's own choice or its preset decided.
+    """
+    return command('weapon_properties_state')
+
+@mcp.tool()
+def weapon_property(name: str, value: str | None, expected_revision: int) -> dict:
+    """Set one property for the whole weapon, overriding its preset, or clear
+    it with value null. name insertion takes straight or native-curve. Operate
+    is prepared again and the project saved.
+    """
+    return command('weapon_property', dict(name=name, value=value), expected_revision)
+
+@mcp.tool()
 def get_installation() -> dict:
     """Inspect game/Creation Kit roots, MO2 profiles, capabilities and active VFS status."""
     return command('installation')

@@ -5,6 +5,8 @@
 #include <QStringList>
 #include <QVector>
 
+#include <optional>
+
 namespace reloadmaker
 {
     // The general weapon model (rework 10 §3, amended by the model probe in
@@ -107,10 +109,23 @@ namespace reloadmaker
         int capacity{ 1 };    // units this point fills: rounds in a tube, chambers in a barrel set
     };
 
+    // How a detachable container goes in: along a straight line from the
+    // well, or along the reload clip's own curve when it rocks or turns into
+    // place. The author may override the preset's choice per weapon.
+    enum class InsertionPath
+    {
+        Straight,
+        NativeCurve,
+    };
+
+    [[nodiscard]] QString insertionPathName(InsertionPath path);
+    [[nodiscard]] std::optional<InsertionPath> insertionPathFromName(const QString& name);
+
     struct Feed
     {
         ContainerKind container{ ContainerKind::None };
         QVector<LoadingPoint> loadingPoints; // in loading order
+        InsertionPath insertion{ InsertionPath::Straight };
     };
 
     enum class FireMotion

@@ -4,6 +4,7 @@
 // body, cartridge or animation-only spare. Any failing step sets
 // _magazineError and leaves _magazineRail empty.
 #include "ReloadMakerController.h"
+#include "areas/properties/PropertyInputs.h"
 #include "MagazineGuide.h"
 #include "MagazineReference.h"
 #include "StudioWindow.h"
@@ -54,9 +55,10 @@ namespace reloadmaker
             authoredOutward = QVector3D(axis.x, axis.y, axis.z).normalized();
         }
         const auto& rig = *_simulationRig;
-        // These magazines rock or rotate into the well; the rail measures from
-        // the seated end of the reload and may fall back to its final approach.
-        const bool finalApproach = isM1AConfiguration() || isBoltActionConfiguration() || isThanatosConfiguration();
+        // A magazine that follows its clip's curve may rock or turn into the
+        // well; the rail measures from the seated end of the reload and may
+        // fall back to its final approach.
+        const bool finalApproach = magazineInsertionPath() == InsertionPath::NativeCurve;
         MagazineRail rail;
         if (!buildMagazineRail(*_reloadRecipe, rig.magazine, connection.name, connection.frame, body, frame, rail, _magazineError, finalApproach,
                                _magazineSetup ? _magazineSetup->emptyTrack : -1, guideJson.isEmpty() ? nullptr : &authoredOutward)) {
@@ -247,14 +249,13 @@ namespace reloadmaker
         return false;
     }
 
-    // The magazine's visible movement along the rail: the native insertion of
-    // the testbeds that use one, or the saved setup's native or manual path.
-    // The setup also chooses the loaded and empty payload frames.
+    // The magazine's visible movement along the rail: the clip's insertion
+    // curve when the weapon follows it, or the saved setup's native or manual
+    // path. The setup also chooses the loaded and empty payload frames.
     bool ReloadMakerController::buildMagazineMotion(const QVector<QVector3D>& body, MagazineRail& rail)
     {
         const bool presetMotion = !_magazineSetup || _magazineSetup->motion == "preset";
-        const bool nativeInsertion = isM1AConfiguration() || isBoltActionConfiguration() || isThanatosConfiguration();
-        if (presetMotion && !currentTestbed().isEmpty() && nativeInsertion && !buildTestbedMagazineMotion(body, rail)) {
+        if (presetMotion && magazineInsertionPath() == InsertionPath::NativeCurve && !buildNativeMagazineMotion(body, rail)) {
             return false;
         }
         if (!_magazineSetup) {
@@ -287,33 +288,13 @@ namespace reloadmaker
         return buildManualMagazineAnimation(*_reloadRecipe, *movement, body, rail, _magazineError);
     }
 
-    // The M1A, bolt-action and Thanatos testbeds insert along their native
-    // reload, from the clip's magazine-in sound event; their magazine-out
-    // event marks the empty payload frame.
-    bool ReloadMakerController::buildTestbedMagazineMotion(const QVector<QVector3D>& body, MagazineRail& rail)
+    // Insertion along the native reload from the clip's magazine entry event;
+    // the removal event marks the empty payload frame.
+    bool ReloadMakerController::buildNativeMagazineMotion(const QVector<QVector3D>& body, MagazineRail& rail)
     {
-        QString magazineIn = "WPNM1AMagIn";
-        QString magazineOut = "WPNM1AMagOut";
-        if (isL118Configuration()) {
-            magazineIn = "L115A3_ReloadMagIn";
-            magazineOut = "L115A3_MagOut";
-        } else if (isBoltActionConfiguration()) {
-            magazineIn = "C14_MagInserting";
-            magazineOut = "C14_MagOut";
-        } else if (isThanatosConfiguration()) {
-            magazineIn = "WPNM107Magin";
-            magazineOut = "WPNM107Magout";
-        }
-        float entry = -1;
-        float empty = -1;
-        for (const auto& event : _reloadClip.annotations) {
-            if (event.text.endsWith(magazineIn, Qt::CaseInsensitive)) {
-                entry = event.timeSeconds;
-            }
-            if (event.text.endsWith(magazineOut, Qt::CaseInsensitive)) {
-                empty = event.timeSeconds;
-            }
-        }
+        const auto events = detectMagazineEvents(clipEvents(_reloadClip));
+        const float entry = events.entrySeconds;
+        const float empty = events.removalSeconds;
         if (empty < 0) {
             _magazineError = "Native empty-magazine frame is unavailable.";
             return false;

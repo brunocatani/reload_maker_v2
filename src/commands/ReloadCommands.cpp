@@ -52,6 +52,15 @@ namespace reloadmaker
                             return result;
                         } });
 
+        _commands.add({ "weapon_properties_state", CommandAccess::Read, CommandGate::Always,
+                        [this](const QJsonObject&) -> std::optional<QJsonObject> { return weaponPropertiesState(); } });
+
+        _commands.add({ "weapon_property", CommandAccess::Edit, CommandGate::WhenIdle,
+                        [this](const QJsonObject& params) -> std::optional<QJsonObject> {
+                            setWeaponProperty(params["name"].toString(), params["value"]);
+                            return weaponPropertiesState();
+                        } });
+
         _commands.add({ "checklist_state", CommandAccess::Read, CommandGate::Always,
                         [this](const QJsonObject&) -> std::optional<QJsonObject> { return checklistState(); } });
 

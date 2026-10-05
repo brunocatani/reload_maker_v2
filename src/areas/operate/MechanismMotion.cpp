@@ -34,8 +34,8 @@ namespace reloadmaker
     // A saved operating setup decides the rig; without one the source reload does.
     bool ReloadMakerController::buildCurrentSimulationRig(SimulationRig& rig, QString& error)
     {
-        if (!_assignedMechanism && currentTestbed().isEmpty()) {
-            error = "Choose a behavior template in Author reload before configuring this weapon.";
+        if (!_assignedMechanism) {
+            error = "Confirm this weapon's behavior preset in the Reload checklist first.";
             return false;
         }
         const auto saved = _authoringRecords.value(authoringRecordKey()).toObject().value("operating").toObject();

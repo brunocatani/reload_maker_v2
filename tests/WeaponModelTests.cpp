@@ -4,6 +4,7 @@
 // combination must map to a preset's behavior or be refused with a reason.
 #include "domain/presets/WeaponPresets.h"
 #include "domain/weapon/WeaponModel.h"
+#include "domain/weapon/WeaponOverrides.h"
 
 #include <QDir>
 #include <QFile>
@@ -292,6 +293,34 @@ namespace
         }
         QVector<WeaponPreset> presets;
         check(!loadWeaponPresets(twice.path(), presets, error), "Two presets with one id and behavior accepted");
+
+        QByteArray unknownInsertion = pistol;
+        unknownInsertion.replace("\"container\": \"detachable\",", "\"container\": \"detachable\", \"insertion\": \"sideways\",");
+        check(unknownInsertion != pistol && !decodeWeaponPreset(unknownInsertion, preset, error), "Unknown insertion path accepted");
+    }
+
+    // The rocking-handle and bolt-action presets follow their clips' insertion
+    // curve; the others insert straight. Weapons may override it.
+    void insertionPathsAndOverrides(const QString& directory)
+    {
+        QVector<WeaponPreset> presets;
+        QString error;
+        check(loadWeaponPresets(directory, presets, error), error);
+        const QSet<QString> curved{ "rifle.operating-handle-rocking.v1", "sniper.manual-bolt-detachable.v1" };
+        for (const WeaponPreset& preset : presets) {
+            check((preset.model.feed.insertion == InsertionPath::NativeCurve) == curved.contains(preset.id), preset.id + ": insertion path");
+        }
+        WeaponModel fixed = presets.first().model;
+        fixed.feed.container = ContainerKind::Fixed;
+        fixed.feed.insertion = InsertionPath::NativeCurve;
+        check(validateWeaponModel(fixed).join(' ').contains("insertion curve"), "A fixed feed accepted a clip insertion curve");
+
+        WeaponOverrides overrides;
+        check(readWeaponOverrides({ { "insertion", "native-curve" } }, overrides, error) && overrides.insertion == InsertionPath::NativeCurve, error);
+        check(weaponOverridesJson(overrides) == QJsonObject{ { "insertion", "native-curve" } }, "Overrides did not round-trip");
+        check(!readWeaponOverrides({ { "insertion", "diagonal" } }, overrides, error), "Unknown insertion override accepted");
+        check(!readWeaponOverrides({ { "magazineColor", "red" } }, overrides, error), "Unknown weapon property accepted");
+        check(readWeaponOverrides({}, overrides, error) && overrides.empty() && weaponOverridesJson(overrides).isEmpty(), "Empty overrides");
     }
 }
 
@@ -308,6 +337,7 @@ int main(int argc, char** argv)
         mapsOrRefusesEveryCombination(presets);
         probeWeaponsMapToDiamondOrWait();
         refusesBrokenPresetFiles(presets);
+        insertionPathsAndOverrides(presets);
         QTextStream(stdout) << "WeaponModel tests passed\n";
         return 0;
     } catch (const std::exception& e) {

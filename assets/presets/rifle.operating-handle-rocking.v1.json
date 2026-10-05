@@ -6,6 +6,7 @@
     "model": {
         "feed": {
             "container": "detachable",
+            "insertion": "native-curve",
             "loadingPoints": [ { "id": "magwell", "unit": "container", "destination": "container" } ]
         },
         "mechanisms": [

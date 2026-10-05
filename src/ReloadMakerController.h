@@ -29,6 +29,7 @@
 #include "areas/sources/SourceBrowserRows.h"
 #include "commands/CommandRegistry.h"
 #include "domain/checklist/Checklist.h"
+#include "domain/weapon/WeaponOverrides.h"
 #include "LoadTimings.h"
 
 #include <QHash>
@@ -410,6 +411,7 @@ namespace reloadmaker
         };
         ChecklistView checklistView() const;
         QJsonObject checklistState() const;
+        QJsonObject weaponPropertiesState() const;
         QJsonObject checklistCommand(const QJsonObject& request);
     private:
         const WeaponPreset* checklistPreset() const;
@@ -473,6 +475,12 @@ namespace reloadmaker
         QJsonObject _authoringRecords;
         QJsonObject _reloadTemplateAssignments;
         std::optional<WeaponMechanism> _assignedMechanism;
+        // Weapon properties (areas/properties): the author's per-weapon
+        // overrides by weapon record, and the values the code reads.
+        QHash<QString, WeaponOverrides> _weaponOverrides;
+        WeaponOverrides currentWeaponOverrides() const;
+        InsertionPath magazineInsertionPath() const;
+        void setWeaponProperty(const QString& name, const QJsonValue& value);
         mutable QHash<QString,QString> _animationReadHashes;
         QJsonObject packCommand(const QJsonObject&);
         QProcess* _packProcess{};
@@ -612,7 +620,7 @@ namespace reloadmaker
         bool collectMagazineGeometry(QVector<QVector3D>& body, QVector<QVector3D>& frame, QVector<MagazineShape>& shapes);
         bool isSrepSpareMagazineShape(QModelIndex node) const;
         bool buildMagazineMotion(const QVector<QVector3D>& body, MagazineRail& rail);
-        bool buildTestbedMagazineMotion(const QVector<QVector3D>& body, MagazineRail& rail);
+        bool buildNativeMagazineMotion(const QVector<QVector3D>& body, MagazineRail& rail);
         void classifyMagazineShapes(const QVector<MagazineShape>& shapes, const MagazineRail& rail, bool& emptyBody, bool& fullBody);
         bool isMagazineCartridge(const MagazineShape& shape, bool isEmpty) const;
         bool applyMagazinePieceRoles(const MagazineRail& rail);

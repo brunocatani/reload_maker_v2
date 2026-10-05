@@ -69,6 +69,9 @@ namespace reloadmaker
             if (feed.container == ContainerKind::Detachable && containerPoints != 1) {
                 problems << QStringLiteral("A detachable feed needs exactly one container loading point");
             }
+            if (feed.insertion == InsertionPath::NativeCurve && feed.container != ContainerKind::Detachable) {
+                problems << QStringLiteral("Only a detachable container follows its clip's insertion curve");
+            }
         }
 
         // Follows drivenBy links between mechanisms; a loop means no part is
@@ -187,6 +190,21 @@ namespace reloadmaker
             }
         }
         return nullptr;
+    }
+
+    QString insertionPathName(InsertionPath path)
+    {
+        return path == InsertionPath::NativeCurve ? QStringLiteral("native-curve") : QStringLiteral("straight");
+    }
+
+    std::optional<InsertionPath> insertionPathFromName(const QString& name)
+    {
+        for (const auto path : { InsertionPath::Straight, InsertionPath::NativeCurve }) {
+            if (name == insertionPathName(path)) {
+                return path;
+            }
+        }
+        return std::nullopt;
     }
 
     QStringList validateWeaponModel(const WeaponModel& model)

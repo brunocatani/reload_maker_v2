@@ -109,6 +109,13 @@ namespace reloadmaker
                 mechanisms.size() > kListLimit || !decodeFire(json["fire"].toObject(), model.fire)) {
                 return false;
             }
+            if (feed.contains("insertion")) {
+                const auto insertion = insertionPathFromName(feed["insertion"].toString());
+                if (!insertion) {
+                    return false;
+                }
+                model.feed.insertion = *insertion;
+            }
             for (const QJsonValue& value : points) {
                 LoadingPoint point;
                 if (!decodeLoadingPoint(value.toObject(), point)) {

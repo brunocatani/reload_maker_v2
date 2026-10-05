@@ -64,6 +64,20 @@ namespace reloadmaker
                     }
                 }
             }
+            if (record.contains("weaponProperties")) {
+                const auto properties = record["weaponProperties"].toObject();
+                if (!record["weaponProperties"].isObject() || properties.size() > 512) {
+                    message = "Invalid weapon properties.";
+                    return false;
+                }
+                for (auto it = properties.begin(); it != properties.end(); ++it) {
+                    WeaponOverrides overrides;
+                    if (it.key().isEmpty() || it.key().size() > 512 || !it.value().isObject() || !readWeaponOverrides(it.value().toObject(), overrides, error)) {
+                        message = "Invalid weapon properties: " + error;
+                        return false;
+                    }
+                }
+            }
             if (record.contains("sourcePolicies")) {
                 const auto policies = record["sourcePolicies"].toObject();
                 if (!record["sourcePolicies"].isObject() || policies.size() > 512) {
@@ -419,6 +433,15 @@ namespace reloadmaker
         record["choices"] = choices;
         record["authoringRoadmaps"] = _authoringRecords;
         record["reloadTemplates"] = _reloadTemplateAssignments;
+        QJsonObject weaponProperties;
+        for (auto it = _weaponOverrides.cbegin(); it != _weaponOverrides.cend(); ++it) {
+            if (!it->empty()) {
+                weaponProperties[it.key()] = weaponOverridesJson(*it);
+            }
+        }
+        if (!weaponProperties.isEmpty()) {
+            record["weaponProperties"] = weaponProperties;
+        }
         record["sourcePolicies"] = _sourcePolicies;
         if (const auto* config = configuration()) {
             record["recordChoices"] = config->savedChoices(*currentPlugin());
@@ -680,6 +703,15 @@ namespace reloadmaker
             _authoringRecords.insert(it.key(), saved);
         }
         _reloadTemplateAssignments = record["reloadTemplates"].toObject();
+        _weaponOverrides.clear();
+        const auto weaponProperties = record["weaponProperties"].toObject();
+        for (auto it = weaponProperties.begin(); it != weaponProperties.end(); ++it) {
+            WeaponOverrides overrides;
+            QString error;
+            if (readWeaponOverrides(it.value().toObject(), overrides, error)) {
+                _weaponOverrides.insert(it.key(), overrides);
+            }
+        }
         _sourcePolicies = record["sourcePolicies"].toObject();
         _savedSounds.clear();
         const auto sounds = record["soundProfiles"].toObject();
