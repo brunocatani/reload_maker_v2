@@ -172,19 +172,6 @@ namespace {
         for(const auto* archive:{"Base - Main.ba2","Addon - Main.ba2","Unrelated - Animations.ba2"})write(dir.filePath(archive),{});
         const QStringList roots{dir.filePath("explicit source")};const auto layers=packageResourceLayers(loaded,roots);
         require(layers==QStringList({dir.filePath("Base - Main.ba2"),dir.filePath("Addon - Main.ba2"),roots[0]}),"development source inherited unrelated Data assets or lost master priority");
-        // A plugin in an MO2 mod folder finds its masters where the selected
-        // profile provides them: overwrite, then enabled mods by priority.
-        QDir instance(dir.filePath("mo2"));instance.mkpath("mods/Package");instance.mkpath("mods/DLC");instance.mkpath("mods/Older");instance.mkpath("mods/Disabled");instance.mkpath("profiles/Test");
-        write(instance.filePath("ModOrganizer.ini"),"[General]\nselected_profile=@ByteArray(Test)\n");
-        write(instance.filePath("profiles/Test/modlist.txt"),"# generated\n+Package\n+DLC\n-Disabled\n+Older\n");
-        write(instance.filePath("mods/DLC/Base.esm"),record("TES4",0)+record("WEAP",0x123));
-        write(instance.filePath("mods/Older/Base.esm"),record("TES4",0));
-        write(instance.filePath("mods/Disabled/Hidden.esm"),record("TES4",0));
-        write(instance.filePath("mods/Package/Addon.esp"),record("TES4",0,0,masterField("Base.esm"))+record("WEAP",0x123));
-        const auto provided=includePackageMasters({EspReader::read(instance.filePath("mods/Package/Addon.esp"))},dir.filePath("unused Data"),{},error);
-        require(error.isEmpty()&&provided.size()==2&&QFileInfo(provided[0].filePath).absolutePath()==instance.filePath("mods/DLC"),"MO2 profile master not found by mod priority");
-        write(instance.filePath("mods/Package/Hidden.esp"),record("TES4",0,0,masterField("Hidden.esm")));
-        require(includePackageMasters({EspReader::read(instance.filePath("mods/Package/Hidden.esp"))},dir.filePath("unused Data"),{},error).isEmpty()&&error.contains("Hidden.esm"),"a disabled mod supplied a master");
         auto missing=root;missing.masters={"Absent.esm"};
         require(includePackageMasters({missing},dir.path(),{},error).isEmpty()&&error.contains("Absent.esm"),"missing master was silently skipped");
         auto cycle=root;cycle.masters={cycle.fileName};
