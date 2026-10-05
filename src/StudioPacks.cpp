@@ -92,23 +92,28 @@ void ReloadMakerController::showPackExporter() {
     auto* cancel=new QPushButton("Cancel job");auto* open=new QPushButton("Open exported folder");
     for(auto* button:{inspect,sourceCheck,publish,cancel,open})actions->addWidget(button);
     QString exported,sourceJob;
+    // Weapons an export leaves out because their checklist is not complete.
+    const auto skippedText=[](const QJsonObject& state,const QString& heading){const auto skipped=state["skipped"].toArray();if(skipped.isEmpty())return QString();
+        QString text="\n\n"+heading;for(const auto& value:skipped){const auto w=value.toObject();text+=QString("\n  %1 · %2: %3").arg(w["name"].toString(),w["record"].toString(),w["reason"].toString());}
+        return text+"\nComplete their checklists, then export again to include them.";};
     const auto update=[&]{
         const auto state=packCommand({});const auto phase=state["phase"].toString();
         const bool running=phase=="running"||phase=="cancelling";
         inspect->setEnabled(!running);sourceCheck->setEnabled(!running&&currentWeapon());publish->setEnabled(!running);cancel->setEnabled(running);open->setEnabled(!exported.isEmpty());
         if(phase=="idle")report->setPlainText("Prepared pack projects are organized by source ESP and weapon under workspace/packs. Each export contains full/empty objects and all included configurations. Original weapon plugins remain dependencies.");
         else if(running)report->setPlainText(phase=="cancelling"?"Cancellation requested. Waiting for the native tool to finish…":"Checking frozen authoring inputs and finished models…");
-        else if(phase=="failed")report->setPlainText(state["error"].toString());
+        else if(phase=="failed")report->setPlainText(state["error"].toString()+skippedText(state,"Left out:"));
         else if(state["operation"]=="inspect-project") {
             const auto result=state["result"].toObject();QString text=result["name"].toString()+"\n";
             for(const auto& value:result["weapons"].toArray()) {const auto weapon=value.toObject();text+=QString("\n%1 · %2\n%3 configurations · %4 magazines\n%5\n").arg(weapon["name"].toString(),weapon["record"].toString()).arg(weapon["variants"].toInt()).arg(weapon["magazines"].toInt()).arg(weapon["template"].toString());}
             if(!result["sourceConflicts"].toArray().isEmpty())text+="\nSome configurations were captured from different source versions. Review those inputs before publishing.";
             else text+="\nReady to validate native collision and publish.";
+            text+=skippedText(state,"Export will leave out:");
             if(state["id"].toString()==sourceJob)try{text+=loadedConfigurationSourceReport(result);}catch(const std::exception& e){text+="\n\n"+QString::fromUtf8(e.what());}
             report->setPlainText(text);
         } else if(state["operation"]=="export") {
             const auto result=state["result"].toObject();exported=result["output"].toString();open->setEnabled(!exported.isEmpty());
-            report->setPlainText(QString("Export complete: %1 configurations, %2 magazine variations, %3 full/empty objects.\n\n%4\n\nThis folder is the shareable pack. Install it with its source mods, then use Build installed reload packs to generate the local object ESP. No game files or MO2 settings were changed.").arg(result["variants"].toInt()).arg(result["magazines"].toInt()).arg(result["objects"].toInt()).arg(QDir::toNativeSeparators(exported)));
+            report->setPlainText(QString("Export complete: %1 configurations, %2 magazine variations, %3 full/empty objects.\n\n%4\n\nThis folder is the shareable pack. Install it with its source mods, then use Build installed reload packs to generate the local object ESP. No game files or MO2 settings were changed.").arg(result["variants"].toInt()).arg(result["magazines"].toInt()).arg(result["objects"].toInt()).arg(QDir::toNativeSeparators(exported))+skippedText(state,"Not exported:"));
         } else report->setPlainText("Choose a prepared pack project and check its coverage before export.");
     };
     connect(this,&ReloadMakerController::packJobChanged,&dialog,update);

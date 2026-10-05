@@ -66,7 +66,10 @@ def source_conflicts(requirements):
     return sorted(path for path,hashes in versions.items() if len(hashes)>1)
 
 
-def inspect_project(path):
+def inspect_project(path, skip=frozenset()):
+    """Check a pack project. Weapons in `skip` (lower-case records) are left
+    out of an export: their inputs are not read and they are not summarized,
+    but they still own their object identities."""
     project = read(path)
     require(project.get('format') == 'reload-maker-pack-project' and project.get('version') == 1,
             'Select a Reload Maker pack project')
@@ -77,12 +80,18 @@ def inspect_project(path):
     require(isinstance(weapons, list) and 0 < len(weapons) <= 32, 'Select at least one authored weapon')
     objects = project.get('objects')
     require(isinstance(objects, list) and 0 < len(objects) <= 256, 'Missing finished magazine objects')
-    claims, identifiers = set(), set()
+    claims, identifiers, included = set(), set(), set()
     summary = []
     for weapon in weapons:
         key = form_key(weapon.get('record'))
         require(key not in claims, 'One project weapon may contain several configurations; do not duplicate its record')
         claims.add(key)
+        if key in skip:
+            for assignment in weapon.get('magazineObjects', []):
+                require(assignment['full'] not in identifiers and assignment['empty'] not in identifiers,
+                        'Different weapon/magazine fits need distinct logical object identities')
+                identifiers.update((assignment['full'], assignment['empty']))
+            continue
         require(weapon.get('template') in TEMPLATES, 'Unsupported reload template')
         documents = {kind: read(project_source(path, weapon[kind])) for kind in ('profiles', 'magazines', 'grabs', 'sounds')}
         profile, magazines = documents['profiles'], documents['magazines']
@@ -102,20 +111,28 @@ def inspect_project(path):
             require(assignment['full'] not in identifiers and assignment['empty'] not in identifiers,
                     'Different weapon/magazine fits need distinct logical object identities')
             identifiers.update((assignment['full'], assignment['empty']))
+            included.update((assignment['full'], assignment['empty']))
         summary.append(dict(record=key, name=weapon.get('name', key), template=weapon['template'],
                             variants=len(profile['profiles']), magazines=len(records)))
+    require(summary, 'No weapon in this project is ready to export; complete a checklist first')
     object_ids = [obj.get('id') for obj in objects]
     require(len(set(object_ids)) == len(object_ids) and set(object_ids) == identifiers,
             'Object definitions must match the complete current magazine assignments')
     for obj in objects:
         require(identity(obj['id']).startswith(pack+'/'), 'Object is outside the project namespace')
-        project_source(path, obj['source'])
+        if obj['id'] in included:
+            project_source(path, obj['source'])
     return project, summary
 
 
-def export_pack(path, destination, backends):
+def export_pack(path, destination, backends, skip=()):
+    """Publish the project's weapons except those in `skip` (the editor's
+    weapons whose checklist is not complete), with only their objects."""
     path, destination = Path(path).resolve(), Path(destination).resolve()
-    project, summary = inspect_project(path)
+    skip = frozenset(form_key(record) for record in skip)
+    project, summary = inspect_project(path, skip)
+    exported = [weapon for weapon in project['weapons'] if form_key(weapon['record']) not in skip]
+    owned = {a[state] for weapon in exported for a in weapon['magazineObjects'] for state in ('full', 'empty')}
     # Each publication is immutable. A failed export never replaces a previous
     # valid directory or mixes it with current authoring files.
     require(not destination.exists(), 'Choose a new export folder; finished exports are immutable')
@@ -128,7 +145,7 @@ def export_pack(path, destination, backends):
     native = backends.adapter('nif')
     verified = set()
     try:
-        for weapon in project['weapons']:
+        for weapon in exported:
             cancellation()
             key = form_key(weapon['record'])
             plugin, local = key.split(':')
@@ -157,6 +174,8 @@ def export_pack(path, destination, backends):
             weapons.append(item)
         for obj in project['objects']:
             cancellation()
+            if obj['id'] not in owned:
+                continue
             source = project_source(path, obj['source'])
             fingerprint = digest(source)
             if fingerprint not in verified:
@@ -187,16 +206,16 @@ def export_pack(path, destination, backends):
         write(stage/prefix/'manifest.json', manifest)
         load_pack(stage)
         # Recheck the authoring input after all native jobs, not merely before.
-        inspected, final_summary = inspect_project(path)
+        inspected, final_summary = inspect_project(path, skip)
         require(inspected == project and final_summary == summary, 'Project changed during export')
         write(stage/'export-report.json', dict(format='reload-maker-export-report', version=1,
             pack=pack, revision=project['revision'], weapons=summary, objects=len(objects),
             uniqueModels=len(verified), nativeCollisionValidated=True,
-            gameTested=False, requirements=manifest['requirements']))
+            gameTested=False, requirements=manifest['requirements'], skippedWeapons=sorted(skip)))
         cancellation()
         os.replace(stage, destination)
         return dict(ok=True, output=str(destination), manifest=str(destination/prefix/'manifest.json'),
-                    weapons=len(weapons), variants=sum(w['variants'] for w in summary),
+                    weapons=len(weapons), skipped=sorted(skip), variants=sum(w['variants'] for w in summary),
                     magazines=sum(w['magazines'] for w in summary), objects=len(objects))
     except Exception:
         # The uniquely created staging directory is the only cleanup target.

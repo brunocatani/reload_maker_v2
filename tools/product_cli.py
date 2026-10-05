@@ -41,6 +41,7 @@ def main():
     export = packs.add_parser('export')
     export.add_argument('--project', required=True)
     export.add_argument('--output', required=True)
+    export.add_argument('--skip', action='append', default=[], help='Weapon record left out of this export')
     save = packs.add_parser('save-configuration')
     save.add_argument('--project', required=True)
     save.add_argument('--capture', required=True)
@@ -103,7 +104,7 @@ def main():
             result=save_configurations(args.project,sorted(Path(args.captures).glob('*.json')),backends,args.expected,args.id)
         else:
             from product_export import export_pack
-            result = export_pack(args.project, args.output, backends)
+            result = export_pack(args.project, args.output, backends, args.skip)
     print(json.dumps(result, allow_nan=False))
 
 

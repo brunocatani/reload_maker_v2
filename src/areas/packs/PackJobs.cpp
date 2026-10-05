@@ -43,6 +43,10 @@ namespace reloadmaker
         require(operation == "build" || operation == "validate" || authoring || cooking || inventory, "Unknown pack operation");
         const auto packs = request["packs"].toArray();
         require(authoring || cooking || inventory || (!packs.isEmpty() && packs.size() <= 256), "Select between one and 256 finished pack folders");
+        // Export leaves out weapons whose checklist is not complete (owner,
+        // 2026-10-05: warn and export the rest, never block); Check project
+        // lists them in advance.
+        const auto skipped = operation == "export" || operation == "inspect-project" ? exportSkippedWeapons(request["project"].toString()) : QJsonArray{};
         QString python;
         QString id;
         auto arguments = packToolArguments(python, id);
@@ -56,6 +60,11 @@ namespace reloadmaker
             appendInventoryArguments(arguments, request);
         } else if (authoring) {
             appendAuthoringArguments(arguments, request, operation);
+            if (operation == "export") {
+                for (const auto& weapon : skipped) {
+                    arguments << "--skip" << weapon.toObject()["record"].toString();
+                }
+            }
         } else if (!cooking) {
             for (const auto& pack : packs) {
                 require(pack.isString() && QFileInfo(pack.toString()).isDir(), "A selected pack folder is missing");
@@ -70,8 +79,33 @@ namespace reloadmaker
                 arguments << "--initialize";
             }
         }
-        startPackProcess(python, arguments, { { "id", id }, { "phase", "running" }, { "operation", operation }, { "packs", packs } });
+        QJsonObject job{ { "id", id }, { "phase", "running" }, { "operation", operation }, { "packs", packs } };
+        if (!skipped.isEmpty()) {
+            job["skipped"] = skipped;
+        }
+        startPackProcess(python, arguments, job);
         return _packJob;
+    }
+
+    QJsonArray ReloadMakerController::exportSkippedWeapons(const QString& project) const
+    {
+        QFile file(project);
+        require(file.size() <= 64 * 1024 * 1024 && file.open(QIODevice::ReadOnly), "Select an authored pack project");
+        const auto progress = weaponProgressIndex();
+        QJsonArray skipped;
+        for (const auto& value : QJsonDocument::fromJson(file.readAll()).object()["weapons"].toArray()) {
+            const auto weapon = value.toObject();
+            const auto record = weapon["record"].toString().toLower();
+            const auto state = progress.constFind(record);
+            if (state != progress.cend() && *state == WeaponProgress::Complete) {
+                continue;
+            }
+            skipped.append(QJsonObject{ { "record", record },
+                                        { "name", weapon["name"].toString(record) },
+                                        { "reason", state == progress.cend() ? QStringLiteral("no checklist for it in the loaded source")
+                                                                             : QStringLiteral("checklist not complete") } });
+        }
+        return skipped;
     }
 
     // The bundled tool's interpreter and its leading arguments, with a new

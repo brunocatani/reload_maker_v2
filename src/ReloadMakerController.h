@@ -1181,6 +1181,9 @@ namespace reloadmaker
         [[nodiscard]] bool assemblyBusy() const;
         void appendInventoryArguments(QStringList& arguments, const QJsonObject& request) const;
         void appendAuthoringArguments(QStringList& arguments, const QJsonObject& request, const QString& operation) const;
+        // The pack project's weapons an export leaves out (checklist not
+        // complete in the loaded source), each {record, name, reason}.
+        [[nodiscard]] QJsonArray exportSkippedWeapons(const QString& project) const;
         void startPackProcess(const QString& python, const QStringList& arguments, const QJsonObject& job);
         [[nodiscard]] QString loadedConfigurationSourceReport(const QJsonObject& inspection) const;
         [[nodiscard]] QJsonObject runtimeOperatingProfile() const;
