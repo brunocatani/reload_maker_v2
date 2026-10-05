@@ -24,9 +24,9 @@ void ReloadMakerController::showMagazineGuide() {
     connect(preset,qOverload<int>(&QComboBox::activated),dialog,[axes](int i){if(i<1)return;for(int a=0;a<3;++a)axes[a]->setValue(a==(i-1)/2?(i%2?1:-1):0);});
     const auto field=[&](const char* key,const QString& title){auto* spin=new QDoubleSpinBox;spin->setRange(.001,999);spin->setDecimals(4);spin->setSingleStep(.1);spin->setSuffix(" game units");spin->setValue(initial[key].toDouble());form->addRow(title,spin);return spin;};
     auto* travel=field("travel","Hand travel");auto* capture=field("captureRadius","Pickup distance from line");auto* release=field("releaseMargin","Pull-out release margin");
-    auto* status=new QLabel(state["stale"].toBool()?"Source changed. Restore the current source guide before editing.":state["error"].toString());status->setWordWrap(true);layout->addWidget(status);
+    auto* status=new QLabel(state["error"].toString());status->setWordWrap(true);layout->addWidget(status);
     auto* actions=new QHBoxLayout;layout->addLayout(actions);auto* save=new QPushButton("Save and preview guide");auto* reset=new QPushButton("Restore source guide");auto* done=new QPushButton("Done");actions->addWidget(save);actions->addWidget(reset);actions->addWidget(done);
-    save->setEnabled(state["canConfigure"].toBool()&&!state["stale"].toBool());
+    save->setEnabled(state["canConfigure"].toBool());
     if(!state["ready"].toBool()&&!state["saved"].toBool())status->setText("No usable native extraction was found. These are manual starting values: choose an outward direction and hand travel. Geometry determines the initial visible clearance; a saved movement can replace that path.");
     connect(save,&QPushButton::clicked,dialog,[=,this]{try{
         QVector3D axis(float(axes[0]->value()),float(axes[1]->value()),float(axes[2]->value()));if(axis.lengthSquared()<1e-8f)throw std::runtime_error("Choose a nonzero outward direction");axis.normalize();

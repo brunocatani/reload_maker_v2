@@ -7,6 +7,7 @@ struct OperatingSetup {
     bool deriveHandle{false};
     float duration{.2f},ejectSeconds{-1};
     QHash<int,QString> movements;
+    QJsonArray trackAnchors; // The node of each track index (recipeTrackAnchors).
 };
 bool readOperatingSetup(const QJsonObject&,OperatingSetup&,QString&);
 QJsonObject operatingSetupJson(const OperatingSetup&);

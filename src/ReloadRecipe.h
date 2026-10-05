@@ -1,5 +1,6 @@
 #pragma once
 #include "HandPoseLibrary.h"
+#include <QJsonArray>
 #include <QVector>
 
 namespace reloadmaker {
@@ -36,4 +37,12 @@ namespace reloadmaker {
     [[nodiscard]] QByteArray encodeReloadRecipe(const ReloadRecipe& recipe,QString& error);
     [[nodiscard]] bool decodeReloadRecipe(const QByteArray& bytes,ReloadRecipe& recipe,QString& error);
     [[nodiscard]] QString reloadRecipeIdentity(const ReloadRecipe& recipe);
+    // Which node each track is, in track order. Saved authoring keeps it with
+    // its track indices, so the recipe of another configuration (the same
+    // reload with other parts) maps those indices by node.
+    [[nodiscard]] QJsonArray recipeTrackAnchors(const ReloadRecipe& recipe);
+    // A saved track index in this recipe: the track of the same node (name,
+    // path and model, else name and path), or -1 when this recipe has no such
+    // node. Without saved nodes the index is taken as it is.
+    [[nodiscard]] int mapRecipeTrack(const QJsonArray& savedAnchors, const ReloadRecipe& recipe, int index);
 }

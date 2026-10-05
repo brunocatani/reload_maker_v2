@@ -23,10 +23,9 @@ def run(names):
             edit('testbed',{'name':name});ready();project=Path(ready()['project']);saved=project.read_bytes()
             try:
                 edit('workspace',{'index':5});ready();before=simulation();setup=command('operating_setup_state')['settings']
-                bad=dict(setup,recipeId='0'*64)
-                try:edit('operating_setup',dict(operation='save',settings=bad))
-                except RuntimeError:pass
-                else:raise AssertionError('Stale source setup applied')
+                # A recipe id is provenance, never a gate (owner, 2026-10-05).
+                edit('operating_setup',dict(operation='save',settings=dict(setup,recipeId='0'*64)));ready()
+                assert command('operating_setup_state')['settings']['recipeId']!='0'*64,'A foreign recipe id was kept'
                 edit('save_project',{'path':str(work/(name+'-read.project.json'))})
                 inspected=json.loads((work/(name+'-read.project.json')).read_text())
                 assert all(isinstance(p,dict) for p in inspected['authoringRoadmaps'].values()),'Read/rejected edit inserted a null authoring record'
@@ -36,10 +35,10 @@ def run(names):
                 edit('save_project',{'path':str(work/(name+'.project.json'))})
                 edit('open_project',{'path':str(work/(name+'.project.json'))});ready()
                 assert command('operating_setup_state')['saved'] and simulation()==before
-                bad=dict(setup,recipeId='0'*64)
-                try:edit('operating_setup',dict(operation='save',settings=bad))
+                # A part outside this reload is refused for what it is, not by a hash.
+                try:edit('operating_setup',dict(operation='save',settings=dict(setup,operating=255,followers=[255])))
                 except RuntimeError:pass
-                else:raise AssertionError('Stale source setup applied')
+                else:raise AssertionError('A role outside the reload tracks was saved')
                 assert command('operating_setup_state')['settings']==setup
                 edit('operating_setup',dict(operation='reset'));ready();assert simulation()==before
                 results.append(name);print('PASS',name,flush=True)

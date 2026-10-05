@@ -54,7 +54,7 @@ namespace reloadmaker
         if (!saved.isEmpty()) {
             MagazineReference reference;
             QString error;
-            if (!_reloadRecipe || !readMagazineReference(saved, reference, error) || reference.recipeId != _reloadRecipe->id) {
+            if (!_reloadRecipe || !readMagazineReference(saved, reference, error)) {
                 return -1;
             }
             int found = -1;

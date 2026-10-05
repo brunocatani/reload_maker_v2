@@ -112,7 +112,9 @@ namespace reloadmaker
     QJsonObject ReloadMakerController::magazinePresentationJson(const QJsonObject& setup) const
     {
         if (!setup.isEmpty()) {
-            return setup;
+            auto presentation = setup;
+            presentation.remove(QStringLiteral("trackAnchors"));
+            return presentation;
         }
         const auto chosen = _magazineRounds.value(magazineRoundsKey());
         return chosen.isEmpty() ? QJsonObject{} : QJsonObject{ { "rounds", chosen } };

@@ -86,6 +86,7 @@ namespace reloadmaker
             updateSimulationControls();
             return;
         }
+        recordReloadAxes();
         _simulationAmmo = resolveWeaponAmmunition(*currentPlugin(), *currentWeapon(), *configuration(), _referenceNames);
         bool motion = false;
         {

@@ -37,6 +37,9 @@ namespace reloadmaker
         [[nodiscard]] const QStringList& warnings() const { return _warnings; }
         [[nodiscard]] const ObjectModRecord* mod(std::uint32_t id) const;
         [[nodiscard]] QJsonObject savedChoices(const PluginContent& plugin) const;
+        // The slot's saved identity: "slot:<attach point>" or, without one,
+        // "mod:<record>", lowercase; savedChoices uses it as the key.
+        [[nodiscard]] QString slotId(const PluginContent& plugin, const ConfigurationSlot& slot) const;
         [[nodiscard]] QStringList restoreChoices(const PluginContent& plugin, const QJsonObject& choices);
 
     private:

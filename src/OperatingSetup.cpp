@@ -7,8 +7,9 @@
 namespace reloadmaker {
 bool readOperatingSetup(const QJsonObject& json,OperatingSetup& output,QString& error) {
     const auto fail=[&](const char* why){error=why;return false;};OperatingSetup value;
-    if(json["version"]!=1||!QRegularExpression("^[a-f0-9]{64}$").match(json["recipeId"].toString()).hasMatch())return fail("Capture this configuration's reload before saving operating roles");
-    value.recipeId=json["recipeId"].toString();value.mode=json["mode"].toString();
+    if(json["version"]!=1)return fail("Unsupported operating setup");
+    if(json.contains("trackAnchors")&&(!json["trackAnchors"].isArray()||json["trackAnchors"].toArray().size()>maximumReloadTracks))return fail("Invalid operating track nodes");
+    value.recipeId=json["recipeId"].toString();value.trackAnchors=json["trackAnchors"].toArray();value.mode=json["mode"].toString();
     if(value.mode!="preset"&&value.mode!="reload"&&value.mode!="clip"&&value.mode!="manual")return fail("Choose a supported movement source");
     const auto integer=[](QJsonValue v,int low,int high){return v.isDouble()&&v.toDouble()==std::floor(v.toDouble())&&v.toInt(low-1)>=low&&v.toInt(high+1)<=high;};
     for(const auto* key:{"operating","bolt","magazine"})if(!integer(json[key],0,maximumReloadTracks-1))return fail("Select the operating, bolt and magazine tracks");
@@ -36,6 +37,7 @@ QJsonObject operatingSetupJson(const OperatingSetup& value) {
     auto keys=value.movements.keys();std::sort(keys.begin(),keys.end());for(int track:keys)movements.append(QJsonObject{{"track",track},{"id",value.movements[track]}});
     return {{"version",1},{"recipeId",value.recipeId},{"mode",value.mode},{"operating",value.parts.operating},{"bolt",value.parts.bolt},{"magazine",value.parts.magazine},
         {"followers",followers},{"openFrame",value.parts.openFrame},{"closedFrame",value.parts.closedFrame},{"deriveHandle",value.deriveHandle},{"fireMode",value.fireMode},
-        {"clip",value.clip},{"baseline",value.baseline},{"duration",value.duration},{"ejectSeconds",value.ejectSeconds},{"movements",movements}};
+        {"clip",value.clip},{"baseline",value.baseline},{"duration",value.duration},{"ejectSeconds",value.ejectSeconds},{"movements",movements},
+        {"trackAnchors",value.trackAnchors}};
 }
 }

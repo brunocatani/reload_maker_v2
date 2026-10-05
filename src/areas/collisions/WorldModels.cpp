@@ -74,7 +74,7 @@ namespace reloadmaker
         return result;
     }
 
-    // Weapon, magazine presentation and saved loadout, and the evidence the
+    // Weapon, magazine presentation and reload parts, and the evidence the
     // capture was made from: carrier frame, source recipe, sources and the
     // magazine setup.
     CollisionProfile ReloadMakerController::magazineWorldIdentity(bool empty, const HandPosePlacement& anchor, const QMatrix4x4& root) const
@@ -82,8 +82,7 @@ namespace reloadmaker
         CollisionProfile captured;
         captured.weapon = poseRecordKey(currentWeapon()->formId);
         captured.target = anchor.ownerRecord + "|magazine-carrier|" + (empty ? "empty" : "full");
-        const auto choices = configuration()->savedChoices(*currentPlugin());
-        captured.configuration = QString::fromLatin1(QCryptographicHash::hash(QJsonDocument(choices).toJson(QJsonDocument::Compact), QCryptographicHash::Sha256).toHex());
+        captured.configuration = authoringRecordKey().section('/', 1);
         captured.referencePose = { { "space", "magazine-carrier" },          { "magazineRecord", anchor.ownerRecord }, { "model", anchor.ownerModel },
                                    { "presentation", empty ? "empty" : "full" }, { "sourceRecipeId", _reloadRecipe->id },   { "rootToWorld", frameJson(root) },
                                    { "sources", sourceEvidence() } };

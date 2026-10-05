@@ -38,7 +38,6 @@ namespace reloadmaker
             fail("Wait for the magazine's current source capture");
         }
         const auto saved = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineGuide").toObject();
-        const bool stale = !saved.isEmpty() && saved["recipeId"] != _reloadRecipe->id;
         if (!_simulationRig && saved.isEmpty()) {
             fail("Choose the operating and magazine roles first");
         }
@@ -60,7 +59,6 @@ namespace reloadmaker
         return {
             { "settings", settings },
             { "saved", !saved.isEmpty() },
-            { "stale", stale },
             { "ready", _magazineRail.has_value() },
             { "canConfigure", _simulationRig.has_value() },
             { "rail", _magazineRail ? magazineRailJson(*_magazineRail) : QJsonObject{} },
@@ -83,9 +81,10 @@ namespace reloadmaker
             if (!readMagazineGuide(request["settings"].toObject(), guide, error)) {
                 fail(error);
             }
-            if (!_simulationRig || guide.recipeId != _reloadRecipe->id) {
-                fail("Guide source changed; reset and review the current magazine before saving");
+            if (!_simulationRig) {
+                fail("Open the magazine in Operate before saving its guide");
             }
+            guide.recipeId = _reloadRecipe->id;
             if (_magazineRail) {
                 auto checked = *_magazineRail;
                 if (!applyMagazineGuide(guide, checked, error)) {
@@ -176,7 +175,6 @@ namespace reloadmaker
             { "anchors", anchors },
             { "selectedAnchor", selected },
             { "saved", !saved.isEmpty() },
-            { "stale", !saved.isEmpty() && saved["recipeId"] != _reloadRecipe->id },
             { "error", _magazineError },
         };
     }
@@ -194,9 +192,7 @@ namespace reloadmaker
             if (!readMagazineReference(request["settings"].toObject(), reference, error)) {
                 fail(error);
             }
-            if (reference.recipeId != _reloadRecipe->id) {
-                fail("The magazine source changed; reopen reference settings");
-            }
+            reference.recipeId = _reloadRecipe->id;
             int found = -1;
             for (int i = 1; i < _handPoseAnchors.size(); ++i) {
                 if (magazineReferenceKey(_handPoseAnchors[i].description) != reference.anchorKey) {
@@ -279,7 +275,6 @@ namespace reloadmaker
             { "movements", movements },
             { "settings", saved.isEmpty() ? magazineSetupJson(value) : saved },
             { "saved", !saved.isEmpty() },
-            { "stale", !saved.isEmpty() && saved["recipeId"] != _reloadRecipe->id },
             { "fullTrack", _simulationRig->magazine },
             { "fullName", carrier.anchorName },
             { "tracks", tracks },
@@ -309,6 +304,8 @@ namespace reloadmaker
                 fail(error);
             }
             checkMagazineSetup(value);
+            value.recipeId = _reloadRecipe->id;
+            value.trackAnchors = recipeTrackAnchors(*_reloadRecipe);
             plan["magazineSetup"] = magazineSetupJson(value);
         } else {
             fail("Choose save or reset for magazine presentation");
@@ -340,8 +337,8 @@ namespace reloadmaker
     void ReloadMakerController::checkMagazineSetup(const MagazineSetup& value) const
     {
         const auto& recipe = *_reloadRecipe;
-        if (value.recipeId != recipe.id || value.emptyTrack >= recipe.tracks.size() || value.loadedFrame >= recipe.frames || value.emptyFrame >= recipe.frames) {
-            fail("Magazine recipe changed; review the current parts and samples");
+        if (value.emptyTrack < 0 || value.emptyTrack >= recipe.tracks.size() || value.loadedFrame >= recipe.frames || value.emptyFrame >= recipe.frames) {
+            fail("Choose an empty body and samples of this configuration's reload");
         }
         const auto state = magazineSetupState();
         bool body = false;

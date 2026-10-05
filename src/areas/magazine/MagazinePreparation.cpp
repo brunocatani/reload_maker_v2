@@ -48,10 +48,6 @@ namespace reloadmaker
             if (!readMagazineGuide(guideJson, guide, _magazineError)) {
                 return;
             }
-            if (guide.recipeId != _reloadRecipe->id) {
-                _magazineError = "Magazine guide source changed. Review or reset its configuration.";
-                return;
-            }
             const auto outward = guide.outwardInConnection;
             const auto axis = rotated(connection.frame.rotation, { outward.x(), outward.y(), outward.z() });
             authoredOutward = QVector3D(axis.x, axis.y, axis.z).normalized();
@@ -102,11 +98,13 @@ namespace reloadmaker
         if (!readMagazineSetup(setupJson, setup, _magazineError)) {
             return false;
         }
-        if (setup.recipeId != _reloadRecipe->id || setup.emptyTrack >= _reloadRecipe->tracks.size() ||
-            setup.loadedFrame >= _reloadRecipe->frames || setup.emptyFrame >= _reloadRecipe->frames) {
-            _magazineError = "Magazine source changed. Review or reset its presentation.";
+        // The empty body's track maps onto this configuration's recipe by node.
+        setup.emptyTrack = mapRecipeTrack(setup.trackAnchors, *_reloadRecipe, setup.emptyTrack);
+        if (setup.emptyTrack < 0 || setup.loadedFrame >= _reloadRecipe->frames || setup.emptyFrame >= _reloadRecipe->frames) {
+            _magazineError = "The magazine presentation names a part or sample this configuration's reload does not have.";
             return false;
         }
+        setup.trackAnchors = recipeTrackAnchors(*_reloadRecipe);
         _magazineSetup = setup;
         return true;
     }
@@ -122,7 +120,7 @@ namespace reloadmaker
         const auto referenceJson = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineReference").toObject();
         MagazineReference reference;
         if (!referenceJson.isEmpty() &&
-            (!readMagazineReference(referenceJson, reference, _magazineError) || reference.recipeId != _reloadRecipe->id || currentMagazineAnchor() < 0)) {
+            (!readMagazineReference(referenceJson, reference, _magazineError) || currentMagazineAnchor() < 0)) {
             if (_magazineError.isEmpty()) {
                 _magazineError = "Magazine reference changed. Review its current carrier and hand reference.";
             }

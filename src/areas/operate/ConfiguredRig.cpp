@@ -27,8 +27,8 @@ namespace reloadmaker
 
     bool ReloadMakerController::buildConfiguredSimulationRig(const OperatingSetup& setup, SimulationRig& rig, QString& error)
     {
-        if (!_reloadRecipe || setup.recipeId != _reloadRecipe->id) {
-            error = "The source assembly changed. Review and save its operating setup again.";
+        if (!_reloadRecipe) {
+            error = "Capture this configuration's reload first.";
             return false;
         }
         const auto& recipe = *_reloadRecipe;
@@ -298,8 +298,7 @@ namespace reloadmaker
         for (const auto& action : _animationActions) {
             clips.append(QJsonObject{ { "name", action.label }, { "path", action.resourcePath }, { "baseline", action.baselineResourcePath } });
         }
-        const auto saved = _authoringRecords.value(authoringRecordKey()).toObject().value("operating").toObject();
-        const bool stale = !saved.isEmpty() && saved["recipeId"] != _reloadRecipe->id;
+        const bool saved = _authoringRecords.value(authoringRecordKey()).toObject().contains("operating");
         QString error;
         OperatingSetup setup;
         setup.recipeId = _reloadRecipe->id;
@@ -320,13 +319,16 @@ namespace reloadmaker
         if (simulationMechanism() == WeaponMechanism::PistolSlide && setup.parts.bolt < 0) {
             setup.parts.bolt = setup.parts.operating;
         }
-        if (!saved.isEmpty() && !stale) {
-            (void)readOperatingSetup(saved, setup, error);
+        if (saved) {
+            OperatingSetup authored;
+            if (savedOperatingSetup(authored, error)) {
+                setup = authored;
+            }
         }
+        setup.trackAnchors = recipeTrackAnchors(*_reloadRecipe);
         return {
             { "settings", operatingSetupJson(setup) },
-            { "saved", !saved.isEmpty() },
-            { "stale", stale },
+            { "saved", saved },
             { "tracks", tracks },
             { "movements", movements },
             { "clips", clips },
@@ -356,6 +358,8 @@ namespace reloadmaker
             if (!readOperatingSetup(request["settings"].toObject(), setup, error) || !buildConfiguredSimulationRig(setup, checked, error)) {
                 throw std::runtime_error(error.toStdString());
             }
+            setup.recipeId = _reloadRecipe->id;
+            setup.trackAnchors = recipeTrackAnchors(*_reloadRecipe);
             plan["operating"] = operatingSetupJson(setup);
         } else {
             throw std::runtime_error("Choose save or reset for the operating setup");

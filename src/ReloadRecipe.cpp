@@ -199,4 +199,41 @@ namespace reloadmaker {
         recipe = std::move(r);
         return true;
     }
+    QJsonArray recipeTrackAnchors(const ReloadRecipe& recipe)
+    {
+        QJsonArray anchors;
+        for (const auto& track : recipe.tracks) {
+            anchors.append(anchorJson(track.anchor));
+        }
+        return anchors;
+    }
+    int mapRecipeTrack(const QJsonArray& savedAnchors, const ReloadRecipe& recipe, int index)
+    {
+        if (index < 0) {
+            return -1;
+        }
+        if (savedAnchors.isEmpty()) {
+            return index < recipe.tracks.size() ? index : -1;
+        }
+        if (index >= savedAnchors.size()) {
+            return -1;
+        }
+        const auto saved = savedAnchors[index].toObject();
+        const auto same = [&](const QString& a, const char* key) { return a.compare(saved[key].toString(), Qt::CaseInsensitive) == 0; };
+        int found = -1;
+        for (const bool withModel : { true, false }) {
+            int matches = 0;
+            for (int i = 0; i < recipe.tracks.size(); ++i) {
+                const auto& anchor = recipe.tracks[i].anchor;
+                if (same(anchor.anchorName, "name") && same(anchor.anchorPath, "path") && (!withModel || same(anchor.ownerModel, "model"))) {
+                    found = i;
+                    ++matches;
+                }
+            }
+            if (matches == 1) {
+                return found;
+            }
+        }
+        return -1;
+    }
 }

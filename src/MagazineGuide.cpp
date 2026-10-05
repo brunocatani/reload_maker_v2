@@ -6,7 +6,7 @@
 namespace reloadmaker {
 bool readMagazineGuide(const QJsonObject& json,MagazineGuide& out,QString& error) {
     const auto fail=[&](const char* why){error=why;return false;};MagazineGuide value;
-    if(json["version"]!=1||!QRegularExpression("^[a-f0-9]{64}$").match(json["recipeId"].toString()).hasMatch())return fail("The magazine guide needs a captured source configuration");
+    if(json["version"]!=1)return fail("Unsupported magazine guide");
     value.recipeId=json["recipeId"].toString();const auto axis=json["outwardInConnection"].toArray();
     if(axis.size()!=3)return fail("Specify all three guide direction components");
     for(int i=0;i<3;++i){if(!axis[i].isDouble()||!std::isfinite(axis[i].toDouble()))return fail("Guide direction must be finite");value.outwardInConnection[i]=float(axis[i].toDouble());}

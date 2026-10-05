@@ -478,10 +478,12 @@ namespace reloadmaker
         QJsonObject chooseHomeRole(const QString&);
         bool openBaseGame();
         // Authoring records (areas/project/AuthoringRecords.cpp): one per
-        // assembled configuration, keyed "<weapon record>/<choices sha256>".
+        // reload configuration, keyed by the weapon and its reload parts
+        // (receiver, separate operating part, magazine; _reloadAxes).
         // Projects save them under "authoringRoadmaps", the name of the retired
         // 12-step roadmap that first kept them.
         QString authoringRecordKey() const;
+        bool savedOperatingSetup(OperatingSetup& setup, QString& error) const;
         void rememberCollisionDraft();
         QString assignedTemplate() const;
         void assignReloadPreset(const QString& id);
@@ -1189,6 +1191,16 @@ namespace reloadmaker
         std::optional<SaveAllJob> _saveAll;
         QJsonObject startSaveAllConfigurations(const QJsonObject& request);
         [[nodiscard]] ConfigurationPlan saveAllPlan() const;
+        // The weapon's reload parts as slots: the receiver, a separate
+        // operating part and the magazine. Authoring keys, Save all and the
+        // pack all use them (areas/project/AuthoringRecords.cpp).
+        using ReloadAxes = QVector<QPair<ConfigurationRole, SlotKey>>;
+        [[nodiscard]] ReloadAxes reloadAxes() const;
+        [[nodiscard]] ReloadAxes liveReloadAxes() const;
+        void recordReloadAxes();
+        [[nodiscard]] static QString configurationRoleName(ConfigurationRole role);
+        // Weapon record -> [{role, slot id}], saved as "reloadAxes".
+        QJsonObject _reloadAxes;
         void continueSaveAll();
         void captureSaveAllConfiguration(const QVector<ConfigurationChoice>& combination);
         void finishSaveAll();

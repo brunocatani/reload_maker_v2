@@ -65,6 +65,28 @@ namespace reloadmaker
                     }
                 }
             }
+            if (record.contains("reloadAxes")) {
+                const auto weapons = record["reloadAxes"].toObject();
+                if (!record["reloadAxes"].isObject() || weapons.size() > 512) {
+                    message = "Invalid reload parts.";
+                    return false;
+                }
+                for (auto it = weapons.begin(); it != weapons.end(); ++it) {
+                    const auto axes = it.value().toArray();
+                    if (it.key().isEmpty() || it.key().size() > 512 || !it.value().isArray() || axes.size() > 3) {
+                        message = "Invalid reload parts.";
+                        return false;
+                    }
+                    for (const auto& value : axes) {
+                        const auto role = value.toObject()["role"].toString();
+                        const auto slot = value.toObject()["slot"].toString();
+                        if ((role != "receiver" && role != "operatingPart" && role != "magazine") || slot.isEmpty() || slot.size() > 512) {
+                            message = "Invalid reload parts.";
+                            return false;
+                        }
+                    }
+                }
+            }
             if (record.contains("weaponProperties")) {
                 const auto properties = record["weaponProperties"].toObject();
                 if (!record["weaponProperties"].isObject() || properties.size() > 512) {
@@ -462,6 +484,7 @@ namespace reloadmaker
         record["choices"] = choices;
         record["authoringRoadmaps"] = _authoringRecords;
         record["reloadTemplates"] = _reloadTemplateAssignments;
+        record["reloadAxes"] = _reloadAxes;
         QJsonObject weaponProperties;
         for (auto it = _weaponOverrides.cbegin(); it != _weaponOverrides.cend(); ++it) {
             if (!it->empty()) {
@@ -743,6 +766,7 @@ namespace reloadmaker
             _authoringRecords.insert(it.key(), saved);
         }
         _reloadTemplateAssignments = record["reloadTemplates"].toObject();
+        _reloadAxes = record["reloadAxes"].toObject();
         restorePins(record);
         _weaponOverrides.clear();
         const auto weaponProperties = record["weaponProperties"].toObject();

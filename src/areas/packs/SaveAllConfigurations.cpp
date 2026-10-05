@@ -45,27 +45,7 @@ namespace reloadmaker
         for (const auto& value : sourcePolicyState()["policy"].toObject()["blockedMods"].toArray()) {
             blocked.insert(value.toString().toLower());
         }
-        const auto slotOf = [this](const QString& record) -> SlotKey {
-            for (const auto* mod : configuredObjectMods()) {
-                if (poseRecordKey(mod->formId).compare(record, Qt::CaseInsensitive) == 0) {
-                    return configurationSlotKey(*mod);
-                }
-            }
-            return 0;
-        };
-        QVector<QPair<ConfigurationRole, SlotKey>> axes;
-        const auto add = [&](ConfigurationRole role, SlotKey slot) {
-            if (slot && std::none_of(axes.cbegin(), axes.cend(), [&](const auto& axis) { return axis.second == slot; })) {
-                axes.append({ role, slot });
-            }
-        };
-        if (const auto* receiver = resolvedReceiverObjectMod()) {
-            add(ConfigurationRole::Receiver, configurationSlotKey(*receiver));
-        }
-        if (const int anchor = operatingAnchor(); anchor >= 0) {
-            add(ConfigurationRole::OperatingPart, slotOf(_handPoseAnchors[anchor].description.ownerRecord));
-        }
-        add(ConfigurationRole::Magazine, slotOf(simulationMagazineAnchor().ownerRecord));
+        const auto axes = reloadAxes();
         ConfigurationPlan plan{ {} };
         for (const auto& [role, slot] : axes) {
             const auto* entry = config->slot(slot);
@@ -175,18 +155,10 @@ namespace reloadmaker
     void ReloadMakerController::captureSaveAllConfiguration(const QVector<ConfigurationChoice>& combination)
     {
         auto& job = *_saveAll;
-        const auto roleName = [](ConfigurationRole role) {
-            switch (role) {
-            case ConfigurationRole::Receiver: return QStringLiteral("receiver");
-            case ConfigurationRole::OperatingPart: return QStringLiteral("operatingPart");
-            case ConfigurationRole::Magazine: break;
-            }
-            return QStringLiteral("magazine");
-        };
         QJsonArray parts;
         for (const auto& choice : combination) {
             const auto* mod = configuration()->mod(choice.mod);
-            parts.append(QJsonObject{ { "role", roleName(choice.role) },
+            parts.append(QJsonObject{ { "role", configurationRoleName(choice.role) },
                                       { "slot", QString::number(choice.slot) },
                                       { "record", poseRecordKey(choice.mod) },
                                       { "name", mod ? mod->name : QString() } });

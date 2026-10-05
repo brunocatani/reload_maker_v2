@@ -69,13 +69,16 @@ namespace reloadmaker
         return it == _slots.cend() ? nullptr : &*it;
     }
 
+    QString WeaponConfiguration::slotId(const PluginContent& plugin, const ConfigurationSlot& slot) const
+    {
+        return (slot.attachPoint ? "slot:" + recordIdentity(plugin, slot.attachPoint) : "mod:" + recordIdentity(plugin, std::uint32_t(slot.key))).toLower();
+    }
+
     QJsonObject WeaponConfiguration::savedChoices(const PluginContent& plugin) const
     {
         QJsonObject result;
         for (const auto& slot : _slots) {
-            const auto key = slot.attachPoint ? "slot:" + recordIdentity(plugin,slot.attachPoint)
-                : "mod:" + recordIdentity(plugin,std::uint32_t(slot.key));
-            result[key.toLower()] = recordIdentity(plugin,selected(slot.key)).toLower();
+            result[slotId(plugin, slot)] = recordIdentity(plugin,selected(slot.key)).toLower();
         }
         return result;
     }
@@ -86,9 +89,7 @@ namespace reloadmaker
         for (auto it=choices.begin();it!=choices.end();++it) {
             bool found=false;
             for (const auto& slot : _slots) {
-                const auto key=(slot.attachPoint ? "slot:"+recordIdentity(plugin,slot.attachPoint)
-                    : "mod:"+recordIdentity(plugin,std::uint32_t(slot.key))).toLower();
-                if(key!=it.key().toLower()||!it.value().isString())continue;
+                if(slotId(plugin,slot)!=it.key().toLower()||!it.value().isString())continue;
                 const auto wanted=it.value().toString();
                 if(wanted.isEmpty()){(void)select(slot.key,0);found=true;break;}
                 for(auto id:slot.choices)if(recordIdentity(plugin,id).compare(wanted,Qt::CaseInsensitive)==0){

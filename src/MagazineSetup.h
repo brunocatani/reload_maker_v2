@@ -8,6 +8,7 @@ struct MagazineSetup {
     bool sampledPayload{};
     float entrySeconds{};
     QMap<QString,QString> pieces; // Complete native shape path -> body, cartridge or spare.
+    QJsonArray trackAnchors; // The node of each track index (recipeTrackAnchors).
 };
 bool readMagazineSetup(const QJsonObject&,MagazineSetup&,QString&);
 QJsonObject magazineSetupJson(const MagazineSetup&);
