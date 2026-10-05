@@ -38,6 +38,40 @@ namespace reloadmaker {
         QString iniText(const QVariant& value) {
             return value.metaType().id() == QMetaType::QByteArray ? QString::fromUtf8(value.toByteArray()) : value.toString();
         }
+        // An MO2 directory setting: %BASE_DIR% is the instance, a relative
+        // path is relative to it, and an empty one is the default folder.
+        QString instanceDirectory(const QSettings& settings, const QString& instancePath, const char* key, const char* fallback) {
+            QString path = iniText(settings.value(QLatin1String(key)));
+            if (path.isEmpty()) { path = QDir(instancePath).filePath(QLatin1String(fallback)); }
+            path.replace("%BASE_DIR%", instancePath, Qt::CaseInsensitive);
+            if (QDir::isRelativePath(path)) { path = QDir(instancePath).filePath(path); }
+            return QDir::cleanPath(path);
+        }
+
+        // The folders that supply files to the virtual Data of the MO2 instance
+        // whose mods folder holds `folder`, highest priority first: overwrite,
+        // then the enabled mods from the top of the selected profile's
+        // modlist.txt. Empty outside an MO2 instance. Reads the profile only.
+        QStringList mo2ProviderFolders(const QString& folder) {
+            const QDir mod(folder);
+            QDir instance(mod.absolutePath());
+            if (!instance.cdUp() || !instance.cdUp() || !QFileInfo(instance.filePath("ModOrganizer.ini")).isFile()) { return {}; }
+            const auto instancePath = instance.absolutePath();
+            QSettings settings(instance.filePath("ModOrganizer.ini"), QSettings::IniFormat);
+            const auto mods = instanceDirectory(settings, instancePath, "Settings/mod_directory", "mods");
+            if (QDir::cleanPath(QFileInfo(mod.absolutePath()).absolutePath()).compare(mods, Qt::CaseInsensitive) != 0) { return {}; }
+            const auto profile = iniText(settings.value("General/selected_profile", settings.value("selected_profile")));
+            if (!leafName(profile)) { return {}; }
+            const auto profiles = instanceDirectory(settings, instancePath, "Settings/profiles_directory", "profiles");
+            QStringList result{ instanceDirectory(settings, instancePath, "Settings/overwrite_directory", "overwrite") };
+            try {
+                for (const auto& line : lines(QDir(profiles).filePath(profile + "/modlist.txt"))) {
+                    if (line.startsWith('+') && leafName(line.mid(1))) { result.append(QDir(mods).filePath(line.mid(1))); }
+                }
+            } catch (const std::exception&) { return {}; }
+            return result;
+        }
+
         QHash<QString, QString> archiveSettings(const QString& path) {
             QHash<QString, QString> result;
             if (!QFileInfo::exists(path)) { return result; }
@@ -261,8 +295,13 @@ namespace reloadmaker {
             if(!leafName(name)||visiting.contains(key)||visiting.size()>64||result.size()>=256)throw std::runtime_error("Invalid or cyclic source master dependencies");
             visiting.insert(key);auto plugin=available.value(key);
             if(!available.contains(key)) {
-                const auto sibling=QDir(parentFolder).filePath(name);
-                plugin=EspReader::read(QFileInfo::exists(sibling)?sibling:QDir(dataPath).filePath(name),cancelled);
+                // Beside the plugin that needs it; else, for a plugin in an MO2
+                // mod folder, wherever that instance's profile provides it (the
+                // DLC masters usually live in a mod); else in the game Data.
+                QStringList folders{parentFolder};folders+=mo2ProviderFolders(parentFolder);folders.append(dataPath);
+                QString found=QDir(dataPath).filePath(name);
+                for(const auto& folder:folders)if(QFileInfo::exists(QDir(folder).filePath(name))){found=QDir(folder).filePath(name);break;}
+                plugin=EspReader::read(found,cancelled);
             }
             if(!plugin.parsed)throw std::runtime_error(("Required source master is unavailable: "+name+". "+plugin.diagnostics.join(';')).toStdString());
             for(const auto& master:plugin.masters)add(master,QFileInfo(plugin.filePath).absolutePath());
