@@ -229,8 +229,8 @@ namespace reloadmaker
         return true;
     }
 
-    // Seconds between automatic shots, from the automatic clip's steady
-    // weaponfire cadence. A receiver the records make semi-automatic fires
+    // Seconds between automatic shots, including authored variable spacing
+    // and the loop boundary. A receiver the records make semi-automatic fires
     // once per press at the single clip's length; it does not need the
     // graph's automatic clip, whose cadence may vary (rework 14, item 16).
     bool ReloadMakerController::measureRifleFireInterval(const HkxClip& single, const AnimationAction* automatic, QString& error)
@@ -260,17 +260,30 @@ namespace reloadmaker
             }
         }
         std::sort(shots.begin(), shots.end());
-        if (shots.size() < 2) {
+        if (shots.size() < 2 || shots.size() > 1024) {
             return fail("Automatic-fire source has no repeated weaponfire cadence.");
         }
         const float interval = shots[1] - shots[0];
         if (interval < .01f || interval > 2) {
             return fail("Invalid automatic-fire cadence.");
         }
-        for (int i = 2; i < shots.size(); ++i) {
-            if (std::abs(shots[i] - shots[i - 1] - interval) > .002f) {
-                return fail("Variable fire cadence needs an explicit event schedule.");
+        QVector<float> schedule;
+        bool variable = false;
+        for (int i = 1; i < shots.size(); ++i) {
+            const float gap = shots[i] - shots[i - 1];
+            if (gap < .01f || gap > 2 || !std::isfinite(gap)) {
+                return fail("Invalid automatic-fire event spacing.");
             }
+            variable |= std::abs(gap - interval) > .002f;
+            schedule.append(gap);
+        }
+        if (variable && _simulationAmmo.automatic) {
+            const float loopGap = automaticClip.durationSeconds + shots.front() - shots.back();
+            if (loopGap < .01f || loopGap > 2 || !std::isfinite(loopGap)) {
+                return fail("Automatic-fire loop has no usable next-shot boundary.");
+            }
+            schedule.append(loopGap);
+            _simulation.fireCycleSchedule = std::move(schedule);
         }
         _rifleFireInterval = interval;
         return true;
@@ -346,7 +359,7 @@ namespace reloadmaker
     // the bolt at its open sample.
     Transformf ReloadMakerController::rifleFireBoltPose() const
     {
-        const float duration = _simulationAmmo.automatic ? _rifleFireInterval : _rifleBoltDuration;
+        const float duration = _simulationAmmo.automatic ? _simulation.currentShotInterval() : _rifleBoltDuration;
         const float elapsed = isM1AConfiguration() ? _simulation.seconds : _simulation.shotSeconds;
         const int last = int(_rifleBoltCycle.size()) - 1;
         float index = std::clamp(elapsed / duration, 0.f, 1.f) * last;

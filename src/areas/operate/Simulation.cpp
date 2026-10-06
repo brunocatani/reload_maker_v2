@@ -88,6 +88,7 @@ namespace reloadmaker
         }
         recordReloadAxes();
         _simulationAmmo = resolveWeaponAmmunition(*currentPlugin(), *currentWeapon(), *configuration(), _referenceNames);
+        _simulation.fireCycleSchedule.clear();
         bool motion = false;
         {
             StageClock clock(_loadTimings, "operate.mechanismMotion");

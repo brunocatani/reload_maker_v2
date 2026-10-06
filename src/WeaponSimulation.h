@@ -36,6 +36,8 @@ namespace reloadmaker {
         float slide{0}, seconds{0}, grabStart{0};
         WeaponMechanism mechanism{WeaponMechanism::PistolSlide};
         float handle{0}, shotSeconds{0}, fireCycleSeconds{0};
+        QVector<float> fireCycleSchedule; // source event gaps, including the loop boundary
+        float currentShotInterval() const { return fireCycleSchedule.isEmpty() ? fireCycleSeconds : fireCycleSchedule[_fireCycleIndex]; }
         bool triggerHeld{false};
         bool spentCase{false},boltClosing{false};
         int casesEjected{0};
@@ -70,6 +72,7 @@ namespace reloadmaker {
     private:
         void finishClosing();
         bool _cycleArmed{false},_pullFromLock{false},_pulledRearward{false};
+        int _fireCycleIndex{0};
         struct PullSnapshot {bool chambered{false},locked{false},cycle{false};int rounds{0},ejected{0};float bolt{0},handle{0};bool spent{false},closing{false};int cases{0};} _pullSnapshot;
     };
     bool buildSimulationRig(const ReloadRecipe& recipe, SimulationRig& rig, QString& error,WeaponMechanism profile=WeaponMechanism::PistolSlide,bool deriveHandleFromBolt=false,const QVector<Transformf>& boltOverride={},const SimulationParts* selected=nullptr);
