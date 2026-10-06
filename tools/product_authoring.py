@@ -40,6 +40,27 @@ def replace_record(items,value,key):
     if matches:items[matches[0]]=copy.deepcopy(value)
     else:items.append(copy.deepcopy(value))
 
+
+def merge_configuration_slots(existing,incoming):
+    """Combine display labels without duplicating the source records they own.
+
+    Separate native attach points may share a label (1911 has two Material
+    slots). The runtime catalog groups by label, not by those attach points.
+    Normalize both sides so the initial capture and subsequent saves agree.
+    """
+    slots={}
+    records={}
+    for source in (*existing,*incoming):
+        name=source['name']
+        slot=slots.setdefault(name,dict(name=name,records=[]))
+        seen=records.setdefault(name,set())
+        for record in source['records']:
+            key=form_key(record)
+            if key not in seen:
+                slot['records'].append(record)
+                seen.add(key)
+    return list(slots.values())
+
 def policy_identity(policy):
     require(isinstance(policy,dict) and set(policy)<= {'sourceOverride','blockedMods','magazineCollections'},'Invalid source compatibility rules')
     marker=None
@@ -155,13 +176,7 @@ def apply_capture(draft,capture,full='',empty=''):
             require(policy_identity(existing_policy)==incoming_policy,'The pack uses another source compatibility policy. Choose its source-context pack or explicitly review and save the weapon-wide compatibility rules.')
     selector=selector_for(profiles)
     replace_record(profiles['profiles'],snapshot['profile'],selector)
-    for incoming in snapshot.get('profileHeader',{}).get('slots',[]):
-        slot=next((s for s in profiles['slots'] if s['name']==incoming['name']),None)
-        if slot is None:profiles['slots'].append(copy.deepcopy(incoming))
-        else:
-            keys={form_key(k) for k in slot['records']}
-            for key in incoming['records']:
-                if form_key(key) not in keys:slot['records'].append(key);keys.add(form_key(key))
+    profiles['slots']=merge_configuration_slots(profiles['slots'],snapshot.get('profileHeader',{}).get('slots',[]))
     if snapshot.get('profileHeader',{}).get('embeddedMagazineReceivers'):
         records=profiles.setdefault('embeddedMagazineReceivers',[])
         for key in snapshot['profileHeader']['embeddedMagazineReceivers']:
