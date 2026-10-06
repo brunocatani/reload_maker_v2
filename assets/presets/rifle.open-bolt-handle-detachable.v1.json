@@ -1,0 +1,45 @@
+{
+  "format": 1,
+  "id": "rifle.open-bolt-handle-detachable.v1",
+  "label": "Open-bolt rifle - independent charging handle",
+  "category": "Rifle",
+  "model": {
+    "feed": {
+      "container": "detachable",
+      "loadingPoints": [
+        {
+          "id": "magwell",
+          "unit": "container",
+          "destination": "container"
+        }
+      ],
+      "insertion": "native-curve"
+    },
+    "mechanisms": [
+      {
+        "id": "handle",
+        "kind": "charging-handle",
+        "roles": [
+          "extract",
+          "eject",
+          "cock",
+          "chamber"
+        ],
+        "return": "spring"
+      },
+      {
+        "id": "bolt",
+        "kind": "reciprocating-bolt",
+        "return": "spring",
+        "driver": "mechanism",
+        "drivenBy": "handle",
+        "locksOpen": true
+      }
+    ],
+    "fire": {
+      "motion": "replay-action-stroke",
+      "afterShot": "open-bolt",
+      "ejection": "on-fire"
+    }
+  }
+}

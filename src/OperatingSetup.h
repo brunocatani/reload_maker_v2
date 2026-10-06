@@ -2,7 +2,7 @@
 #include "WeaponSimulation.h"
 namespace reloadmaker {
 struct OperatingSetup {
-    QString recipeId,mode{"preset"},clip,baseline,fireMode{"preset"};
+    QString recipeId,mode{"preset"},clip,baseline,fireMode{"preset"},cycleMode{"preset"},catchMode{"preset"};
     SimulationParts parts;
     bool deriveHandle{false};
     float duration{.2f},ejectSeconds{-1};

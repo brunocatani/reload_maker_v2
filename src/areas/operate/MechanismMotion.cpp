@@ -48,6 +48,10 @@ namespace reloadmaker
             rig.fireFromStroke = true;
             rig.presetFire = false;
         }
+        if(authored&&setup.catchMode!="preset")rig.lastShotHoldOpen=setup.catchMode=="hold-open";
+        rig.openBolt=authored&&setup.cycleMode!="preset"?setup.cycleMode=="open-bolt":preset&&preset->model.fire.afterShot==AfterShot::OpenBolt;
+        if(rig.openBolt&&rig.hkSlap){error="Open-bolt sear and HK handle notch are distinct actions";return false;}
+        if(rig.openBolt&&rig.mechanism!=WeaponMechanism::Ar15){error="Open-bolt firing requires an independent handle and bolt";return false;}
         return true;
     }
 
@@ -361,6 +365,7 @@ namespace reloadmaker
         const float elapsed = isM1AConfiguration() ? _simulation.seconds : _simulation.shotSeconds;
         const int last = int(_rifleBoltCycle.size()) - 1;
         float index = std::clamp(elapsed / duration, 0.f, 1.f) * last;
+        if(_simulation.openBolt)index=std::fmod(index+float(_rifleBoltOpen),float(last));
         if (_simulation.willLockAfterShot() && index >= _rifleBoltOpen) {
             index = float(_rifleBoltOpen);
         }

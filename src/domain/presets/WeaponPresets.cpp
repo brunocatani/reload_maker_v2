@@ -194,8 +194,8 @@ namespace reloadmaker
         if (!action) {
             return refused(QStringLiteral("DIAMOND needs a hand-operated action"));
         }
-        if (model.fire.afterShot == AfterShot::OpenBolt) {
-            return refused(QStringLiteral("DIAMOND has no runtime yet for open-bolt firing"));
+        if (model.fire.afterShot == AfterShot::OpenBolt && action->kind != MechanismKind::ChargingHandle) {
+            return refused(QStringLiteral("Open-bolt firing currently requires an independent charging handle"));
         }
         const bool manual = model.fire.afterShot == AfterShot::ManualCycle;
         if (manual != (action->kind == MechanismKind::TurnBolt)) {

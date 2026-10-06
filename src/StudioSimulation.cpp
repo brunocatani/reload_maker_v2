@@ -155,7 +155,7 @@ void ReloadMakerController::updateSimulationControls() {
     const QString grabText=magazineInsertionPath()==InsertionPath::NativeCurve?"GRAB: enter the angled line, then move straight along it or use the wheel. The magazine follows its reload motion.":"GRAB: move the mouse, wheel for depth, enter the guide and push in.";
     _simulationInstructions->setText(bolt?"After firing, pull the bolt back to eject, then push it forward to feed and lock. Release holds its position. Magazine: enter the angled line and push straight in.":
         "Drag the "+part+" to rack. "+(!ar?QString():automatic?QString("Hold FIRE for automatic fire. "):QString("FIRE shoots once per press. "))+grabText+" Esc cancels.");
-    _simulationSlideRelease->setVisible(!bolt);_simulationSpring->setVisible(!bolt);
+    _simulationSlideRelease->setVisible(!bolt&&!_simulation.openBolt);_simulationSpring->setVisible(!bolt);
     _simulationSlideRelease->setText(_simulation.hkSlap?"Slap handle":ar?"Bolt release":"Slide release");
     if(_simulation.hkSlap)_simulationInstructions->setText("Pull straight back fully to latch the handle in its notch. Release your grip, then Slap handle to spring it closed. In VR, strike the latched handle with your free palm. "+grabText);
     _simulationSpring->setText(isAr15Configuration()?"Handle returns":ar?"Bolt returns":"Slide returns");
@@ -164,6 +164,7 @@ void ReloadMakerController::updateSimulationControls() {
     _simulationDrive->setInstructions(bolt?"Grab the bolt · pull back to lift and open · push forward to close and lock · releasing holds its position":
         ar?"Grab the "+part+" to rack · Bolt release closes the bolt · "+(automatic?"hold Fire for automatic fire":"background drag orbits"):"Grab the slide to rack it · linked parts follow · background drag orbits");
     if(_simulation.hkSlap)_simulationDrive->setInstructions("Pull straight back to latch the handle · release your grip · Slap handle springs it closed");
+    if(_simulation.openBolt){_simulationInstructions->setText("Pull the charging handle to cock. The bolt stays back with an empty chamber; FIRE feeds and fires from the magazine. Replace the magazine while cocked, or rack after running empty. "+grabText);_simulationDrive->setInstructions("Open bolt · pull handle to cock · trigger feeds and fires · magazine carries every unfired round");}
     const bool noExtender=!noExtenderReloadPath().isEmpty(),pistol=simulationMechanism()==WeaponMechanism::PistolSlide;
     _simulationNoExtender->setVisible(noExtender||_glockNoExtender);_simulationNoExtender->setEnabled(!busy&&!_loadThread&&!_reloadCapturing&&noExtender);
     {const QSignalBlocker block(_simulationNoExtender);_simulationNoExtender->setChecked(_glockNoExtender);}

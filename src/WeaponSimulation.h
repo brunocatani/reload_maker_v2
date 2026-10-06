@@ -26,7 +26,7 @@ namespace reloadmaker {
         QHash<int,QVector<Transformf>> authoredCurves;
         bool customSetup{false},manualCycle{false},fireFromStroke{false},presetFire{true};
         bool magazineBranchOnly{false}; // Explicit carrier inside a shared receiver model.
-        bool hkSlap{false},lastShotHoldOpen{true},singleHandle{false};
+        bool hkSlap{false},lastShotHoldOpen{true},singleHandle{false},openBolt{false};
         float motionDuration{0},manualEjectSeconds{-1};
         QJsonObject authoring;
     };
@@ -47,14 +47,14 @@ namespace reloadmaker {
         float inputProgress()const{return mechanism==WeaponMechanism::Ar15?handle:slide;}
         int capacity{0}, magazineRounds{0}, shotsFired{0}, roundsEjected{0};
         bool chambered{false}, slideLocked{false}, pistolLock{false};
-        bool hkSlap{false},notchLatched{false};
+        bool hkSlap{false},notchLatched{false},openBolt{false};
         bool reloadStartedLoaded{false}, reloadStartedOpen{false}, reloadCycled{false}, reloadFed{false};
         float reloadRackAt{-1}, reloadFeedAt{-1};
         bool ammoKnown()const{return capacity>0;}
-        bool canFire()const{return ammoKnown()&&chambered&&!slideLocked&&action==SimulationAction::Idle&&slide<=.001f&&handle<=.001f&&!magazine.busy();}
+        bool canFire()const{return ammoKnown()&&(openBolt?(magazine.seated()&&magazineRounds>0&&slideLocked):(chambered&&!slideLocked&&slide<=.001f))&&action==SimulationAction::Idle&&handle<=.001f&&!magazine.busy();}
         // Empty chamber with the action closed and at rest: the trigger only clicks.
-        bool canDryFire()const{return !chambered&&action==SimulationAction::Idle&&inputProgress()<=.001f&&slide<=.001f&&!magazine.busy();}
-        bool willLockAfterShot()const{return action==SimulationAction::Fire&&pistolLock&&magazine.seated()&&magazineRounds==0&&!chambered;}
+        bool canDryFire()const{return action==SimulationAction::Idle&&inputProgress()<=.001f&&!magazine.busy()&&(openBolt?(!magazine.seated()||magazineRounds==0):(!chambered&&slide<=.001f));}
+        bool willLockAfterShot()const{return !openBolt&&action==SimulationAction::Fire&&pistolLock&&magazine.seated()&&magazineRounds==0&&!chambered;}
         bool feedCycleActive()const{return _cycleArmed;}
         void configureAmmunition(int magazineCapacity,bool lockPistol,WeaponMechanism profile=WeaponMechanism::PistolSlide);
         bool slideRelease();

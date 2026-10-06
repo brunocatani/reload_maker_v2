@@ -139,6 +139,8 @@ namespace reloadmaker
         const auto type = rig.mechanism;
         auto profile = runtimeOperatingProfile();
         profile["receiver"] = receiverKey;
+        profile["openBolt"] = rig.openBolt;
+        profile["lastShotHoldOpen"] = rig.lastShotHoldOpen;
         profile["magazine"] = magazineKey;
         if (rig.customSetup) {
             profile["operatingSetup"] = rig.authoring;
@@ -161,7 +163,7 @@ namespace reloadmaker
         require(type == WeaponMechanism::PistolSlide || !grabs.isEmpty(), "Configure the operating surface grab points before capture");
         auto header = runtimeProfileHeader(weapon, receiver != nullptr, receiverKey, magazineKey, selection);
         header["hkSlap"]=rig.hkSlap;
-        header["lastShotHoldOpen"]=rig.hkSlap?rig.lastShotHoldOpen:true;
+        header["lastShotHoldOpen"]=rig.lastShotHoldOpen;
         header["singleHandle"]=rig.singleHandle;
         const auto compatibility = sourcePolicyState();
         const auto policy = compatibility["policy"].toObject();

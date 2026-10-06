@@ -23,6 +23,10 @@ bool readOperatingSetup(const QJsonObject& json,OperatingSetup& output,QString& 
     if(!json["deriveHandle"].isBool())return fail("Movement derivation choices must be explicit");
     value.deriveHandle=json["deriveHandle"].toBool();value.fireMode=json["fireMode"].toString();
     if(value.fireMode!="preset"&&value.fireMode!="native"&&value.fireMode!="stroke")return fail("Choose a firing movement source");
+    value.cycleMode=json["cycleMode"].toString("preset");
+    if(value.cycleMode!="preset"&&value.cycleMode!="closed-bolt"&&value.cycleMode!="open-bolt")return fail("Choose a firing action");
+    value.catchMode=json["catchMode"].toString("preset");
+    if(value.catchMode!="preset"&&value.catchMode!="hold-open"&&value.catchMode!="close")return fail("Choose the last-round action");
     value.clip=json["clip"].toString();value.baseline=json["baseline"].toString();
     if(value.mode=="clip"&&(value.clip.isEmpty()||value.baseline.isEmpty()||value.clip.size()>512||value.baseline.size()>512))return fail("Choose both native movement and baseline clips");
     if(!json["duration"].isDouble()||!std::isfinite(json["duration"].toDouble())||json["duration"].toDouble()<.01||json["duration"].toDouble()>120)return fail("Manual duration must be between 0.01 and 120 seconds");value.duration=float(json["duration"].toDouble());
@@ -51,7 +55,7 @@ QJsonObject operatingSetupJson(const OperatingSetup& value) {
     QJsonArray followers,movements;for(int track:value.parts.followers)followers.append(track);
     auto keys=value.movements.keys();std::sort(keys.begin(),keys.end());for(int track:keys)movements.append(QJsonObject{{"track",track},{"id",value.movements[track]}});
     return {{"version",1},{"recipeId",value.recipeId},{"mode",value.mode},{"operating",value.parts.operating},{"bolt",value.parts.bolt},{"magazine",value.parts.magazine},
-        {"followers",followers},{"openFrame",value.parts.openFrame},{"closedFrame",value.parts.closedFrame},{"deriveHandle",value.deriveHandle},{"fireMode",value.fireMode},
+        {"followers",followers},{"openFrame",value.parts.openFrame},{"closedFrame",value.parts.closedFrame},{"deriveHandle",value.deriveHandle},{"fireMode",value.fireMode},{"cycleMode",value.cycleMode},{"catchMode",value.catchMode},
         {"clip",value.clip},{"baseline",value.baseline},{"duration",value.duration},{"ejectSeconds",value.ejectSeconds},{"movements",movements},
         {"trackAnchors",value.trackAnchors}};
 }

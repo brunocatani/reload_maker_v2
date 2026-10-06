@@ -102,7 +102,9 @@ namespace reloadmaker
         }
         _simulation.configureAmmunition(_simulationAmmo.valid() ? _simulationAmmo.capacity : 0, _simulationAmmo.pistol, rig.mechanism);
         _simulation.hkSlap=rig.hkSlap;
-        if(rig.hkSlap)_simulation.pistolLock=rig.lastShotHoldOpen;
+        _simulation.openBolt=rig.openBolt;
+        _simulation.reset();
+        _simulation.pistolLock=rig.lastShotHoldOpen;
         _simulation.fireCycleSeconds = 0;
         if (isBoltActionConfiguration()) {
             _simulation.boltEjectProgress = _boltCycle.ejectProgress;
@@ -343,6 +345,7 @@ namespace reloadmaker
         } else if (action == "fire" || action == "reload") {
             const bool fire = action == "fire";
             if (fire && _simulation.canDryFire()) {
+                if(_simulation.openBolt&&_simulation.slideRelease())startSimulationClock();
                 emitSoundEvent("dry_fire");
                 refreshSoundsUi();
                 setStatus("Dry fire · chamber empty");
