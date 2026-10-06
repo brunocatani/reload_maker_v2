@@ -148,7 +148,7 @@ void ReloadMakerController::updateSimulationControls() {
     const bool native=_simulation.action==SimulationAction::Fire||_simulation.action==SimulationAction::Reload;
     const bool busy=native||_simulation.magazine.busy();
     _simulationMagazineGrip->setEnabled(_simulationActive&&!busy&&_simulation.action==SimulationAction::Idle&&_simulationRig&&_reloadRecipe&&currentMagazineAnchor()>=0);
-    const bool bolt=isBoltActionConfiguration(),ar=isRifleConfiguration()||bolt,automatic=ar&&_simulationAmmo.automatic;
+    const bool bolt=isBoltActionConfiguration(),ar=isRifleConfiguration()||bolt,automatic=ar&&_simulationAmmo.repeatsWhileHeld();
     // The operating part's name, the fire mode and the insertion path word the
     // instructions (rework 14, item 24).
     const QString part=QString(operatingGroup()).replace('_',' ');
@@ -159,7 +159,7 @@ void ReloadMakerController::updateSimulationControls() {
     _simulationSlideRelease->setText(ar?"Bolt release":"Slide release");
     _simulationSpring->setText(isAr15Configuration()?"Handle returns":ar?"Bolt returns":"Slide returns");
     _simulationSpring->setToolTip(isAr15Configuration()?"The charging handle returns when released.":ar?"The bolt returns when released.":"The slide returns when released.");
-    _simulationFire->setToolTip(ar&&_simulationAmmo.automatic?"Press for one shot; hold for automatic fire.":"Fire one shot.");
+    _simulationFire->setToolTip(_simulationAmmo.repeatsWhileHeld()?"Press for one shot; hold to keep firing.":"Fire one shot.");
     _simulationDrive->setInstructions(bolt?"Grab the bolt · pull back to lift and open · push forward to close and lock · releasing holds its position":
         ar?"Grab the "+part+" to rack · Bolt release closes the bolt · "+(automatic?"hold Fire for automatic fire":"background drag orbits"):"Grab the slide to rack it · linked parts follow · background drag orbits");
     const bool noExtender=!noExtenderReloadPath().isEmpty(),pistol=simulationMechanism()==WeaponMechanism::PistolSlide;
@@ -168,7 +168,7 @@ void ReloadMakerController::updateSimulationControls() {
     _simulationSource->setVisible(pistol||ar);
     if((pistol||ar)&&_reloadRecipe) {
         const auto path=_reloadRecipe->source["animation"].toString();
-        _simulationSource->setText("Reload source · "+animationSetRelativePath(path)+" · "+(bolt?"manual bolt action":_simulationAmmo.automatic?"automatic receiver":"semi-automatic receiver"));
+        _simulationSource->setText("Reload source · "+animationSetRelativePath(path)+" · "+(bolt?"manual bolt action":_simulationAmmo.automatic?"automatic receiver":_simulationAmmo.repeatableSingleFire?"repeating single-fire receiver":"semi-automatic receiver"));
         _simulationSource->setToolTip(path);
     }
     _simulationFire->setEnabled(_simulationActive&&(_simulation.canFire()||(ar&&_simulation.action==SimulationAction::Fire)||_simulation.canDryFire()));

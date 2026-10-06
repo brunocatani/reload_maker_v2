@@ -174,7 +174,7 @@ namespace reloadmaker
             }
         }
         const auto ammunition = resolveWeaponAmmunition(*currentPlugin(), *currentWeapon(), *configuration(), _referenceNames);
-        o["fire.modes"] = ammunition.valid() ? found(ammunition.automatic ? QStringLiteral("Automatic") : QStringLiteral("Semi-automatic"),
+        o["fire.modes"] = ammunition.valid() ? found(ammunition.automatic ? QStringLiteral("Automatic") : ammunition.repeatableSingleFire ? QStringLiteral("Repeating single fire") : QStringLiteral("Semi-automatic"),
                                                      QStringLiteral("From the weapon record and its receiver."))
                                              : missing(ammunition.error);
 

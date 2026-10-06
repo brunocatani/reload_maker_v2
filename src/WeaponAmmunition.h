@@ -9,6 +9,8 @@ struct WeaponAmmunition {
     std::uint32_t ammo{0};
     bool pistol{false};
     bool automatic{false};
+    bool repeatableSingleFire{false};
+    bool repeatsWhileHeld()const{return automatic||repeatableSingleFire;}
     QString ammoName,ammoRecord,error;
     QJsonArray sources;
     bool valid()const{return error.isEmpty()&&capacity>0&&ammo!=0;}

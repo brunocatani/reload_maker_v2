@@ -284,7 +284,7 @@ namespace reloadmaker
                 const auto id=readLittle<std::uint16_t>(data,offset+8);
                 if(id==12||id==61)mod.ammoProperties.append({id,static_cast<std::uint8_t>(data[offset]),static_cast<std::uint8_t>(data[offset+4]),
                     readLittle<std::uint32_t>(data,offset+12),readLittle<std::uint32_t>(data,offset+16),readLittle<std::uint32_t>(data,offset+20)});
-                if(id==25)mod.firingProperties.append({id,static_cast<std::uint8_t>(data[offset]),static_cast<std::uint8_t>(data[offset+4]),
+                if(id==25||id==86)mod.firingProperties.append({id,static_cast<std::uint8_t>(data[offset]),static_cast<std::uint8_t>(data[offset+4]),
                     readLittle<std::uint32_t>(data,offset+12),readLittle<std::uint32_t>(data,offset+16),readLittle<std::uint32_t>(data,offset+20)});
                 if(id==31&&static_cast<uchar>(data[offset])==4&&static_cast<uchar>(data[offset+4])==1)
                     appendUnique(mod.removedKeywords,readLittle<std::uint32_t>(data,offset+12));
@@ -467,6 +467,7 @@ namespace reloadmaker
                         pending.weapon.ammoCapacity=readLittle<std::uint16_t>(d->data,52);
                         pending.weapon.dataFlags=readLittle<std::uint32_t>(d->data,48);
                         pending.weapon.automatic=(pending.weapon.dataFlags&0x8000u)!=0;
+                        pending.weapon.repeatableSingleFire=(pending.weapon.dataFlags&0x10000u)!=0;
                         // Bolt Action: set on the C14 and L118A2 records and on
                         // none of the eight other testbed weapons (2026-10-05).
                         pending.weapon.boltAction=(pending.weapon.dataFlags&0x400000u)!=0;

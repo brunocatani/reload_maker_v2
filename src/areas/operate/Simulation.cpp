@@ -431,8 +431,8 @@ namespace reloadmaker
         return "Finish the current interaction; the slide must be closed and chamber loaded to fire.";
     }
 
-    // FIRE press and release. Holding the trigger keeps an automatic receiver
-    // firing; a semi-automatic receiver fires once per press.
+    // Repeatable Single Fire (OMOD 86) repeats the single-shot clip while
+    // held. It must not select the Automatic (OMOD 25) animation or cadence.
     void ReloadMakerController::setSimulationTrigger(bool pressed)
     {
         if (pressed && _simulationTriggerDown) {
@@ -444,12 +444,12 @@ namespace reloadmaker
             return;
         }
         if (_simulation.action == SimulationAction::Fire) {
-            _simulation.triggerHeld = _simulationAmmo.automatic;
+            _simulation.triggerHeld = _simulationAmmo.repeatsWhileHeld();
             return;
         }
         runSimulationAction("fire");
         if (_simulation.action == SimulationAction::Fire) {
-            _simulation.triggerHeld = _simulationAmmo.automatic;
+            _simulation.triggerHeld = _simulationAmmo.repeatsWhileHeld();
         }
     }
 

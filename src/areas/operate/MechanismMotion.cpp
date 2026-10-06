@@ -250,6 +250,9 @@ namespace reloadmaker
             _rifleFireInterval = single.durationSeconds;
             return true;
         };
+        if (_simulationAmmo.repeatableSingleFire && !_simulationAmmo.automatic) {
+            return singleFire();
+        }
         const auto fail = [&](const QString& message) {
             if (!_simulationAmmo.automatic) {
                 return singleFire();
