@@ -50,7 +50,18 @@ namespace reloadmaker
     {
         require(track >= 0 && track < _reloadTrackNodes.size() && _weaponBoneIndex >= 0, "Missing native part binding");
         const auto binding = std::find_if(_nodeBindings.cbegin(), _nodeBindings.cend(), [&](const auto& b) { return b.nodeIndex == _reloadTrackNodes[track]; });
-        require(binding != _nodeBindings.cend(), "Part has no native animation binding");
+        if (binding == _nodeBindings.cend()) {
+            require(_reloadRecipe && track < _reloadRecipe->tracks.size(), "Static part has no captured source anchor");
+            const auto& anchor = _reloadRecipe->tracks[track].anchor;
+            auto path = anchor.anchorPath.split('/');
+            require(path.size() > 1 && path.back() == anchor.anchorName && !anchor.ownerModel.isEmpty(),
+                    "Static part has no unambiguous model-relative path");
+            // The source path retains the exact model root for native binding.
+            // The runtime's logical path starts at Weapon, just as bound tracks
+            // do; source-only children need no invented animation skeleton bone.
+            path.front() = _skeleton.bones[_weaponBoneIndex].name;
+            return path.join('/');
+        }
         QStringList path;
         int bone = binding->boneIndex;
         for (int depth = 0; bone >= 0 && bone < _skeleton.bones.size() && depth < 64; ++depth) {

@@ -274,6 +274,7 @@ namespace reloadmaker
     // before they are forgotten.
     void ReloadMakerController::stopSimulation()
     {
+        _simulationStaticLocalPose.clear();
         _simulationTriggerDown = false;
         _audio.stop();
         _soundTracking = false;

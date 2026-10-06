@@ -7,6 +7,7 @@
 
 #include <QDateTime>
 #include <QJsonArray>
+#include <QSet>
 #include <QTimer>
 #include <QUuid>
 #include <algorithm>
@@ -130,6 +131,22 @@ namespace reloadmaker
                 addAnimatedPartAnchor(binding);
             }
         }
+        // Source weapon nodes can carry real geometry without an HKX track.
+        // Keep their native rest frame so an explicit authored movement can
+        // drive them without inventing a skeleton bone or moving the receiver.
+        const auto geometry = weaponGeometryBlocks();
+        for (int i = 0; i < _sceneNodes.size(); ++i) {
+            const auto node = _sceneNodes[i];
+            const auto name = model->get<QString>(node, "Name");
+            if (_assemblyNodes[i].boneIndex >= 0 || !geometry.contains(model->getBlockNumber(node)) ||
+                !name.startsWith("Weapon", Qt::CaseInsensitive) || name.compare("Weapon", Qt::CaseInsensitive) == 0 ||
+                std::any_of(_handPoseAnchors.cbegin(), _handPoseAnchors.cend(), [&](const auto& a) { return a.node == node; })) {
+                continue;
+            }
+            ScenePoseBinding sourcePart;
+            sourcePart.nodeIndex = i;
+            addAnimatedPartAnchor(sourcePart);
+        }
         return true;
     }
 
@@ -140,7 +157,7 @@ namespace reloadmaker
         const auto* model = activeModel();
         const auto* config = configuration();
         const auto node = _sceneNodes[binding.nodeIndex];
-        const auto& bone = _skeleton.bones[binding.boneIndex].name;
+        const auto bone = model->get<QString>(node, "Name");
         auto ancestor = QModelIndex(node);
         for (int depth = 0; ancestor.isValid() && depth < model->getBlockCount(); ++depth) {
             for (const auto& slot : config->entries()) {

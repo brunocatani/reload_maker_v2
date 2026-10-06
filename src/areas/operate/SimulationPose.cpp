@@ -51,6 +51,7 @@ namespace reloadmaker
     // Sets the simulated parts over the native pose already in _boundLocalPose.
     bool ReloadMakerController::applySimulationPose()
     {
+        _simulationStaticLocalPose.clear();
         _ghostNatives.clear();
         if (!_simulationActive || !_simulationRig || !_reloadRecipe) {
             refreshNativeGhost({});
@@ -97,6 +98,11 @@ namespace reloadmaker
             const int node = _nodeBindings[i].nodeIndex;
             _boundLocalPose[i] = local[node];
             _boundGlobalPose[i] = world[node];
+        }
+        for (auto it = targets.cbegin(); it != targets.cend(); ++it) {
+            if (_assemblyNodes[it.key()].boneIndex < 0) {
+                _simulationStaticLocalPose.insert(it.key(), local[it.key()]);
+            }
         }
         refreshNativeGhost(targets);
         return true;

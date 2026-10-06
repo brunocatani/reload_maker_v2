@@ -322,6 +322,7 @@ namespace reloadmaker
         // Native weapon-local poses of the authored operating tracks posed this
         // frame, by scene node; written while the targets are collected.
         mutable QHash<int, Transformf> _ghostNatives;
+        QHash<int, Transformf> _simulationStaticLocalPose;
         bool _weaponFixedMotion{ true };      // the preview holds the weapon frame still
         bool _approximateTransitions{ true }; // clip entry and exit blends
         bool _armsShown{ true };

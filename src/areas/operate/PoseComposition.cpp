@@ -172,6 +172,28 @@ namespace reloadmaker
                 node->update(model, nodeIndex);
             }
         }
+        // Unanimated source parts have no skeleton binding to write above.
+        // Restore their original local frame whenever simulation stops or a
+        // native clip owns the pose, so custom pulls cannot leak into playback.
+        for (const auto& anchor : _handPoseAnchors) {
+            if (anchor.description.anchorKind != "animated-part") {
+                continue;
+            }
+            const int nodeIndex = _sceneNodes.indexOf(anchor.node);
+            if (nodeIndex < 0 || _assemblyNodes[nodeIndex].boneIndex >= 0) {
+                continue;
+            }
+            const auto pose = _simulationStaticLocalPose.constFind(nodeIndex);
+            const auto& local = _simulationActive && pose != _simulationStaticLocalPose.cend() ?
+                pose.value() : _assemblyNodes[nodeIndex].restLocal;
+            if (!setNodeTransform(anchor.node, local)) {
+                _poseError = QStringLiteral("Cannot write static weapon part %1").arg(anchor.description.anchorName);
+                return false;
+            }
+            if (Node* node = scene->getNode(model, anchor.node)) {
+                node->update(model, anchor.node);
+            }
+        }
         applySimulationVisibility();
         _window->getGLView()->update();
         return true;

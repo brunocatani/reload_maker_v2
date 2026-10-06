@@ -206,6 +206,40 @@ namespace reloadmaker
         for (int i = 0; i < bindingIndices.size(); ++i) {
             recipe.tracks[i].parent = bindingIndices.indexOf(_nodeBindings[bindingIndices[i]].semanticParentBinding);
         }
+        // Static source parts are sampled by the scene plan too. They have no
+        // skeleton binding; authoring supplies their motion after capture.
+        const int boundTrackCount = recipe.tracks.size();
+        for (const auto& anchor : _handPoseAnchors) {
+            if (anchor.description.anchorKind != "animated-part") {
+                continue;
+            }
+            const int node = _sceneNodes.indexOf(anchor.node);
+            if (node < 0 || _assemblyNodes[node].boneIndex >= 0 || _reloadTrackNodes.contains(node)) {
+                continue;
+            }
+            ReloadTrack track;
+            track.anchor = anchor.description;
+            track.label = anchor.label + QStringLiteral(" · static source");
+            track.surface = geometry.contains(model->getBlockNumber(anchor.node));
+            track.poses.reserve(recipe.frames);
+            recipe.tracks.append(std::move(track));
+            _reloadTrackNodes.append(node);
+        }
+        if (recipe.tracks.size() > maximumReloadTracks) {
+            error = "Too many source part tracks for this capture.";
+            return false;
+        }
+        for (int i = boundTrackCount; i < recipe.tracks.size(); ++i) {
+            int parent = _assemblyNodes[_reloadTrackNodes[i]].parent;
+            for (int depth = 0; parent >= 0 && depth < _assemblyNodes.size(); ++depth) {
+                const int track = _reloadTrackNodes.indexOf(parent);
+                if (track >= 0) {
+                    recipe.tracks[i].parent = track;
+                    break;
+                }
+                parent = _assemblyNodes[parent].parent;
+            }
+        }
         return true;
     }
 
