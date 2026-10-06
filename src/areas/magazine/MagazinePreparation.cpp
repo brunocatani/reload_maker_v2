@@ -84,18 +84,6 @@ namespace reloadmaker
         if (!guideJson.isEmpty() && !applyMagazineGuide(guide, rail, _magazineError)) {
             return;
         }
-        if (guideJson.isEmpty()) {
-            // Preserve full visual clearance while shortening the controller
-            // stroke. A long stock or drum must not demand a long arm gesture.
-            if (rail.motion.isEmpty()) {
-                const auto delta = rail.outward * rail.travel;
-                rail.motion = { Transformf{}, Transformf{{delta.x(), delta.y(), delta.z()}} };
-                rail.motionDistances = { 0, rail.travel };
-            }
-            rail.travel *= .5f;
-            rail.captureRadius = std::min(rail.captureRadius, rail.travel * .2f);
-            rail.releaseMargin = std::min(rail.releaseMargin, rail.captureRadius * .6f);
-        }
         _magazineRail = rail;
     }
 

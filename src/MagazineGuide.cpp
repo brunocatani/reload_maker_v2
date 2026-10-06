@@ -15,10 +15,6 @@ bool readMagazineGuide(const QJsonObject& json,MagazineGuide& out,QString& error
     for(const auto* key:{"travel","captureRadius","releaseMargin"})if(!json[key].isDouble()||!std::isfinite(json[key].toDouble())||json[key].toDouble()<=0)return fail("Guide dimensions must be positive and finite");
     value.travel=float(json["travel"].toDouble());value.captureRadius=float(json["captureRadius"].toDouble());value.releaseMargin=float(json["releaseMargin"].toDouble());
     if(value.travel>=1000||value.captureRadius>=value.travel||value.releaseMargin>value.travel)return fail("Use a finite stroke below 1000 units, with pickup radius and release margin smaller than its travel");
-    if(json["version"]==1) {
-        value.travel*=.5f;value.captureRadius=std::min(value.captureRadius,value.travel*.2f);
-        value.releaseMargin=std::min(value.releaseMargin,value.captureRadius*.6f);
-    }
     out=value;error.clear();return true;
 }
 QJsonObject magazineGuideJson(const MagazineGuide& value) {

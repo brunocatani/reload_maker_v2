@@ -67,11 +67,6 @@ bool buildMagazineRail(const ReloadRecipe& r,int full,const QString& name,const 
     for(const auto& p:weapon){if(!finite(p)){error="Invalid native weapon vertex.";return false;}weaponMax=std::max(weaponMax,QVector3D::dotProduct(p,rail.outward));}
     const float clearance=size*.035f;
     rail.magazineMinProjection=magazineMin;rail.weaponMaxProjection=weaponMax;rail.clearance=clearance;
-    // Native attachment pivots can be outside the actual magazine. Locate
-    // the leading end in the seated body instead; the weapon-side endpoint
-    // and the loose magazine then describe the same physical mating point.
-    rail.handle+=rail.outward*(magazineMin-QVector3D::dotProduct(rail.handle,rail.outward));
-    rail.connection.translation={rail.handle.x(),rail.handle.y(),rail.handle.z()};
     rail.travel=weaponMax-magazineMin+clearance;
     rail.captureRadius=std::max(size*.035f,radius*.55f);rail.releaseMargin=rail.captureRadius*.6f;
     // Insertion depth belongs to the socket, not the complete magazine length.
@@ -191,7 +186,7 @@ QJsonObject magazineRailJson(const MagazineRail& r) {
     if(invertUniformTransform(r.connection,inverse))localAxis=v(rotated(inverse.rotation,{r.outward.x(),r.outward.y(),r.outward.z()}));
     QJsonObject result{{"version",r.motion.isEmpty()?1:3},{"connectionName",r.connectionName},{"connection",connection},{"outwardInWeapon",array(r.outward)},
         {"outwardInConnection",array(localAxis)},{"handleInWeapon",array(r.handle)},{"travel",r.travel},{"captureRadius",r.captureRadius},
-        {"releaseMargin",r.releaseMargin},{"fullTrack",r.fullTrack},{"emptyTrack",r.emptyTrack},{"sharedBody",r.sharedBody()},{"animationSeconds",.6},{"inputReference","magazine-connection"},
+        {"releaseMargin",r.releaseMargin},{"fullTrack",r.fullTrack},{"emptyTrack",r.emptyTrack},{"sharedBody",r.sharedBody()},{"animationSeconds",.6},{"inputReference","magazine-carrier"},
         {"magazineMinProjection",r.magazineMinProjection},{"weaponMaxProjection",r.weaponMaxProjection},{"clearance",r.clearance}};
     if(!r.motion.isEmpty()) {
         QJsonArray samples;
