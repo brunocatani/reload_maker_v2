@@ -85,7 +85,7 @@ bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& err
             if(i==rig.slide||(profile==WeaponMechanism::M1A&&i==rig.bolt))rig.slideTracks.append(i);
             continue;
         }
-        if(rig.magazineBranchOnly?descendant(r,i,rig.magazine):sameOwner(t,r.tracks[rig.magazine]))rig.magazineTracks.append(i);
+        if((rig.magazineBranchOnly||profile==WeaponMechanism::BoltAction)?descendant(r,i,rig.magazine):sameOwner(t,r.tracks[rig.magazine]))rig.magazineTracks.append(i);
         // Receiver followers (barrel/catch) and independently animated magazine
         // descendants (feed cartridge) keep their own sampled trajectories.
         // A sibling spent-magazine copy is deliberately not a slide follower.
