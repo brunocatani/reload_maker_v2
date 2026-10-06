@@ -4,6 +4,7 @@
 #include "ReloadMakerController.h"
 #include "StudioWindow.h"
 #include "areas/loadout/LoadoutNames.h"
+#include "areas/loadout/SceneTree.h"
 #include "data/niftypes.h"
 #include "gamemanager.h"
 #include "gl/glscene.h"
@@ -481,6 +482,14 @@ namespace reloadmaker
             const int parentBone = _skeleton.bones.at(bone).parentIndex;
             if (parentBone >= 0) {
                 result.parent = _canonicalNodes.value(normalizedKey(_skeleton.bones.at(parentBone).name));
+            }
+            const int anchor = _attachmentConnections.anchor(match, model->getBlockNumber(result.parent), result.error);
+            if (anchor < 0) { result.parent = QPersistentModelIndex{}; return result; }
+            // A receiver-owned bone supplies the connection frame. If the
+            // owner has no such node (Glock), the incoming model supplies it.
+            const auto ownerAnchor = model->getBlockIndex(anchor);
+            if (isWithinBlock(*model, ownerAnchor, model->getBlockIndex(result.ownerRoot))) {
+                result.connectionParent = ownerAnchor;
             }
             result.suppliedBone = bone;
         } else {

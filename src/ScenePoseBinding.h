@@ -9,7 +9,7 @@ namespace reloadmaker
     // introducing a second animated copy of the anchor above it.
     [[nodiscard]] bool suppliedAnchorPlacement(const Transformf& authoredRoot,
                                                 const Transformf& anchorInMount,
-                                                const Transformf& connection,
+                                                const Transformf& ownerInMount, const Transformf& connection,
                                                 Transformf& rootPlacement);
     // Immutable assembly snapshot. Node indices are assembly-scoped, not names;
     // the adapter assigns boneIndex only to nodes actually driven by this rig.

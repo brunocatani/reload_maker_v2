@@ -127,6 +127,7 @@ namespace reloadmaker
         struct ConnectTarget
         {
             QPersistentModelIndex parent;
+            QPersistentModelIndex connectionParent;
             Vec3f translation{};
             Quaternionf rotation{};
             float scale{ 1.0f };

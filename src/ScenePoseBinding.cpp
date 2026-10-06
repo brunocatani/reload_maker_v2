@@ -6,11 +6,11 @@
 namespace reloadmaker
 {
     bool suppliedAnchorPlacement(const Transformf& authoredRoot, const Transformf& anchorInMount,
-                                 const Transformf& connection, Transformf& rootPlacement)
+                                 const Transformf& ownerInMount, const Transformf& connection, Transformf& rootPlacement)
     {
         Transformf inverse;
         if (!invertUniformTransform(anchorInMount, inverse)) { return false; }
-        rootPlacement = composed(composed(composed(anchorInMount, connection), inverse), authoredRoot);
+        rootPlacement = composed(composed(composed(ownerInMount, connection), inverse), authoredRoot);
         return true;
     }
 

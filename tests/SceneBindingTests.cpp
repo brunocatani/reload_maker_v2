@@ -354,7 +354,7 @@ int main(int argc, char** argv)
             const Transformf root = transform({7, 3, -2}, 10, 35, -20);
             const Transformf anchor = transform({2, 8, 5}, 20, -15, 60);
             Transformf placement;
-            require(suppliedAnchorPlacement(root, anchor, connection, placement), "invalid anchor placement");
+            require(suppliedAnchorPlacement(root, anchor, anchor, connection, placement), "invalid anchor placement");
             expect(matrix(placement) * matrix(root).inverted() * matrix(anchor), matrix(anchor) * matrix(connection));
         }
         if (app.arguments().size() > 1) {

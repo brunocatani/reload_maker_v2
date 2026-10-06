@@ -984,7 +984,17 @@ namespace reloadmaker
                 }
                 anchor = destination.getBlockIndex(destination.getParent(anchor));
             }
-            if (!reachedRoot || !suppliedAnchorPlacement(authoredRoot, anchorInMount, placement, placement)) {
+            auto ownerInMount = anchorInMount;
+            if (target.connectionParent.isValid()) {
+                Transformf ownerWorld, mountWorld, inverseMount;
+                if (!sceneNodeWorld(target.connectionParent, ownerWorld, error) ||
+                    !sceneNodeWorld(target.parent, mountWorld, error) || !invertUniformTransform(mountWorld, inverseMount)) {
+                    error = QStringLiteral("Cannot resolve attachment connection parent %1").arg(record.editorId);
+                    return false;
+                }
+                ownerInMount = composed(inverseMount, ownerWorld);
+            }
+            if (!reachedRoot || !suppliedAnchorPlacement(authoredRoot, anchorInMount, ownerInMount, placement, placement)) {
                 error = QStringLiteral("Cannot resolve supplied attachment anchor %1").arg(record.editorId);
                 return false;
             }
