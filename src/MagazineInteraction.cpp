@@ -170,9 +170,9 @@ void MagazineMotion::moveRail(const MagazineRail& rail,float d) {
 }
 void MagazineMotion::tick(const MagazineRail& rail,float delta) {
     if(!animated()||!std::isfinite(delta)||delta<0)return;
-    elapsed=std::min(.6f,elapsed+delta);const float t=elapsed/.6f;const float smooth=t*t*(3-2*t);
-    distance=rail.travel*(phase==MagazinePhase::Outgoing?smooth:1-smooth);offset=magazineInputOffset(rail,distance);
-    if(elapsed>=.6f){if(phase==MagazinePhase::Incoming)reset();else phase=MagazinePhase::OutsideEmpty;}
+    const float duration=phase==MagazinePhase::Outgoing?.06f:.6f;elapsed=std::min(duration,elapsed+delta);const float t=elapsed/duration;const float smooth=t*t*(3-2*t);
+    distance=rail.travel*(phase==MagazinePhase::Outgoing?.1f*smooth:1-smooth);offset=magazineInputOffset(rail,distance);
+    if(elapsed>=duration){if(phase==MagazinePhase::Incoming)reset();else phase=MagazinePhase::OutsideEmpty;}
 }
 QString magazinePhaseName(MagazinePhase p) {
     switch(p){case MagazinePhase::Seated:return "Seated full";case MagazinePhase::Absent:return "Absent";case MagazinePhase::Outgoing:return "Empty magazine out";
