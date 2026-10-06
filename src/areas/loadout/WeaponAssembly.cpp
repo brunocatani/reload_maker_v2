@@ -745,7 +745,7 @@ namespace reloadmaker
         const QString basePath = normalizeNifPath(weapon.baseModelPath);
         QString detail;
         const auto baseModel = sourceNif(_packageResources.contains(basePath) ? _packageResources : referenceMeshes(),
-                                         basePath, detail);
+                                         basePath, detail, true);
         if (weapon.baseModelPath.isEmpty() || !baseModel) {
             error = QStringLiteral("Cannot load weapon base model '%1': %2").arg(weapon.baseModelPath, detail);
             return false;
@@ -811,7 +811,7 @@ namespace reloadmaker
             }
             const bool receiver = isReceiverObjectMod(*objectMod);
             QString detail;
-            auto attachment = sourceNif(_packageResources, objectMod->modelPath, detail);
+            auto attachment = sourceNif(_packageResources, objectMod->modelPath, detail, true);
             if (!attachment) {
                 if (receiver) {
                     error = QStringLiteral("Cannot load receiver '%1': %2").arg(objectMod->modelPath, detail);

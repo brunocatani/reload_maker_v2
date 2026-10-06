@@ -149,9 +149,19 @@ namespace reloadmaker
     }
 
     QSharedPointer<NifModel> ReloadMakerController::sourceNif(const ResourceArchive& archive,
-                                                              const QString& resourcePath, QString& error)
+                                                              const QString& resourcePath, QString& error, bool firstPerson)
     {
-        const QString path = normalizeNifPath(resourcePath);
+        QString path = normalizeNifPath(resourcePath);
+        // FO4VR's assembled-model loader tries the first-person sibling before
+        // the declared model (14130c910). Keep record/anchor identities on the
+        // declared path; only the resource and decode-cache key change here.
+        if (firstPerson && path.endsWith(".nif") && !path.endsWith("_1.nif")) {
+            const auto candidate = path.chopped(4) + "_1.nif";
+            if (archive.contains(candidate)) {
+                appendDiagnostic(QStringLiteral("MODEL first-person %1 (declared %2)").arg(candidate, path));
+                path = candidate;
+            }
+        }
         const QString key = (&archive == &_gameMeshes ? QStringLiteral("game:") : QStringLiteral("mod:")) + path;
         error.clear();
         if (const auto* model = _nifCache.object(key)) { return *model; }

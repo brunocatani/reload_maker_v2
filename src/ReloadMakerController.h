@@ -1335,7 +1335,7 @@ namespace reloadmaker
         [[nodiscard]] bool loadNif(const ResourceArchive& archive, const QString& resourcePath,
                                    NifModel& destination, QString& error) const;
         [[nodiscard]] QSharedPointer<NifModel> sourceNif(const ResourceArchive& archive,
-                                                       const QString& path, QString& error);
+                                                       const QString& path, QString& error, bool firstPerson = false);
         [[nodiscard]] QByteArray nifBytes(const ResourceArchive& archive,
                                          const QString& path, QString& error) const;
         [[nodiscard]] HkxClip cachedClip(const QString& path, QString& error);

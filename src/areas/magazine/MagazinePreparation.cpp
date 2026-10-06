@@ -141,7 +141,7 @@ namespace reloadmaker
             connection.name = rig.magazineBranchOnly ? "Magazine carrier" : "P-Mag";
             return sceneNodeWorld(carrierNode, connection.frame, _magazineError);
         }
-        auto source = sourceNif(_packageResources, anchor.ownerModel, _magazineError);
+        auto source = sourceNif(_packageResources, anchor.ownerModel, _magazineError, true);
         if (!source) {
             return false;
         }
