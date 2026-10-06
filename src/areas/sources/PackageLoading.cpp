@@ -343,11 +343,15 @@ namespace reloadmaker
             setLoading(false);
             if (result->cancelled) {
                 _pendingSession = {};
+                _pendingSessionPath.clear();
+                _gameDataText = _gameData;
                 setStatus("Loading cancelled; previous source retained.");
                 return;
             }
             if (!result->error.isEmpty()) {
                 _pendingSession = {};
+                _pendingSessionPath.clear();
+                _gameDataText = _gameData;
                 setStatus(result->error, true);
                 return;
             }

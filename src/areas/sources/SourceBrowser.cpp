@@ -3,6 +3,7 @@
 // StudioSourceBrowser.cpp only render this state.
 #include "ReloadMakerController.h"
 #include "InstallationSetup.h"
+#include "ReloadTemplates.h"
 #include "StudioPaths.h"
 #include "StudioWindow.h"
 #include "areas/sources/Testbeds.h"
@@ -17,7 +18,6 @@
 #include <QMap>
 #include <QMenu>
 #include <QRegularExpression>
-#include <QSettings>
 #include <QSignalBlocker>
 #include <QTimer>
 
@@ -87,9 +87,8 @@ namespace reloadmaker
     {
         _testbedSources = {};
         _testbedSourcesLoaded = true;
-        QSettings settings;
         for (const char* id : kTestbedIds) {
-            const QString project = settings.value("testbeds/" + QString(id), testbedProject(id)).toString();
+            const QString project = resolvedTestbedProject(id);
             QFile file(project);
             if (file.size() > kProjectSizeLimit || !file.open(QIODevice::ReadOnly)) {
                 continue;
@@ -128,7 +127,7 @@ namespace reloadmaker
                 continue;
             }
             const QString id = devBenchId(weapon);
-            const bool authored = !document["reloadTemplates"].toObject()[weapon.toLower()].toString().isEmpty();
+            const bool authored = templateMechanism(document["reloadTemplates"].toObject()[weapon.toLower()].toString()).has_value();
             if (benchWeapons.contains(id)) {
                 const auto& previous = benchWeapons[id];
                 const bool previousAuthored = previous.second["authored"].toBool();
@@ -400,18 +399,8 @@ namespace reloadmaker
             setStatus("Choose a weapon from the selected plugin.", true);
             return false;
         }
-        if (!_libraryMode) {
-            for (const auto& value : _testbedSources) {
-                const QJsonObject testbed = value.toObject();
-                const bool samePlugin = testbed["plugin"].toString().compare(_browserPlugin, Qt::CaseInsensitive) == 0;
-                const bool sameWeapon = testbed["weapon"].toString().compare(selectionRecordKey(index), Qt::CaseInsensitive) == 0;
-                if (samePlugin && sameWeapon) {
-                    return selectTestbed(testbed["id"].toString());
-                }
-            }
-        }
         selectWeapon(index);
-        return true;
+        return _loadThread || _lastError.isEmpty();
     }
 
     SourceBrowserProjection ReloadMakerController::sourceBrowserProjection() const

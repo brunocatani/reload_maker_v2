@@ -336,10 +336,16 @@ namespace reloadmaker
                 _launchSnapshot = result->snapshot;
             }
             if (result->cancelled) {
+                _pendingSession = {};
+                _pendingSessionPath.clear();
+                _gameDataText = _gameData;
                 setStatus("Library loading cancelled; previous source retained.");
                 return;
             }
             if (!result->error.isEmpty()) {
+                _pendingSession = {};
+                _pendingSessionPath.clear();
+                _gameDataText = _gameData;
                 for (const auto& plugin : result->plugins) {
                     if (!plugin.error.isEmpty()) {
                         appendDiagnostic(QStringLiteral("PLUGIN ERROR %1: %2").arg(plugin.name, plugin.error));

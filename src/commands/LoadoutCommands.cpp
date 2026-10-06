@@ -25,7 +25,9 @@ namespace reloadmaker
                             const int index = params["index"].toInt(-1);
                             require(index >= 0 && index < _weaponSelections.size(), "Unknown weapon index");
                             selectWeapon(index);
-                            require(_selectedWeapon == index, "Weapon change failed: " + _lastError);
+                            // A saved project may switch source; numeric indices
+                            // belong to the old source until loading completes.
+                            require(_loadThread || _selectedWeapon == index, "Weapon change failed: " + _lastError);
                             if (!_loadThread) {
                                 rebuildWeapon();
                             }

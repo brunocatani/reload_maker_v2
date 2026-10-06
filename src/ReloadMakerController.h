@@ -549,6 +549,8 @@ namespace reloadmaker
         bool isRifleConfiguration() const;
         QString currentTestbed();
         QString testbedProject(const QString& name) const;
+        QString resolvedTestbedProject(const QString& name) const;
+        bool selectSavedWeapon(int index);
         bool prepareRifleMotion();
         bool buildCurrentSimulationRig(SimulationRig&,QString&);
         Transformf rifleBoltPose(float progress) const;
@@ -812,6 +814,7 @@ namespace reloadmaker
         // refresh, remembering `source` when it happened outside a command.
         void noteDocumentChange(const QString& source);
         QJsonObject _pendingSession;
+        QString _pendingSessionPath;
         QString _sessionPath;
         QString _lastError;
         QComboBox* _fingerJoint{nullptr};

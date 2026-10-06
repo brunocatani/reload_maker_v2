@@ -19,6 +19,9 @@ namespace reloadmaker
     void ReloadMakerController::selectWeapon(int index)
     {
         index = validWeaponIndex(index);
+        if (selectSavedWeapon(index)) {
+            return;
+        }
         if (index == _selectedWeapon) {
             return;
         }

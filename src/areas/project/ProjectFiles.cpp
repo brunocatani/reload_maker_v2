@@ -26,6 +26,7 @@
 #include <QSettings>
 #include <QUuid>
 #include <algorithm>
+#include <utility>
 
 namespace reloadmaker
 {
@@ -433,10 +434,11 @@ namespace reloadmaker
         }
         _selectedWeapon = validWeaponIndex(selectedIndex);
         const auto next = suggestedSessionPath();
-        _sessionPath.clear();
         if (!QFileInfo(next).isFile()) {
+            _sessionPath.clear();
             return false;
         }
+        _selectedWeapon = validWeaponIndex(previousIndex);
         const bool all = allWeaponsSelected();
         openSession(next);
         if (all && !_pendingSession.isEmpty()) {
@@ -686,14 +688,16 @@ namespace reloadmaker
         default:
             return false;
         }
+
     }
 
     // Saves to `requested`, else the open project, else the weapon's project
-    // path. Nothing to save (no weapon, or a source loading) counts as saved.
+    // path. A missing weapon or unfinished source cannot report a successful save.
     bool ReloadMakerController::saveSession(const QString& requested)
     {
         if (!currentWeapon() || _loadThread) {
-            return true;
+            setStatus("Load a weapon and finish loading before saving its project.", true);
+            return false;
         }
         const QString path = requested.isEmpty() ? (_sessionPath.isEmpty() ? suggestedSessionPath() : _sessionPath) : requested;
         if (path.isEmpty()) {
@@ -713,6 +717,22 @@ namespace reloadmaker
             setStatus(message, true);
             return false;
         }
+        QFile previous(path);
+        if (previous.exists()) {
+            if (previous.size() > kMaximumProjectBytes || !previous.open(QIODevice::ReadOnly)) {
+                setStatus("Cannot inspect the existing project before saving.", true);
+                return false;
+            }
+            const auto saved = QJsonDocument::fromJson(previous.readAll()).object();
+            previous.close();
+            const auto weapon = record["weapon"].toString().toLower();
+            if (saved["kind"] == "reload-maker-v2-project" &&
+                (saved["weapon"].toString().compare(weapon, Qt::CaseInsensitive) != 0 ||
+                 (!saved["reloadTemplates"].toObject()[weapon].toString().isEmpty() && assignedTemplate().isEmpty()))) {
+                setStatus("This save would replace another weapon or its authored preset with an unconfigured draft. Open that project or save the draft to a different path.", true);
+                return false;
+            }
+        }
         QDir().mkpath(QFileInfo(path).absolutePath());
         QSaveFile file(path);
         const auto bytes = QJsonDocument(record).toJson();
@@ -723,9 +743,8 @@ namespace reloadmaker
         _sessionPath = absolute;
         _savedAuthoring = withoutViewState(record);
         refreshDocumentModified();
-        if (const QString testbed = currentTestbed(); !_libraryMode && isCorpusTestbed(testbed)) {
-            QSettings().setValue("testbeds/" + testbed, absolute);
-        }
+        // Saving elsewhere does not change a testbed's default project.
+        refreshDevelopmentSources();
         QSettings().setValue("projects/lastProject", absolute);
         writeWeaponStatus(absolute);
         setStatus("Project saved · " + QFileInfo(path).fileName());
@@ -769,7 +788,7 @@ namespace reloadmaker
             return;
         }
         _pendingSession = record;
-        _sessionPath = QFileInfo(path).absoluteFilePath();
+        _pendingSessionPath = QFileInfo(path).absoluteFilePath();
         _gameDataText = record["gameData"].toString();
         if (!record["mo2Instance"].toString().isEmpty()) {
             _mo2Instance = record["mo2Instance"].toString();
@@ -781,6 +800,11 @@ namespace reloadmaker
             startLibraryLoad(true);
         } else {
             startPackageLoad(record["package"].toString(), record["gameData"].toString(), false, true);
+        }
+        if (!_loadThread) {
+            _pendingSession = {};
+            _pendingSessionPath.clear();
+            _gameDataText = _gameData;
         }
     }
 
@@ -1032,8 +1056,11 @@ namespace reloadmaker
         _pendingSession = {};
         StageClock clock(_loadTimings, "project.restore");
         if (!selectProjectWeapon(record)) {
+            _pendingSessionPath.clear();
+            _sessionPath.clear();
             return;
         }
+        _sessionPath = std::exchange(_pendingSessionPath, {});
         // The project as opened is the clean state; later edits ask on leave.
         const auto opened = qScopeGuard([this] {
             markDocumentClean();
