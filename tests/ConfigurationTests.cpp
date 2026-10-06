@@ -89,6 +89,19 @@ namespace
         require(config.entries().size() == 7, "unclassified choices incorrectly merged");
         require(config.selected(10) == 1 && !config.warnings().isEmpty(), "duplicate defaults not reported");
         for (const auto& slot : config.entries()) { require(slot.unverified, "absent root metadata claimed verified"); }
+        // A template's default may be a mod collection (PPSh-41, SA58, MG42):
+        // the lowest-level member is the default, through nested collections.
+        ObjectModRecord barrels = part(60, 10);
+        barrels.targetType = QStringLiteral("NONE"); barrels.weaponModification = false; barrels.modelPath.clear();
+        barrels.includes = { { 2, 24, false, true }, { 61, 0, false, true } };
+        ObjectModRecord shortBarrels = barrels;
+        shortBarrels.formId = 61; shortBarrels.includes = { { 4, 12, false, true }, { 1, 0, false, true } };
+        plugin.objectMods.append(barrels); plugin.objectMods.append(shortBarrels);
+        weapon.defaultObjectMods = {60, 3};
+        config.initialize(plugin, weapon);
+        require(!config.mod(60) && !config.mod(61), "a mod collection became a selectable choice");
+        require(config.selected(10) == 1, "collection default did not resolve to its lowest-level member");
+        require(config.activeMods().contains(3), "a direct default beside a collection was lost");
     }
 
     void u32(QByteArray& data, int offset, std::uint32_t value)

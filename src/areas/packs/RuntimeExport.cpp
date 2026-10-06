@@ -119,7 +119,7 @@ namespace reloadmaker
         require(rig.mechanism == WeaponMechanism::BoltAction || _slideSpringReturn, "This template requires spring return; enable it before export");
         const auto anchor = simulationMagazineAnchor();
         const auto weapon = poseRecordKey(currentWeapon()->formId);
-        const auto* receiver = resolvedReceiverObjectMod();
+        const auto* receiver = reloadReceiverObjectMod();
         require(receiver || recipe.tracks[rig.slide].anchor.ownerRecord.compare(weapon, Qt::CaseInsensitive) == 0, "This template needs a concrete receiver selection");
         const auto receiverKey = receiver ? poseRecordKey(receiver->formId) : weapon;
         const auto magazineKey = anchor.ownerRecord;

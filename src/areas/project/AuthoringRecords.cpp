@@ -84,7 +84,7 @@ namespace reloadmaker
                 axes.append({ role, slot });
             }
         };
-        if (const auto* receiver = resolvedReceiverObjectMod()) {
+        if (const auto* receiver = reloadReceiverObjectMod()) {
             add(ConfigurationRole::Receiver, configurationSlotKey(*receiver));
         }
         if (const int anchor = operatingAnchor(); anchor >= 0) {

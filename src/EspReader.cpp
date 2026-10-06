@@ -258,10 +258,22 @@ namespace reloadmaker
             for (std::uint32_t i = 0; i < parents; ++i) {
                 appendUnique(mod.attachParentSlots, readLittle<std::uint32_t>(data, 24 + 4 * i));
             }
-            const qsizetype propertyStart = 28 + 4 * static_cast<qsizetype>(parents);
-            if (readLittle<std::uint32_t>(data, 0) != 0 ||
-                propertyStart + static_cast<qsizetype>(properties) * 24 != data.size()) {
-                mod.metadataWarning = QStringLiteral("Slot decoded; additional OMOD data/includes need explicit review");
+            // Includes (xEdit "Includes": a mod collection's levelled members,
+            // 7 bytes each) sit between the parent slots and the properties.
+            const auto includeCount = readLittle<std::uint32_t>(data, 0);
+            const qsizetype includeStart = 28 + 4 * static_cast<qsizetype>(parents);
+            if (includeCount > static_cast<std::uint32_t>((data.size() - includeStart) / 7)) {
+                mod.metadataWarning = QStringLiteral("Invalid OMOD include array");
+                return;
+            }
+            for (std::uint32_t i = 0; i < includeCount; ++i) {
+                const qsizetype offset = includeStart + 7 * static_cast<qsizetype>(i);
+                mod.includes.append({ readLittle<std::uint32_t>(data, offset), static_cast<std::uint8_t>(data[offset + 4]),
+                                      data[offset + 5] != 0, data[offset + 6] != 0 });
+            }
+            const qsizetype propertyStart = includeStart + 7 * static_cast<qsizetype>(includeCount);
+            if (propertyStart + static_cast<qsizetype>(properties) * 24 != data.size()) {
+                mod.metadataWarning = QStringLiteral("Slot decoded; additional OMOD data needs explicit review");
                 return;
             }
             for (std::uint32_t i = 0; i < properties; ++i) {

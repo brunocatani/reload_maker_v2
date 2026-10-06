@@ -392,7 +392,7 @@ namespace reloadmaker
             presets.append(QJsonObject{ { "id", preset.id }, { "label", preset.label }, { "category", preset.category } });
         }
         return { { "preset", view.preset ? view.preset->id : QString() }, { "presetLabel", view.preset ? view.preset->label : QString() },
-                 { "presetAssigned", !assignedTemplate().isEmpty() }, { "presets", presets },
+                 { "presetAssigned", !assignedTemplate().isEmpty() }, { "presets", presets }, { "authoringKey", authoringRecordKey() },
                  { "evaluated", view.evaluated }, { "problem", view.problem }, { "items", items },
                  { "summary", QJsonObject{ { "total", s.total }, { "done", s.done }, { "mandatory", s.mandatory }, { "mandatoryDone", s.mandatoryDone },
                                            { "needsYou", s.needsYou }, { "toConfirm", s.toConfirm }, { "started", s.started }, { "complete", s.complete },

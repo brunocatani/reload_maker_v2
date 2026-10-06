@@ -180,6 +180,56 @@ namespace reloadmaker
         return nullptr;
     }
 
+    // The installed modelled part that brings the WeaponMagazine bone along
+    // with other animated bones: the body the reload parts hang on. A mod that
+    // names no receiver (Project 1911: frame, slide, magazine; the slide
+    // carries WeaponBolt and WeaponMagazine) gets its reload body from this
+    // structure. A magazine model that brings its own WeaponMagazine* bones
+    // (the 1911's Mag does) brings nothing else, so it is never the body.
+    // Null when the weapon's own model brings the bones or no installed part
+    // does. Read from the hand anchors only, so the magazine choice may
+    // depend on it without a cycle.
+    const ObjectModRecord* ReloadMakerController::reloadHostObjectMod() const
+    {
+        const auto* weapon = currentWeapon();
+        if (!weapon) { return nullptr; }
+        const QString weaponKey = poseRecordKey(weapon->formId);
+        QStringList owners;
+        QHash<QString, bool> magazineBone;
+        QHash<QString, bool> otherBone;
+        for (const auto& anchor : _handPoseAnchors) {
+            const auto& placement = anchor.description;
+            if (placement.anchorKind != QLatin1String("animated-part") || placement.ownerRecord.isEmpty() ||
+                placement.ownerRecord.compare(weaponKey, Qt::CaseInsensitive) == 0) {
+                continue;
+            }
+            const QString owner = placement.ownerRecord.toLower();
+            if (!owners.contains(owner)) { owners.append(owner); }
+            if (placement.anchorName.compare(QLatin1String("WeaponMagazine"), Qt::CaseInsensitive) == 0) {
+                magazineBone[owner] = true;
+            } else if (!placement.anchorName.startsWith(QLatin1String("WeaponMagazine"), Qt::CaseInsensitive)) {
+                otherBone[owner] = true;
+            }
+        }
+        for (const QString& owner : owners) {
+            if (!magazineBone.value(owner) || !otherBone.value(owner)) { continue; }
+            for (const auto* mod : configuredObjectMods()) {
+                if (mod && !mod->modelPath.isEmpty() && poseRecordKey(mod->formId).compare(owner, Qt::CaseInsensitive) == 0) {
+                    return mod;
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    // The receiver the authoring axes and the export key: the named one,
+    // else the reload body.
+    const ObjectModRecord* ReloadMakerController::reloadReceiverObjectMod() const
+    {
+        if (const auto* receiver = resolvedReceiverObjectMod()) { return receiver; }
+        return reloadHostObjectMod();
+    }
+
     QVector<const ObjectModRecord*> ReloadMakerController::configuredObjectMods() const
     {
         QVector<const ObjectModRecord*> result;

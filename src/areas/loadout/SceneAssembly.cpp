@@ -374,8 +374,11 @@ namespace reloadmaker
         if (!scope.points.isEmpty()) { _attachmentConnections.add(std::move(scope)); }
     }
 
+    // Resolves a child connect point to an installed parent point, preferring
+    // the declared owner slots' models. While `waitForOwner`, a declared owner
+    // that is selected but not yet placed defers the part instead.
     ReloadMakerController::ConnectTarget ReloadMakerController::findConnectTarget(
-        const QString& childPoint, const NifModel* incoming, SlotKey slot) const
+        const QString& childPoint, const NifModel* incoming, SlotKey slot, bool waitForOwner) const
     {
         ConnectTarget result;
         const auto* model = activeModel();
@@ -391,7 +394,7 @@ namespace reloadmaker
                 const auto partRoot = _partRoots.value(owner);
                 if (partRoot.isValid()) {
                     preferredRoots.append(model->getBlockNumber(partRoot));
-                } else if (const auto* part = config->mod(config->selected(owner)); part && !part->modelPath.isEmpty()) {
+                } else if (const auto* part = config->mod(config->selected(owner)); waitForOwner && part && !part->modelPath.isEmpty()) {
                     // Do not steal another part's identically named connection
                     // while the declared geometric owner is still pending.
                     result.error = QStringLiteral("Waiting for installed owner %1").arg(part->editorId);

@@ -153,7 +153,9 @@ namespace reloadmaker
         bool attachArmsModel(NifModel& destination, const QString& path, const QString& name, QPersistentModelIndex& root,
                              int& flags, QString& error);
         bool attachWeaponModels(NifModel& destination, const WeaponRecord& weapon, QString& error);
-        bool attachReceiver(NifModel& destination, const ObjectModRecord& receiver, int baseNodesReplaced, QString& error);
+        bool placeReceiver(NifModel& destination, const ObjectModRecord& receiver, NifModel& receiverModel, const ConnectTarget& target,
+                           const QString& point, QString& error);
+        int _baseNodesReplaced{ 0 };
         bool attachObjectMods(NifModel& destination, bool& complete, QString& error);
         bool placeAttachment(NifModel& destination, const ObjectModRecord& record, NifModel& attachment,
                              const ConnectTarget& target, const QString& point, QString& error);
@@ -1304,6 +1306,8 @@ namespace reloadmaker
         [[nodiscard]] const PluginContent* currentPlugin() const;
         [[nodiscard]] const WeaponRecord* currentWeapon() const;
         [[nodiscard]] const ObjectModRecord* resolvedReceiverObjectMod() const;
+        [[nodiscard]] const ObjectModRecord* reloadHostObjectMod() const;
+        [[nodiscard]] const ObjectModRecord* reloadReceiverObjectMod() const;
         [[nodiscard]] QVector<const ObjectModRecord*> configuredObjectMods() const;
         [[nodiscard]] QVector<std::uint32_t> activeAnimationKeywords() const;
         [[nodiscard]] QByteArray readAnimationResource(const QString& resourcePath,
@@ -1340,8 +1344,8 @@ namespace reloadmaker
             const QHash<QString, QPersistentModelIndex>& nodes);
         [[nodiscard]] QStringList childConnectPoints(const NifModel& source) const;
         void registerAttachmentModel(const QModelIndex& root, int firstBlock, int lastBlock);
-        [[nodiscard]] ConnectTarget findConnectTarget(const QString& childPoint,
-                                                       const NifModel* incoming, SlotKey slot) const;
+        [[nodiscard]] ConnectTarget findConnectTarget(const QString& childPoint, const NifModel* incoming, SlotKey slot,
+                                                       bool waitForOwner = true) const;
         [[nodiscard]] bool readNodeTransform(
             const QModelIndex& node, Transformf& transform) const;
         [[nodiscard]] bool setNodeTransform(const QModelIndex& node, const Transformf& transform);

@@ -87,7 +87,7 @@ namespace reloadmaker
             }
         }
         const auto* weapon = currentWeapon();
-        const auto* receiver = resolvedReceiverObjectMod();
+        const auto* receiver = reloadReceiverObjectMod();
         const QString weaponKey = weapon ? poseRecordKey(weapon->formId) : QString();
         const QString receiverKey = receiver ? poseRecordKey(receiver->formId) : QString();
         const auto framed = [&](int carrier) {

@@ -28,9 +28,25 @@ namespace reloadmaker
     {
         _weapon = weapon;
         _mods.clear(); _slots.clear(); _selected.clear(); _warnings.clear();
+        // A template may include a mod collection (form type NONE) whose
+        // levelled members the game picks from at spawn; the editor takes the
+        // lowest level, first declared. Nested collections resolve the same way.
+        QVector<std::uint32_t> defaults;
+        for (auto id : weapon.defaultObjectMods) {
+            for (int depth = 0; depth < 8; ++depth) {
+                const auto* collection = plugin.findObjectMod(id);
+                if (!collection || collection->weaponModification || collection->includes.isEmpty()) { break; }
+                const ObjectModInclude* chosen = &collection->includes.first();
+                for (const auto& include : collection->includes) {
+                    if (include.minLevel < chosen->minLevel) { chosen = &include; }
+                }
+                id = chosen->formId;
+            }
+            if (!defaults.contains(id)) { defaults.append(id); }
+        }
         for (const auto& candidate : plugin.objectMods) {
             if (!candidate.targetType.isEmpty() && candidate.targetType != QStringLiteral("WEAP")) { continue; }
-            const bool isDefault = weapon.defaultObjectMods.contains(candidate.formId);
+            const bool isDefault = defaults.contains(candidate.formId);
             if (!candidate.weaponModification && candidate.metadataWarning.isEmpty()) { continue; }
             const bool targetMatches = std::any_of(candidate.targetKeywords.cbegin(), candidate.targetKeywords.cend(),
                 [&weapon](auto id) { return weapon.keywords.contains(id); });
@@ -47,7 +63,7 @@ namespace reloadmaker
             found->unverified |= weapon.attachParentSlots.isEmpty() || candidate.attachPoint == 0 || candidate.targetKeywords.isEmpty() ||
                                  !candidate.metadataWarning.isEmpty();
         }
-        for (auto id : weapon.defaultObjectMods) {
+        for (auto id : defaults) {
             const auto* candidate = mod(id);
             if (!candidate) {
                 _warnings.append(QStringLiteral("Default modification %1 is not available in this plugin").arg(id, 8, 16, QLatin1Char('0')));

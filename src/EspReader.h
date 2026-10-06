@@ -43,6 +43,15 @@ namespace reloadmaker
         std::uint8_t valueType{0}, function{0};
         std::uint32_t value1{0}, value2{0}, stepBits{0};
     };
+    // One "Includes" entry: a mod collection's levelled member.
+    struct ObjectModInclude
+    {
+        std::uint32_t formId{ 0 };
+        std::uint8_t minLevel{ 0 };
+        bool optional{ false };
+        bool dontUseAll{ false };
+    };
+
     struct ObjectModRecord
     {
         std::uint32_t formId{ 0 };
@@ -52,6 +61,7 @@ namespace reloadmaker
         QVector<std::uint32_t> addedKeywords;
         std::uint32_t attachPoint{ 0 };
         QVector<std::uint32_t> attachParentSlots;
+        QVector<ObjectModInclude> includes;
         QVector<std::uint32_t> targetKeywords;
         QString metadataWarning;
         bool weaponModification{ false };

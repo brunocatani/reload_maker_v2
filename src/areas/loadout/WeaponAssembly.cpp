@@ -15,6 +15,8 @@
 #include "spells/blocks.h"
 #include "viewport/PartPicker.h"
 
+#include <algorithm>
+
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
@@ -718,11 +720,10 @@ namespace reloadmaker
         return true;
     }
 
-    // The base model goes on the skeleton's Weapon bone; the receiver, when
-    // the loadout has one, connects to the base model.
+    // The base model goes on the skeleton's Weapon bone; every modelled part,
+    // the receiver included, then connects through attachObjectMods.
     bool ReloadMakerController::attachWeaponModels(NifModel& destination, const WeaponRecord& weapon, QString& error)
     {
-        const ObjectModRecord* receiver = resolvedReceiverObjectMod();
         const int weaponBone = _skeleton.boneIndex(QStringLiteral("Weapon"));
         if (weaponBone < 0 || _skeleton.bones.at(weaponBone).parentIndex < 0) {
             error = QStringLiteral("First-person HKX skeleton has no Weapon bone.");
@@ -752,33 +753,14 @@ namespace reloadmaker
             error = QStringLiteral("Cannot attach the weapon base model to the Weapon bone.");
             return false;
         }
-        const int baseNodesReplaced = mergeWeaponModelNodes(collectCanonicalNodes(baseFirstBlock));
-        return !receiver || attachReceiver(destination, *receiver, baseNodesReplaced, error);
+        _baseNodesReplaced = mergeWeaponModelNodes(collectCanonicalNodes(baseFirstBlock));
+        return true;
     }
 
-    bool ReloadMakerController::attachReceiver(NifModel& destination, const ObjectModRecord& receiver,
-                                               int baseNodesReplaced, QString& error)
+    // The receiver's visible weapon nodes become the canonical animated ones.
+    bool ReloadMakerController::placeReceiver(NifModel& destination, const ObjectModRecord& receiver, NifModel& receiverModel,
+                                              const ConnectTarget& target, const QString& point, QString& error)
     {
-        QString detail;
-        const auto receiverSource = sourceNif(_packageResources, receiver.modelPath, detail);
-        if (!receiverSource) {
-            error = QStringLiteral("Cannot load receiver '%1': %2").arg(receiver.modelPath, detail);
-            return false;
-        }
-        NifModel& receiverModel = *receiverSource;
-        ConnectTarget target;
-        QString point;
-        for (const QString& candidate : childConnectPoints(receiverModel)) {
-            target = findConnectTarget(candidate, nullptr, configurationSlotKey(receiver));
-            if (target.valid()) {
-                point = candidate;
-                break;
-            }
-        }
-        if (!target.valid()) {
-            error = QStringLiteral("Receiver '%1': %2").arg(receiver.modelPath, target.error);
-            return false;
-        }
         const int firstBlock = destination.getBlockCount();
         const QPersistentModelIndex root = pasteRoot(receiverModel, target.parent);
         const Transformf placement{ target.translation, target.rotation, Vec3f{ target.scale, target.scale, target.scale } };
@@ -791,18 +773,23 @@ namespace reloadmaker
         recordPartSurfaces(configurationSlotKey(receiver), firstBlock, destination.getBlockCount());
         const int receiverNodesReplaced = mergeWeaponModelNodes(receiverNodes);
         appendDiagnostic(QStringLiteral("BIND visible weapon nodes base-replaced=%1 receiver-replaced=%2")
-                             .arg(baseNodesReplaced)
+                             .arg(_baseNodesReplaced)
                              .arg(receiverNodesReplaced));
         appendDiagnostic(QStringLiteral("ATTACH %1 via %2").arg(receiver.editorId, point));
         appendDiagnostic(QStringLiteral("RECEIVER  authority=slot configuration  model=%1").arg(receiver.modelPath));
         return true;
     }
 
-    // Every other modelled OMOD connects to a point the scene already has.
-    // An attachment can connect to a point another attachment brings, so the
-    // loop places what connects and retries the rest. Missing skeleton bones
-    // are created only when a pass places nothing. `complete` turns false
-    // when an attachment cannot be loaded or connected.
+    // Every modelled OMOD connects to a point the scene already has. An
+    // attachment can connect to a point another attachment brings (a receiver
+    // can hang on a stock), so the loop places what connects and retries the
+    // rest, the receiver first. Parts wait for their declared owner slots'
+    // models. When a pass places nothing, missing skeleton bones are created;
+    // when none are, the owner wait is released for one pass (the Remington
+    // 870's receiver shape hangs on the stock model whose slot the receiver
+    // owns, so each waited for the other). `complete`
+    // turns false when an attachment cannot be loaded or connected; a receiver
+    // that cannot is an error.
     bool ReloadMakerController::attachObjectMods(NifModel& destination, bool& complete, QString& error)
     {
         struct PendingAttachment
@@ -810,17 +797,23 @@ namespace reloadmaker
             const ObjectModRecord* record;
             QSharedPointer<NifModel> model;
             QString connectionError;
+            bool receiver{ false };
         };
         const QVector<const ObjectModRecord*> selected = configuredObjectMods();
         std::vector<PendingAttachment> pending;
         QSet<QString> providedBones;
         for (const ObjectModRecord* objectMod : selected) {
-            if (!objectMod || isReceiverObjectMod(*objectMod) || objectMod->modelPath.isEmpty()) {
+            if (!objectMod || objectMod->modelPath.isEmpty()) {
                 continue;
             }
+            const bool receiver = isReceiverObjectMod(*objectMod);
             QString detail;
             auto attachment = sourceNif(_packageResources, objectMod->modelPath, detail);
             if (!attachment) {
+                if (receiver) {
+                    error = QStringLiteral("Cannot load receiver '%1': %2").arg(objectMod->modelPath, detail);
+                    return false;
+                }
                 complete = false;
                 appendDiagnostic(QStringLiteral("SKIP %1: %2").arg(objectMod->editorId, detail));
                 continue;
@@ -831,8 +824,9 @@ namespace reloadmaker
                     providedBones.insert(normalizedKey(attachment->get<QString>(index, "Name")));
                 }
             }
-            pending.push_back({ objectMod, std::move(attachment), {} });
+            pending.push_back({ objectMod, std::move(attachment), {}, receiver });
         }
+        std::stable_partition(pending.begin(), pending.end(), [](const PendingAttachment& entry) { return entry.receiver; });
         // Never manufacture a reference-pose substitute for a bone owned by an
         // incoming model. Preserve missing-bone support for passive attachments.
         const auto createMissingBones = [this, &providedBones]() {
@@ -847,6 +841,7 @@ namespace reloadmaker
             }
             return created;
         };
+        bool waitForOwners = true;
         while (!pending.empty()) {
             bool progress = false;
             for (auto it = pending.begin(); it != pending.end();) {
@@ -854,7 +849,7 @@ namespace reloadmaker
                 ConnectTarget target;
                 QString point;
                 for (const QString& candidate : childConnectPoints(attachment)) {
-                    target = findConnectTarget(candidate, &attachment, configurationSlotKey(*it->record));
+                    target = findConnectTarget(candidate, it->receiver ? nullptr : &attachment, configurationSlotKey(*it->record), waitForOwners);
                     if (target.valid()) {
                         point = candidate;
                         break;
@@ -865,13 +860,37 @@ namespace reloadmaker
                     ++it;
                     continue;
                 }
-                if (!placeAttachment(destination, *it->record, attachment, target, point, error)) {
+                const bool placed = it->receiver ? placeReceiver(destination, *it->record, attachment, target, point, error)
+                                                 : placeAttachment(destination, *it->record, attachment, target, point, error);
+                if (!placed) {
                     return false;
                 }
                 it = pending.erase(it);
                 progress = true;
             }
-            if (!progress && createMissingBones() == 0) {
+            if (progress) {
+                waitForOwners = true;
+                continue;
+            }
+            if (createMissingBones() > 0) {
+                continue;
+            }
+            if (waitForOwners) {
+                QStringList waiting;
+                for (const auto& entry : pending) {
+                    waiting.append(entry.record->editorId);
+                }
+                appendDiagnostic(QStringLiteral("ORDER  declared owners pending for %1; connecting to any installed point").arg(waiting.join(QStringLiteral(", "))));
+                waitForOwners = false;
+                continue;
+            }
+            {
+                for (const auto& entry : pending) {
+                    if (entry.receiver) {
+                        error = QStringLiteral("Receiver '%1': %2").arg(entry.record->modelPath, entry.connectionError);
+                        return false;
+                    }
+                }
                 complete = false;
                 for (const auto& entry : pending) {
                     appendDiagnostic(QStringLiteral("SKIP %1: %2 (%3)")
