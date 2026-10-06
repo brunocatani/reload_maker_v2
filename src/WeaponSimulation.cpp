@@ -123,6 +123,17 @@ Transformf simulationTrackPose(const ReloadRecipe& r,const SimulationRig& rig,in
     const float frame=simulationFrame(rig,progress);
     const auto& curve=simulationTrackCurve(r,rig,track);const int a=int(frame),b=std::min(a+1,int(curve.size()-1));return interpolatedTransform(curve[a],curve[b],frame-a);
 }
+Vec3f simulationControllerStroke(const ReloadRecipe& r,const SimulationRig& rig,const Vec3f& contact) {
+    const int track=rig.mechanism==WeaponMechanism::PistolSlide?rig.slide:rig.bolt;
+    const auto a=simulationTrackPose(r,rig,track,0).translation,b=simulationTrackPose(r,rig,track,1).translation;
+    Vec3f delta{b.x-a.x,b.y-a.y,b.z-a.z};
+    if(delta.x*delta.x+delta.y*delta.y+delta.z*delta.z<.0001f) {
+        const auto start=composed(simulationTrackPose(r,rig,rig.slide,0),Transformf{contact}).translation;
+        const auto end=composed(simulationTrackPose(r,rig,rig.slide,1),Transformf{contact}).translation;
+        delta={end.x-start.x,end.y-start.y,end.z-start.z};
+    }
+    return delta;
+}
 float reloadTrackStroke(const ReloadRecipe& r,int track) {
     float stroke=0;
     if(track<0||track>=r.tracks.size()||r.tracks[track].poses.isEmpty())return stroke;

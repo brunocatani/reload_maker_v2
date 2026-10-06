@@ -110,6 +110,12 @@ namespace reloadmaker
         }
         if (_simulationRig && _reloadRecipe) {
             result["setup"] = simulationRigJson(*_reloadRecipe, *_simulationRig, _slideSpringReturn);
+            const auto stroke = operatingControllerStroke();
+            result["controllerInput"] = QJsonObject{
+                { "path", "linear" },
+                { "strokeInWeapon", QJsonArray{ stroke.x, stroke.y, stroke.z } },
+                { "visualMotion", "complete-authored-curves" },
+            };
         }
         result["interaction"] = interactionGripState();
         result["parts"] = simulationPartsJson();

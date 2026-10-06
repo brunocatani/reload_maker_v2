@@ -12,6 +12,7 @@
 #include <QSignalBlocker>
 #include <QTimer>
 #include <algorithm>
+#include <cmath>
 
 namespace reloadmaker
 {
@@ -565,9 +566,9 @@ namespace reloadmaker
         curve.endpointSnapFraction = .025f;
     }
 
-    // The slide or handle's hand path: the grabbed point carried along the
-    // part's sampled stroke. Releases the grab when the part has no world
-    // transform.
+    // A straight controller guide drives the complete visual animation.
+    // It follows measured bolt travel, or the contact's endpoint chord for
+    // a purely rotating lever. Both endpoints remain reachable in one pull.
     bool ReloadMakerController::setStrokeDriveCurve(const Vec3f& hit, ReloadDriveCurve& curve, QString& error)
     {
         const auto& rig = *_simulationRig;
@@ -580,18 +581,38 @@ namespace reloadmaker
         }
         const auto contact = composed(inverse, Transformf{ hit }).translation;
         curve.current = _simulation.inputProgress();
-        const int samples = std::max(16, rig.closedFrame - rig.openFrame);
-        for (int i = 0; i <= samples; ++i) {
-            const float progress = float(i) / samples;
-            const auto position = composed(simulationTrackPose(*_reloadRecipe, rig, rig.slide, progress), Transformf{ contact }).translation;
-            curve.points.append({ position.x, position.y, position.z });
-            curve.times.append(progress);
+        const auto locations = currentGrabLocations();
+        const auto local = locations.points.isEmpty() ? simulationControllerStroke(*_reloadRecipe, rig, contact) : operatingControllerStroke();
+        const auto& weapon = _globalPose[_weaponBoneIndex];
+        const auto delta = rotated(weapon.rotation, { local.x * weapon.scale.x, local.y * weapon.scale.y, local.z * weapon.scale.z });
+        const QVector3D stroke(delta.x, delta.y, delta.z);
+        if (!std::isfinite(stroke.lengthSquared()) || stroke.lengthSquared() < .0001f) {
+            _simulation.release(true, false);
+            error = "The operating contact has no measurable controller stroke. Pick a point away from its pivot.";
+            setStatus(error, true);
+            return false;
         }
+        const QVector3D start = QVector3D(hit.x, hit.y, hit.z) - stroke * curve.current;
         // Gesture travel beyond the catch lets a locked-open slide be pulled and
         // released. Geometry remains clamped to the verified source stroke.
-        curve.points.append(curve.points.back() + (curve.points.back() - curve.points.front()) * .08f);
-        curve.times.append(1.08f);
+        curve.points = { start, start + stroke, start + stroke * 1.08f };
+        curve.times = { 0, 1, 1.08f };
         return true;
+    }
+
+    Vec3f ReloadMakerController::operatingControllerStroke() const
+    {
+        if (!_simulationRig || !_reloadRecipe) return {};
+        if (isBoltActionConfiguration()) {
+            const auto& a = _boltCycle.inputAxis;
+            return { a.x * _boltCycle.inputTravel, a.y * _boltCycle.inputTravel, a.z * _boltCycle.inputTravel };
+        }
+        const auto locations = currentGrabLocations();
+        Vec3f contact{};
+        // A guide belongs to the mechanism. Picking another acquisition point
+        // or switching physical hands must not change its direction or travel.
+        if (!locations.points.isEmpty()) contact = locations.points.first().point;
+        return simulationControllerStroke(*_reloadRecipe, *_simulationRig, contact);
     }
 
     void ReloadMakerController::dragSimulation(float progress)

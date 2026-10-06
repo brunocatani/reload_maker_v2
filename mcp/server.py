@@ -260,7 +260,7 @@ def export_authored_record(kind: str, expected_revision: int) -> dict:
 
 @mcp.tool()
 def get_simulation_state() -> dict:
-    """Read direct-operation state, slide source curves, magazine assembly and current part frames."""
+    """Read direct-operation state, source curves, magazine assembly and current part frames. controllerInput.strokeInWeapon is the straight controller displacement for one complete stroke; the visible parts retain their complete animation."""
     return command('simulation_state')
 
 @mcp.tool()
@@ -268,7 +268,7 @@ def simulate_weapon(operation: str, expected_revision: int, progress: float | No
                     cancel: bool = False, enabled: bool = True,
                     position: list[float] | None = None, distance: float | None = None,
                     seconds: float | None = None) -> dict:
-    """Operate: fire/reload/drop_magazine/reset/slide_release or bolt_release, pull, release(cancel), spring(enabled), ghost(enabled: draw parts whose authored motion differs at the source clip's pose), mag_out/mag_in/grab_magazine/cancel_magazine. AR-15 uses an independent charging handle (pull 0..1) and bolt catch; trigger_down/up controls held automatic fire. C14 Timberwolf uses pull progress 0..1 to lift/open, then 1..0 to close/lock; release holds position. Firing leaves a spent case until the source ejection threshold; only a full rear-and-forward cycle feeds. Commands never run the live clock: an action starts and holds until step(seconds 0..30) advances simulated time deterministically, so each call acts on the state the previous one returned. move_magazine takes weapon-local offset position[3] while free or outward distance on its straight, weapon-angled input rail. Linear progress drives any sampled magazine rotation/translation; never trace the visual motion path. Fresh insertion does not chamber until the bolt/slide closes."""
+    """Operate: controller_pull(position=[x,y,z] is controller displacement since acquisition in weapon-local game units; read controllerInput.strokeInWeapon, release before reacquisition), fire/reload/drop_magazine/reset/slide_release or bolt_release, pull (direct normalized authoring progress), release(cancel), spring(enabled), ghost(enabled: draw parts whose authored motion differs at the source clip's pose), mag_out/mag_in/grab_magazine/cancel_magazine. AR-15 uses an independent charging handle (pull 0..1) and bolt catch; trigger_down/up controls held automatic fire. C14 Timberwolf uses pull progress 0..1 to lift/open, then 1..0 to close/lock; release holds position. Firing leaves a spent case until the source ejection threshold; only a full rear-and-forward cycle feeds. Commands never run the live clock: an action starts and holds until step(seconds 0..30) advances simulated time deterministically, so each call acts on the state the previous one returned. move_magazine takes weapon-local offset position[3] while free or outward distance on its straight, weapon-angled input rail. Linear progress drives any sampled magazine rotation/translation; never trace the visual motion path. Fresh insertion does not chamber until the bolt/slide closes."""
     params={'operation':operation,'cancel':cancel,'enabled':enabled}
     if progress is not None: params['progress']=progress
     if position is not None: params['position']=position

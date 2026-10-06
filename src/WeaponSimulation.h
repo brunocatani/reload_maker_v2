@@ -78,6 +78,8 @@ namespace reloadmaker {
     bool buildSimulationRig(const ReloadRecipe& recipe, SimulationRig& rig, QString& error,WeaponMechanism profile=WeaponMechanism::PistolSlide,bool deriveHandleFromBolt=false,const QVector<Transformf>& boltOverride={},const SimulationParts* selected=nullptr);
     const QVector<Transformf>& simulationTrackCurve(const ReloadRecipe&,const SimulationRig&,int track);
     Transformf simulationTrackPose(const ReloadRecipe& recipe, const SimulationRig& rig, int track, float progress);
+    // Straight controller stroke in weapon space; visual curves remain intact.
+    Vec3f simulationControllerStroke(const ReloadRecipe&,const SimulationRig&,const Vec3f& contact);
     // Whether the rig replaces the track's native curve (an authored stage, a
     // derived handle or bolt).
     [[nodiscard]] bool simulationTrackAuthored(const SimulationRig& rig, int track);

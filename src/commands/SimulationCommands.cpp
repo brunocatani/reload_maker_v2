@@ -3,6 +3,7 @@
 
 #include <QCheckBox>
 #include <QTimer>
+#include <algorithm>
 
 namespace reloadmaker
 {
@@ -51,6 +52,18 @@ namespace reloadmaker
             require(delta >= 0 && delta <= kMaximumStepSeconds, "Simulation step must be between 0 and 30 seconds");
             _simulationTimer->stop();
             advanceSimulation(delta);
+        } else if (operation == "controller_pull") {
+            require(operatingGrabAvailable(), "The operating grip assignment is invalid for this assembly.");
+            const auto position = params["position"].toArray();
+            require(position.size() == 3, "Supply controller displacement since acquisition as weapon-local XYZ");
+            const Vec3f delta{number(position[0]), number(position[1]), number(position[2])};
+            const auto stroke = operatingControllerStroke();
+            const float lengthSquared = stroke.x*stroke.x + stroke.y*stroke.y + stroke.z*stroke.z;
+            require(lengthSquared >= .0001f, "The operating contact has no measurable controller stroke");
+            require(_simulation.action == SimulationAction::Held || _simulation.grab(), "Finish the native action before pulling");
+            const float movement = (delta.x*stroke.x + delta.y*stroke.y + delta.z*stroke.z) / lengthSquared;
+            _simulationTimer->stop();
+            dragSimulation(std::clamp(_simulation.grabStart + movement, 0.f, kMaximumPullProgress));
         } else if (operation == "pull") {
             require(operatingGrabAvailable(), "The operating grip assignment is invalid for this assembly.");
             const float progress = number(params["progress"]);

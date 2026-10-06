@@ -716,6 +716,7 @@ namespace reloadmaker
         void startSimulationClock();
         void setBoltDriveCurve(const Vec3f& hit, ReloadDriveCurve& curve) const;
         bool setStrokeDriveCurve(const Vec3f& hit, ReloadDriveCurve& curve, QString& error);
+        Vec3f operatingControllerStroke() const;
         void addSlideTargets(QHash<int, Transformf>& targets, bool holdOpen) const;
         [[nodiscard]] Transformf operatingTrackTarget(int track, float progress) const;
         void addAr15Targets(QHash<int, Transformf>& targets, bool holdOpen) const;
