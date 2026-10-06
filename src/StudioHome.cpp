@@ -28,7 +28,7 @@ void ReloadMakerController::showHome() {
     const auto current=homeState();resume->setEnabled(current["canResume"].toBool());
     connect(creator,&QPushButton::clicked,dialog,[=,this]{try{chooseHomeRole("creator");dialog->close();if(currentWeapon())showChecklist();else showSetup();}catch(const std::exception& e){status->setText(e.what());}});
     connect(player,&QPushButton::clicked,dialog,[=,this]{try{chooseHomeRole("player");dialog->close();showPackBuilder();}catch(const std::exception& e){status->setText(e.what());}});
-    const auto openProject=[=,this](const QString& path){if(path.isEmpty())return;try{chooseHomeRole("creator");dialog->close();openSession(path);}catch(const std::exception& e){setStatus(e.what(),true);}};
+    const auto openProject=[=,this](const QString& path){if(path.isEmpty())return;try{chooseHomeRole("creator");if(!leaveDocument(QStringLiteral("opening another project")))return;dialog->close();openSession(path);}catch(const std::exception& e){setStatus(e.what(),true);}};
     connect(resume,&QPushButton::clicked,dialog,[=]{openProject(current["recentProject"].toString());});
     connect(open,&QPushButton::clicked,dialog,[=]{openProject(QFileDialog::getOpenFileName(dialog,"Open reload project",studioDataPath("workspace"),"Reload Maker project (*.json)"));});
     connect(setup,&QPushButton::clicked,dialog,[this,dialog]{dialog->close();showSetup();});connect(close,&QPushButton::clicked,dialog,&QDialog::close);

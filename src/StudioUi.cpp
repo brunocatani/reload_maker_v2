@@ -418,7 +418,7 @@ void ReloadMakerController::createUi() {
     connect(saveProject, &QAction::triggered, this, [this] { saveSession(); });
     connect(openProject, &QAction::triggered, this, [this] {
         const QString path = QFileDialog::getOpenFileName(_window, "Open Reload Maker project", studioDataPath("workspace"), "Reload Maker project (*.json)");
-        if (!path.isEmpty()) openSession(path);
+        if (!path.isEmpty() && leaveDocument(QStringLiteral("opening another project"))) openSession(path);
     });
     auto* saveShortcut = new QShortcut(QKeySequence::Save, _window);
     connect(saveShortcut, &QShortcut::activated, this, [this] { saveSession(); });

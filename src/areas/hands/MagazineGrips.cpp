@@ -246,15 +246,16 @@ namespace reloadmaker
         _magazineGrabGrips.remove(key);
         _magazineGripDrafts.remove(key);
         _partGripDraft.reset();
-        if (!editMagazineGrip() || !saveSession()) {
+        if (!editMagazineGrip()) {
             _magazineGrabGrips = assignments;
             _magazineGripDrafts = drafts;
             return false;
         }
+        noteDocumentChange(QStringLiteral("magazine fit"));
         resolveMagazineGrabGrip();
         refreshPartGripList();
         updatePartGripControls();
-        setStatus("This magazine now uses the weapon default. Project saved.");
+        setStatus("This magazine now uses the weapon default.");
         return true;
     }
 
@@ -300,8 +301,6 @@ namespace reloadmaker
             setStatus(error, true);
             return false;
         }
-        const auto previousAssignments = _magazineGrabGrips;
-        const auto previousDefaults = _magazineGrabDefaults;
         // A save for one hand supersedes a legacy key without a hand that holds
         // a fit for that same hand, as Use weapon default does; left in place
         // it could never be read again.
@@ -326,16 +325,10 @@ namespace reloadmaker
         rememberMagazineGrip();
         refreshPartGripLibrary();
         resolveMagazineGrabGrip();
-        if (!saveSession()) {
-            _magazineGrabGrips = previousAssignments;
-            _magazineGrabDefaults = previousDefaults;
-            resolveMagazineGrabGrip();
-            setStatus("Fit snapshot saved, but the project assignment could not be saved. Retry Save for this magazine.", true);
-            return false;
-        }
+        noteDocumentChange(QStringLiteral("magazine fit"));
         updatePartGripControls();
-        setStatus(allMagazines ? "Weapon default saved. Other custom magazine fits are preserved. Project saved."
-                               : "Magazine fit replaced and project saved. Grab Magazine now uses this fit.");
+        setStatus(allMagazines ? "Weapon default set. Other custom magazine fits are preserved."
+                               : "Magazine fit replaced. Grab Magazine now uses this fit.");
         return true;
     }
 

@@ -385,7 +385,7 @@ namespace reloadmaker
         if (!applyPose(_playbackTime)) {
             throw std::runtime_error(_poseError.toStdString());
         }
-        ++_revision;
+        noteDocumentChange(QStringLiteral("finger draft"));
         refreshFingerEditor();
     }
 

@@ -179,7 +179,7 @@ namespace reloadmaker
         _pickingGrabLocation = false;
         _lastError.clear();
         _gripViewport->setPicking(false);
-        ++_revision;
+        noteDocumentChange(QStringLiteral("grab location picked"));
         refreshGrabLocationsUi();
         if (!_replaceGrabLocation) {
             selectGrabLocation(g.points.size() - 1);
@@ -205,7 +205,7 @@ namespace reloadmaker
         }
         g.points[index].point = composed(inverse, target).translation;
         _grabLocations[grabLocationsKey(g)] = g;
-        ++_revision;
+        noteDocumentChange(QStringLiteral("grab location moved"));
         refreshGrabLocationsUi();
         updateGripViewport();
     }
@@ -220,10 +220,8 @@ namespace reloadmaker
             return false;
         }
         _grabLocations[grabLocationsKey(g)] = g;
-        if (!saveSession()) {
-            return false;
-        }
-        showGrabLocationStatus("Grab locations saved. Export them for the game's point-target registration.");
+        noteDocumentChange(QStringLiteral("grab locations"));
+        showGrabLocationStatus("Grab locations kept. Save the project to keep them; export them for the game's point-target registration.");
         return true;
     }
 
@@ -314,7 +312,7 @@ namespace reloadmaker
             fail(error);
         }
         _grabLocations[grabLocationsKey(g)] = g;
-        ++_revision;
+        noteDocumentChange(QStringLiteral("grab location edited"));
         refreshGrabLocationsUi();
         if (i < g.points.size()) {
             selectGrabLocation(i);

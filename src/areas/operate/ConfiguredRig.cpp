@@ -356,11 +356,8 @@ namespace reloadmaker
         stopSimulation();
         _authoringRecords[key] = plan;
         _simulationRig.reset();
-        ++_revision;
+        noteDocumentChange(QStringLiteral("operating setup"));
         prepareSimulation();
-        if (!saveSession()) {
-            throw std::runtime_error("Could not save operating setup");
-        }
         return operatingSetupState();
     }
 }

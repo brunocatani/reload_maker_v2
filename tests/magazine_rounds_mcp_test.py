@@ -59,6 +59,7 @@ def run():
         assert not any(p['round'] for p in result['pieces'])
         exported = runtime()['magazine']
         assert 'emptyHideNodes' not in exported and exported['presentationSetup'] == {'rounds': {bullet: False}}, exported
+        edit('save_project', dict(path=str(project)))  # nothing writes the project except Save (owner, 2026-10-05)
         persisted = json.loads(project.read_text(encoding='utf-8'))['magazineRounds']
         assert persisted == {state['key']: {bullet: False}}, persisted
         # A confirmation stays until the author removes it (owner, 2026-10-05).
@@ -82,6 +83,7 @@ def run():
         assert not result['chosen'] and [p['name'] for p in result['pieces'] if p['round']] == ['Bullet:0']
         exported = runtime()['magazine']
         assert exported['emptyHideNodes'] == hidden and 'presentationSetup' not in exported, exported
+        edit('save_project', dict(path=str(project)))
         assert 'magazineRounds' not in json.loads(project.read_text(encoding='utf-8'))
         assert presentation_item()['state'] == confirmed, presentation_item()
         print('PASS detected rounds, author choice, persistence, pack hiding, checklist review, refusals and reset', flush=True)

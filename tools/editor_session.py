@@ -1,8 +1,9 @@
 """Run the built editor for automated checks without changing the authoring corpus.
 
 The editor saves its current session whenever it switches projects or closes, and
-records the last opened project in its settings. Automated checks snapshot those
-files first and restore any that changed once the editor has closed.
+records the last opened project in its settings. Nothing writes a project
+except an explicit save; automated checks still snapshot those files first and
+restore any that changed once the editor has closed.
 """
 import configparser
 import os
@@ -125,8 +126,8 @@ def files_written_since(folder, started):
 class EditorRun:
     """Launch the editor for a block of checks and leave the corpus as it was.
 
-    Session files are restored only after the editor has closed, because closing
-    saves the current session.
+    Session files are restored only after the editor has closed, when every
+    explicit save of the run has landed.
     """
 
     def __enter__(self):

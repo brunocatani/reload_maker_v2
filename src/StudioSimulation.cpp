@@ -111,7 +111,7 @@ void ReloadMakerController::createSimulationUi() {
             setStatus("This weapon has a default hand fit. Change it in Reload builder › Part grips.");resolveMagazineGrabGrip();return;
         }
         if(id.isEmpty())_magazineGrabGrips.remove(key);else _magazineGrabGrips[key]=id;
-        _magazineGripDrafts.remove(key);noteDocumentChange("magazine grip");resolveMagazineGrabGrip();(void)applyPose(_simulation.seconds);updateSimulationControls();(void)saveSession();
+        _magazineGripDrafts.remove(key);noteDocumentChange("magazine grip");resolveMagazineGrabGrip();(void)applyPose(_simulation.seconds);updateSimulationControls();
     });
 
     section("Details");

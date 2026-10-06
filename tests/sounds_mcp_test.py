@@ -56,7 +56,7 @@ try:
             before=count();op('mag_in');op('step',seconds=2);assert count()>before,'Magazine seating emitted no cue'
             op('reset');before=count();op('reload');op('step',seconds=12);assert count()>before,'Native source reload is silent'
             old=next(c for c in command('sound_state')['profile']['cues'] if c['id']=='pull')
-            edit('sound',operation='edit',id='pull',gain=.65,progress=.12);edit('sound',operation='save');edit('open_project',path=str(scratch));ready()
+            edit('sound',operation='edit',id='pull',gain=.65,progress=.12);edit('sound',operation='save');edit('save_project',path=str(scratch));edit('open_project',path=str(scratch));ready()
             cue=next(c for c in command('sound_state')['profile']['cues'] if c['id']=='pull');assert abs(cue['gain']-.65)<1e-5 and abs(cue['progress']-.12)<1e-5
             exported=edit('export',kind='sounds');profile=json.loads(Path(exported['path']).read_text(encoding='utf-8'));assert profile==command('sound_state')['profile']
             results[weapon]={'enabled':sum(c['enabled'] for c in profile['cues']),'samples':played['audio']['cachedSamples'],'descriptor':old['record']}

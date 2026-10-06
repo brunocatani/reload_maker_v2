@@ -323,7 +323,7 @@ namespace reloadmaker
         const auto profile = exportSounds();
         o["sounds.reload"] = !profile.isEmpty() && _soundError.isEmpty()
                                  ? found(QStringLiteral("%1 of %2 cues play").arg(enabled).arg(_soundProfile.cues.size()),
-                                         _soundsDirty ? QStringLiteral("Unsaved changes on the Sounds page.") : QStringLiteral("Saved on the Sounds page."))
+                                         _soundsDirty ? QStringLiteral("Unsaved changes on the Sounds page.") : QStringLiteral("Applied on the Sounds page."))
                                  : missing(_soundError.isEmpty() ? QStringLiteral("Open Sounds and save the reload's cues.") : _soundError);
         return o;
     }
@@ -467,10 +467,7 @@ namespace reloadmaker
         }
         saved["checklist"] = confirmations;
         _authoringRecords[key] = saved;
-        ++_revision;
-        if (!saveSession()) {
-            throw std::runtime_error("Could not save the checklist");
-        }
+        noteDocumentChange(QStringLiteral("checklist"));
         return checklistState();
     }
 }

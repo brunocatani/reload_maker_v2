@@ -82,6 +82,13 @@ namespace reloadmaker
         if (!_executingCommand) {
             _revisionChangedOutside = source;
         }
+        if (!_modifiedRefreshQueued) {
+            _modifiedRefreshQueued = true;
+            QTimer::singleShot(0, this, [this] {
+                _modifiedRefreshQueued = false;
+                refreshDocumentModified();
+            });
+        }
     }
 
     QString ReloadMakerController::staleRevisionMessage() const
@@ -261,6 +268,7 @@ namespace reloadmaker
                  { "status", _window->statusBar()->currentMessage() },
                  { "lastError", _lastError },
                  { "project", _sessionPath },
+                 { "modified", documentDirty() },
                  { "suggestedProject", suggestedSessionPath() },
                  { "camera", _window->getGLView()->studioCameraState() },
                  { "nativeApplicationShell", false } };

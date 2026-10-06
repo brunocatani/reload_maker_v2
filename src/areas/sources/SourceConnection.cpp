@@ -147,8 +147,8 @@ namespace reloadmaker
             setStatus("An MO2 connection is already starting.", true);
             return false;
         }
-        if (_loadThread || _reloadCapturing || !saveSession()) {
-            setStatus("Finish the current load/capture and save the project before connecting.", true);
+        if (_loadThread || _reloadCapturing || !leaveDocument(QStringLiteral("connecting to MO2"))) {
+            setStatus("Not connected: finish the current load or capture, or settle the unsaved changes, first.", true);
             return false;
         }
         const QString executable = QDir(setup.mo2Instance).filePath("ModOrganizer.exe");
@@ -205,8 +205,8 @@ namespace reloadmaker
             setStatus(check.errors.join('\n'), true);
             return false;
         }
-        if (currentWeapon() && !saveSession()) {
-            setStatus("Save the current project before opening base game sources.", true);
+        if (currentWeapon() && !leaveDocument(QStringLiteral("opening base game sources"))) {
+            setStatus("Base game sources were not opened.", true);
             return false;
         }
 

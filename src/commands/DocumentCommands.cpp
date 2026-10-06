@@ -39,8 +39,8 @@ namespace reloadmaker
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
                             require(!_profileHandoff.isEmpty() && params["token"].toString() == _profileHandoff,
                                     "No matching MO2 handoff is pending");
-                            require(!_loadThread && !_reloadCapturing && !_packProcess && saveSession(),
-                                    "The current project cannot close safely; source handoff cancelled");
+                            require(!_loadThread && !_reloadCapturing && !_packProcess && !documentDirty(),
+                                    "The open editor has unsaved changes; save or discard them first. Source handoff cancelled");
                             _profileHandoff.clear();
                             QTimer::singleShot(0, _window, [this] { _window->close(); });
                             return QJsonObject{ { "accepted", true } };

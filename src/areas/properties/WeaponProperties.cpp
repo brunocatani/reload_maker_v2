@@ -114,9 +114,7 @@ namespace reloadmaker
             _weaponOverrides.insert(key, overrides);
         }
         noteDocumentChange("weapon property");
-        ++_revision;
         prepareSimulation();
-        require(saveSession(), "Could not save the weapon property");
     }
 
     // The native clips of the configuration with their events, read from the

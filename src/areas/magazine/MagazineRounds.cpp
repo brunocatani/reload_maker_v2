@@ -214,10 +214,7 @@ namespace reloadmaker
             apply(previous);
             fail(failure);
         }
-        ++_revision;
-        if (!saveSession()) {
-            fail("Could not save the magazine rounds");
-        }
+        noteDocumentChange(QStringLiteral("magazine rounds"));
         return magazineRoundsState();
     }
 }

@@ -292,7 +292,7 @@ namespace reloadmaker
         if (_loadThread) {
             return;
         }
-        if (_pendingSession.isEmpty() && !saveSession()) {
+        if (_pendingSession.isEmpty() && !leaveDocument(QStringLiteral("opening another source"))) {
             return;
         }
         auto result = std::make_shared<PackageLoad>();

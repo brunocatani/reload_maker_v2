@@ -103,6 +103,7 @@ try:
     saved = save(); new_id = saved["magazineEditor"]["gripId"]
     assert new_id != old_id and not saved['magazineEditor']['unsaved'], saved['magazineEditor']
     assert len(saved['magazineGrabGrips']) == len(before)
+    edit('save_project', path=str(working))  # nothing writes the project except Save (owner, 2026-10-05)
     persisted = json.loads(working.read_text(encoding='utf-8'))
     # Fits are assigned per hand; no key without a hand survives a save.
     key = next(k for k, v in before.items() if v == old_id)
@@ -143,6 +144,7 @@ try:
     drum = save()
     assert drum['magazineEditor']['assignment'] == 'custom' and drum['magazineEditor']['canSave']
     drum_id = drum['magazineEditor']['gripId']
+    edit('save_project', path=str(working))  # nothing writes the project except Save (owner, 2026-10-05)
     edit('open_project', path=str(working)); ready()
     edit('workspace', index=5); ready();edit('configure_magazine')
     assert command('state')['magazineEditor']['gripId'] == drum_id

@@ -158,10 +158,7 @@ namespace reloadmaker
         } else {
             throw std::runtime_error("Choose save or reset for source compatibility");
         }
-        ++_revision;
-        if (!saveSession()) {
-            throw std::runtime_error("Cannot save source compatibility rules");
-        }
+        noteDocumentChange(QStringLiteral("source compatibility"));
         return sourcePolicyState();
     }
 }

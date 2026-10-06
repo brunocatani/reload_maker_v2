@@ -119,7 +119,7 @@ namespace reloadmaker {
         connect(_useMagazineGrip,&QPushButton::clicked,this,[this]{(void)useMagazineGrabGrip();});
         _gripStatus=new QLabel(page); _gripStatus->setObjectName("Callout"); _gripStatus->setTextFormat(Qt::PlainText); _gripStatus->setWordWrap(true); layout->addWidget(_gripStatus);
         auto* back=new QPushButton("Back to Operate",page);layout->addWidget(back);
-        connect(back,&QPushButton::clicked,this,[this]{rememberMagazineGrip();(void)saveSession();setWorkspace(OperateWorkspace);});
+        connect(back,&QPushButton::clicked,this,[this]{rememberMagazineGrip();setWorkspace(OperateWorkspace);});
 
         layout->addSpacing(4);
         auto* advanced=new QWidget(page);auto* advancedLayout=new QVBoxLayout(advanced);advancedLayout->setContentsMargins(0,0,0,0);advancedLayout->setSpacing(8);

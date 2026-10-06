@@ -344,12 +344,24 @@ namespace reloadmaker
         QJsonObject _sourcePolicies;
         // Project files (src/areas/project).
         bool saveSession(const QString& path = {});
+        // Explicit saves only (owner, 2026-10-05): nothing writes a project
+        // except Save. The authored part of the record, never the camera,
+        // part selection or playback, is compared with what the last save or
+        // open produced; leaving a changed document asks in the editor and
+        // discards in an unattended run, which saves explicitly.
+        [[nodiscard]] QJsonObject authoredRecord() const;
+        [[nodiscard]] bool documentDirty() const;
+        void markDocumentClean();
+        void refreshDocumentModified();
+        bool leaveDocument(const QString& action);
+        QJsonObject _savedAuthoring;
+        bool _modifiedRefreshQueued{ false };
         QString suggestedSessionPath() const;
         QJsonObject sessionSourceContext() const;
         bool beginWeaponProject(int selectedIndex);
         QJsonObject animationSourceIdentity() const;
         [[nodiscard]] QJsonObject projectRecord() const;
-        bool appendProjectDrafts(QJsonObject& record, QString& message);
+        bool appendProjectDrafts(QJsonObject& record, QString& message) const;
         void openSession(const QString& path);
         void restoreSessionSelection();
         bool selectProjectWeapon(const QJsonObject& record);

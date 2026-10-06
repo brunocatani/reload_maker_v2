@@ -10,7 +10,7 @@
 #include "gl/glshape.h"
 
 StudioWindow::StudioWindow(QWidget* parent) : QMainWindow(parent) {
-    setWindowTitle("Reload Maker V2");
+    setWindowTitle("Reload Maker V2[*]");
     // Fit the available desktop instead of a fixed size that can exceed it.
     const QRect available = screen() ? screen()->availableGeometry() : QRect(0, 0, 1600, 980);
     resize(std::min(1600, available.width() - 40), std::min(980, available.height() - 60));

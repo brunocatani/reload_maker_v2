@@ -212,8 +212,7 @@ namespace reloadmaker
         stopSimulation();
         _reloadTemplateAssignments[poseRecordKey(currentWeapon()->formId).toLower()] = id;
         _assignedMechanism = mechanism;
-        ++_revision;
+        noteDocumentChange(QStringLiteral("reload preset"));
         prepareSimulation();
-        require(saveSession(), "Could not save the assigned preset");
     }
 }

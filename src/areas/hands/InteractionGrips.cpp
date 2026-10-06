@@ -96,8 +96,8 @@ namespace reloadmaker
             _savedOperatingGrips[fallback] = id;
         }
         resolveOperatingFingers();
-        if (!_operatingFingerError.isEmpty() || !saveSession()) {
-            const auto error = _operatingFingerError.isEmpty() ? _lastError : _operatingFingerError;
+        if (!_operatingFingerError.isEmpty()) {
+            const auto error = _operatingFingerError;
             if (previous.isEmpty()) {
                 _savedOperatingGrips.remove(key);
             } else {
@@ -111,8 +111,8 @@ namespace reloadmaker
             return false;
         }
         updateInteractionGripUi();
-        ++_revision;
-        setStatus("Operating fingers saved. Wrist angle stays live; an unassigned opposite hand uses the mirrored finger shape.");
+        noteDocumentChange(QStringLiteral("operating grip"));
+        setStatus("Operating fingers set. Wrist angle stays live; an unassigned opposite hand uses the mirrored finger shape.");
         return true;
     }
 

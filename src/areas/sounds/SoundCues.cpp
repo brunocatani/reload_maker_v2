@@ -103,12 +103,10 @@ namespace reloadmaker
             return false;
         }
         _savedSounds[soundProfileKey()] = _soundProfile;
-        if (!saveSession()) {
-            return false;
-        }
+        noteDocumentChange(QStringLiteral("sound profile"));
         _soundsDirty = false;
         refreshSoundsUi();
-        setStatus("Sound cues saved for this weapon and reload set.");
+        setStatus("Sound cues applied to this weapon and reload set.");
         return true;
     }
 

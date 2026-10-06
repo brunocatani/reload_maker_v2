@@ -97,11 +97,8 @@ namespace reloadmaker
         }
         stopSimulation();
         _authoringRecords[key] = plan;
-        ++_revision;
+        noteDocumentChange(QStringLiteral("magazine guide"));
         prepareSimulation();
-        if (!saveSession()) {
-            fail("Could not save the magazine guide");
-        }
         return magazineGuideState();
     }
 
@@ -213,10 +210,7 @@ namespace reloadmaker
         stopSimulation();
         _authoringRecords[key] = plan;
         prepareSimulation();
-        ++_revision;
-        if (!saveSession()) {
-            fail("Cannot save the magazine reference");
-        }
+        noteDocumentChange(QStringLiteral("magazine reference"));
         return magazineReferenceState();
     }
 
@@ -338,10 +332,7 @@ namespace reloadmaker
             prepareSimulation();
             fail(failure);
         }
-        ++_revision;
-        if (!saveSession()) {
-            fail("Could not save magazine presentation");
-        }
+        noteDocumentChange(QStringLiteral("magazine presentation"));
         return magazineSetupState();
     }
 

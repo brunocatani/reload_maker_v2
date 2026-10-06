@@ -220,7 +220,7 @@ namespace reloadmaker
         }
         _scopeProfiles[p.model] = p;
         _scopeViewport->setPicking(false);
-        ++_revision;
+        noteDocumentChange(QStringLiteral("optic profile"));
         refreshScopeControls();
         updateScopeViewport();
         return true;
@@ -244,7 +244,7 @@ namespace reloadmaker
             return;
         }
         _scopeProfiles[p.model] = p;
-        ++_revision;
+        noteDocumentChange(QStringLiteral("optic profile"));
         refreshScopeControls();
         updateScopeViewport();
     }
@@ -331,13 +331,12 @@ namespace reloadmaker
         } else if (op == "save") {
             Transformf frame;
             require(scopeFrame(frame), "Pick a valid lens first.");
-            require(saveSession(), _lastError);
         } else if (op == "remove") {
             _scopeProfiles.remove(currentScopeKey());
         } else {
             require(false, "Unknown scope-profile operation.");
         }
-        ++_revision;
+        noteDocumentChange(QStringLiteral("optic profile"));
         refreshScopeControls();
         updateScopeViewport();
         return scopeState();

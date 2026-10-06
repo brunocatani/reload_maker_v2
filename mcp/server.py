@@ -85,7 +85,7 @@ def inspect_pose() -> dict:
 
 @mcp.tool()
 def open_source(path: str, game_data: str, expected_revision: int) -> dict:
-    """Open a read-only mod folder or ZIP; state reports asynchronous loading."""
+    """Open a read-only mod folder or ZIP; state reports asynchronous loading. The open weapon's unsaved edits are discarded; save_project first."""
     return command('open_source',{'path':path,'gameData':game_data},expected_revision)
 
 @mcp.tool()
@@ -95,12 +95,12 @@ def open_installed_library(instance: str, expected_revision: int) -> dict:
 
 @mcp.tool()
 def select_weapon(index: int, expected_revision: int) -> dict:
-    """Choose a weapon index from the current state and assemble its configuration."""
+    """Choose a weapon index from the current state and assemble its configuration. Leaving the open weapon discards its unsaved edits; save_project first."""
     return command('select_weapon',{'index':index},expected_revision)
 
 @mcp.tool()
 def select_testbed(name: str, expected_revision: int) -> dict:
-    """Switch to a saved testbed, retaining the outgoing project: the corpus (glock/ru556/m1a/timberwolf/l118a2/thanatos/srep-*) or a dev bench weapon (source_browser developmentSources with bench=true). State becomes busy while the source loads."""
+    """Switch to a saved testbed, discarding the outgoing project's unsaved edits (save_project first): the corpus (glock/ru556/m1a/timberwolf/l118a2/thanatos/srep-*) or a dev bench weapon (source_browser developmentSources with bench=true). State becomes busy while the source loads."""
     return command('testbed',{'name':name},expected_revision)
 
 @mcp.tool()
@@ -245,12 +245,12 @@ def get_reload_recipe() -> dict:
 
 @mcp.tool()
 def save_project(expected_revision: int, path: str = '') -> dict:
-    """Save source/configuration/time and current authored drafts atomically inside V2."""
+    """Save source/configuration/time and current authored drafts atomically inside V2. Nothing else writes a project: save before changing weapons, testbeds or sources."""
     return command('save_project',{'path':path},expected_revision)
 
 @mcp.tool()
 def open_project(path: str, expected_revision: int) -> dict:
-    """Validate and reopen an existing project; loading is asynchronous."""
+    """Validate and reopen an existing project; loading is asynchronous. The open weapon's unsaved edits are discarded; save_project first."""
     return command('open_project',{'path':path},expected_revision)
 
 @mcp.tool()

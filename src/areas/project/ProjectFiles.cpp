@@ -20,7 +20,9 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QMessageBox>
 #include <QSaveFile>
+#include <QScopeGuard>
 #include <QSettings>
 #include <QUuid>
 #include <algorithm>
@@ -404,12 +406,11 @@ namespace reloadmaker
         return source;
     }
 
-    // Changing weapons saves the current project under the previous weapon,
-    // then opens the next weapon's project when one exists. With no weapon on
-    // screen (a source just opened) there is nothing to save, but the chosen
-    // weapon still opens its saved project: shown as a new document, it would
-    // be saved over that project on the next weapon change. Returns whether
-    // the change was handled here.
+    // Changing weapons leaves the current document (unsaved edits ask), then
+    // opens the next weapon's project when one exists; with none the caller
+    // starts a new document. With no weapon on screen (a source just opened)
+    // there is nothing to leave, but the chosen weapon still opens its saved
+    // project. Returns whether the change was handled here.
     bool ReloadMakerController::beginWeaponProject(int selectedIndex)
     {
         const int previousIndex = _renderedWeapon;
@@ -421,9 +422,11 @@ namespace reloadmaker
             _selectedWeapon = validWeaponIndex(previousIndex);
             if (_reloadCapturing || _packProcess) {
                 setStatus("Finish the current capture or pack job before changing weapons.", true);
+                refreshWeaponPicker();
                 return true;
             }
-            if (!saveSession()) {
+            if (!leaveDocument(QStringLiteral("changing weapons"))) {
+                refreshWeaponPicker();
                 return true;
             }
             oldPath = _sessionPath;
@@ -553,10 +556,9 @@ namespace reloadmaker
 
     // The open magazine grip is remembered first. A draft that cannot be
     // encoded fails the save with `message`.
-    bool ReloadMakerController::appendProjectDrafts(QJsonObject& record, QString& message)
+    bool ReloadMakerController::appendProjectDrafts(QJsonObject& record, QString& message) const
     {
         QString error;
-        rememberMagazineGrip();
         QJsonObject magazineDrafts;
         for (auto it = _magazineGripDrafts.cbegin(); it != _magazineGripDrafts.cend(); ++it) {
             const auto bytes = encodePartGrip(it.value(), error);
@@ -609,6 +611,83 @@ namespace reloadmaker
         return true;
     }
 
+    namespace
+    {
+        // What looking around, choosing parts, scrubbing and previewing
+        // write: a save keeps it, but it never asks for one. The hand preview
+        // is the pose shown on the hand, dropped by every rebuild; finger,
+        // grip, mechanism and magazine-grip drafts are unsaved work and count.
+        constexpr const char* kViewStateKeys[] = {
+            "animation", "seconds", "motionMode", "transitions", "showArms", "workspace", "hand", "fingerJoint", "selectedHandPose",
+            "browserPlugin", "choices", "recordChoices", "camera", "handsPage", "interactionHand", "scopeSelection", "body",
+            "simulationSetup", "magazineInteraction", "ammunitionConfiguration", "handPreview"
+        };
+
+        QJsonObject withoutViewState(QJsonObject record)
+        {
+            for (const char* key : kViewStateKeys) {
+                record.remove(QLatin1String(key));
+            }
+            return record;
+        }
+    }
+
+    // The project record without its view state, with the drafts a save
+    // would keep (an unfinished one counts as content).
+    QJsonObject ReloadMakerController::authoredRecord() const
+    {
+        if (!currentWeapon() || _loadThread) {
+            return {};
+        }
+        auto record = projectRecord();
+        QString message;
+        if (!appendProjectDrafts(record, message)) {
+            record["unfinishedDraft"] = message;
+        }
+        return withoutViewState(record);
+    }
+
+    bool ReloadMakerController::documentDirty() const
+    {
+        return currentWeapon() && !_loadThread && authoredRecord() != _savedAuthoring;
+    }
+
+    void ReloadMakerController::markDocumentClean()
+    {
+        _savedAuthoring = authoredRecord();
+        refreshDocumentModified();
+    }
+
+    void ReloadMakerController::refreshDocumentModified()
+    {
+        if (_window) {
+            _window->setWindowModified(documentDirty());
+        }
+    }
+
+    // Leaving a document that Save would change: the editor asks; an
+    // unattended run discards, since its scripts save explicitly.
+    bool ReloadMakerController::leaveDocument(const QString& action)
+    {
+        rememberMagazineGrip();
+        if (!documentDirty() || qApp->property("unattended").toBool()) {
+            return true;
+        }
+        const auto* weapon = currentWeapon();
+        QMessageBox question(QMessageBox::Question, QStringLiteral("Unsaved changes"),
+                             QStringLiteral("Save the changes to %1 before %2?").arg(weapon->name.isEmpty() ? weapon->editorId : weapon->name, action),
+                             QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, _window);
+        question.setDefaultButton(QMessageBox::Save);
+        switch (question.exec()) {
+        case QMessageBox::Save:
+            return saveSession();
+        case QMessageBox::Discard:
+            return true;
+        default:
+            return false;
+        }
+    }
+
     // Saves to `requested`, else the open project, else the weapon's project
     // path. Nothing to save (no weapon, or a source loading) counts as saved.
     bool ReloadMakerController::saveSession(const QString& requested)
@@ -629,6 +708,7 @@ namespace reloadmaker
         StageClock clock(_loadTimings, "project.save");
         auto record = projectRecord();
         QString message;
+        rememberMagazineGrip();
         if (!appendProjectDrafts(record, message)) {
             setStatus(message, true);
             return false;
@@ -641,6 +721,8 @@ namespace reloadmaker
             return false;
         }
         _sessionPath = absolute;
+        _savedAuthoring = withoutViewState(record);
+        refreshDocumentModified();
         if (const QString testbed = currentTestbed(); !_libraryMode && isCorpusTestbed(testbed)) {
             QSettings().setValue("testbeds/" + testbed, absolute);
         }
@@ -952,6 +1034,11 @@ namespace reloadmaker
         if (!selectProjectWeapon(record)) {
             return;
         }
+        // The project as opened is the clean state; later edits ask on leave.
+        const auto opened = qScopeGuard([this] {
+            markDocumentClean();
+            QSettings().setValue("projects/lastProject", _sessionPath);
+        });
         restoreProjectLoadout(record);
         restoreProjectAuthoring(record);
         rebuildWeapon();

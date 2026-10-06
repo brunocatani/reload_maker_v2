@@ -341,10 +341,10 @@ namespace reloadmaker
             }
         }
 
-        // The open weapon does not come from the new plugin: save and close it.
+        // The open weapon does not come from the new plugin: leave and close it.
         const bool weaponOutsidePlugin = !selectionPlugins(_selectedWeapon).contains(name, Qt::CaseInsensitive);
         if (currentWeapon() && !allWeaponsSelected() && weaponOutsidePlugin) {
-            if (!saveSession()) {
+            if (!leaveDocument(QStringLiteral("changing plugins"))) {
                 alignPluginToWeapon();
                 return false;
             }

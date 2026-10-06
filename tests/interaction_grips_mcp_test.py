@@ -100,7 +100,8 @@ def run():
                 edit('interaction_hand',hand='right');edit('use_operating_fingers',id=selected['id'])
                 after=export('simulation')['authoredInteractions']['operatingFingers']
                 assert after[0]==before[0] and after[1]['sourcePoseId']==selected['id']
-                edit('open_project',path=str(scratch));ready();edit('workspace',index=5);ready()
+                # Nothing writes the project except Save (owner, 2026-10-05).
+                edit('save_project',path=str(scratch));edit('open_project',path=str(scratch));ready();edit('workspace',index=5);ready()
                 assert export('simulation')['authoredInteractions']['operatingFingers']==after
                 assigned=json.loads(scratch.read_text(encoding='utf-8'))
                 for key in ['magazineGrabGrips','magazineGrabDefaults','grabLocations']:assert assigned.get(key,{})==saved.get(key,{})

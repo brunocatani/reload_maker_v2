@@ -49,7 +49,7 @@ bool ReloadMakerController::selectTestbed(const QString& name) {
     const auto project=isCorpusTestbed(name)?QSettings().value("testbeds/"+name,testbedProject(name)).toString():benchProject;
     if(!QFileInfo::exists(project)){setStatus("Open and save the "+name+" project before selecting this testbed.",true);return false;}
     if(current==name&&!_libraryMode&&QFileInfo(_sessionPath).absoluteFilePath()==QFileInfo(project).absoluteFilePath()){setWorkspace(OperateWorkspace);alignPluginToWeapon();refreshWeaponPicker();return true;}
-    if(!saveSession())return false;
+    if(!leaveDocument(QStringLiteral("changing testbeds")))return false;
     if(isCorpusTestbed(current)&&!_libraryMode)QSettings().setValue("testbeds/"+current,_sessionPath);
     openSession(project);
     if(!_pendingSession.isEmpty()) {
