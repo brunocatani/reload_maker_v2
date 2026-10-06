@@ -28,6 +28,8 @@ void ReloadMakerController::showSourcePolicy() {
     const auto initial=state["policy"].toObject(),condition=initial["sourceOverride"].toObject();const auto key=state["key"].toString();
     auto* form=new QFormLayout;layout->addLayout(form);auto* marker=new QLineEdit(condition["marker"].toString());marker->setPlaceholderText("Optional · Addon.esp:000800");form->addRow("Add-on marker record",marker);
     auto* present=new QCheckBox("This marker must be installed (unchecked: must be absent)");present->setChecked(condition.value("present").toBool(true));layout->addWidget(present);
+    QStringList equivalentRecords;for(const auto& value:initial["weaponAliases"].toArray())equivalentRecords.append(value.toString());
+    auto* equivalents=new QLineEdit(equivalentRecords.join(", "));equivalents->setPlaceholderText("Same reload assembly only · Plugin.esp:001234, Plugin.esp:001235");form->addRow("Equivalent weapon records",equivalents);
     auto* chooser=new QComboBox;chooser->setEditable(true);for(const auto& row:state["modifications"].toArray()){const auto item=row.toObject();chooser->addItem(item["name"].toString()+" · "+item["record"].toString(),item["record"]);}form->addRow("Available modification",chooser);
     const auto selected=[=]{return chooser->currentIndex()>=0&&chooser->currentText()==chooser->itemText(chooser->currentIndex())?chooser->currentData().toString():chooser->currentText().trimmed();};
     auto* useMarker=new QPushButton("Use selected modification as marker");layout->addWidget(useMarker);connect(useMarker,&QPushButton::clicked,dialog,[=]{marker->setText(selected());});
@@ -43,6 +45,7 @@ void ReloadMakerController::showSourcePolicy() {
     connect(save,&QPushButton::clicked,dialog,[=,this,expected=initial]()mutable{try{
         if(sourcePolicyState()["policy"].toObject()!=expected)throw std::runtime_error("Compatibility rules changed while editing; reopen them before saving");
         QJsonObject policy;if(!marker->text().trimmed().isEmpty())policy["sourceOverride"]=QJsonObject{{"marker",marker->text().trimmed()},{"present",present->isChecked()}};
+        QJsonArray aliases;for(const auto& value:equivalents->text().split(',',Qt::SkipEmptyParts))aliases.append(value.trimmed());if(!aliases.isEmpty())policy["weaponAliases"]=aliases;
         const auto rows=[](QListWidget* list){QJsonArray result;for(int i=0;i<list->count();++i)result.append(list->item(i)->text());return result;};
         if(blocked->count())policy["blockedMods"]=rows(blocked);if(collections->count())policy["magazineCollections"]=rows(collections);
         const auto result=configureSourcePolicy({{"operation","save"},{"key",key},{"policy",policy}});expected=result["policy"].toObject();status->setText("Saved. Capture and validate this source context before exporting.");

@@ -62,14 +62,14 @@ def merge_configuration_slots(existing,incoming):
     return list(slots.values())
 
 def policy_identity(policy):
-    require(isinstance(policy,dict) and set(policy)<= {'sourceOverride','blockedMods','magazineCollections'},'Invalid source compatibility rules')
+    require(isinstance(policy,dict) and set(policy)<= {'sourceOverride','blockedMods','magazineCollections','weaponAliases'},'Invalid source compatibility rules')
     marker=None
     if 'sourceOverride' in policy:
         value=policy['sourceOverride']
         require(isinstance(value,dict) and set(value)=={'marker','present'} and type(value['present']) is bool,'Invalid add-on marker condition')
         marker=(form_key(value['marker']),value['present'])
     groups=[];seen=set()
-    for field in ('blockedMods','magazineCollections'):
+    for field in ('blockedMods','magazineCollections','weaponAliases'):
         values=policy.get(field,[])
         require(isinstance(values,list) and len(values)<=32,'Too many source compatibility records')
         records=[form_key(value) for value in values]
@@ -146,7 +146,7 @@ def apply_capture(draft,capture,full='',empty=''):
     for key,value in snapshot.get('profileHeader',{}).items():
         if key not in ('slots','embeddedMagazineReceivers','profiles'):profiles[key]=copy.deepcopy(value)
     if 'sourcePolicy' in snapshot:
-        policy=snapshot['sourcePolicy'];fields=('sourceOverride','blockedMods','magazineCollections')
+        policy=snapshot['sourcePolicy'];fields=('sourceOverride','blockedMods','magazineCollections','weaponAliases')
         incoming_policy=policy_identity(policy)
         existing_policy={key:profiles[key] for key in fields if key in profiles}
         if snapshot.get('sourcePolicyEdited') is True:

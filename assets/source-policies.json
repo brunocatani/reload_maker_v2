@@ -2,6 +2,14 @@
   "version": 1,
   "policies": [
     {
+      "id": "SA58 regular variants",
+      "weapon": "Wana_SA58.esp:000801",
+      "policy": {
+        "weaponAliases": ["Wana_SA58.esp:0059d2", "Wana_SA58.esp:0059d3", "Wana_SA58.esp:00624c"],
+        "magazineCollections": ["Wana_SA58.esp:00083c"]
+      }
+    },
+    {
       "id": "MK18",
       "weapon": "MK18.esp:000f9d",
       "policy": {
