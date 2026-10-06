@@ -4,6 +4,7 @@
 #include "ReloadMakerController.h"
 #include "MagazineViewport.h"
 #include "ReloadDriveViewport.h"
+#include "areas/loadout/SceneTree.h"
 #include "areas/operate/SimulationNames.h"
 #include "model/nifmodel.h"
 
@@ -188,7 +189,12 @@ namespace reloadmaker
                 }
                 if (match && it.value().isValid()) {
                     _simulationMagazineSlot = it.key();
-                    _simulationVisibility.append({ it.value(), model->get<int>(it.value(), "Flags") });
+                    // Installed bodies can share the receiver's carrier with
+                    // rounds and a follower. The whole carrier is the loose
+                    // assembly; the installed root remains the hand reference.
+                    const auto carrier = _sceneNodes[_reloadTrackNodes[rig.magazine]];
+                    const auto root = installedMagazine && isWithinBlock(*model, it.value(), carrier) ? carrier : it.value();
+                    _simulationVisibility.append({ root, model->get<int>(root, "Flags") });
                 }
             }
         }
