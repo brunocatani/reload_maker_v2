@@ -40,6 +40,10 @@ namespace reloadmaker
         // Explicit per-configuration fire choices override the family default.
         // Replaying the measured stroke never substitutes a generic distance.
         const auto* preset = checklistPreset();
+        if(preset) {
+            rig.hkSlap=std::any_of(preset->model.mechanisms.cbegin(),preset->model.mechanisms.cend(),[](const auto& part){return part.kind==MechanismKind::HkSlap;});
+            rig.lastShotHoldOpen=!preset->model.fire.lockOpenMechanism.isEmpty();
+        }
         if ((!authored || setup.fireMode == "preset") && preset && preset->model.fire.motion == FireMotion::ReplayActionStroke) {
             rig.fireFromStroke = true;
             rig.presetFire = false;

@@ -260,6 +260,10 @@ namespace reloadmaker
             if (!weapon || (!magazine && shape->isHidden()) || (magazine && !inFullCarrier)) {
                 continue;
             }
+            // Zero scale is also used to hide optional receiver/sight pieces.
+            // A collapsed accessory has no clearance surface and must not
+            // invalidate the physical magazine's insertion guide.
+            if(!magazine&&std::isfinite(shape->worldTrans().scale)&&std::abs(shape->worldTrans().scale)<1e-6f)continue;
             if (!shape->reloadMakerSkinBones().isEmpty()) {
                 _magazineError = "Magazine rail geometry needs a rigid source surface.";
                 return false;

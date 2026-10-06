@@ -156,6 +156,7 @@ namespace reloadmaker
             case MechanismKind::OperatingHandle:
             case MechanismKind::ReciprocatingBolt:
             case MechanismKind::TurnBolt:
+            case MechanismKind::HkSlap:
                 return true;
             default:
                 return false;

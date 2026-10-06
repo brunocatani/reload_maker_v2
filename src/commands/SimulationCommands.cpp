@@ -20,7 +20,7 @@ namespace reloadmaker
         {
             return operation == "fire" || operation == "reload" || operation == "drop_magazine" ||
                    operation == "reset" || operation == "mag_out" || operation == "mag_in" ||
-                   operation == "grab_magazine" || operation == "slide_release" || operation == "bolt_release";
+                   operation == "grab_magazine" || operation == "slide_release" || operation == "bolt_release" || operation == "slap";
         }
     }
 
@@ -45,6 +45,7 @@ namespace reloadmaker
         require(_simulationActive,
                 _simulationError.isEmpty() ? "Wait until the Operate workspace is ready" : _simulationError);
         const auto operation = params["operation"].toString();
+        require(operation!="slap"||_simulation.hkSlap,"This weapon has no locking-handle slap action");
         if (operation == "trigger_down" || operation == "trigger_up") {
             setSimulationTrigger(operation == "trigger_down");
         } else if (operation == "step") {

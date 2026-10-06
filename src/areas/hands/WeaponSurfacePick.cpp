@@ -8,6 +8,21 @@
 
 namespace reloadmaker
 {
+    bool ReloadMakerController::operatingSurfaceCandidate(int candidate) const
+    {
+        const int operating=operatingAnchor();
+        if(operating<0||candidate<0||candidate>=_handPoseAnchors.size())return false;
+        const int target=_sceneNodes.indexOf(_handPoseAnchors[operating].node);
+        int node=_sceneNodes.indexOf(_handPoseAnchors[candidate].node);
+        for(int depth=0;node>=0&&depth<_assemblyNodes.size();++depth) {
+            if(node==target)return true;
+            // Static helper descendants belong to the part. Crossing another
+            // animated bone would admit an independently moving surface.
+            if(_assemblyNodes[node].boneIndex>=0)return false;
+            node=_assemblyNodes[node].parent;
+        }
+        return false;
+    }
     // Fills the hit point, the surface's block name and the candidate
     // reference parts. A rigid surface's candidates come from its nearest
     // anchored ancestor, a skinned surface's from its animated bones;

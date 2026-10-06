@@ -101,6 +101,8 @@ namespace reloadmaker
             return;
         }
         _simulation.configureAmmunition(_simulationAmmo.valid() ? _simulationAmmo.capacity : 0, _simulationAmmo.pistol, rig.mechanism);
+        _simulation.hkSlap=rig.hkSlap;
+        if(rig.hkSlap)_simulation.pistolLock=rig.lastShotHoldOpen;
         _simulation.fireCycleSeconds = 0;
         if (isBoltActionConfiguration()) {
             _simulation.boltEjectProgress = _boltCycle.ejectProgress;
@@ -327,7 +329,7 @@ namespace reloadmaker
             accepted = selectSimulationClip(false, false);
         } else if (action == "drop_magazine") {
             accepted = _simulation.dropMagazine();
-        } else if (action == "slide_release" || action == "bolt_release") {
+        } else if (action == "slide_release" || action == "bolt_release" || action == "slap") {
             accepted = _simulation.slideRelease();
             if (accepted) {
                 startSimulationClock();
@@ -524,9 +526,8 @@ namespace reloadmaker
         if (!pickWeaponPart(point, automatic, hit, surface, candidates, error)) {
             return false;
         }
-        const auto& input = _reloadRecipe->tracks[_simulationRig->slide];
         const bool onInput = std::any_of(candidates.cbegin(), candidates.cend(), [&](int anchor) {
-            return sameGripAnchor(_handPoseAnchors[anchor].description, input.anchor);
+            return operatingSurfaceCandidate(anchor);
         });
         curve.onDrivenPart = onInput;
         if (!operatingGrabAvailable() || !onInput || !_simulation.grab()) {

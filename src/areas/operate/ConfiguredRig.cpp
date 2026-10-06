@@ -6,6 +6,7 @@
 //   clip    another native clip, sampled over the recipe's frames,
 //   manual  saved Move / Rotate movements authored on the parts.
 #include "ReloadMakerController.h"
+#include "ReloadTemplates.h"
 #include "areas/operate/WeaponLocalSampler.h"
 
 #include <QJsonArray>
@@ -60,6 +61,7 @@ namespace reloadmaker
         if (reversed && !reverseSetupWindow(parts, motion, error)) {
             return false;
         }
+        if(const auto* preset=checklistPreset();preset&&preset->model.mechanisms.size()==1&&preset->model.mechanisms.front().kind==MechanismKind::HkSlap)parts.singleHandle=true;
         if (!buildSimulationRig(recipe, rig, error, simulationMechanism(), setup.deriveHandle, {}, &parts)) {
             return false;
         }

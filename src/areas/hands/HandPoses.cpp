@@ -223,7 +223,7 @@ namespace reloadmaker
         for (int depth = 0; ancestor.isValid() && depth < model->getBlockCount(); ++depth) {
             Transformf local;
             if (!readNodeTransform(ancestor, local)) {
-                error = QStringLiteral("The selected part has an invalid or zero-scaled frame");
+                error = QStringLiteral("Part '%1' (block %2) has an invalid or zero-scaled frame").arg(model->get<QString>(ancestor,"Name")).arg(model->getBlockNumber(ancestor));
                 return false;
             }
             world = composed(local, world);

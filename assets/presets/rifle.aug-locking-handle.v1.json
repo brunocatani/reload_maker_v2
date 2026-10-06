@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "id": "rifle.aug-locking-handle.v1",
+  "label": "AUG locking handle - palm release",
+  "category": "Rifle",
+  "model": {
+    "feed": {
+      "container": "detachable",
+      "loadingPoints": [
+        {
+          "id": "magwell",
+          "unit": "container",
+          "destination": "container"
+        }
+      ],
+      "insertion": "native-curve"
+    },
+    "mechanisms": [
+      {
+        "id": "handle",
+        "kind": "hk-slap",
+        "roles": [
+          "extract",
+          "eject",
+          "cock",
+          "chamber"
+        ],
+        "return": "spring",
+        "locksOpen": true
+      }
+    ],
+    "fire": {
+      "motion": "native-clip",
+      "afterShot": "automatic-cycle",
+      "ejection": "on-fire",
+      "lockOpen": "handle"
+    }
+  }
+}

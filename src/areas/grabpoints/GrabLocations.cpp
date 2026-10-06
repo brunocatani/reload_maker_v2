@@ -153,7 +153,10 @@ namespace reloadmaker
             return false;
         }
         const int a = operatingAnchor();
-        if (a < 0 || !candidates.contains(a)) {
+        const auto rigidChild=[&](int candidate) {return operatingSurfaceCandidate(candidate);};
+        // Some source meshes skin to a static helper below the animated
+        // handle. That is still its surface, not a separate operating part.
+        if (a < 0 || (!candidates.contains(a)&&std::none_of(candidates.cbegin(),candidates.cend(),rigidChild))) {
             setStatus("Pick a surface on the selected operating part.", true);
             return false;
         }

@@ -160,6 +160,9 @@ namespace reloadmaker
         const auto grabs = exportGrabLocations();
         require(type == WeaponMechanism::PistolSlide || !grabs.isEmpty(), "Configure the operating surface grab points before capture");
         auto header = runtimeProfileHeader(weapon, receiver != nullptr, receiverKey, magazineKey, selection);
+        header["hkSlap"]=rig.hkSlap;
+        header["lastShotHoldOpen"]=rig.hkSlap?rig.lastShotHoldOpen:true;
+        header["singleHandle"]=rig.singleHandle;
         const auto compatibility = sourcePolicyState();
         const auto policy = compatibility["policy"].toObject();
         for (auto it = policy.begin(); it != policy.end(); ++it) {

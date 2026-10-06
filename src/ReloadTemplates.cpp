@@ -35,6 +35,7 @@ namespace reloadmaker
             case MechanismKind::Slide:
                 return WeaponMechanism::PistolSlide;
             case MechanismKind::ChargingHandle:
+            case MechanismKind::HkSlap:
                 return WeaponMechanism::Ar15;
             case MechanismKind::OperatingHandle:
                 return WeaponMechanism::M1A;

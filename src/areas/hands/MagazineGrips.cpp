@@ -5,6 +5,7 @@
 #include "ReloadMakerController.h"
 #include "MagazineViewport.h"
 #include "ReloadBundle.h"
+#include "areas/loadout/SceneTree.h"
 
 #include <QDateTime>
 #include <QTimer>
@@ -52,7 +53,16 @@ namespace reloadmaker
     {
         if (magazineAnchorDecides()) {
             const int index = currentMagazineAnchor();
-            return index >= 0 && sameGripAnchor(placement, _handPoseAnchors[index].description) ? index : -1;
+            if(index<0)return -1;
+            const auto& target=_handPoseAnchors[index].description;
+            if(sameGripAnchor(placement,target))return index;
+            // A source reload may hold its separate incoming copy (MP5).
+            // Only a classified magazine spare from the same owner/model is
+            // eligible for conversion; unrelated receiver parts are not.
+            if(target.ownerRecord.compare(placement.ownerRecord,Qt::CaseInsensitive)!=0||normalizeNifPath(target.ownerModel)!=normalizeNifPath(placement.ownerModel))return -1;
+            for(const auto& anchor:_handPoseAnchors)if(sameMechanismPart(anchor.description,placement))
+                for(const auto& visual:_magazineVisuals)if(visual.nativeOnly&&isWithinBlock(*activeModel(),visual.node,anchor.node))return index;
+            return -1;
         }
         // A frame exactly on the magazine's carrier is that magazine, whatever
         // the carrier is called (the USP's WeaponMagazineChild2 helper pivot).

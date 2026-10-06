@@ -941,6 +941,7 @@ namespace reloadmaker
         bool _editingGrabLocationUi{},_pickingGrabLocation{},_replaceGrabLocation{};
         QString operatingGroup() const;
         int operatingAnchor() const;
+        bool operatingSurfaceCandidate(int anchor) const;
         bool mirrorMagazineGrip();
         void updateInteractionGripUi();
         QJsonObject interactionGripState() const;

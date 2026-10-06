@@ -51,7 +51,9 @@ QMatrix4x4 GLView::reloadMakerWorldToClip() const
 
 bool GLView::reloadMakerSurfaceAt(const QPointF& point,const QVector<int>& allowedBlocks,int& block,Vector3& world)
 {
-    if(!model || !scene || !scene->renderer || !isValid() || !isVisible() || doCompile ||
+    // MCP can author from an offscreen frame while the application is covered
+    // or minimized. The private framebuffer only requires a valid GL context.
+    if(!model || !scene || !scene->renderer || !isValid() || doCompile ||
        point.x()<0 || point.y()<0 || point.x()>=width() || point.y()>=height() || allowedBlocks.isEmpty()) return false;
     auto* previous=pushGLContext(); const auto restoreContext=qScopeGuard([&](){popGLContext(previous);});
     auto* renderer=scene->renderer;

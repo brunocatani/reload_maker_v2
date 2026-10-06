@@ -10,6 +10,7 @@ namespace reloadmaker {
         QVector<int> followers;
         int openFrame{-1},closedFrame{-1};
         QHash<int,QVector<Transformf>> curves;
+        bool singleHandle{false}; // Internal bolt has no separate visible mesh.
     };
     // Indices belong to this exact captured recipe, never to scene blocks.
     struct SimulationRig {
@@ -25,6 +26,7 @@ namespace reloadmaker {
         QHash<int,QVector<Transformf>> authoredCurves;
         bool customSetup{false},manualCycle{false},fireFromStroke{false},presetFire{true};
         bool magazineBranchOnly{false}; // Explicit carrier inside a shared receiver model.
+        bool hkSlap{false},lastShotHoldOpen{true},singleHandle{false};
         float motionDuration{0},manualEjectSeconds{-1};
         QJsonObject authoring;
     };
@@ -45,6 +47,7 @@ namespace reloadmaker {
         float inputProgress()const{return mechanism==WeaponMechanism::Ar15?handle:slide;}
         int capacity{0}, magazineRounds{0}, shotsFired{0}, roundsEjected{0};
         bool chambered{false}, slideLocked{false}, pistolLock{false};
+        bool hkSlap{false},notchLatched{false};
         bool reloadStartedLoaded{false}, reloadStartedOpen{false}, reloadCycled{false}, reloadFed{false};
         float reloadRackAt{-1}, reloadFeedAt{-1};
         bool ammoKnown()const{return capacity>0;}
@@ -73,7 +76,7 @@ namespace reloadmaker {
         void finishClosing();
         bool _cycleArmed{false},_pullFromLock{false},_pulledRearward{false};
         int _fireCycleIndex{0};
-        struct PullSnapshot {bool chambered{false},locked{false},cycle{false};int rounds{0},ejected{0};float bolt{0},handle{0};bool spent{false},closing{false};int cases{0};} _pullSnapshot;
+        struct PullSnapshot {bool chambered{false},locked{false},cycle{false};int rounds{0},ejected{0};float bolt{0},handle{0};bool spent{false},closing{false};int cases{0};bool notch{false};} _pullSnapshot;
     };
     bool buildSimulationRig(const ReloadRecipe& recipe, SimulationRig& rig, QString& error,WeaponMechanism profile=WeaponMechanism::PistolSlide,bool deriveHandleFromBolt=false,const QVector<Transformf>& boltOverride={},const SimulationParts* selected=nullptr);
     const QVector<Transformf>& simulationTrackCurve(const ReloadRecipe&,const SimulationRig&,int track);
