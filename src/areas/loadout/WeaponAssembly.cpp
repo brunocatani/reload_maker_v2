@@ -141,8 +141,7 @@ namespace reloadmaker
                 return false;
             }
             const QPersistentModelIndex oldParent = model->getBlockIndex(model->getParent(node));
-            Transformf authored;
-            if (!oldParent.isValid() || !readNodeTransform(node, authored)) {
+            if (!oldParent.isValid()) {
                 error = "Invalid remapped branch parent or transform";
                 return false;
             }
@@ -150,7 +149,10 @@ namespace reloadmaker
             // Move only the explicitly named branch. A rail-mounted optic can
             // share this attachment with iron sights but stay on the receiver.
             delLink(model, oldParent, "Children", block);
-            if (!addLink(model, target.parent, "Children", block) || !setNodeTransform(node, composed(connection, authored))) {
+            // The remap selects a new attachment frame. The branch's old
+            // placement is not an additional offset from that frame (the
+            // Handmade front sight otherwise adds its old 27.6-unit position).
+            if (!addLink(model, target.parent, "Children", block) || !setNodeTransform(node, connection)) {
                 error = "Cannot attach remapped branch: " + remap->node;
                 return false;
             }

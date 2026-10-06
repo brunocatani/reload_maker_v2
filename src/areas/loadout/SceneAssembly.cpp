@@ -316,6 +316,21 @@ namespace reloadmaker
                 }
             }
         }
+        // Some native attachments declare the child connection in their root
+        // name (Handmade ScopeIronSights: C-Scope), without CPT extra data.
+        // Only accept a real scene root and still resolve its exact P-* target.
+        if (result.isEmpty()) {
+            for (int block = 0; block < source.getBlockCount(); ++block) {
+                const auto index = source.getBlockIndex(block);
+                if (!source.blockInherits(index, "NiNode") || source.getParent(index) >= 0) {
+                    continue;
+                }
+                const auto name = source.get<QString>(index, "Name");
+                if (name.startsWith("C-", Qt::CaseInsensitive) && name.size() > 2) {
+                    result.append(name);
+                }
+            }
+        }
         return result;
     }
 
