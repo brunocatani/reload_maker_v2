@@ -137,6 +137,13 @@ def apply_capture(draft,capture,full='',empty=''):
     # compatibility edit updates the shared weapon policy; source snapshots and
     # the complete native parser still validate every remaining configuration.
     profiles=documents['profiles']
+    # The weapon-level header follows the current capture (format, version,
+    # weapon, standard receiver, strictness, magazine attach point). A document
+    # saved under a retired format (the Glock's reload-maker-glock-slide-pack,
+    # 2026-10-05) keeps its variants and reads as what DIAMOND validates today;
+    # slots and embedded receivers merge below, the policy fields are separate.
+    for key,value in snapshot.get('profileHeader',{}).items():
+        if key not in ('slots','embeddedMagazineReceivers','profiles'):profiles[key]=copy.deepcopy(value)
     if 'sourcePolicy' in snapshot:
         policy=snapshot['sourcePolicy'];fields=('sourceOverride','blockedMods','magazineCollections')
         incoming_policy=policy_identity(policy)
