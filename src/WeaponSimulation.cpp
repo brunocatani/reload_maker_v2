@@ -32,8 +32,10 @@ bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& err
         }
     }
     if(rig.slide<0||rig.magazine<0){error="Direct simulation currently requires a resolved slide and magazine.";return false;}
-    if(profile==WeaponMechanism::PistolSlide&&sameOwner(r.tracks[rig.slide],r.tracks[rig.magazine])) {
-        if(!selected){error="Slide and magazine share a source model. Select their separate native branches in Operating parts.";return false;}
+    // Some bolt-action receivers contain both the action and magazine carrier.
+    // Sharing a NIF must not make the detached magazine carry the whole bolt.
+    if((profile==WeaponMechanism::PistolSlide||profile==WeaponMechanism::BoltAction)&&sameOwner(r.tracks[rig.slide],r.tracks[rig.magazine])) {
+        if(profile==WeaponMechanism::PistolSlide&&!selected){error="Slide and magazine share a source model. Select their separate native branches in Operating parts.";return false;}
         if(descendant(r,rig.slide,rig.magazine)||descendant(r,rig.magazine,rig.slide)) {
             error="The magazine carrier and operating part must be independent native branches.";return false;
         }
