@@ -218,6 +218,17 @@ namespace reloadmaker
         if ((rig.presetFire && travel < kCompleteStroke && reloadStrokes) || rig.fireFromStroke) {
             return useReloadBoltStroke(clip);
         }
+        // An explicit native choice preserves a source that leaves its manual
+        // charging part still on fire (ARR's rotating charging lever). Keep
+        // every sampled pose and the source duration; do not invent recoil
+        // by replaying that part's manual cocking stroke on each shot.
+        if (rig.customSetup && !rig.presetFire && !rig.fireFromStroke && travel <= .01f && frames >= 3) {
+            _rifleBoltOpen = frames / 2; // phase marker; the visible curve is static
+            _rifleBoltDuration = clip.durationSeconds;
+            _rifleSingleDuration = clip.durationSeconds;
+            _rifleBoltSource = single->resourcePath;
+            return true;
+        }
         if (travel < kCompleteStroke || closed < 0) {
             _simulationError = "Single-fire source has no complete bolt stroke.";
             return false;
