@@ -28,6 +28,32 @@ namespace reloadmaker
         constexpr qint64 kProjectSizeLimit = 64 * 1024 * 1024;
         constexpr qint64 kSourceDefinitionSizeLimit = 64 * 1024;
 
+        bool developmentSource(const QString& source, const QString& bench)
+        {
+            if (source.startsWith(bench, Qt::CaseInsensitive)) {
+                return true;
+            }
+            if (!source.endsWith(".reloadsources.json", Qt::CaseInsensitive)) {
+                return false;
+            }
+            QFile file(source);
+            if (file.size() > kSourceDefinitionSizeLimit || !file.open(QIODevice::ReadOnly)) {
+                return false;
+            }
+            const auto definition = QJsonDocument::fromJson(file.readAll()).object();
+            if (definition["format"] != "reload-maker-source-pack" || definition["version"] != 1) {
+                return false;
+            }
+            const QDir directory = QFileInfo(source).dir();
+            for (const auto& input : definition["plugins"].toArray()) {
+                const auto path = QDir::cleanPath(directory.absoluteFilePath(input.toString()));
+                if (path.startsWith(bench, Qt::CaseInsensitive)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         // A source-pack testbed names its plugins in load order; the last one
         // is the weapon's own plugin.
         QString testbedPlugin(const QString& weapon, const QString& source)
@@ -83,8 +109,9 @@ namespace reloadmaker
                 { "name", document["weaponName"].toString(document["weaponEditorId"].toString(id)) },
             });
         }
-        // Dev bench weapons, in record order. A weapon saved from two dev
-        // bench sources lists its most recently saved project.
+        // Dev bench weapons include ordered source packs. Master records can
+        // also acquire empty projects while browsing an unrelated mod; those
+        // must not displace a weapon's authored reload just by being newer.
         const QString bench = QDir::cleanPath(studioDataPath(kDevBenchFolder)) + '/';
         QMap<QString, QPair<QDateTime, QJsonObject>> benchWeapons;
         QDirIterator projects(studioDataPath("workspace/projects"), { "authoring.project.json" }, QDir::Files, QDirIterator::Subdirectories);
@@ -97,21 +124,27 @@ namespace reloadmaker
             const QJsonObject document = QJsonDocument::fromJson(file.readAll()).object();
             const QString weapon = document["weapon"].toString();
             const QString source = QDir::cleanPath(document["package"].toString());
-            if (document["library"].toBool() || weapon.isEmpty() || !source.startsWith(bench, Qt::CaseInsensitive)) {
+            if (document["library"].toBool() || weapon.isEmpty() || !developmentSource(source, bench)) {
                 continue;
             }
             const QString id = devBenchId(weapon);
-            if (benchWeapons.contains(id) && benchWeapons[id].first >= project.lastModified()) {
-                continue;
+            const bool authored = !document["reloadTemplates"].toObject()[weapon.toLower()].toString().isEmpty();
+            if (benchWeapons.contains(id)) {
+                const auto& previous = benchWeapons[id];
+                const bool previousAuthored = previous.second["authored"].toBool();
+                if ((previousAuthored && !authored) || (previousAuthored == authored && previous.first >= project.lastModified())) {
+                    continue;
+                }
             }
             benchWeapons.insert(id, { project.lastModified(), QJsonObject{
                 { "id", id },
-                { "plugin", testbedPlugin(weapon, source) },
+                { "plugin", weapon.section(':', 0, 0) },
                 { "weapon", weapon },
                 { "project", project.filePath() },
                 { "source", source },
                 { "name", document["weaponName"].toString(document["weaponEditorId"].toString(id)) },
                 { "bench", true },
+                { "authored", authored },
             } });
         }
         for (const auto& entry : benchWeapons) {
