@@ -65,8 +65,15 @@ CollisionResult bakeCollision(CollisionProfile input,const std::shared_ptr<std::
         const auto& s=input.settings;
         for(auto& source:input.sources){checkCancel(stop);if(source.vertices.size()>65536||source.triangles.size()>65536)throw std::runtime_error("Source exceeds ROCK's supported triangle budget");
             if(!source.worldIncluded)continue;input.inputTriangles+=source.triangles.size();if(input.inputTriangles>1000000)throw std::runtime_error("Snapshot triangle budget exceeded");
+            // Solver tolerances are game units. Native mesh vertices may be
+            // tiny under a large node scale (the SCAR Colt magazine is 74.6x).
+            // Fit the full linear transform, without world translation, then
+            // retain the existing source-local hull storage contract.
+            auto solverFrame=source.frame;solverFrame.setColumn(3,QVector4D(0,0,0,1));
+            bool invertible=false;const auto solverInverse=solverFrame.inverted(&invertible);
+            if(!invertible)throw std::runtime_error("Singular collision source frame");
             std::vector<rock::weapon_gap_decomposition::Triangle> mesh;std::vector<Point> all;
-            for(auto tri:source.triangles){rock::weapon_gap_decomposition::Triangle t;for(int i=0;i<3;++i){if(tri[i]>=quint32(source.vertices.size()))throw std::runtime_error("Invalid triangle index");auto p=source.vertices[int(tri[i])];if(!finite(p.x())||!finite(p.y())||!finite(p.z()))throw std::runtime_error("Non-finite source geometry");t[i]={p.x(),p.y(),p.z()};all.push_back({p.x(),p.y(),p.z()});}mesh.push_back(t);}
+            for(auto tri:source.triangles){rock::weapon_gap_decomposition::Triangle t;for(int i=0;i<3;++i){if(tri[i]>=quint32(source.vertices.size()))throw std::runtime_error("Invalid triangle index");auto p=solverFrame.map(source.vertices[int(tri[i])]);if(!finite(p.x())||!finite(p.y())||!finite(p.z()))throw std::runtime_error("Non-finite source geometry");t[i]={p.x(),p.y(),p.z()};all.push_back({p.x(),p.y(),p.z()});}mesh.push_back(t);}
             all=dedup(all,s.dedup);if(!volume(all)){input.warnings<<source.name+": degenerate surface omitted (ROCK also requires a volume)";continue;}
             rock::weapon_gap_decomposition::Result partition;finish(rock::weapon_gap_decomposition::decomposeDeferred(mesh,s.gap,.01,partition),stop);
             std::vector<std::vector<Point>> children;bool accepted=!partition.pieces.empty();
@@ -78,7 +85,7 @@ CollisionResult bakeCollision(CollisionProfile input,const std::shared_ptr<std::
                 else {std::vector<std::vector<Point>> split;finish(rock::weapon_collision_geometry_math::splitOversizedClusterDeferred(all,252,split),stop);for(auto& points:split){rock::weapon_collision_geometry_math::ConvexSupportFitResult<Point> child;finish(rock::weapon_collision_geometry_math::fitConvexSupportPointCloudDeferred(points,s.targetPoints,252,float(s.error),false,child),stop);children.push_back(child.accepted&&!child.points.empty()?std::move(child.points):std::move(points));}}
                 input.warnings<<source.name+": gap partition rejected; complete source fallback used";}
             if(partition.budgetLimited)input.warnings<<source.name+": ROCK's gap budget was reached; unresolved concavities may remain";
-            int child=0;for(const auto& points:children){checkCancel(stop);CollisionHull hull;hull.source=source.key;hull.name=source.name+QString(" / %1").arg(++child);for(auto p:points)hull.points.append({p.x,p.y,p.z});if(!collisionHullFaces(hull,error))throw std::runtime_error((hull.name+": "+error).toStdString());input.hulls.append(std::move(hull));if(input.hulls.size()>1024)throw std::runtime_error("Preview exceeded 1024 hulls; select a smaller part");}
+            int child=0;for(const auto& points:children){checkCancel(stop);CollisionHull hull;hull.source=source.key;hull.name=source.name+QString(" / %1").arg(++child);for(auto p:points)hull.points.append(solverInverse.map(QVector3D(p.x,p.y,p.z)));if(!collisionHullFaces(hull,error))throw std::runtime_error((hull.name+": "+error).toStdString());input.hulls.append(std::move(hull));if(input.hulls.size()>1024)throw std::runtime_error("Preview exceeded 1024 hulls; select a smaller part");}
         }
         if(!input.valid())throw std::runtime_error("No volumetric collision shapes could be generated");
         out.profile=std::move(input);
