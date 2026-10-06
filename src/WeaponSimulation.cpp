@@ -247,12 +247,15 @@ void WeaponSimulation::drag(float value) {
     }
     if(mechanism==WeaponMechanism::Ar15) {
         if(openBolt){handle=std::clamp(value,0.f,1.f);if(handle>=.95f){slide=1;slideLocked=true;}else if(!slideLocked)slide=handle;return;}
-        if(notchLatched){handle=slide=1;return;}
+        if(notchLatched){
+            if(magazine.seated()&&magazineRounds>0&&std::abs(value-grabStart)>.025f){notchLatched=slideLocked=false;_cycleArmed=true;}
+            else {handle=slide=1;return;}
+        }
         handle=std::clamp(value,0.f,1.f);
         if(handle>=.95f) {
             slideLocked=false;
             if(!_cycleArmed){if(chambered){chambered=false;++roundsEjected;}_cycleArmed=true;}
-            if(hkSlap){notchLatched=slideLocked=true;handle=slide=1;return;}
+            if(hkSlap&&magazineRounds==0&&!_pullSnapshot.notch){notchLatched=slideLocked=true;handle=slide=1;return;}
         }
         if(!slideLocked)slide=handle;
         if(slide<=.001f&&!slideLocked)finishClosing();

@@ -62,6 +62,10 @@ namespace reloadmaker
             const float lengthSquared = stroke.x*stroke.x + stroke.y*stroke.y + stroke.z*stroke.z;
             require(lengthSquared >= .0001f, "The operating contact has no measurable controller stroke");
             require(_simulation.action == SimulationAction::Held || _simulation.grab(), "Finish the native action before pulling");
+            if (_simulation.hkSlap && _simulation.notchLatched &&
+                delta.x*delta.x+delta.y*delta.y+delta.z*delta.z >= lengthSquared*.0025f) {
+                _simulation.drag(_simulation.grabStart+.05f);
+            }
             const float movement = (delta.x*stroke.x + delta.y*stroke.y + delta.z*stroke.z) / lengthSquared;
             _simulationTimer->stop();
             dragSimulation(std::clamp(_simulation.grabStart + movement, 0.f, kMaximumPullProgress));
