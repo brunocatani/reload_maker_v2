@@ -425,6 +425,14 @@ namespace reloadmaker
             if (!magazinePart || (synthesized && !track.surface)) {
                 continue;
             }
+            // An installed model can repeat the receiver's empty timing bones.
+            // The runtime selector is a bone name; include the physical owner,
+            // not an additional empty copy with a different mount transform.
+            if (!track.surface && std::any_of(recipe.tracks.cbegin(), recipe.tracks.cend(), [&](const auto& other) {
+                    return &other != &track && other.anchor.anchorName == track.anchor.anchorName;
+                })) {
+                continue;
+            }
             const int frame = sampledMagazinePayload() ? _m1aLoadedMagazineFrame : 0;
             const auto pose = sampledMagazinePayload() ? normalizedPart(track, frame) : track.poses[0];
             if (pose.scale.x > 1e-5f) {
@@ -467,6 +475,12 @@ namespace reloadmaker
             for (int depth = 0; depth < model->getBlockCount(); ++depth) {
                 const auto parent = model->getBlockIndex(model->getParent(candidate));
                 if (!parent.isValid() || parent == root) {
+                    break;
+                }
+                // Nested attachment aliases may repeat the carrier's name.
+                // Hiding that name would also hide the outer magazine body;
+                // keep the payload's narrower child selector instead.
+                if (model->get<QString>(parent, "Name") == model->get<QString>(root, "Name")) {
                     break;
                 }
                 const bool body = std::any_of(_magazineVisuals.begin(), _magazineVisuals.end(), [&](const auto& other) {

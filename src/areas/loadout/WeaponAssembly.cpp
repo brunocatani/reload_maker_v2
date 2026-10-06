@@ -391,7 +391,7 @@ namespace reloadmaker
                 return false;
             }
             const QString name = model->get<QString>(index, "Name");
-            const int bone = _skeleton.boneIndex(name);
+            const int bone = _attachmentBoneAliases.contains(block) ? -1 : _skeleton.boneIndex(name);
             const bool isCanonical = bone >= 0 &&
                 _canonicalNodes.value(normalizedKey(name)) == index;
             const bool part = bone >= 0 && bone != _weaponBoneIndex &&
@@ -591,6 +591,7 @@ namespace reloadmaker
             _partRoots.clear();
             _partSurfaces.clear();
             _partAlignmentAnchors.clear();
+            _attachmentBoneAliases.clear();
             _attachmentConnections.clear();
             _remappedAttachments.clear();
             _slotOverlay->setCallouts({});
@@ -953,6 +954,18 @@ namespace reloadmaker
         if (!setNodeTransform(root, placement)) {
             error = QStringLiteral("Cannot place attachment %1").arg(record.editorId);
             return false;
+        }
+        if (target.mountedBone >= 0) {
+            // The actual parent already animates this attachment. Its own
+            // same-named node is an authored static bridge, not a second
+            // animation driver; payload descendants keep their own bindings.
+            for (int block = firstBlock; block < destination.getBlockCount(); ++block) {
+                const auto node = destination.getBlockIndex(block);
+                if (destination.blockInherits(node, "NiNode") &&
+                    _skeleton.boneIndex(destination.get<QString>(node, "Name")) == target.mountedBone) {
+                    _attachmentBoneAliases.insert(block);
+                }
+            }
         }
         QString detail;
         if (target.suppliedBone >= 0 && !recordPartAlignment(firstBlock, destination.getBlockCount(), target.suppliedBone, detail)) {

@@ -119,6 +119,7 @@ namespace reloadmaker
         _partRoots.clear();
         _partSurfaces.clear();
         _partAlignmentAnchors.clear();
+        _attachmentBoneAliases.clear();
         _attachmentConnections.clear();
         _remappedAttachments.clear();
         if (_slotOverlay) { _slotOverlay->setCallouts({}); }
@@ -417,6 +418,34 @@ namespace reloadmaker
                 if (incoming->blockInherits(node, "NiNode") &&
                     incoming->get<QString>(node, "Name").compare(parentName, Qt::CaseInsensitive) == 0) {
                     suppliesParent = true;
+                    break;
+                }
+            }
+        }
+        if (suppliesParent) {
+            // An attachment may bring payload bones while its rigid body is
+            // outside every animated branch (the 1911 extended magazine).
+            // That body must stay attached to the parent's actual connect
+            // bone. Moving its root up to the semantic parent strands it.
+            for (int block = 0; block < incoming->getBlockCount(); ++block) {
+                auto node = incoming->getBlockIndex(block);
+                if (!incoming->blockInherits(node, "BSTriShape") && !incoming->blockInherits(node, "NiTriBasedGeom")) {
+                    continue;
+                }
+                bool animated = false;
+                for (int depth = 0; node.isValid() && depth < incoming->getBlockCount(); ++depth) {
+                    if (incoming->blockInherits(node, "NiNode")) {
+                        const int owner = _skeleton.boneIndex(incoming->get<QString>(node, "Name"));
+                        if (owner >= 0 && owner != _weaponBoneIndex && isDescendantOf(owner, _weaponBoneIndex)) {
+                            animated = true;
+                            break;
+                        }
+                    }
+                    node = incoming->getBlockIndex(incoming->getParent(node));
+                }
+                if (!animated) {
+                    suppliesParent = false;
+                    result.mountedBone = bone;
                     break;
                 }
             }

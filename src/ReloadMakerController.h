@@ -131,6 +131,7 @@ namespace reloadmaker
             Quaternionf rotation{};
             float scale{ 1.0f };
             int suppliedBone{ -1 };
+            int mountedBone{ -1 }; // incoming copy stays a static bridge to this parent bone
             int ownerRoot{ -1 };
             QString error;
 
@@ -1546,6 +1547,7 @@ namespace reloadmaker
         // Append-only assembly block IDs, discarded on source/config rebuild.
         // Only models explicitly supplying their connection bone populate this.
         QHash<int, int> _partAlignmentAnchors;
+        QSet<int> _attachmentBoneAliases;
         AttachmentConnections _attachmentConnections;
         QListWidget* _animationList{ nullptr };
         QPlainTextEdit* _details{ nullptr };
