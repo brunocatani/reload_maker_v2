@@ -96,14 +96,15 @@ namespace reloadmaker
         const bool handle = action == CueAction::ChargingHandle || action == CueAction::ReciprocatingBolt;
 
         const auto out = pick(reload, [](const QString& name) -> std::optional<int> {
-            if (!name.endsWith(QLatin1String("magout")) || name.endsWith(QLatin1String("clothmagout"))) {
+            if (!endsWithAny(name, { "magout", "drumout" }) || name.endsWith(QLatin1String("clothmagout"))) {
                 return std::nullopt;
             }
             return name.endsWith(QLatin1String("reloadmagout")) ? 1 : 0;
         });
         if (out) {
             result.sounds["mag-out"] = out->sound;
-            result.prefix = out->sound.left(base(out->sound).size() - int(qstrlen("magout")));
+            const int suffix = base(out->sound).endsWith(QLatin1String("drumout")) ? int(qstrlen("drumout")) : int(qstrlen("magout"));
+            result.prefix = out->sound.left(base(out->sound).size() - suffix);
         } else if (!reload.isEmpty()) {
             QString common = reload.front().sound;
             for (const auto& sound : reload) {
@@ -153,7 +154,7 @@ namespace reloadmaker
                                            action == CueAction::ReciprocatingBolt ? QStringList{ "boltrelease" } : QStringList{});
         result.sounds["forward"] = operatingSound(forwardRank, forwardNames);
 
-        if (const auto release = pick(reload, operating({ "magrelease" }))) {
+        if (const auto release = pick(reload, operating({ "magrelease", "drumrelease" }))) {
             result.sounds["mag-release"] = release->sound;
         } else {
             result.sounds["mag-release"] = fromCatalog({ "MagRelease" });
@@ -184,13 +185,13 @@ namespace reloadmaker
                 return magIn ? std::optional<int>(0) : std::nullopt;
             });
             const auto slap = later([](const QString& name) {
-                return endsWithAny(name, { "magslap", "magslam" }) ? std::optional<int>(0) : std::nullopt;
+                return endsWithAny(name, { "magslap", "magslam", "drumhit", "drumslap" }) ? std::optional<int>(0) : std::nullopt;
             });
             if (plainIn) {
                 seat = plainIn->sound;
             } else if (slap) {
                 seat = slap->sound;
-            } else if (base(entry).endsWith(QLatin1String("magin")) && !base(entry).endsWith(QLatin1String("reloadmagin"))) {
+            } else if (endsWithAny(base(entry), { "magin", "drumin" }) && !base(entry).endsWith(QLatin1String("reloadmagin"))) {
                 seat = entry; // one insertion sound: it seats the magazine
                 entry.clear();
             }
