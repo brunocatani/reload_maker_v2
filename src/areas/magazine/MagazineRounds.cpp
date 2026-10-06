@@ -48,7 +48,7 @@ namespace reloadmaker
         QModelIndex current = node;
         for (int depth = 0; current.isValid() && current != carrier && depth < model->getBlockCount(); ++depth) {
             const auto parent = model->getBlockIndex(model->getParent(current));
-            auto name = model->get<QString>(current, "Name");
+            auto name = authoringNodeName(*model, current);
             if (name.isEmpty()) {
                 const int place = parent.isValid() ? model->getChildLinks(model->getBlockNumber(parent)).indexOf(model->getBlockNumber(current)) : -1;
                 name = '#' + QString::number(place);

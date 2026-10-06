@@ -5,6 +5,7 @@
 #include "StudioPaths.h"
 #include "StudioWindow.h"
 #include "areas/collisions/CollisionFrames.h"
+#include "areas/loadout/SceneTree.h"
 #include "commands/CommandSupport.h"
 #include "gl/glshape.h"
 #include "glview.h"
@@ -120,7 +121,7 @@ namespace reloadmaker
             QStringList path;
             auto parent = node;
             for (int depth = 0; parent.isValid() && depth < model->getBlockCount(); ++depth) {
-                path.prepend(model->get<QString>(parent, "Name"));
+                path.prepend(authoringNodeName(*model, parent));
                 if (parent == carrierNode) {
                     break;
                 }

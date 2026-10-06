@@ -137,7 +137,7 @@ namespace reloadmaker
         QStringList path;
         auto node = leaf;
         for (int depth = 0; node.isValid() && depth < model->getBlockCount(); ++depth) {
-            auto name = model->get<QString>(node, "Name");
+            auto name = authoringNodeName(*model, node);
             if (name.isEmpty()) {
                 name = QString("unnamed:%1").arg(model->getBlockNumber(node));
             }
