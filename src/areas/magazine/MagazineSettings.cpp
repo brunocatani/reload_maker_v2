@@ -42,10 +42,15 @@ namespace reloadmaker
             fail("Choose the operating and magazine roles first");
         }
         QJsonObject settings = saved;
+        if (!settings.isEmpty()) {
+            MagazineGuide guide;QString error;
+            if (!readMagazineGuide(settings, guide, error)) fail(error);
+            settings = magazineGuideJson(guide);
+        }
         if (settings.isEmpty() && _magazineRail) {
             const auto rail = magazineRailJson(*_magazineRail);
             settings = {
-                { "version", 1 },
+                { "version", 2 },
                 { "recipeId", _reloadRecipe->id },
                 { "outwardInConnection", rail["outwardInConnection"] },
                 { "travel", rail["travel"] },
@@ -275,7 +280,7 @@ namespace reloadmaker
         const auto& carrier = _reloadRecipe->tracks[_simulationRig->magazine].anchor;
         QJsonArray movements;
         for (const auto& movement : _mechanisms) {
-            if (sameMechanismPart(movement.anchor, carrier)) {
+            if (compatibleMechanismPart(movement.anchor, carrier)) {
                 movements.append(QJsonObject{ { "id", movement.id }, { "name", movement.name } });
             }
         }
@@ -311,6 +316,7 @@ namespace reloadmaker
             if (!readMagazineSetup(request["settings"].toObject(), value, error)) {
                 fail(error);
             }
+            value.emptyTrack = mapRecipeTrack(value.trackAnchors, *_reloadRecipe, value.emptyTrack);
             checkMagazineSetup(value);
             value.recipeId = _reloadRecipe->id;
             value.trackAnchors = recipeTrackAnchors(*_reloadRecipe);

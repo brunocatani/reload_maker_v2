@@ -63,13 +63,20 @@ bool buildMagazineRail(const ReloadRecipe& r,int full,const QString& name,const 
     if(rail.outward.lengthSquared()<.9f){error="No aligned magazine extraction segment was found.";return false;}
     float magazineMin=std::numeric_limits<float>::max(),weaponMax=-magazineMin;
     float radius=0;
-    for(const auto& p:body){magazineMin=std::min(magazineMin,QVector3D::dotProduct(p,rail.outward));const auto d=p-rail.handle;radius=std::max(radius,(d-rail.outward*QVector3D::dotProduct(d,rail.outward)).length());}
+    for(const auto& p:body){magazineMin=std::min(magazineMin,QVector3D::dotProduct(p,rail.outward));const auto d=p-(low+high)*.5f;radius=std::max(radius,(d-rail.outward*QVector3D::dotProduct(d,rail.outward)).length());}
     for(const auto& p:weapon){if(!finite(p)){error="Invalid native weapon vertex.";return false;}weaponMax=std::max(weaponMax,QVector3D::dotProduct(p,rail.outward));}
     const float clearance=size*.035f;
     rail.magazineMinProjection=magazineMin;rail.weaponMaxProjection=weaponMax;rail.clearance=clearance;
+    // Native attachment pivots can be outside the actual magazine. Locate
+    // the leading end in the seated body instead; the weapon-side endpoint
+    // and the loose magazine then describe the same physical mating point.
+    rail.handle+=rail.outward*(magazineMin-QVector3D::dotProduct(rail.handle,rail.outward));
+    rail.connection.translation={rail.handle.x(),rail.handle.y(),rail.handle.z()};
     rail.travel=weaponMax-magazineMin+clearance;
     rail.captureRadius=std::max(size*.035f,radius*.55f);rail.releaseMargin=rail.captureRadius*.6f;
-    if(!std::isfinite(rail.travel)||rail.travel<size*.3f||rail.travel>size*8){error="Magazine clearance is inconsistent with this assembly.";return false;}
+    // Insertion depth belongs to the socket, not the complete magazine length.
+    // Extended bodies can be much longer while sharing the same shallow well.
+    if(!std::isfinite(rail.travel)||rail.travel<=clearance||rail.travel>size*8){error="Magazine clearance is inconsistent with this assembly.";return false;}
     out=rail;return true;
 }
 Transformf magazineAnimationDelta(const MagazineRail& rail,float distance) {
@@ -121,7 +128,7 @@ bool buildManualMagazineAnimation(const ReloadRecipe& recipe,const PartMechanism
     const QVector<QVector3D>& body,MagazineRail& rail,QString& error) {
     error.clear();
     if(rail.fullTrack<0||rail.fullTrack>=recipe.tracks.size()||body.isEmpty()||
-       !sameMechanismPart(movement.anchor,recipe.tracks[rail.fullTrack].anchor)||!validateMechanism(movement,error)) {
+       !compatibleMechanismPart(movement.anchor,recipe.tracks[rail.fullTrack].anchor)||!validateMechanism(movement,error)) {
         if(error.isEmpty())error="Choose a saved movement for the exact full magazine carrier";return false;
     }
     const auto& rest=recipe.tracks[rail.fullTrack].poses.front();Transformf inverse,startInverse;
@@ -184,7 +191,7 @@ QJsonObject magazineRailJson(const MagazineRail& r) {
     if(invertUniformTransform(r.connection,inverse))localAxis=v(rotated(inverse.rotation,{r.outward.x(),r.outward.y(),r.outward.z()}));
     QJsonObject result{{"version",r.motion.isEmpty()?1:3},{"connectionName",r.connectionName},{"connection",connection},{"outwardInWeapon",array(r.outward)},
         {"outwardInConnection",array(localAxis)},{"handleInWeapon",array(r.handle)},{"travel",r.travel},{"captureRadius",r.captureRadius},
-        {"releaseMargin",r.releaseMargin},{"fullTrack",r.fullTrack},{"emptyTrack",r.emptyTrack},{"sharedBody",r.sharedBody()},{"animationSeconds",.6},
+        {"releaseMargin",r.releaseMargin},{"fullTrack",r.fullTrack},{"emptyTrack",r.emptyTrack},{"sharedBody",r.sharedBody()},{"animationSeconds",.6},{"inputReference","magazine-connection"},
         {"magazineMinProjection",r.magazineMinProjection},{"weaponMaxProjection",r.weaponMaxProjection},{"clearance",r.clearance}};
     if(!r.motion.isEmpty()) {
         QJsonArray samples;

@@ -8,6 +8,7 @@
 #include "SlotOverlay.h"
 #include "StudioWindow.h"
 #include "areas/loadout/LoadoutNames.h"
+#include "areas/loadout/SceneTree.h"
 #include "data/niftypes.h"
 #include "gl/glscene.h"
 #include "glview.h"
@@ -376,6 +377,7 @@ namespace reloadmaker
     {
         _nodeBindings.clear();
         _sceneNodes.clear();
+        _auxiliaryReloadNodes.clear();
         NifModel* model = activeModel();
         if (!model || !_skeleton.valid()) {
             error = QStringLiteral("No scene or skeleton for binding");
@@ -384,6 +386,39 @@ namespace reloadmaker
         QVector<ScenePoseNode> nodes;
         QHash<int, int> blockToNode;
         QVector<int> canonical(_skeleton.bones.size(), -1);
+        // A mounted secondary weapon can bring another complete magazine rig.
+        // Keep its geometry, but it must not acquire the host rifle's HKX bones.
+        QHash<int,SlotKey> partOwners;
+        for(auto it=_partRoots.cbegin();it!=_partRoots.cend();++it)partOwners.insert(model->getBlockNumber(it.value()),it.key());
+        const auto ownerOf=[&](QModelIndex node) {
+            for(int depth=0;node.isValid()&&depth<model->getBlockCount();++depth) {
+                const int block=model->getBlockNumber(node);
+                if(partOwners.contains(block))return block;
+                node=model->getBlockIndex(model->getParent(node));
+            }
+            return -1;
+        };
+        QSet<SlotKey> primarySlots;
+        if(const auto* receiver=resolvedReceiverObjectMod())primarySlots.insert(configurationSlotKey(*receiver));
+        if(const auto* config=configuration())for(const auto& slot:config->entries())
+            if(poseRecordKey(slot.attachPoint).compare("Fallout4.esm:05d4d7",Qt::CaseInsensitive)==0)primarySlots.insert(slot.key);
+        for(const auto& axis:reloadAxes())primarySlots.insert(axis.second);
+        const auto primary=[&](int owner){return owner<0||primarySlots.contains(partOwners.value(owner));};
+        QVector<int> magazineOwners;
+        bool primaryMagazine=false;
+        for(int block=0;block<model->getBlockCount();++block) {
+            const auto node=model->getBlockIndex(block);
+            if(!model->blockInherits(node,"NiNode")||model->get<QString>(node,"Name").compare("WeaponMagazine",Qt::CaseInsensitive)!=0)continue;
+            bool surface=false;
+            for(int shape=0;shape<model->getBlockCount()&&!surface;++shape) {
+                const auto geometry=model->getBlockIndex(shape);
+                surface=(model->blockInherits(geometry,"BSTriShape")||model->blockInherits(geometry,"NiGeometry"))&&isWithinBlock(*model,geometry,node);
+            }
+            if(!surface)continue;
+            const int owner=ownerOf(node);magazineOwners.append(owner);primaryMagazine|=primary(owner);
+        }
+        QSet<int> auxiliaryOwners;
+        if(primaryMagazine)for(const int owner:magazineOwners)if(!primary(owner))auxiliaryOwners.insert(owner);
         for (int block = 0; block < model->getBlockCount(); ++block) {
             const QModelIndex index = model->getBlockIndex(block);
             if (!model->blockInherits(index, "NiNode")) { continue; }
@@ -393,12 +428,13 @@ namespace reloadmaker
                 return false;
             }
             const QString name = model->get<QString>(index, "Name");
-            const int bone = _attachmentBoneAliases.contains(block) ? -1 : _skeleton.boneIndex(name);
+            const int bone = _attachmentBoneAliases.contains(block)||auxiliaryOwners.contains(ownerOf(index)) ? -1 : _skeleton.boneIndex(name);
             const bool isCanonical = bone >= 0 &&
                 _canonicalNodes.value(normalizedKey(name)) == index;
             const bool part = bone >= 0 && bone != _weaponBoneIndex &&
                 isDescendantOf(bone, _weaponBoneIndex);
             const int node = nodes.size();
+            if(auxiliaryOwners.contains(ownerOf(index)))_auxiliaryReloadNodes.insert(node);
             nodes.append(ScenePoseNode{ -1, isCanonical || part ? bone : -1, rest });
             _sceneNodes.append(QPersistentModelIndex(index));
             blockToNode.insert(block, node);

@@ -2,6 +2,7 @@
 // the active keywords, the clips it lists resolved through its animation
 // search stack, and reading those clip resources.
 #include "ReloadMakerController.h"
+#include "SourcePolicy.h"
 
 #include <QFileInfo>
 #include <QSet>
@@ -60,7 +61,7 @@ namespace reloadmaker
             }
         }
         for (const ObjectModRecord* objectMod : configuredObjectMods()) {
-            if (!objectMod) {
+            if (!objectMod || auxiliaryReloadMode(poseRecordKey(objectMod->formId))) {
                 continue;
             }
             for (const std::uint32_t keyword : objectMod->addedKeywords) {

@@ -401,11 +401,8 @@ namespace reloadmaker
                     && invertUniformTransform(carrier, inverse),
                 "Cannot establish the magazine carrier frame");
         magazine["modelInMagazine"] = runtimePose(composed(inverse, referenceWorld));
-        const auto referenceSetup = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineReference").toObject();
-        if (!referenceSetup.isEmpty() && referenceSetup.value("connectionMode") != "source") {
-            const auto point = composed(inverse, rail.connection).translation;
-            magazine["capturePointInMagazine"] = QJsonArray{ point.x, point.y, point.z };
-        }
+        const auto point = composed(inverse, Transformf{{rail.handle.x(), rail.handle.y(), rail.handle.z()}}).translation;
+        magazine["capturePointInMagazine"] = QJsonArray{ point.x, point.y, point.z };
     }
 
     // The magazine's visible parts at rest in the carrier frame (a sampled

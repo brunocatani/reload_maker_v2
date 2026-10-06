@@ -29,6 +29,11 @@ namespace reloadmaker {
         auto other=b;other.anchorKind=a.anchorKind;
         return sameGripAnchor(a,other);
     }
+    bool compatibleMechanismPart(const HandPosePlacement& a,const HandPosePlacement& b){
+        if(!validAnchor(a)||!validAnchor(b))return false;
+        auto other=b;other.ownerRecord=a.ownerRecord;other.anchorKind=a.anchorKind;
+        return sameGripAnchor(a,other);
+    }
     bool validateMechanism(const PartMechanism& part,QString& error){
         error.clear();
         if(!uuid(part.id)||part.name.trimmed().isEmpty()||part.name.size()>128||part.weaponRecord.isEmpty()||part.revision<0||!validAnchor(part.anchor)||part.stages.size()>32||part.followers.size()>64){error="Invalid part identity, anchor or definition size";return false;}

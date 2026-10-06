@@ -33,6 +33,8 @@ namespace reloadmaker {
     [[nodiscard]] bool validateMechanism(const PartMechanism& part,QString& error);
     // Installed/animated labels may describe the same owner-qualified scene frame.
     [[nodiscard]] bool sameMechanismPart(const HandPosePlacement& a,const HandPosePlacement& b);
+    // Runtime/preview reuse of an explicitly selected movement on the same model/node.
+    [[nodiscard]] bool compatibleMechanismPart(const HandPosePlacement& a,const HandPosePlacement& b);
     [[nodiscard]] QByteArray encodeMechanism(const PartMechanism& part,QString& error);
     [[nodiscard]] bool decodeMechanism(const QByteArray& bytes,PartMechanism& part,QString& error);
     [[nodiscard]] Transformf mechanismDelta(const PartMechanism& part,float path);

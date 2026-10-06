@@ -214,7 +214,7 @@ namespace reloadmaker
                 continue;
             }
             const int node = _sceneNodes.indexOf(anchor.node);
-            if (node < 0 || _assemblyNodes[node].boneIndex >= 0 || _reloadTrackNodes.contains(node)) {
+            if (node < 0 || _auxiliaryReloadNodes.contains(node) || _assemblyNodes[node].boneIndex >= 0 || _reloadTrackNodes.contains(node)) {
                 continue;
             }
             ReloadTrack track;

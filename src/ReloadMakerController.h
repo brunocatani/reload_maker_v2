@@ -1553,6 +1553,7 @@ namespace reloadmaker
         // Only models explicitly supplying their connection bone populate this.
         QHash<int, int> _partAlignmentAnchors;
         QSet<int> _attachmentBoneAliases;
+        QSet<int> _auxiliaryReloadNodes;
         AttachmentConnections _attachmentConnections;
         QListWidget* _animationList{ nullptr };
         QPlainTextEdit* _details{ nullptr };

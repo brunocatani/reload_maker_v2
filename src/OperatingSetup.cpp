@@ -32,6 +32,21 @@ bool readOperatingSetup(const QJsonObject& json,OperatingSetup& output,QString& 
     if(value.mode=="manual"&&!value.movements.contains(value.parts.operating))return fail("Assign the saved operating movement");
     output=std::move(value);error.clear();return true;
 }
+bool remapOperatingSetup(OperatingSetup& setup,const ReloadRecipe& recipe,QString& error) {
+    const auto map=[&](int& track) {
+        const int mapped=mapRecipeTrack(setup.trackAnchors,recipe,track);
+        if(mapped<0){error="An authored operating part is missing or ambiguous in this assembly";return false;}
+        track=mapped;return true;
+    };
+    if(!map(setup.parts.operating)||!map(setup.parts.bolt)||!map(setup.parts.magazine))return false;
+    for(auto& track:setup.parts.followers)if(!map(track))return false;
+    QHash<int,QString> movements;
+    for(auto it=setup.movements.cbegin();it!=setup.movements.cend();++it) {
+        int track=it.key();if(!map(track)||movements.contains(track)){error="An authored movement target is missing or ambiguous";return false;}
+        movements.insert(track,it.value());
+    }
+    setup.movements=movements;setup.trackAnchors=recipeTrackAnchors(recipe);setup.recipeId=recipe.id;return true;
+}
 QJsonObject operatingSetupJson(const OperatingSetup& value) {
     QJsonArray followers,movements;for(int track:value.parts.followers)followers.append(track);
     auto keys=value.movements.keys();std::sort(keys.begin(),keys.end());for(int track:keys)movements.append(QJsonObject{{"track",track},{"id",value.movements[track]}});

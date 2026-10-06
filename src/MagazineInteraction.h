@@ -19,7 +19,7 @@ namespace reloadmaker {
     enum class MagazinePhase { Seated, Absent, Outgoing, OutsideEmpty, Incoming, Free, Rail };
     struct MagazineMotion {
         MagazinePhase phase{MagazinePhase::Seated};
-        QVector3D offset; // Free: visual center offset. Guided: straight input offset.
+        QVector3D offset; // Free: mating point offset. Guided: straight input offset.
         float distance{0}, elapsed{0};
         bool seated()const{return phase==MagazinePhase::Seated;}
         bool visible()const{return phase!=MagazinePhase::Absent;}

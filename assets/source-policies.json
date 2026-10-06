@@ -29,46 +29,6 @@
           "DiaRifles.esp:00067b"
         ]
       }
-    },
-    {
-      "id": "SREPService",
-      "weapon": "1CAS_ServiceRifle.esp:00213f",
-      "policy": {
-        "blockedMods": [
-          "1CAS_ServiceRifle.esp:00c7c0",
-          "1CAS_ServiceRifle.esp:00d847"
-        ]
-      }
-    },
-    {
-      "id": "SREPAR10",
-      "weapon": "1CAS_ServiceRifle.esp:00d875",
-      "policy": {
-        "blockedMods": [
-          "1CAS_ServiceRifle.esp:00c7c0",
-          "1CAS_ServiceRifle.esp:00d847"
-        ]
-      }
-    },
-    {
-      "id": "SREPHoneyBadger",
-      "weapon": "1CAS_ServiceRifle.esp:005bdd",
-      "policy": {
-        "blockedMods": [
-          "1CAS_ServiceRifle.esp:00c7c0",
-          "1CAS_ServiceRifle.esp:00d847"
-        ]
-      }
-    },
-    {
-      "id": "SREPXM16E1",
-      "weapon": "1CAS_ServiceRifle.esp:00d8a5",
-      "policy": {
-        "blockedMods": [
-          "1CAS_ServiceRifle.esp:00c7c0",
-          "1CAS_ServiceRifle.esp:00d847"
-        ]
-      }
     }
   ]
 }

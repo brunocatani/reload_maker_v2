@@ -152,7 +152,7 @@ void ReloadMakerController::showPackBuilder() {
             if(state["operation"]=="build") {
                 text=QString("Build complete.\n%1 objects from the selected packs.\n\nGenerated ESP and bindings:\n%2\n\nUse this folder alongside the authored packs. You control activation and load order in MO2.").arg(result["activeObjects"].toInt()).arg(QDir::toNativeSeparators(result["output"].toString()));
             }
-            else if(state["operation"]=="validate")text=QString("Validated %1 pack(s). The content hashes and object definitions match their export.").arg(result["packs"].toArray().size());
+            else if(state["operation"]=="validate")text=QString("Validated %1 pack(s). The authored records and object definitions are readable and consistent.").arg(result["packs"].toArray().size());
             else text="Add the finished packs to include, then validate or build their local object ESP.";
         }
         report->setPlainText(text);};

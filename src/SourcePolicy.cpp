@@ -3,6 +3,10 @@
 #include <QRegularExpression>
 #include <QSet>
 namespace reloadmaker {
+bool auxiliaryReloadMode(const QString& record) {
+    return record.compare("1CAS_ServiceRifle.esp:00c7c0",Qt::CaseInsensitive)==0||
+        record.compare("1CAS_ServiceRifle.esp:00d847",Qt::CaseInsensitive)==0;
+}
 bool validSourcePolicy(const QJsonObject& policy,QString& error) {
     const auto key=[](const QJsonValue& value){return value.isString()&&value.toString().size()<=261&&QRegularExpression(R"(^[^:/\\\x00]+\.(?:esp|esm|esl):[0-9a-f]{6}$)",QRegularExpression::CaseInsensitiveOption).match(value.toString()).hasMatch()&&!value.toString().endsWith(":000000");};
     for(auto it=policy.begin();it!=policy.end();++it)if(it.key()!="sourceOverride"&&it.key()!="blockedMods"&&it.key()!="magazineCollections"){error="Unknown source compatibility rule";return false;}

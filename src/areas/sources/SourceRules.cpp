@@ -11,7 +11,9 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QMap>
+#include <QSet>
 
+#include <algorithm>
 #include <functional>
 #include <stdexcept>
 
@@ -123,6 +125,45 @@ namespace reloadmaker
                 }
             }
         }
+        // The game retains a levelled OMOD container beside its selected leaf.
+        // Derive these identities from NONE-type Includes records; a name or
+        // an empty model alone must never exempt an unknown physical magazine.
+        QJsonArray collections = policy.policy.value("magazineCollections").toArray();
+        const auto* plugin = currentPlugin();
+        const auto* config = configuration();
+        QSet<std::uint32_t> magazineLeaves;
+        if (plugin && config) {
+            for (const auto& slot : config->entries()) {
+                if (poseRecordKey(slot.attachPoint).compare("Fallout4.esm:05d4d7", Qt::CaseInsensitive) != 0) continue;
+                for (const auto id : slot.choices) {
+                    const auto* mod = config->mod(id);
+                    if (mod && mod->weaponModification) magazineLeaves.insert(id);
+                }
+            }
+            std::function<bool(std::uint32_t, int)> containsMagazine = [&](std::uint32_t id, int depth) {
+                if (magazineLeaves.contains(id)) return true;
+                const auto* mod = plugin->findObjectMod(id);
+                if (depth >= 8 || !mod || mod->weaponModification || !mod->modelPath.isEmpty()) return false;
+                for (const auto& child : mod->includes) if (containsMagazine(child.formId, depth + 1)) return true;
+                return false;
+            };
+            for (const auto& mod : plugin->objectMods) {
+                if (mod.weaponModification || !mod.modelPath.isEmpty() || mod.includes.isEmpty() ||
+                    poseRecordKey(mod.attachPoint).compare("Fallout4.esm:05d4d7", Qt::CaseInsensitive) != 0 ||
+                    !containsMagazine(mod.formId, 0)) continue;
+                const auto record = poseRecordKey(mod.formId);
+                if (std::none_of(collections.cbegin(), collections.cend(), [&](const auto& item) {
+                    return item.toString().compare(record, Qt::CaseInsensitive) == 0;
+                })) collections.append(record);
+            }
+        }
+        if (!collections.isEmpty()) policy.policy["magazineCollections"] = collections;
+        QJsonArray blocked;
+        for (const auto& entry : policy.policy.value("blockedMods").toArray()) {
+            if (!auxiliaryReloadMode(entry.toString())) blocked.append(entry);
+        }
+        if (blocked.isEmpty()) policy.policy.remove("blockedMods");
+        else policy.policy["blockedMods"] = blocked;
         QJsonArray choices;
         for (auto it = modifications.cbegin(); it != modifications.cend(); ++it) {
             choices.append(QJsonObject{ { "record", it.key() }, { "name", it.value() } });

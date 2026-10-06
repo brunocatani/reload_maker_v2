@@ -177,7 +177,7 @@ namespace reloadmaker
             return false;
         }
         const auto movement = std::find_if(_mechanisms.cbegin(), _mechanisms.cend(), [&](const auto& m) { return m.id == movementId; });
-        if (movement == _mechanisms.cend() || movement->stages.isEmpty() || !sameMechanismPart(movement->anchor, recipe.tracks[track].anchor)) {
+        if (movement == _mechanisms.cend() || movement->stages.isEmpty() || !compatibleMechanismPart(movement->anchor, recipe.tracks[track].anchor)) {
             error = "Choose a saved movement authored on this exact native part";
             return false;
         }
@@ -188,7 +188,7 @@ namespace reloadmaker
         for (const auto& follower : movement->followers) {
             int found = -1;
             for (int i = 0; i < recipe.tracks.size(); ++i) {
-                if (sameMechanismPart(follower.anchor, recipe.tracks[i].anchor)) {
+                if (compatibleMechanismPart(follower.anchor, recipe.tracks[i].anchor)) {
                     if (found >= 0) {
                         error = "An authored follower is ambiguous";
                         return false;
@@ -344,7 +344,7 @@ namespace reloadmaker
             OperatingSetup setup;
             QString error;
             SimulationRig checked;
-            if (!readOperatingSetup(request["settings"].toObject(), setup, error) || !buildConfiguredSimulationRig(setup, checked, error)) {
+            if (!readOperatingSetup(request["settings"].toObject(), setup, error) || !remapOperatingSetup(setup, *_reloadRecipe, error) || !buildConfiguredSimulationRig(setup, checked, error)) {
                 throw std::runtime_error(error.toStdString());
             }
             setup.recipeId = _reloadRecipe->id;

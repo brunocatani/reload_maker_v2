@@ -1,4 +1,5 @@
 #include "WeaponAmmunition.h"
+#include "SourcePolicy.h"
 #include <QSet>
 #include <bit>
 #include <cmath>
@@ -18,6 +19,7 @@ WeaponAmmunition resolveWeaponAmmunition(const PluginContent& plugin,const Weapo
     QSet<std::uint32_t> keywords(weapon.keywords.cbegin(),weapon.keywords.cend()),addedKeywords,removedKeywords;
     for(auto id:configuration.activeMods()) {
         const auto* mod=configuration.mod(id);if(!mod)continue;
+        if(auxiliaryReloadMode(recordIdentity(plugin,id)))continue;
         if(!mod->metadataWarning.isEmpty())return fail("Cannot fully resolve ammunition properties for "+mod->editorId+": "+mod->metadataWarning);
         for(auto keyword:mod->removedKeywords)removedKeywords.insert(keyword);
         for(auto keyword:mod->addedKeywords)addedKeywords.insert(keyword);

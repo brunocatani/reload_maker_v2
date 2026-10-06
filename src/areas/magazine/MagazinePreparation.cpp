@@ -62,6 +62,10 @@ namespace reloadmaker
                                _magazineSetup ? _magazineSetup->emptyTrack : -1, guideJson.isEmpty() ? nullptr : &authoredOutward)) {
             return;
         }
+        if (connection.authored) {
+            rail.connection = connection.frame;
+            rail.handle = { connection.frame.translation.x, connection.frame.translation.y, connection.frame.translation.z };
+        }
         if (!buildMagazineMotion(body, rail)) {
             return;
         }
@@ -80,8 +84,17 @@ namespace reloadmaker
         if (!guideJson.isEmpty() && !applyMagazineGuide(guide, rail, _magazineError)) {
             return;
         }
-        if (connection.authored) {
-            rail.handle = { rail.connection.translation.x, rail.connection.translation.y, rail.connection.translation.z };
+        if (guideJson.isEmpty()) {
+            // Preserve full visual clearance while shortening the controller
+            // stroke. A long stock or drum must not demand a long arm gesture.
+            if (rail.motion.isEmpty()) {
+                const auto delta = rail.outward * rail.travel;
+                rail.motion = { Transformf{}, Transformf{{delta.x(), delta.y(), delta.z()}} };
+                rail.motionDistances = { 0, rail.travel };
+            }
+            rail.travel *= .5f;
+            rail.captureRadius = std::min(rail.captureRadius, rail.travel * .2f);
+            rail.releaseMargin = std::min(rail.releaseMargin, rail.captureRadius * .6f);
         }
         _magazineRail = rail;
     }
@@ -241,7 +254,10 @@ namespace reloadmaker
                     }
                 }
             }
-            if (!weapon || (!magazine && shape->isHidden()) || (magazine && owner != rig.magazine)) {
+            // Static mesh tracks and payload bones can sit below the carrier.
+            // Their deepest track is for animation, not assembly membership.
+            const bool inFullCarrier = magazine && isWithinBlock(*model, index, trackNode(rig.magazine));
+            if (!weapon || (!magazine && shape->isHidden()) || (magazine && !inFullCarrier)) {
                 continue;
             }
             if (!shape->reloadMakerSkinBones().isEmpty()) {
@@ -327,14 +343,15 @@ namespace reloadmaker
         auto* model = activeModel();
         const auto& rig = *_simulationRig;
         for (const auto& shape : shapes) {
-            const bool isEmpty = !rail.sharedBody() && shape.track == rail.emptyTrack;
+            const bool isEmpty = !rail.sharedBody() && isWithinBlock(*model, shape.node, _sceneNodes[_reloadTrackNodes[rail.emptyTrack]]);
             if (isEmpty) {
                 emptyBody = true;
             }
-            if (shape.track == rig.magazine) {
+            const bool inFull = isWithinBlock(*model, shape.node, _sceneNodes[_reloadTrackNodes[rig.magazine]]);
+            if (inFull) {
                 fullBody = true;
             }
-            const bool parked = !rig.magazineTracks.contains(shape.track);
+            const bool parked = !inFull && !isEmpty;
             _magazineVisuals.append({ shape.node, model->get<int>(shape.node, "Flags"), isEmpty, shape.track, magazinePieceProposal(shape.node).cartridge,
                                       parked, parked });
         }

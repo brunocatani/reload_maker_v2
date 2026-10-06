@@ -10,5 +10,6 @@ struct OperatingSetup {
     QJsonArray trackAnchors; // The node of each track index (recipeTrackAnchors).
 };
 bool readOperatingSetup(const QJsonObject&,OperatingSetup&,QString&);
+bool remapOperatingSetup(OperatingSetup&,const ReloadRecipe&,QString&);
 QJsonObject operatingSetupJson(const OperatingSetup&);
 }

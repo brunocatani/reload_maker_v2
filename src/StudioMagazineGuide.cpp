@@ -17,7 +17,7 @@ void ReloadMakerController::showMagazineGuide() {
     QJsonObject state;try{state=magazineGuideState();}catch(const std::exception& e){setStatus(e.what(),true);return;}
     auto* dialog=new QDialog(_window);dialog->setObjectName("MagazineGuideDialog");dialog->setAttribute(Qt::WA_DeleteOnClose);dialog->setWindowTitle("Magazine insertion guide");dialog->resize(580,420);
     auto* layout=new QVBoxLayout(dialog);auto* info=new QLabel("Set the straight path your hand follows. The magazine keeps its complete visible insertion/extraction motion, including rocking and rotation. Direction points outward from the seated position, relative to this magazine's connection.");info->setWordWrap(true);layout->addWidget(info);
-    const auto initial=state["settings"].toObject();const auto recipe=_reloadRecipe->id;auto* form=new QFormLayout;layout->addLayout(form);
+    const auto initial=state["settings"].toObject();const auto recipe=_reloadRecipe->id;const auto selection=authoringRecordKey();auto* form=new QFormLayout;layout->addLayout(form);
     auto* preset=new QComboBox;for(const auto* text:{"Custom direction","Connection +X","Connection -X","Connection +Y","Connection -Y","Connection +Z","Connection -Z"})preset->addItem(text);form->addRow("Direction",preset);
     QVector<QDoubleSpinBox*> axes;const auto direction=initial["outwardInConnection"].toArray();
     for(int i=0;i<3;++i){auto* spin=new QDoubleSpinBox;spin->setRange(-1,1);spin->setDecimals(5);spin->setSingleStep(.05);spin->setValue(direction[i].toDouble());form->addRow(QString("Connection %1").arg(QChar('X'+i)),spin);axes.append(spin);}
@@ -35,7 +35,7 @@ void ReloadMakerController::showMagazineGuide() {
         if(_simulationActive&&_magazineRail){_simulation.magazine.animateOut();_simulation.magazine.tick(*_magazineRail,1);updateMagazinePose();}
         status->setText(_magazineRail?"Saved for this assembly. The guide is visible; use GRAB to test entry anywhere along it.":_magazineError);
     }catch(const std::exception& e){status->setText(e.what());}});
-    connect(reset,&QPushButton::clicked,dialog,[=,this]{try{if(!_reloadRecipe||_reloadRecipe->id!=recipe)throw std::runtime_error("Source changed; reopen guide settings");configureMagazineGuide({{"operation","reset"}});dialog->close();}catch(const std::exception& e){status->setText(e.what());}});
+    connect(reset,&QPushButton::clicked,dialog,[=,this]{try{if(!_reloadRecipe||authoringRecordKey()!=selection)throw std::runtime_error("Source changed; reopen guide settings");configureMagazineGuide({{"operation","reset"}});dialog->close();}catch(const std::exception& e){status->setText(e.what());}});
     connect(done,&QPushButton::clicked,dialog,&QDialog::close);dialog->show();
 }
 }

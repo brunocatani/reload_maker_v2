@@ -57,36 +57,7 @@ namespace reloadmaker
         if (!_reloadRecipe || !readOperatingSetup(saved, setup, error)) {
             return false;
         }
-        const auto map = [&](int& track) {
-            const int mapped = mapRecipeTrack(setup.trackAnchors, *_reloadRecipe, track);
-            if (mapped < 0) {
-                const auto node = track >= 0 && track < setup.trackAnchors.size() ? setup.trackAnchors[track].toObject()["name"].toString() : QString::number(track);
-                error = QStringLiteral("The operating setup names %1, which this configuration's reload does not move.").arg(node);
-                return false;
-            }
-            track = mapped;
-            return true;
-        };
-        if (!map(setup.parts.operating) || !map(setup.parts.bolt) || !map(setup.parts.magazine)) {
-            return false;
-        }
-        for (auto& track : setup.parts.followers) {
-            if (!map(track)) {
-                return false;
-            }
-        }
-        QHash<int, QString> movements;
-        for (auto it = setup.movements.cbegin(); it != setup.movements.cend(); ++it) {
-            int track = it.key();
-            if (!map(track)) {
-                return false;
-            }
-            movements.insert(track, it.value());
-        }
-        setup.movements = movements;
-        setup.trackAnchors = recipeTrackAnchors(*_reloadRecipe);
-        setup.recipeId = _reloadRecipe->id;
-        return true;
+        return remapOperatingSetup(setup, *_reloadRecipe, error);
     }
 
     // The rig from the captured reload (rework 14, items 9-13). An AR-15
