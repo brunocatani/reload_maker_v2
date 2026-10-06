@@ -1554,6 +1554,7 @@ namespace reloadmaker
         // Append-only assembly block IDs, discarded on source/config rebuild.
         // Only models explicitly supplying their connection bone populate this.
         QHash<int, int> _partAlignmentAnchors;
+        QHash<int, QString> _attachmentRuntimeNames;
         QSet<int> _attachmentBoneAliases;
         QSet<int> _auxiliaryReloadNodes;
         AttachmentConnections _attachmentConnections;

@@ -120,6 +120,7 @@ namespace reloadmaker
         _partRoots.clear();
         _partSurfaces.clear();
         _partAlignmentAnchors.clear();
+        _attachmentRuntimeNames.clear();
         _attachmentBoneAliases.clear();
         _attachmentConnections.clear();
         _remappedAttachments.clear();

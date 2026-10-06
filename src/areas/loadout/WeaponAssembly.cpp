@@ -629,6 +629,7 @@ namespace reloadmaker
             _partRoots.clear();
             _partSurfaces.clear();
             _partAlignmentAnchors.clear();
+            _attachmentRuntimeNames.clear();
             _attachmentBoneAliases.clear();
             _attachmentConnections.clear();
             _remappedAttachments.clear();
@@ -962,6 +963,7 @@ namespace reloadmaker
             error = QStringLiteral("Cannot paste attachment %1").arg(record.editorId);
             return false;
         }
+        _attachmentRuntimeNames.insert(destination.getBlockNumber(root), "P-" + point.mid(2));
         Transformf placement{ target.translation, target.rotation, { target.scale, target.scale, target.scale } };
         if (target.suppliedBone >= 0) {
             Transformf authoredRoot;

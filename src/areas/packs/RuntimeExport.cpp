@@ -429,6 +429,41 @@ namespace reloadmaker
             require(invertUniformTransform(full.poses[frame], inv), "Invalid payload carrier");
             return composed(composed(full.poses[0], inv), track.poses[frame]);
         };
+        const auto partPath = [&](int index) {
+            auto* model = activeModel();
+            const auto carrier = _sceneNodes[_reloadTrackNodes[rail.fullTrack]];
+            auto node = _sceneNodes[_reloadTrackNodes[index]];
+            QStringList path;
+            for (int depth = 0; node.isValid() && depth < 64; ++depth) {
+                path.prepend(node != carrier && _attachmentRuntimeNames.contains(model->getBlockNumber(node))
+                    ? _attachmentRuntimeNames.value(model->getBlockNumber(node)) : model->get<QString>(node, "Name"));
+                if (node == carrier) {
+                    // The game retains the receiver's named parent and inserts
+                    // the incoming model below a connect-point wrapper. Maker
+                    // separates its animated copy to avoid double animation.
+                    const int block = model->getBlockNumber(carrier);
+                    const int carrierNode = _reloadTrackNodes[rail.fullTrack];
+                    if (_partAlignmentAnchors.contains(block) &&
+                        std::any_of(_nodeBindings.cbegin(), _nodeBindings.cend(), [&](const auto& b) {
+                            return b.nodeIndex != carrierNode && b.boneIndex == _assemblyNodes[carrierNode].boneIndex;
+                        })) {
+                        auto mount = carrier;
+                        QString connection;
+                        for (int depth = 0; mount.isValid() && depth < 64; ++depth) {
+                            connection = _attachmentRuntimeNames.value(model->getBlockNumber(mount));
+                            if (!connection.isEmpty()) break;
+                            mount = model->getBlockIndex(model->getParent(mount));
+                        }
+                        require(!connection.isEmpty(), "Missing native magazine attachment name");
+                        path.prepend(connection);
+                        path.prepend(model->get<QString>(carrier, "Name"));
+                    }
+                    return path.join('/');
+                }
+                node = model->getBlockIndex(model->getParent(node));
+            }
+            throw std::runtime_error("Magazine part is outside the physical carrier");
+        };
         // Every magazine bone the game has is posed, empty or not: in game
         // another attachment may hang below a bone that is empty here. A bone
         // Maker synthesized from the skeleton (for a passive attachment) does
@@ -452,14 +487,14 @@ namespace reloadmaker
             const int frame = sampledMagazinePayload() ? _m1aLoadedMagazineFrame : 0;
             const auto pose = sampledMagazinePayload() ? normalizedPart(track, frame) : track.poses[0];
             if (pose.scale.x > 1e-5f) {
-                parts.append(QJsonObject{ { "name", track.anchor.anchorName }, { "pose", runtimePose(pose) } });
+                parts.append(QJsonObject{ { "name", track.anchor.anchorName }, { "pose", runtimePose(pose) }, { "path", partPath(index) } });
             }
             const bool emptied = _magazineSetup ? sampledMagazinePayload() && index != rail.fullTrack && runtimeFullTrack(index)
                                                 : type == WeaponMechanism::M1A && track.anchor.anchorName.startsWith("WeaponMagazineChild");
             if (emptied) {
                 const auto empty = normalizedPart(track, _m1aEmptyMagazineFrame);
                 if (empty.scale.x > 1e-5f) {
-                    emptyParts.append(QJsonObject{ { "name", track.anchor.anchorName }, { "pose", runtimePose(empty) } });
+                    emptyParts.append(QJsonObject{ { "name", track.anchor.anchorName }, { "pose", runtimePose(empty) }, { "path", partPath(index) } });
                 }
             }
         }
