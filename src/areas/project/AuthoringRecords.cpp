@@ -212,6 +212,7 @@ namespace reloadmaker
         stopSimulation();
         _reloadTemplateAssignments[poseRecordKey(currentWeapon()->formId).toLower()] = id;
         _assignedMechanism = mechanism;
+        refreshHeader();
         noteDocumentChange(QStringLiteral("reload preset"));
         prepareSimulation();
     }

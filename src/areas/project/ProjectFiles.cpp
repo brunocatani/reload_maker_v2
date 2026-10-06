@@ -1068,6 +1068,9 @@ namespace reloadmaker
         });
         restoreProjectLoadout(record);
         restoreProjectAuthoring(record);
+        // Loadout restoration paints the header before the saved preset exists.
+        // Refresh from the restored authoring state even if assembly later fails.
+        refreshHeader();
         rebuildWeapon();
         if (!_clip.valid()) {
             return;
