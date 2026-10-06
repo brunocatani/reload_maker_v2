@@ -98,11 +98,30 @@ namespace reloadmaker
             return;
         }
         _simulation.configureAmmunition(_simulationAmmo.valid() ? _simulationAmmo.capacity : 0, _simulationAmmo.pistol, rig.mechanism);
+        _simulation.fireCycleSeconds = 0;
         if (isBoltActionConfiguration()) {
             _simulation.boltEjectProgress = _boltCycle.ejectProgress;
         }
         if (isRifleConfiguration()) {
             _simulation.fireCycleSeconds = _simulationAmmo.automatic ? _rifleFireInterval : _rifleSingleDuration;
+        } else if (rig.mechanism == WeaponMechanism::PistolSlide && _simulationAmmo.automatic) {
+            const auto single = std::find_if(_animationActions.cbegin(), _animationActions.cend(), [](const auto& action) {
+                return action.family == ActionFamily::Fire && !action.automatic;
+            });
+            const auto automatic = std::find_if(_animationActions.cbegin(), _animationActions.cend(), [](const auto& action) {
+                return action.family == ActionFamily::Fire && action.automatic;
+            });
+            QString error;
+            const auto singleClip = single == _animationActions.cend() ? HkxClip{} :
+                HkxReader::readClip(readAnimationResource(single->resourcePath, error), error);
+            if (!singleClip.valid() || !measureRifleFireInterval(singleClip, automatic == _animationActions.cend() ? nullptr : &*automatic, error)) {
+                if (_simulationError.isEmpty()) {
+                    _simulationError = "Cannot resolve automatic pistol firing cadence: " + error;
+                }
+                updateSimulationControls();
+                return;
+            }
+            _simulation.fireCycleSeconds = _rifleFireInterval;
         }
         _simulationActive = true;
         _reloadPreviewTimer->stop();

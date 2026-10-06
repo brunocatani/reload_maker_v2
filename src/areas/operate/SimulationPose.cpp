@@ -39,11 +39,10 @@ namespace reloadmaker
         }
     }
 
-    // Clip time for the current pose. Rifle fire repeats its clip while the
-    // trigger is held, so its time wraps.
+    // Automatic fire repeats its source clip while the trigger is held.
     float ReloadMakerController::simulationPoseSeconds() const
     {
-        if (isRifleConfiguration() && _simulation.action == SimulationAction::Fire && _clip.durationSeconds > 0) {
+        if ((isRifleConfiguration() || _simulationAmmo.automatic) && _simulation.action == SimulationAction::Fire && _clip.durationSeconds > 0) {
             return std::fmod(_simulation.seconds, _clip.durationSeconds);
         }
         return _simulation.seconds;
