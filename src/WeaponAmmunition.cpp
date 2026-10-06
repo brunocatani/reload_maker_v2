@@ -1,5 +1,7 @@
 #include "WeaponAmmunition.h"
 #include <QSet>
+#include <bit>
+#include <cmath>
 #include <optional>
 
 namespace reloadmaker {
@@ -10,6 +12,7 @@ WeaponAmmunition resolveWeaponAmmunition(const PluginContent& plugin,const Weapo
     if(!weapon.ammoDataKnown)return fail("Weapon ammunition data is missing or truncated.");
     result.sources.append(QJsonObject{{"record",recordIdentity(plugin,weapon.formId)},{"capacity",weapon.ammoCapacity},{"ammo",recordIdentity(plugin,weapon.ammo)}});
     std::optional<int> setCapacity;std::optional<std::uint32_t> setAmmo;std::int64_t added=0;bool hasAdd=false;
+    std::optional<float> capacityMultiplier;
     std::optional<bool> setAutomatic;
     QSet<std::uint32_t> keywords(weapon.keywords.cbegin(),weapon.keywords.cend()),addedKeywords,removedKeywords;
     for(auto id:configuration.activeMods()) {
@@ -27,6 +30,17 @@ WeaponAmmunition resolveWeaponAmmunition(const PluginContent& plugin,const Weapo
             if(p.stepBits!=0)return fail("Rank-scaled ammunition property needs explicit support: "+mod->editorId);
             if(p.property==12) {
                 if(p.value2!=0)return fail("Ranged capacity property needs explicit support: "+mod->editorId);
+                if(p.function==1&&(p.valueType==0||p.valueType==1)) {
+                    // F4SE VR ObjectMod's Mul_Add operator uses float storage
+                    // even for integer targets. A 1.0 modifier adds the base
+                    // capacity once (the vanilla 10mm large mag: 12 -> 24).
+                    const float value=std::bit_cast<float>(p.value1);
+                    if(!std::isfinite(value))return fail("Non-finite capacity multiplier in "+mod->editorId);
+                    if(capacityMultiplier)return fail("Multiple capacity multipliers need verified evaluation order.");
+                    capacityMultiplier=value;
+                    result.sources.append(QJsonObject{{"record",recordIdentity(plugin,id)},{"name",mod->name},{"capacityOperation","multiply-add"},{"value",value}});
+                    continue;
+                }
                 if(p.valueType!=0||(p.function!=0&&p.function!=2))return fail("Unsupported capacity operation in "+mod->editorId);
                 const auto value=static_cast<std::int32_t>(p.value1);
                 if(p.function==0){if(setCapacity&&*setCapacity!=value)return fail("Conflicting capacity overrides in selected parts.");setCapacity=value;}
@@ -42,8 +56,10 @@ WeaponAmmunition resolveWeaponAmmunition(const PluginContent& plugin,const Weapo
         }
     }
     if(setCapacity&&hasAdd)return fail("Mixed set/add capacity modifiers need verified evaluation order.");
-    const std::int64_t capacity=setCapacity?*setCapacity:std::int64_t(weapon.ammoCapacity)+added;
-    if(capacity<1||capacity>65535)return fail("Configured magazine capacity is outside the supported range.");
+    if(capacityMultiplier&&(setCapacity||hasAdd))return fail("Mixed capacity multiplier and set/add modifiers need verified evaluation order.");
+    const double capacity=capacityMultiplier?double(float(weapon.ammoCapacity)*(1.f+*capacityMultiplier)):
+        setCapacity?double(*setCapacity):double(std::int64_t(weapon.ammoCapacity)+added);
+    if(!std::isfinite(capacity)||capacity<1||capacity>65535)return fail("Configured magazine capacity is outside the supported range.");
     result.capacity=int(capacity);if(setAmmo)result.ammo=*setAmmo;
     if(setAutomatic)result.automatic=*setAutomatic;
     if(!result.ammo)return fail("This configuration has no ammunition type.");
