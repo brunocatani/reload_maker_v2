@@ -13,6 +13,14 @@ namespace reloadmaker
         return event.text.startsWith(prefix, Qt::CaseInsensitive) ? event.text.mid(prefix.size()) : QString();
     }
 
+    QString withoutSoundVariant(const QString& sound)
+    {
+        static const QRegularExpression variant(QStringLiteral("_alt\\d*$"), QRegularExpression::CaseInsensitiveOption);
+        QString name = sound;
+        name.remove(variant);
+        return name;
+    }
+
     namespace
     {
         // Rank of a sound name for one kind of magazine event: lower ranks
@@ -49,7 +57,7 @@ namespace reloadmaker
             std::optional<int> best;
             int count = 0;
             for (const auto& event : events) {
-                const auto r = rank(playedSound(event));
+                const auto r = rank(withoutSoundVariant(playedSound(event)));
                 if (!r) {
                     continue;
                 }

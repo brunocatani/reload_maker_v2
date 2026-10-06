@@ -31,7 +31,7 @@ namespace reloadmaker
         // The lower-case name without a trailing number ("MagIn141" -> "magin").
         QString base(const QString& sound)
         {
-            QString name = sound.toLower();
+            QString name = withoutSoundVariant(sound).toLower();
             while (!name.isEmpty() && name.back().isDigit()) {
                 name.chop(1);
             }

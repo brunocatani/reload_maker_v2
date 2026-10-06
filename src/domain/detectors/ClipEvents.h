@@ -17,6 +17,10 @@ namespace reloadmaker
     // empty for other events.
     [[nodiscard]] QString playedSound(const ClipEvent& event);
 
+    // Matching only: alternate takes retain the same physical event. Never
+    // use this normalized name to resolve the actual sound descriptor.
+    [[nodiscard]] QString withoutSoundVariant(const QString& sound);
+
     // When the magazine starts into the well and when the old one comes out,
     // from the reload clip's sound events (rework 02 §5). Clips name these
     // sounds per weapon (WPNM1AMagIn, C14_MagInserting, L115A3_ReloadMagIn,
