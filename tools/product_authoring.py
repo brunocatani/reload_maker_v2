@@ -88,20 +88,13 @@ def presentation_identity(setup):
     return setup
 
 
-def input_hash(snapshot):
-    """Everything a configuration is saved from: the capture, the authored
-    setup and the hand fits it uses. Save all only uses it to report an
-    unchanged configuration up to date; a different hash saves it again."""
-    return hashlib.sha256(json.dumps(snapshot,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
-
-
 def load_capture(capture_path):
     path=Path(capture_path).resolve()
     snapshot=read(path)
     require(snapshot.get('format')=='reload-maker-runtime-configuration' and snapshot.get('version')==1,
             'Select a live runtime configuration captured by Maker')
     require(snapshot.get('worldModelSpace')=='magazine-carrier','The capture must use the native magazine carrier frame')
-    return dict(path=path,snapshot=snapshot,inputHash=input_hash(snapshot))
+    return dict(path=path,snapshot=snapshot)
 
 
 def selector_for(profiles):
@@ -134,19 +127,6 @@ class Draft:
                                         sounds=dict(format='diamond-sound-pack',version=1,profiles=[]),
                                         grabs=dict(format='diamond-grab-locations',version=1,locations=[]))
         return record,weapon,self.documents[record]
-
-    def saved_hash(self,snapshot):
-        """The input hash this project saved for the capture's configuration, if any."""
-        record=form_key(snapshot.get('weapon'))
-        weapon=next((item for item in self.project['weapons'] if form_key(item['record'])==record),None)
-        if not weapon:
-            return None
-        if record not in self.documents:
-            self.documents[record]={kind:read(project_source(self.path,weapon[kind])) for kind in KINDS}
-        selector=selector_for(self.documents[record]['profiles'])
-        saved=next((c for c in weapon.get('captures',[]) if selector(c['selection'])==selector(snapshot['selection'])),None)
-        return saved.get('inputHash') if saved else None
-
 
 def apply_capture(draft,capture,full='',empty=''):
     """Writes one capture into the draft."""
@@ -212,7 +192,7 @@ def apply_capture(draft,capture,full='',empty=''):
                       bounds=meta['bounds'],weight=meta['massKg'],value=0,source=dict(path=str(model)))
             replace_record(project['objects'],item,lambda p:p['id'])
     capture_records=weapon.setdefault('captures',[])
-    replace_record(capture_records,dict(selection=snapshot['selection'],inputHash=capture['inputHash']),
+    replace_record(capture_records,dict(selection=snapshot['selection']),
                    lambda p:selector(p['selection']))
 
 
@@ -222,12 +202,13 @@ def checked(draft,record,backends):
         native_validate(draft.documents[record],Path(folder),backends)
 
 
-def save(project_path,captures,backends,pack_id='',full='',empty='',skip_unchanged=False,strict=True):
+def save(project_path,captures,backends,pack_id='',full='',empty='',strict=True):
     """Applies the captures in order and writes the project once.
 
     With strict, any failure fails the save. Otherwise each failing capture is
-    reported and left out while the others are saved; with skip_unchanged a
-    configuration saved from identical inputs is reported up to date."""
+    reported and left out while the others are saved. A template change must
+    replace every existing configuration together; it cannot relabel old
+    behavior under a new family."""
     path=Path(project_path).resolve()
     require(captures,'Select at least one captured configuration')
     loaded=[load_capture(c) for c in captures]
@@ -240,12 +221,24 @@ def save(project_path,captures,backends,pack_id='',full='',empty='',skip_unchang
                      requirements={},weapons=[],objects=[])
     path.parent.mkdir(parents=True,exist_ok=True)
     draft=Draft(path,project)
+    changed_templates={}
+    for weapon in project['weapons']:
+        record=form_key(weapon['record'])
+        incoming=[c['snapshot'] for c in loaded if form_key(c['snapshot']['weapon'])==record]
+        templates={s['template'] for s in incoming}
+        if not templates or templates=={weapon['template']}:
+            continue
+        require(len(templates)==1 and next(iter(templates)) in TEMPLATES,'One weapon must use one supported template')
+        profiles=read(project_source(path,weapon['profiles']))
+        selector=selector_for(profiles)
+        previous={selector(p) for p in profiles['profiles']}
+        require(previous <= {selector(s['selection']) for s in incoming},
+                'The behavior template changed. Save all configurations of this weapon to replace its previous behavior together.')
+        weapon['template']=next(iter(templates));changed_templates[record]=(selector,previous)
     rows,touched=[],set()
     for capture in loaded:
         cancellation()
         snapshot=capture['snapshot'];row=dict(selection=snapshot.get('selection',{}),capture=str(capture['path']))
-        if skip_unchanged and existing and draft.saved_hash(snapshot)==capture['inputHash']:
-            rows.append(dict(row,status='up-to-date'));continue
         trial=Draft(path,copy.deepcopy(draft.project));trial.documents=copy.deepcopy(draft.documents)
         try:
             apply_capture(trial,capture,full,empty)
@@ -253,15 +246,18 @@ def save(project_path,captures,backends,pack_id='',full='',empty='',skip_unchang
             if not strict:
                 checked(trial,record,backends)
         except ValueError as error:
-            if strict:
+            changed=changed_templates.get(form_key(snapshot['weapon']))
+            replacing=changed and changed[0](snapshot['selection']) in changed[1]
+            if strict or replacing:
                 raise
             rows.append(dict(row,status='failed',error=str(error)));continue
         draft=trial;touched.add(record)
         rows.append(dict(row,status='saved'))
     saved=[r for r in rows if r['status']=='saved']
-    summary=dict(ok=True,project=str(path),rows=rows,saved=len(saved),upToDate=sum(r['status']=='up-to-date' for r in rows),
+    summary=dict(ok=bool(saved),project=str(path),rows=rows,saved=len(saved),upToDate=0,
                  failed=sum(r['status']=='failed' for r in rows))
     if not saved:
+        summary['error']='No configuration was saved. '+next((r['error'] for r in rows if r['status']=='failed'),'No valid captures.')
         return dict(summary,revision=project['revision'])
     stage=path.parent/('.authoring-'+uuid.uuid4().hex);stage.mkdir()
     final=path.parent/'authoring'/uuid.uuid4().hex
@@ -318,6 +314,5 @@ def save_configuration(project_path,capture_path,backends,pack_id='',full='',emp
 
 
 def save_configurations(project_path,capture_paths,backends,pack_id=''):
-    """Saves every configuration that passes; unchanged ones are skipped and
-    failing ones reported, none of them blocking the rest."""
-    return save(project_path,capture_paths,backends,pack_id,skip_unchanged=True,strict=False)
+    """Save current captures by selector; a changed template is atomic."""
+    return save(project_path,capture_paths,backends,pack_id,strict=False)

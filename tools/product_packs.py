@@ -23,6 +23,11 @@ TEMPLATES = {
     'rifle.operating-handle-rocking.v1',
     'rifle.reciprocating-detachable.v1',
     'sniper.manual-bolt-detachable.v1',
+    'rifle.ar15-stroke-detachable.v1',
+    'rifle.independent-handle-rocking.v1',
+    'rifle.reciprocating-rocking.v1',
+    'rifle.rotary-handle-detachable.v1',
+    'shotgun.self-loading-detachable.v1',
 }
 
 

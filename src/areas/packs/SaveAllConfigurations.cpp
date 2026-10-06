@@ -214,8 +214,9 @@ namespace reloadmaker
                                       .arg(job.captures).arg(job.plan.size()).arg(job.exceptions.size()));
         if (job.cancelled || job.captures == 0) {
             QDir(job.folder).removeRecursively();
-            _packJob["phase"] = job.cancelled ? "cancelled" : "complete";
-            _packJob["result"] = QJsonObject{ { "ok", !job.cancelled }, { "saved", 0 }, { "upToDate", 0 }, { "failed", 0 }, { "rows", QJsonArray{} } };
+            _packJob["phase"] = job.cancelled ? "cancelled" : "failed";
+            _packJob["error"] = job.cancelled ? "Save cancelled; the pack is unchanged." : "No configuration could be captured; the pack is unchanged.";
+            _packJob["result"] = QJsonObject{ { "ok", false }, { "saved", 0 }, { "upToDate", 0 }, { "failed", job.exceptions.size() }, { "rows", QJsonArray{} } };
             emit packJobChanged();
             return;
         }

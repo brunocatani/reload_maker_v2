@@ -1,0 +1,37 @@
+{
+    "format": 1,
+    "id": "shotgun.self-loading-detachable.v1",
+    "label": "Self-loading shotgun - detachable box or drum",
+    "category": "Shotgun",
+    "model": {
+        "feed": {
+            "container": "detachable",
+            "loadingPoints": [
+                {
+                    "id": "magwell",
+                    "unit": "container",
+                    "destination": "container"
+                }
+            ],
+            "insertion": "native-curve"
+        },
+        "mechanisms": [
+            {
+                "id": "bolt",
+                "kind": "reciprocating-bolt",
+                "roles": [
+                    "extract",
+                    "eject",
+                    "cock",
+                    "chamber"
+                ],
+                "return": "spring"
+            }
+        ],
+        "fire": {
+            "motion": "native-clip",
+            "afterShot": "automatic-cycle",
+            "ejection": "on-fire"
+        }
+    }
+}

@@ -28,14 +28,23 @@ namespace reloadmaker
             error = "Confirm this weapon's behavior preset in the Reload checklist first.";
             return false;
         }
-        if (!_authoringRecords.value(authoringRecordKey()).toObject().contains("operating")) {
-            return buildSourceSimulationRig(rig, error);
-        }
         OperatingSetup setup;
-        if (!savedOperatingSetup(setup, error)) {
+        const bool authored = _authoringRecords.value(authoringRecordKey()).toObject().contains("operating");
+        if (authored) {
+            if (!savedOperatingSetup(setup, error) || !buildConfiguredSimulationRig(setup, rig, error)) {
+                return false;
+            }
+        } else if (!buildSourceSimulationRig(rig, error)) {
             return false;
         }
-        return buildConfiguredSimulationRig(setup, rig, error);
+        // Explicit per-configuration fire choices override the family default.
+        // Replaying the measured stroke never substitutes a generic distance.
+        const auto* preset = checklistPreset();
+        if ((!authored || setup.fireMode == "preset") && preset && preset->model.fire.motion == FireMotion::ReplayActionStroke) {
+            rig.fireFromStroke = true;
+            rig.presetFire = false;
+        }
+        return true;
     }
 
     // The saved operating setup with its track indices mapped onto this

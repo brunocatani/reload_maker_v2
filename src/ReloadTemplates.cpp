@@ -68,13 +68,4 @@ namespace reloadmaker
         return std::nullopt;
     }
 
-    QString templateIdentity(WeaponMechanism mechanism)
-    {
-        for (const WeaponPreset& preset : reloadPresets()) {
-            if (codedMechanism(preset) == mechanism) {
-                return preset.id;
-            }
-        }
-        return {};
-    }
 }

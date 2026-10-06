@@ -168,7 +168,7 @@ namespace reloadmaker
         return { { "format", "reload-maker-runtime-configuration" },
                  { "version", 1 },
                  { "weapon", weapon },
-                 { "template", templateIdentity(type) },
+                 { "template", assignedTemplate() },
                  { "sourcePolicy", policy },
                  { "sourcePolicyEdited", compatibility["saved"] },
                  { "name", currentWeapon()->name },

@@ -14,8 +14,9 @@ namespace reloadmaker
     [[nodiscard]] const QVector<WeaponPreset>& reloadPresets();
     [[nodiscard]] QString reloadPresetsError();
 
-    // Template id <-> the coded simulation mechanism. The simulation still runs
+    // Several distinct presets can use the same simulation mechanism. Keep the
+    // author's exact id in projects and exports; never infer it from the mechanism.
+    // The simulation still runs
     // one of five coded mechanisms until P2-08 retires WeaponMechanism.
     [[nodiscard]] std::optional<WeaponMechanism> templateMechanism(const QString& id);
-    [[nodiscard]] QString templateIdentity(WeaponMechanism mechanism);
 }

@@ -237,7 +237,6 @@ namespace reloadmaker
             return false;
         }
         QSet<QString> ids;
-        QSet<int> actions; // MechanismKind values
         for (const QString& name : files) {
             QFile file(QDir(directory).filePath(name));
             if (!file.open(QIODevice::ReadOnly) || file.size() > kPresetSizeLimit) {
@@ -249,13 +248,12 @@ namespace reloadmaker
                 return false;
             }
             const DiamondSupport support = diamondSupport(preset.model);
-            if (ids.contains(preset.id) || !support.action || actions.contains(static_cast<int>(*support.action))) {
-                error = QStringLiteral("Weapon preset \"%1\" repeats an id or is not one DIAMOND behavior: %2")
+            if (ids.contains(preset.id) || !support.action) {
+                error = QStringLiteral("Weapon preset \"%1\" repeats an id or has unsupported DIAMOND behavior: %2")
                             .arg(preset.id, support.refusal);
                 return false;
             }
             ids.insert(preset.id);
-            actions.insert(static_cast<int>(*support.action));
             presets.append(preset);
         }
         return true;
