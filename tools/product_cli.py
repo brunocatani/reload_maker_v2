@@ -34,11 +34,20 @@ def main():
     build.add_argument('--pack', action='append', required=True)
     build.add_argument('--installation', required=True)
     build.add_argument('--initialize', action='store_true')
+    destination = build.add_mutually_exclusive_group()
+    destination.add_argument('--archive', help='Complete ZIP or 7z output')
+    destination.add_argument('--mo2', help='One destination mod directory inside MO2 mods')
     inspect = packs.add_parser('inspect-project')
     inspect.add_argument('--project', required=True)
     coverage = packs.add_parser('inventory')
     coverage.add_argument('--project', action='append', default=[])
-    export = packs.add_parser('export')
+    publish = packs.add_parser('export')
+    publish.add_argument('--project', action='append', required=True)
+    publish.add_argument('--installation')
+    deliver = publish.add_mutually_exclusive_group(required=True)
+    deliver.add_argument('--archive')
+    deliver.add_argument('--mo2')
+    export = packs.add_parser('freeze')
     export.add_argument('--project', required=True)
     export.add_argument('--output', required=True)
     export.add_argument('--skip', action='append', default=[], help='Weapon record left out of this export')
@@ -82,9 +91,12 @@ def main():
             loaded = [load_pack(Path(p)) for p in args.pack]
             result = dict(ok=True, packs=[dict(id=p['manifest']['id'], objects=len(p['objects'])) for p in loaded],
                           runtimeCatalogValidated=False,
-                          message='Pack inputs checked. Building the generated ESP also validates the complete DIAMOND catalog.')
-        elif args.action == 'build':
-            result = asyncio.run(build_packs(args.pack, Path(args.installation), backends, args.initialize))
+                          message='Pack inputs checked. Building the source-plugin ESLs also validates the complete DIAMOND catalog.')
+        elif args.action in ('build', 'export'):
+            installation = Path(args.installation or str(Path(settings.workspace)/'workspace/installations/default'))
+            initial = args.initialize if args.action == 'build' else not (installation/'current.json').exists()
+            inputs = args.pack if args.action == 'build' else args.project
+            result = asyncio.run(build_packs(inputs, installation, backends, initial, args.archive, args.mo2))
         elif args.action == 'inspect-project':
             from product_export import inspect_project
             project, weapons = inspect_project(Path(args.project).resolve())

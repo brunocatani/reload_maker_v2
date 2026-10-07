@@ -31,11 +31,11 @@ def run():
     evidence=ROOT/'evidence/pack-builder'
     evidence.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='mcp-',dir=evidence) as temporary:
-        params=dict(operation='build',packs=args.pack,installation=temporary,initialize=True)
+        params=dict(operation='build',packs=[str(Path(p).resolve()) for p in args.pack],installation=temporary,initialize=True)
         job=command('pack_job',params,state['revision'])
         result=finish(job['id'])
         assert result['phase']=='complete',result
-        assert Path(result['result']['output'],'DIAMOND_Generated.esp').is_file()
+        assert result['result']['plugins'] and all(Path(result['result']['output'],g['plugin']).is_file() for g in result['result']['plugins'])
         assert command('state')['project']==before
         pointer=Path(temporary)/'current.json'
         preserved=pointer.read_bytes()

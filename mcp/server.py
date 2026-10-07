@@ -607,23 +607,24 @@ def source_browser(operation: str = 'state', plugin: str = '', mode: str = '',
 @mcp.tool()
 def pack_job(operation: str = 'state', packs: list[str] | None = None,
              installation: str = '', initialize: bool = False,
-             project: str = '', output: str = '',
+             project: str = '', output: str = '', archive: str = '', mo2: str = '',
              expected_revision: int | None = None) -> dict:
-    """Validate/build selected finished packs, read the current job, or cancel.
-    Also supports inspect-project and export for a prepared pack project.
-    Export requires a new output folder and includes all configured content.
-    Uses the same bundled builder as the manual UI and standalone command.
-    New installations require initialize=True; existing IDs are never reset.
-    Poll operation=state until complete/failed. Inspect the returned job ID.
-    Building stays local and does not enable or install MO2 mods.
-    Successful builds return the generated output folder and catalog counts.
-    MO2 activation and load order remain under the user's control.
+    """Export complete reload mods: one ESL per source plugin, grouped meshes.
+    build accepts saved pack-project JSON files or finished pack folders in packs.
+    export accepts one project. Choose archive (.zip/.7z) or mo2 (one mod folder).
+    Both use the same native UI builder. New build ledgers need initialize=True;
+    export initializes only a missing ledger. Existing per-source IDs persist.
+    open/close show or close the export window. state/cancel observe or cancel the job.
+    freeze is internal authoring interchange only, not an installable export.
+    A completed export includes ESLs, behavior, bindings and meshes. Neither
+    destination changes MO2 activation, load order or original source plugins.
+    Poll state to complete/failed, retaining the returned job ID.
     """
     if operation not in ('state', 'cancel') and expected_revision is None:
         raise ValueError('Read the current document revision before starting a pack job')
     return command('pack_job', dict(operation=operation, packs=packs or [],
                                    installation=installation, initialize=initialize,
-                                   project=project, output=output), expected_revision)
+                                   project=project, output=output, archive=archive, mo2=mo2), expected_revision)
 
 @mcp.tool()
 def configure_installation(game_root: str, creation_kit_root: str, same_tools_root: bool,

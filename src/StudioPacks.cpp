@@ -1,6 +1,7 @@
 #include "ReloadMakerController.h"
 #include "StudioWindow.h"
 #include "StudioPaths.h"
+#include "InstallationSetup.h"
 #include <QDialog>
 #include <QDir>
 #include <QDateTime>
@@ -63,7 +64,7 @@ void ReloadMakerController::showConfigurationSaver() {
         if(state["operation"]!="save-configuration"||state["id"].toString()!=ownedJob)return;
         if(running)report->setPlainText("Validating live motion, both hand fits and finished magazine models…");
         else if(state["phase"]=="failed")report->setPlainText(state["error"].toString());
-        else{const auto result=state["result"].toObject();report->setPlainText(QString("Saved revision %1.\n%2 configurations · %3 magazines\n\n%4\n\nUse Export complete reload pack to publish this project.").arg(result["revision"].toInt()).arg(result["variants"].toInt()).arg(result["magazines"].toInt()).arg(result["project"].toString()));}
+        else{const auto result=state["result"].toObject();report->setPlainText(QString("Saved revision %1.\n%2 configurations · %3 magazines\n\n%4\n\nUse MENU > Export > Export current reload to publish this project.").arg(result["revision"].toInt()).arg(result["variants"].toInt()).arg(result["magazines"].toInt()).arg(result["project"].toString()));}
     };
     connect(this,&ReloadMakerController::packJobChanged,&dialog,update);
     connect(save,&QPushButton::clicked,&dialog,[&]{try{settings.setValue(setting,project->text());settings.setValue("packExporter/project",project->text());ownedJob=saveConfiguredReload({{"project",project->text()},{"id",id->text()},{"full",full->text()},{"empty",empty->text()}})["id"].toString();update();}catch(const std::exception& e){report->setPlainText(e.what());}});
@@ -73,97 +74,74 @@ void ReloadMakerController::showConfigurationSaver() {
 }
 
 void ReloadMakerController::showPackExporter() {
-    QDialog dialog(_window);dialog.setWindowTitle("Export complete reload pack");dialog.resize(820,620);
-    auto* layout=new QVBoxLayout(&dialog);
-    auto* intro=new QLabel("Publish prepared weapon behavior, magazine fits, sounds, grab points and finished collision models together. Select a pack project to inspect its exact coverage before export.");
-    intro->setWordWrap(true);layout->addWidget(intro);
     QSettings settings;
-    auto* row=new QHBoxLayout;layout->addLayout(row);
-    auto* project=new QLineEdit(settings.value("packExporter/project").toString());row->addWidget(project,1);
-    auto* browse=new QPushButton("Choose pack project…");row->addWidget(browse);
-    connect(browse,&QPushButton::clicked,&dialog,[&]{const auto file=QFileDialog::getOpenFileName(&dialog,"Authored pack project",studioDataPath("workspace/packs"),"Pack project (*.json)");if(!file.isEmpty())project->setText(file);});
-    layout->addWidget(new QLabel("New export folder"));
-    auto* output=new QLineEdit(studioDataPath("exports/packs/export-"+QDateTime::currentDateTimeUtc().toString("yyyyMMdd-HHmmss")));layout->addWidget(output);
-    auto* report=new QPlainTextEdit;report->setReadOnly(true);layout->addWidget(report,1);
-    auto* actions=new QHBoxLayout;layout->addLayout(actions);
-    auto* inspect=new QPushButton("Check project");auto* publish=new QPushButton("Export complete pack");
-    auto* cancel=new QPushButton("Cancel job");auto* open=new QPushButton("Open exported folder");
-    for(auto* button:{inspect,publish,cancel,open})actions->addWidget(button);
-    QString exported;
-    // Weapons an export leaves out because their checklist is not complete.
-    const auto skippedText=[](const QJsonObject& state,const QString& heading){const auto skipped=state["skipped"].toArray();if(skipped.isEmpty())return QString();
-        QString text="\n\n"+heading;for(const auto& value:skipped){const auto w=value.toObject();text+=QString("\n  %1 · %2: %3").arg(w["name"].toString(),w["record"].toString(),w["reason"].toString());}
-        return text+"\nComplete their checklists, then export again to include them.";};
-    const auto update=[&]{
-        const auto state=packCommand({});const auto phase=state["phase"].toString();
-        const bool running=phase=="running"||phase=="cancelling";
-        inspect->setEnabled(!running);publish->setEnabled(!running);cancel->setEnabled(running);open->setEnabled(!exported.isEmpty());
-        if(phase=="idle")report->setPlainText("Prepared pack projects are organized by source ESP and weapon under workspace/packs. Each export contains full/empty objects and all included configurations. Original weapon plugins remain dependencies.");
-        else if(running)report->setPlainText(phase=="cancelling"?"Cancellation requested. Waiting for the native tool to finish…":"Checking frozen authoring inputs and finished models…");
-        else if(phase=="failed")report->setPlainText(state["error"].toString()+skippedText(state,"Left out:"));
-        else if(state["operation"]=="inspect-project") {
-            const auto result=state["result"].toObject();QString text=result["name"].toString()+"\n";
-            for(const auto& value:result["weapons"].toArray()) {const auto weapon=value.toObject();text+=QString("\n%1 · %2\n%3 configurations · %4 magazines\n%5\n").arg(weapon["name"].toString(),weapon["record"].toString()).arg(weapon["variants"].toInt()).arg(weapon["magazines"].toInt()).arg(weapon["template"].toString());}
-            text+="\nReady to validate native collision and publish.";
-            text+=skippedText(state,"Export will leave out:");
-            report->setPlainText(text);
-        } else if(state["operation"]=="export") {
-            const auto result=state["result"].toObject();exported=result["output"].toString();open->setEnabled(!exported.isEmpty());
-            report->setPlainText(QString("Export complete: %1 configurations, %2 magazine variations, %3 full/empty objects.\n\n%4\n\nThis folder is the shareable pack. Install it with its source mods, then use Build installed reload packs to generate the local object ESP. No game files or MO2 settings were changed.").arg(result["variants"].toInt()).arg(result["magazines"].toInt()).arg(result["objects"].toInt()).arg(QDir::toNativeSeparators(exported))+skippedText(state,"Not exported:"));
-        } else report->setPlainText("Choose a prepared pack project and check its coverage before export.");
-    };
-    connect(this,&ReloadMakerController::packJobChanged,&dialog,update);
-    const auto run=[&](const QString& operation){settings.setValue("packExporter/project",project->text());try{packCommand({{"operation",operation},{"project",project->text()},{"output",output->text()}});update();}catch(const std::exception& e){report->setPlainText(e.what());}};
-    connect(inspect,&QPushButton::clicked,&dialog,[&]{run("inspect-project");});
-    connect(publish,&QPushButton::clicked,&dialog,[&]{run("export");});
-    connect(cancel,&QPushButton::clicked,&dialog,[&]{try{packCommand({{"operation","cancel"}});}catch(const std::exception& e){report->setPlainText(e.what());}});
-    connect(open,&QPushButton::clicked,&dialog,[&]{QDesktopServices::openUrl(QUrl::fromLocalFile(exported));});
-    update();dialog.exec();
+    QString project;
+    if(currentWeapon()) {
+        const auto key=poseRecordKey(currentWeapon()->formId).toLower(),context=QFileInfo(suggestedSessionPath()).dir().dirName();
+        const auto destination=studioDataPath("workspace/packs/"+key.section(':',0,0)+"/"+key.section(':',1,1)+"/"+context+"/pack.project.json");
+        project=settings.value("packAuthoring/"+key+"/"+context+"/project",destination).toString();
+    }
+    settings.setValue("packBuilder/packs",QFileInfo(project).isFile()?QStringList{project}:QStringList{});
+    showPackBuilder();
 }
 
 void ReloadMakerController::showPackBuilder() {
-    QDialog dialog(_window);dialog.setWindowTitle("Build installed reload packs");dialog.resize(800,640);
+    QDialog dialog(_window);dialog.setObjectName("ReloadExportDialog");dialog.setWindowTitle("Export reload mods");dialog.resize(850,690);
     auto* layout=new QVBoxLayout(&dialog);
-    auto* intro=new QLabel("Select finished packs to generate one local object ESP. Collision is already inside their models; Creation Kit is not needed. Keep one ledger folder for this game installation across all profiles.");intro->setWordWrap(true);layout->addWidget(intro);
-    auto* list=new QListWidget;layout->addWidget(list);
-    QSettings settings;list->addItems(settings.value("packBuilder/packs").toStringList());
-    auto* files=new QHBoxLayout;layout->addLayout(files);
-    auto* add=new QPushButton("Add pack folder");auto* remove=new QPushButton("Remove selected");files->addWidget(add);files->addWidget(remove);
-    connect(add,&QPushButton::clicked,&dialog,[&]{const auto folder=QFileDialog::getExistingDirectory(&dialog,"Finished reload pack",studioDataPath("exports"));if(!folder.isEmpty()&&list->findItems(folder,Qt::MatchExactly).isEmpty())list->addItem(folder);});
+    auto* intro=new QLabel("Select saved weapon projects or finished packs. Each source ESP/ESM gets one ESL and a matching magazine-mesh folder. Export the complete selection to one MO2 mod or one archive. Source-group updates retain previously exported sibling weapons. Enable only the ESLs for the source mods you use.");
+    intro->setWordWrap(true);layout->addWidget(intro);
+    QSettings settings;
+    auto* list=new QListWidget;list->addItems(settings.value("packBuilder/packs").toStringList());layout->addWidget(list,1);
+    auto* choices=new QHBoxLayout;layout->addLayout(choices);
+    auto* projects=new QPushButton("Add saved projects...");auto* packs=new QPushButton("Add finished pack folder...");auto* remove=new QPushButton("Remove selected");
+    for(auto* button:{projects,packs,remove})choices->addWidget(button);
+    const auto add=[&](const QString& path){if(!path.isEmpty()&&list->findItems(path,Qt::MatchExactly).isEmpty())list->addItem(path);};
+    connect(projects,&QPushButton::clicked,&dialog,[&]{for(const auto& path:QFileDialog::getOpenFileNames(&dialog,"Saved reload projects",studioDataPath("workspace/packs"),"Pack projects (*.json)"))add(path);});
+    connect(packs,&QPushButton::clicked,&dialog,[&]{add(QFileDialog::getExistingDirectory(&dialog,"Finished reload packs",studioDataPath("exports")));});
     connect(remove,&QPushButton::clicked,&dialog,[&]{delete list->takeItem(list->currentRow());});
-    layout->addWidget(new QLabel("Installation ledger folder"));
-    auto* row=new QHBoxLayout;layout->addLayout(row);
-    auto* ledger=new QLineEdit(settings.value("packBuilder/installation",studioDataPath("workspace/installations/default")).toString());row->addWidget(ledger,1);
-    auto* browse=new QPushButton("Browse…");row->addWidget(browse);
-    connect(browse,&QPushButton::clicked,&dialog,[&]{const auto folder=QFileDialog::getExistingDirectory(&dialog,"Installation ledger",ledger->text());if(!folder.isEmpty())ledger->setText(folder);});
+    layout->addWidget(new QLabel("MO2 destination - one mod folder"));
+    auto* destinationRow=new QHBoxLayout;layout->addLayout(destinationRow);
+    const auto setup=loadInstallationSetup();
+    const auto instance=QFileInfo(setup.mo2Instance).isFile()?QFileInfo(setup.mo2Instance).absolutePath():setup.mo2Instance;
+    const auto defaultMod=instance.isEmpty()?QString():QDir(instance).filePath("mods/DIAMOND Reload Packs");
+    auto* mo2=new QLineEdit(settings.value("packBuilder/mo2",defaultMod).toString());destinationRow->addWidget(mo2,1);
+    auto* browse=new QPushButton("Choose mods folder...");destinationRow->addWidget(browse);
+    connect(browse,&QPushButton::clicked,&dialog,[&]{const auto folder=QFileDialog::getExistingDirectory(&dialog,"MO2 mods folder",instance);if(!folder.isEmpty())mo2->setText(QDir(folder).filePath("DIAMOND Reload Packs"));});
+    layout->addWidget(new QLabel("Saved export identity - keep this folder between exports"));
+    auto* ledger=new QLineEdit(settings.value("packBuilder/installation",studioDataPath("workspace/installations/default")).toString());layout->addWidget(ledger);
     auto* report=new QPlainTextEdit;report->setReadOnly(true);layout->addWidget(report,1);
     auto* actions=new QHBoxLayout;layout->addLayout(actions);
-    auto* validate=new QPushButton("Validate packs");auto* build=new QPushButton("Rebuild installation");auto* initialize=new QPushButton("Create new installation");auto* cancel=new QPushButton("Cancel job");
-    for(auto* button:{validate,build,initialize,cancel})actions->addWidget(button);
-    const auto update=[&]{const auto state=packCommand({});const auto phase=state["phase"].toString();const bool running=phase=="running"||phase=="cancelling";
-        validate->setEnabled(!running);build->setEnabled(!running);initialize->setEnabled(!running);cancel->setEnabled(running);
-        QString text;
-        if(phase=="idle")text="Add the finished packs you want to use, then validate or build. Generated output stays separate from your game and original weapon plugins.";
-        else if(phase=="running")text="Processing selected packs…\nYou can cancel; the last successful installation will be retained.";
-        else if(phase=="cancelling")text="Cancellation requested. Waiting for the current native tool to finish safely…";
-        else if(phase=="failed")text="Build did not complete.\n"+state["error"].toString();
-        else {
+    auto* toMo2=new QPushButton("Export to MO2");auto* toArchive=new QPushButton("Export ZIP / 7z");auto* cancel=new QPushButton("Cancel export");
+    for(auto* button:{toMo2,toArchive,cancel})actions->addWidget(button);
+    const auto update=[&]{
+        const auto state=packCommand({});const auto phase=state["phase"].toString();const bool running=phase=="running"||phase=="cancelling";
+        for(auto* button:{toMo2,toArchive,projects,packs,remove})button->setEnabled(!running);
+        cancel->setEnabled(running);
+        if(phase=="idle")report->setPlainText("The export includes reload behavior, ESLs and finished assets. Fallout 4 VR requires ESL support such as Daytripper. MO2 activation and load order are never changed.");
+        else if(running)report->setPlainText("Preparing selected reloads, building source-plugin ESLs and validating the complete output...");
+        else if(phase=="failed")report->setPlainText("Export failed: "+state["error"].toString());
+        else if(state["operation"]=="build") {
             const auto result=state["result"].toObject();
-            if(state["operation"]=="build") {
-                text=QString("Build complete.\n%1 objects from the selected packs.\n\nGenerated ESP and bindings:\n%2\n\nUse this folder alongside the authored packs. You control activation and load order in MO2.").arg(result["activeObjects"].toInt()).arg(QDir::toNativeSeparators(result["output"].toString()));
-            }
-            else if(state["operation"]=="validate")text=QString("Validated %1 pack(s). The authored records and object definitions are readable and consistent.").arg(result["packs"].toArray().size());
-            else text="Add the finished packs to include, then validate or build their local object ESP.";
+            QString text=QString("Export complete: %1 ESLs, %2 magazine objects\n\n%3\n").arg(result["plugins"].toArray().size()).arg(result["activeObjects"].toInt()).arg(result["installedTo"].toString(result["archive"].toString(result["output"].toString())));
+            for(const auto& value:result["plugins"].toArray()){const auto group=value.toObject();text+="\n"+group["master"].toString()+" -> "+group["plugin"].toString();}
+            report->setPlainText(text+"\n\nEnable the desired ESLs in MO2. Source plugins and profile settings were not changed.");
         }
-        report->setPlainText(text);};
+    };
     connect(this,&ReloadMakerController::packJobChanged,&dialog,update);
-    const auto run=[&](const QString& operation,bool initial){QJsonArray packs;QStringList saved;for(int i=0;i<list->count();++i){packs.append(list->item(i)->text());saved.append(list->item(i)->text());}
-        settings.setValue("packBuilder/packs",saved);settings.setValue("packBuilder/installation",ledger->text());
-        try{packCommand({{"operation",operation},{"packs",packs},{"installation",ledger->text()},{"initialize",initial}});update();}
-        catch(const std::exception& e){report->setPlainText(QString::fromUtf8(e.what()));}};
-    connect(validate,&QPushButton::clicked,&dialog,[&]{run("validate",false);});
-    connect(build,&QPushButton::clicked,&dialog,[&]{run("build",false);});
-    connect(initialize,&QPushButton::clicked,&dialog,[&]{run("build",true);});
+    const auto run=[&](const QString& destination,const QString& key){
+        if(destination.isEmpty())return;
+        QJsonArray inputs;QStringList saved;for(int i=0;i<list->count();++i){inputs.append(list->item(i)->text());saved.append(list->item(i)->text());}
+        settings.setValue("packBuilder/packs",saved);settings.setValue("packBuilder/installation",ledger->text());settings.setValue("packBuilder/mo2",mo2->text());
+        try{packCommand({{"operation","build"},{"packs",inputs},{"installation",ledger->text()},{"initialize",!QFileInfo(QDir(ledger->text()).filePath("current.json")).exists()},{key,destination}});update();}
+        catch(const std::exception& e){report->setPlainText(e.what());}
+    };
+    connect(toMo2,&QPushButton::clicked,&dialog,[&]{if(mo2->text().trimmed().isEmpty()){report->setPlainText("Choose your MO2 mods folder first.");return;}run(mo2->text(),"mo2");});
+    connect(toArchive,&QPushButton::clicked,&dialog,[&]{
+        QString filter;auto file=QFileDialog::getSaveFileName(&dialog,"Export reload mods",studioDataPath("exports/DIAMOND Reload Packs.zip"),"ZIP archive (*.zip);;7-Zip archive (*.7z)",&filter);
+        if(!file.isEmpty()&&filter.startsWith("7-Zip")&&!file.endsWith(".7z",Qt::CaseInsensitive))file=QFileInfo(file).dir().filePath(QFileInfo(file).completeBaseName()+".7z");
+        if(!file.isEmpty()&&QFileInfo(file).suffix().isEmpty())file+=filter.startsWith("7-Zip")?".7z":".zip";
+        run(file,"archive");
+    });
     connect(cancel,&QPushButton::clicked,&dialog,[&]{try{packCommand({{"operation","cancel"}});}catch(const std::exception& e){report->setPlainText(e.what());}});
     update();dialog.exec();
 }

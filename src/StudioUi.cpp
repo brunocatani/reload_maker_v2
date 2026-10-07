@@ -158,9 +158,10 @@ void ReloadMakerController::createUi() {
     auto* importRecords = mainMenu->addAction("Import…");
     auto* exportMenu = mainMenu->addMenu("Export");
     connect(exportMenu->addAction("Save selected configuration to pack…"),&QAction::triggered,this,&ReloadMakerController::showConfigurationSaver);
-    connect(exportMenu->addAction("Complete DIAMOND reload pack…"),&QAction::triggered,this,&ReloadMakerController::showPackExporter);
+    connect(exportMenu->addAction("Export current reload…"),&QAction::triggered,this,&ReloadMakerController::showPackExporter);
+    connect(exportMenu->addAction("Export selected reload mods…"),&QAction::triggered,this,&ReloadMakerController::showPackBuilder);
     exportMenu->addSeparator();
-    connect(exportMenu->addAction("Current configured reload for DIAMOND"),&QAction::triggered,this,[this]{
+    connect(exportMenu->addAction("Capture current configuration (authoring data)"),&QAction::triggered,this,[this]{
         try{const auto result=executeCommand({{"method","export"},{"params",QJsonObject{{"kind","runtime_configuration"}}}});setStatus("Captured configured reload · "+result["path"].toString());}
         catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}
     });

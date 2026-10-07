@@ -22,7 +22,7 @@ void ReloadMakerController::showHome() {
     auto* routes=new QHBoxLayout;layout->addLayout(routes,1);
     const auto card=[&](const QString& title,const QString& description,const QString& action){auto* box=new QGroupBox(title);auto* content=new QVBoxLayout(box);auto* text=new QLabel(description);text->setWordWrap(true);content->addWidget(text,1);auto* button=new QPushButton(action);button->setMinimumHeight(42);content->addWidget(button);routes->addWidget(box,1);return button;};
     auto* creator=card("CREATE / EDIT","Load an MO2 profile or a source package. Configure the mechanism, magazine hands, contact points and sounds. Creation Kit tools are needed when cooking new collision models.","Create or edit a reload");
-    auto* player=card("USE FINISHED PACKS","Select downloaded JSON and cooked NIF packs to generate one local object ESP. This step needs no Creation Kit or loaded weapon scene. Keep the generated ESP and its bindings together.","Build downloaded packs");
+    auto* player=card("USE FINISHED PACKS","Export saved projects or finished packs as one ESL per source mod, together in one MO2 mod folder or ZIP / 7z.","Export reload mods");
     auto* status=new QLabel;status->setWordWrap(true);layout->addWidget(status);
     auto* actions=new QHBoxLayout;layout->addLayout(actions);auto* resume=new QPushButton("Continue recent project");auto* open=new QPushButton("Open project…");auto* setup=new QPushButton("Setup & tools");auto* close=new QPushButton("Close");for(auto* button:{resume,open,setup,close})actions->addWidget(button);
     const auto current=homeState();resume->setEnabled(current["canResume"].toBool());

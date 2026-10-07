@@ -4,10 +4,12 @@
 // Every dialog and command shares the one job state.
 #include "ReloadMakerController.h"
 #include "StudioPaths.h"
+#include "StudioWindow.h"
 #include "commands/CommandSupport.h"
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QDialog>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -36,9 +38,24 @@ namespace reloadmaker
             return _packJob;
         }
         require(!_packProcess && !_saveAll, "A pack job is already running");
+        if (operation == "close") {
+            if(auto* dialog=_window->findChild<QDialog*>("ReloadExportDialog"))dialog->close();
+            return {{"ok",true},{"phase","closed"}};
+        }
+        if (operation == "open") {
+            QMetaObject::invokeMethod(this,[this]{showPackBuilder();},Qt::QueuedConnection);
+            return {{"ok",true},{"phase","dialog"}};
+        }
+        if (operation == "export") {
+            require(!request["archive"].toString().isEmpty() || !request["mo2"].toString().isEmpty(), "Choose archive or MO2 output");
+            auto build=request;build["operation"]="build";build["packs"]=QJsonArray{request["project"]};
+            if(build["installation"].toString().isEmpty())build["installation"]=studioDataPath("workspace/installations/default");
+            build["initialize"]=!QFileInfo(QDir(build["installation"].toString()).filePath("current.json")).exists();
+            return packCommand(build);
+        }
         const bool saving = operation == "save-configuration";
         const bool inventory = operation == "inventory";
-        const bool authoring = operation == "export" || operation == "inspect-project" || saving;
+        const bool authoring = operation == "freeze" || operation == "inspect-project" || saving;
         const bool cooking = operation == "cook" || operation == "prepare";
         require(operation == "build" || operation == "validate" || authoring || cooking || inventory, "Unknown pack operation");
         const auto packs = request["packs"].toArray();
@@ -46,7 +63,7 @@ namespace reloadmaker
         // Export leaves out weapons whose checklist is not complete (owner,
         // 2026-10-05: warn and export the rest, never block); Check project
         // lists them in advance.
-        const auto skipped = operation == "export" || operation == "inspect-project" ? exportSkippedWeapons(request["project"].toString()) : QJsonArray{};
+        const auto skipped = operation == "freeze" || operation == "inspect-project" ? exportSkippedWeapons(request["project"].toString()) : QJsonArray{};
         QString python;
         QString id;
         auto arguments = packToolArguments(python, id);
@@ -60,14 +77,14 @@ namespace reloadmaker
             appendInventoryArguments(arguments, request);
         } else if (authoring) {
             appendAuthoringArguments(arguments, request, operation);
-            if (operation == "export") {
+            if (operation == "freeze") {
                 for (const auto& weapon : skipped) {
                     arguments << "--skip" << weapon.toObject()["record"].toString();
                 }
             }
         } else if (!cooking) {
             for (const auto& pack : packs) {
-                require(pack.isString() && QFileInfo(pack.toString()).isDir(), "A selected pack folder is missing");
+                require(pack.isString() && (QFileInfo(pack.toString()).isDir() || (operation == "build" && QFileInfo(pack.toString()).isFile())), "A selected pack folder is missing");
                 arguments << "--pack" << pack.toString();
             }
         }
@@ -75,6 +92,10 @@ namespace reloadmaker
             const auto installation = request["installation"].toString();
             require(!installation.isEmpty(), "Select the installation ledger folder");
             arguments << "--installation" << installation;
+            const auto archive = request["archive"].toString(), mo2 = request["mo2"].toString();
+            require(archive.isEmpty() || mo2.isEmpty(), "Choose Export to MO2 or Export ZIP / 7z");
+            if (!archive.isEmpty()) arguments << "--archive" << archive;
+            if (!mo2.isEmpty()) arguments << "--mo2" << mo2;
             if (request["initialize"].toBool()) {
                 arguments << "--initialize";
             }
@@ -170,7 +191,7 @@ namespace reloadmaker
                 }
             }
         }
-        if (operation == "export") {
+        if (operation == "freeze") {
             const auto output = request["output"].toString();
             require(!output.isEmpty(), "Choose a new local export folder");
             arguments << "--output" << output;

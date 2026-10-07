@@ -5,6 +5,7 @@
 #include "viewport/PartPicker.h"
 #include "glview.h"
 
+#include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QListWidget>
@@ -212,17 +213,19 @@ namespace reloadmaker
     // window blank, so its frame is drawn into the container's place.
     QJsonObject ReloadMakerController::captureWindow()
     {
-        QImage image = _window->grab().toImage();
+        QWidget* target = QApplication::activeModalWidget();
+        if (!target) target = _window;
+        QImage image = target->grab().toImage();
         require(!image.isNull(), "Cannot capture the window");
         auto* container = _window->viewportContainer();
         const auto frame = _window->getGLView()->studioCaptureFrame();
-        if (!frame.isNull() && container->isVisible()) {
+        if (target == _window && !frame.isNull() && container->isVisible()) {
             QPainter painter(&image);
             painter.drawImage(QRect(container->mapTo(_window, QPoint(0, 0)), container->size()), frame);
         }
         const QString path = studioDataPath("evidence/window-" + QString::number(_revision) + ".png");
         require(image.save(path), "Cannot save the window capture");
-        return { { "path", path }, { "width", _window->width() }, { "height", _window->height() } };
+        return { { "path", path }, { "width", target->width() }, { "height", target->height() } };
     }
 
     // Points are logical viewport pixels, the same space as mouse events.

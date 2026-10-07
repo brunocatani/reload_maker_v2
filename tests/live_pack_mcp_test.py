@@ -35,7 +35,7 @@ def run():
             assert inspected['revision']==saved_pack['revision']
             replaced=finish(edit('save_configured_reload',dict(project=str(project))))
             assert replaced['variants']==1 and replaced['magazines']==1 and replaced['objects']==2
-            exported=finish(edit('pack_job',dict(operation='export',project=str(project),output=str(work/'pack'))))
+            exported=finish(edit('pack_job',dict(operation='freeze',project=str(project),output=str(work/'pack'))))
             built=finish(edit('pack_job',dict(operation='build',packs=[exported['output']],installation=str(work/'installation'),initialize=True)))
             assert built['activeObjects']==2
             # Swapping an empty hull set under the full geometry cannot cook.

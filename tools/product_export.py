@@ -157,12 +157,21 @@ def export_pack(path, destination, backends, skip=()):
                 shutil.copy2(source, target);files.append(model)
             objects.append({**{k: copy.deepcopy(obj[k]) for k in ('id', 'name', 'bounds', 'weight', 'value')}, 'model': model})
             materials.update(relative(value) for value in obj.get('materialDependencies', []))
+        overrides = []
+        for entry in project.get('modelOverrides', []):
+            target = relative(entry['model'])
+            require(target.lower().startswith('meshes/') and target.lower().endswith('.nif'), 'Invalid source model override path')
+            source = project_source(path, entry)
+            require(native.nif_validate(str(source)).get('ok'), 'Invalid source model override: '+str(source))
+            destination_model = within(stage, target); destination_model.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination_model); files.append(target); overrides.append(target)
         object_path = prefix+'objects.json';write(within(stage, object_path), objects);files.append(object_path)
         manifest = dict(format='diamond-content-pack', version=1, id=pack, revision=project['revision'],
                         name=project.get('name', pack), templates=sorted({w['template'] for w in weapons}),
                         files=sorted(files), objects=object_path, weapons=weapons,
                         requirements=copy.deepcopy(project.get('requirements', {})))
         manifest['requirements']['materials'] = sorted(materials)
+        if overrides: manifest['modelOverrides'] = sorted(overrides)
         write(stage/prefix/'manifest.json', manifest)
         load_pack(stage)
         # Recheck the authoring input after all native jobs, not merely before.

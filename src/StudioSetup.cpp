@@ -53,7 +53,7 @@ void ReloadMakerController::showSetup() {
     connect(same,&QCheckBox::toggled,&dialog,[&](bool enabled){kit->parentWidget()->setEnabled(!enabled);refresh();});
     auto* buttons=new QDialogButtonBox(QDialogButtonBox::Save|QDialogButtonBox::Cancel,&dialog);layout->addWidget(buttons);
     auto* connectSource=buttons->addButton("Save and connect MO2",QDialogButtonBox::ActionRole);
-    auto* packs=buttons->addButton("Build installed packs…",QDialogButtonBox::ActionRole);
+    auto* packs=buttons->addButton("Export reload mods…",QDialogButtonBox::ActionRole);
     connect(packs,&QPushButton::clicked,&dialog,[&]{dialog.accept();QTimer::singleShot(0,this,&ReloadMakerController::showPackBuilder);});
     connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
     connect(buttons,&QDialogButtonBox::accepted,&dialog,[&]{if(configureInstallation(installationJson(value())))dialog.accept();else report->setPlainText(_lastError);});
