@@ -135,7 +135,7 @@ def load_pack(root, manifest_path=None):
 
 def allocate(previous, packs):
     ledger = copy.deepcopy(previous)
-    require(ledger.get('version') == 1 and str(ledger.get('plugin','')).lower().endswith('.esl'), 'Invalid installation ledger')
+    require(ledger.get('version') == 1 and str(ledger.get('plugin','')).lower().endswith('.esp'), 'Invalid installation ledger')
     entries = ledger.get('objects')
     require(isinstance(entries, dict) and len(entries) <= 8192, 'Invalid installation object count')
     used = set()
@@ -168,7 +168,7 @@ def write_plugin_source(folder, ledger):
     masters = ledger['masters']
     header = dict(SpriggitSource=dict(PackageName='Spriggit.Yaml.Fallout4', Version='0.40'),
                   ModKey=plugin, GameRelease='Fallout4VR',
-                  ModHeader=dict(Flags=['Master','Small'], Stats=dict(Version=.95, NextFormID=ledger['nextId']),
+                  ModHeader=dict(Flags=['Small'], Stats=dict(Version=.95, NextFormID=ledger['nextId']),
                                  Author='Reload Maker', Description='Generated physical reload objects.',
                                  MasterReferences=[dict(Master=master, FileSize=0) for master in masters], INTV='0x01000000'))
     (folder/'RecordData.yaml').write_text(yaml.safe_dump(header, sort_keys=False), encoding='utf-8')

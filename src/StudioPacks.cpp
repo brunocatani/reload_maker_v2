@@ -88,7 +88,7 @@ void ReloadMakerController::showPackExporter() {
 void ReloadMakerController::showPackBuilder() {
     QDialog dialog(_window);dialog.setObjectName("ReloadExportDialog");dialog.setWindowTitle("Export reload mods");dialog.resize(850,690);
     auto* layout=new QVBoxLayout(&dialog);
-    auto* intro=new QLabel("Select saved weapon projects or finished packs. Each source ESP/ESM gets one ESL and a matching magazine-mesh folder. Export the complete selection to one MO2 mod or one archive. Source-group updates retain previously exported sibling weapons. Enable only the ESLs for the source mods you use.");
+    auto* intro=new QLabel("Select saved weapon projects or finished packs. Each source ESP/ESM gets one ESL-flagged ESP and a matching magazine-mesh folder. Export the complete selection to one MO2 mod or one archive. Source-group updates retain previously exported sibling weapons. Enable only the ESL-flagged ESPs for the source mods you use.");
     intro->setWordWrap(true);layout->addWidget(intro);
     QSettings settings;
     auto* list=new QListWidget;list->addItems(settings.value("packBuilder/packs").toStringList());layout->addWidget(list,1);
@@ -117,14 +117,14 @@ void ReloadMakerController::showPackBuilder() {
         const auto state=packCommand({});const auto phase=state["phase"].toString();const bool running=phase=="running"||phase=="cancelling";
         for(auto* button:{toMo2,toArchive,projects,packs,remove})button->setEnabled(!running);
         cancel->setEnabled(running);
-        if(phase=="idle")report->setPlainText("The export includes reload behavior, ESLs and finished assets. Fallout 4 VR requires ESL support such as Daytripper. MO2 activation and load order are never changed.");
-        else if(running)report->setPlainText("Preparing selected reloads, building source-plugin ESLs and validating the complete output...");
+        if(phase=="idle")report->setPlainText("The export includes reload behavior, ESL-flagged ESPs and finished assets. Fallout 4 VR requires ESL support such as Daytripper. MO2 activation and load order are never changed.");
+        else if(running)report->setPlainText("Preparing selected reloads, building source-plugin ESL-flagged ESPs and validating the complete output...");
         else if(phase=="failed")report->setPlainText("Export failed: "+state["error"].toString());
         else if(state["operation"]=="build") {
             const auto result=state["result"].toObject();
-            QString text=QString("Export complete: %1 ESLs, %2 magazine objects\n\n%3\n").arg(result["plugins"].toArray().size()).arg(result["activeObjects"].toInt()).arg(result["installedTo"].toString(result["archive"].toString(result["output"].toString())));
+            QString text=QString("Export complete: %1 ESL-flagged ESPs, %2 magazine objects\n\n%3\n").arg(result["plugins"].toArray().size()).arg(result["activeObjects"].toInt()).arg(result["installedTo"].toString(result["archive"].toString(result["output"].toString())));
             for(const auto& value:result["plugins"].toArray()){const auto group=value.toObject();text+="\n"+group["master"].toString()+" -> "+group["plugin"].toString();}
-            report->setPlainText(text+"\n\nEnable the desired ESLs in MO2. Source plugins and profile settings were not changed.");
+            report->setPlainText(text+"\n\nEnable the desired ESL-flagged ESPs in MO2. Source plugins and profile settings were not changed.");
         }
     };
     connect(this,&ReloadMakerController::packJobChanged,&dialog,update);

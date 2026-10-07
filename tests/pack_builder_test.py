@@ -21,6 +21,7 @@ async def run(args):
         target=workspace/'inputs'/str(i);shutil.copytree(source,target,dirs_exist_ok=True);inputs.append(target)
     install=workspace/'installation'
     first=await build(inputs,install,backends,initialize=True,archive=workspace/'reloads.zip')
+    assert all(g['plugin'].endswith('.esp') for g in first['plugins'])
     ledger=read(install/read(install/'current.json')['generation']/'ledger.json')
     ids=lambda data:{(master,key):v['localId'] for master,g in data['groups'].items() for key,v in g['objects'].items()}
     original_ids=ids(ledger)
@@ -46,7 +47,7 @@ async def run(args):
     subset=await build(inputs[:1],install,backends,mo2=mod)
     assert marker.read_text()=='keep'
     assert ids(read(install/read(install/'current.json')['generation']/'ledger.json'))==original_ids
-    assert set(g['plugin'] for g in first['plugins']).issubset({p.name for p in mod.glob('*.esl')})
+    assert set(g['plugin'] for g in first['plugins']).issubset({p.name for p in mod.glob('*.esp')})
     assert backends.content_validation(mod)['ok']
     # Editing another source and returning must retain the first source's siblings.
     source_master=load_pack(inputs[0])['manifest']['weapons'][0]['record'].split(':')[0].lower()

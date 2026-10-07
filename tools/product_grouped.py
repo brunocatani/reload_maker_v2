@@ -19,8 +19,8 @@ def plugin_name(master):
     require(isinstance(master, str) and re.fullmatch(r'[^:/\\\x00]+\.(esm|esp|esl)', master, re.I),
             'Invalid source plugin name')
     stem = re.sub(r'[^a-z0-9_-]+', '_', Path(master).stem.lower()).strip('_')
-    require(stem and len(stem) <= 100, 'Source plugin name cannot form an ESL filename')
-    return 'DIAMOND_' + stem + '.esl'
+    require(stem and len(stem) <= 100, 'Source plugin name cannot form a light ESP filename')
+    return 'DIAMOND_' + stem + '.esp'
 
 
 def load_inputs(inputs, stage, backends):
@@ -188,18 +188,20 @@ def deliver(output, archive=None, mo2=None):
                 and not any((destination/name).exists() for name in ('ModOrganizer.ini','Fallout4.exe','Fallout4VR.exe')), 'Choose one named mod folder, not the game or MO2 instance root')
         # The receipt lists only generated files belonging to each source group.
         # Updating one group never removes another source mod's installed group.
-        receipts = {read(p)['plugin']: read(p) for p in destination.glob('F4SE/Plugins/DIAMOND/Generated/*/files.json')}
+        receipts = {Path(read(p)['plugin']).stem.lower(): read(p) for p in destination.glob('F4SE/Plugins/DIAMOND/Generated/*/files.json')}
         updates = [read(p) for p in output.glob('F4SE/Plugins/DIAMOND/Generated/*/files.json')]
-        retained_files = {name for plugin, data in receipts.items() if plugin not in {u['plugin'] for u in updates} for name in data['files']}
+        retained_files = {name for plugin, data in receipts.items() if plugin not in {Path(u['plugin']).stem.lower() for u in updates} for name in data['files']}
         retained_files.update(name for data in updates for name in data['files'])
         for receipt in sorted(output.glob('F4SE/Plugins/DIAMOND/Generated/*/files.json')):
             current = read(receipt); old_path = destination/receipt.relative_to(output)
             old = read(old_path) if old_path.is_file() else {'files': []}
-            require(old.get('plugin', current['plugin']) == current['plugin'], 'MO2 group receipt mismatch')
+            previous_plugin = old.get('plugin', current['plugin'])
+            renamed = previous_plugin == str(Path(current['plugin']).with_suffix('.esl'))
+            require(previous_plugin == current['plugin'] or renamed, 'MO2 group receipt mismatch')
             for name in set(old['files'])-set(current['files']):
                 if name in retained_files: continue
                 path = within(destination, name)
-                allowed = name.startswith('Meshes/'+Path(current['plugin']).stem+'/') or name.startswith('F4SE/Plugins/DIAMOND/Packs/') or name in old.get('modelOverrides', [])
+                allowed = name.startswith('Meshes/'+Path(current['plugin']).stem+'/') or name.startswith('F4SE/Plugins/DIAMOND/Packs/') or name in old.get('modelOverrides', []) or (renamed and name == previous_plugin)
                 require(allowed, 'Unexpected stale file outside this group')
                 if path.is_file(): path.unlink()
         for path in sorted(output.rglob('*')):
@@ -231,17 +233,19 @@ async def build_grouped(inputs, installation, backends, initialize=False, archiv
         output.mkdir(parents=True)
         loaded = retain_group_members(load_inputs(inputs, stage, backends), published, installation, previous)
         capability = backends.content_validation()
-        require(capability.get('sourcePluginESL') is True, 'Update DIAMOND and its bundled validator for source-plugin ESL exports')
+        require(capability.get('sourcePluginLightESP') is True, 'Update DIAMOND and its bundled validator for ESL-flagged ESP exports')
         limits = capability['limits']
         require(len(loaded) <= limits['packs'], 'Too many selected reload packs')
         groups = partition(loaded); native = backends.adapter('nif'); validated = set(); emitted_count = 0
         backends.prepare_serializer(); backend = backends.adapter('plugin'); plugins = []
         for master, parts in sorted(groups.items()):
             cancellation(); plugin = plugin_name(master); stem = Path(plugin).stem
-            require(all(other == master or g['plugin'].lower() != plugin.lower() for other, g in ledger['groups'].items()), 'ESL filename collides with an existing source group')
+            require(all(other == master or Path(g['plugin']).stem.lower() != stem.lower() for other, g in ledger['groups'].items()), 'Light ESP filename collides with an existing source group')
             masters = ['Fallout4.esm'] + ([] if master == 'fallout4.esm' else [master])
             emitted = [emit_pack(p, plugin, output, native, validated) for p in parts]
             seed = ledger['groups'].get(master, dict(version=1, plugin=plugin, installation=ledger['installation'], nextId=0x800, objects={}))
+            require(seed['plugin'] in (plugin, str(Path(plugin).with_suffix('.esl'))), 'Unexpected source group plugin identity')
+            seed['plugin'] = plugin
             seed['masters'] = masters
             group = allocate(seed, emitted); require(group['nextId'] <= 0x1000, 'ESL record capacity exceeded for '+master)
             group['generation'] = generation
@@ -256,7 +260,8 @@ async def build_grouped(inputs, installation, backends, initialize=False, archiv
                 plugin_path=str(output/plugin), output_dir=str(stage/'readback'/stem))))
             require(result.get('status') == 'success', 'Cannot read back generated ESL flags')
             header = yaml.safe_load((stage/'readback'/stem/'RecordData.yaml').read_text(encoding='utf-8-sig'))
-            require({'Master', 'Small'}.issubset(set(header['ModHeader']['Flags'])), 'Generated plugin is not a light master')
+            flags = set(header['ModHeader']['Flags'])
+            require('Small' in flags and 'Master' not in flags, 'Generated ESP must be ESL flagged without the Master flag')
             bindings_path = 'F4SE/Plugins/DIAMOND/Generated/'+stem+'/objects.json'
             bindings = dict(format='diamond-object-bindings', version=2, plugin=plugin, sourcePlugin=master,
                             installation=ledger['installation'], packs=sorted(p['id'] for p in parts),
@@ -272,7 +277,7 @@ async def build_grouped(inputs, installation, backends, initialize=False, archiv
             plugins.append(dict(plugin=plugin, master=master, objects=len(bindings['objects'])))
             emitted_count += len(bindings['objects'])
         require(emitted_count <= limits['worldObjects'], 'Selected active objects exceed DIAMOND runtime capacity')
-        (output/'DIAMOND Reload Packs.txt').write_text('Install this bundle as one MO2 mod. Enable only the ESLs for the original source mods you use.\nRequires DIAMOND with source-plugin ESL support. Fallout 4 VR also requires an ESL loader such as Daytripper.\nGenerated magazine meshes are grouped under each ESL name. Weapon model overrides retain their required native paths.\nSource plugins, activation and load order are not modified by the exporter.\n', encoding='utf-8')
+        (output/'DIAMOND Reload Packs.txt').write_text('Install this bundle as one MO2 mod. Enable only the ESL-flagged ESPs for the original source mods you use.\nRequires DIAMOND with source-plugin ESL support. Fallout 4 VR also requires an ESL loader such as Daytripper.\nGenerated magazine meshes are grouped under each plugin name. Weapon model overrides retain their required native paths.\nSource plugins, activation and load order are not modified by the exporter.\n', encoding='utf-8')
         checked = backends.content_validation(output)
         write(stage/'catalog-validation.json', checked)
         require(checked.get('ok') and checked.get('objects') == emitted_count, 'DIAMOND rejected grouped content: '+json.dumps(checked))
