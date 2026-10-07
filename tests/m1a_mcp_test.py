@@ -43,8 +43,8 @@ def photo(name):
     r=command('render',{'view':'iso','fit':True,'preserveCamera':True})
     (OUT/(name+'.png')).write_bytes(Path(r['path']).read_bytes())
 
-original=ready()['project'];backup=OUT/'original.project.json'
-edit('save_project',path=str(backup));results={'magazines':[],'receivers':[]}
+original=command('export',{'kind':'project'},ready()['revision'])['path'];backup=OUT/'original.project.json'
+edit('export',kind='project',path=str(backup));results={'magazines':[],'receivers':[]}
 try:
     preserved={}
     for name in ['glock','ru556']:
@@ -108,10 +108,10 @@ try:
     bundled=edit('export',kind='reload_bundle');bundle=json.loads(Path(bundled['path']).read_text(encoding='utf-8'))
     assert sum(b.get('hand', 'right')=='right' for b in bundle['magazineGrabBindings'])==4
     results['export']=exported['path'];results['bundle']=bundled['path']
-    edit('save_project',path=str(ROOT/'workspace/M1A-native-reload.project.json'))
+    edit('export',kind='project',path=str(ROOT/'workspace/M1A-native-reload.project.json'))
     for name in ['glock','ru556']:
         edit('testbed',name=name);s=ready();assert s['magazineGrabGrips']==preserved[name];sim()
     (OUT/'validated.json').write_text(json.dumps(results,indent=2),encoding='utf-8')
     print('PASS M1A OMOD-resolved reloads, all magazines/receivers, source bolt rotation and handle coupling, straight input with animated magazine, payload states, native fits and exports')
 finally:
-    edit('open_project',path=str(backup));ready();edit('save_project',path=original)
+    edit('import_project',path=str(backup));ready();edit('export',kind='project',path=original)

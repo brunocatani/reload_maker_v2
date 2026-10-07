@@ -46,7 +46,7 @@ def check_hand(grip):
     return pose
 
 initial=ready();edit('testbed',{'name':'glock'});initial=ready()
-snapshot=OUT/'original.project.json';edit('save_project',{'path':str(snapshot)})
+snapshot=OUT/'original.project.json';edit('export',{'kind':'project','path':str(snapshot)})
 pose_bytes={p.name:p.read_bytes() for p in (ROOT/'workspace/hand-poses').glob('*.json')}
 slot=next(s['key'] for s in initial['slots'] if s['name']=='Magazine')
 cases=[]
@@ -93,8 +93,8 @@ try:
     assert max(abs(a-b) for a,b in zip(relative(fixed_part,fixed_hand),relative(native_part,bones(native)['LArm_Hand'])))<.003
     assert math.dist(bones(native)['Weapon']['translate'],[0,0,0])>.1,'Native-motion option was lost'
     edit('playback',{'mode':0});edit('workspace',{'index':5});ready()
-    saved=OUT/'assigned-grips.project.json';edit('save_project',{'path':str(saved)})
-    assigned=command('state')['magazineGrabGrips'];edit('open_project',{'path':str(saved)});ready()
+    saved=OUT/'assigned-grips.project.json';edit('export',{'kind':'project','path':str(saved)})
+    assigned=command('state')['magazineGrabGrips'];edit('import_project',{'path':str(saved)});ready()
     assert command('state')['magazineGrabGrips']==assigned
     exported=edit('export',{'kind':'reload_bundle'});bundle=json.loads(Path(exported['path']).read_text())
     ids={g['pose']['id'] for g in bundle['grips']}
@@ -104,4 +104,4 @@ try:
     (OUT/'validated.json').write_text(json.dumps({'cases':cases,'fixedReloadSamples':len(samples),'bundle':exported['path'],'sourcePosesUnchanged':True},indent=2))
     print('PASS seven magazine grips including the drum, free/rail following, reach and hand independence, fixed/native reload authoring, persistence and self-contained export')
 finally:
-    edit('open_project',{'path':str(snapshot)});ready();edit('save_project',{'path':initial['project']})
+    edit('import_project',{'path':str(snapshot)});ready();edit('export',{'kind':'project','path':command('export',{'kind':'project'},ready()['revision'])['path']})

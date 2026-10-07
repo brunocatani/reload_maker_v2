@@ -39,12 +39,12 @@ def check_fit(grip):
         actual=next(b['local'] for b in pose['bones'] if b['name']==prefix+f'Arm_Finger{i//3+1}{i%3+1}')
         assert math.dist(actual['translate'],expected['translate'])<.008
         assert max(abs(a-b) for a,b in zip(sum(rotation(actual['rotation']),[]),expected['rotate']))<.004
-original=ready()['project'];results={}
+original=command('export',{'kind':'project'},ready()['revision'])['path'];results={}
 try:
     for name,title,manual in [('l118a2','L118A2',True),('thanatos','Thanatos',False)]:
-        edit('testbed',name=name);state=ready();canonical=Path(state['project']);edit('save_project',path=str(canonical))
+        edit('testbed',name=name);state=ready();canonical=Path(command('export',{'kind':'project'},ready()['revision'])['path']);edit('export',kind='project',path=str(canonical))
         saved=canonical.read_bytes();scratch=OUT/(title+'.project.json');scratch.write_bytes(saved)
-        edit('save_project',path=str(scratch));tested=[]
+        edit('export',kind='project',path=str(scratch));tested=[]
         try:
             edit('workspace',index=5);ready();slot=next(s for s in ready()['slots'] if s['key']=='382167');assert len(slot['choices'])==2
             for choice in slot['choices']:
@@ -99,7 +99,7 @@ try:
                 op('fire');state=op('step',seconds=3);assert state['ammunition']['shotsFired']==1
             results[title]={'magazines':tested,'receivers':len(receiver['choices'])}
         finally:
-            scratch.write_bytes(saved);edit('open_project',path=str(scratch));ready();edit('save_project',path=str(canonical))
+            scratch.write_bytes(saved);edit('import_project',path=str(scratch));ready();edit('export',kind='project',path=str(canonical))
     (OUT/'validated.json').write_text(json.dumps(results,indent=2),encoding='utf-8')
 finally:
-    edit('open_project',path=original);ready()
+    edit('import_project',path=original);ready()

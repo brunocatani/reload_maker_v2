@@ -30,37 +30,28 @@ def main():
     packs = commands.add_parser('packs').add_subparsers(dest='action', required=True)
     validate = packs.add_parser('validate')
     validate.add_argument('--pack', action='append', required=True)
-    build = packs.add_parser('build')
-    build.add_argument('--pack', action='append', required=True)
-    build.add_argument('--installation', required=True)
-    build.add_argument('--initialize', action='store_true')
-    destination = build.add_mutually_exclusive_group()
-    destination.add_argument('--archive', help='Complete ZIP or 7z output')
-    destination.add_argument('--mo2', help='One destination mod directory inside MO2 mods')
     inspect = packs.add_parser('inspect-project')
     inspect.add_argument('--project', required=True)
-    coverage = packs.add_parser('inventory')
-    coverage.add_argument('--project', action='append', default=[])
-    publish = packs.add_parser('export')
-    publish.add_argument('--project', action='append', required=True)
-    publish.add_argument('--installation')
-    deliver = publish.add_mutually_exclusive_group(required=True)
-    deliver.add_argument('--archive')
-    deliver.add_argument('--mo2')
     export = packs.add_parser('freeze')
     export.add_argument('--project', required=True)
     export.add_argument('--output', required=True)
     export.add_argument('--skip', action='append', default=[], help='Weapon record left out of this export')
-    save = packs.add_parser('save-configuration')
-    save.add_argument('--project', required=True)
-    save.add_argument('--capture', required=True)
-    save.add_argument('--id', default='')
-    save.add_argument('--full', default='')
-    save.add_argument('--empty', default='')
-    batch = packs.add_parser('save-configurations')
-    batch.add_argument('--project', required=True)
-    batch.add_argument('--captures', required=True, help='Folder of captures, saved in file-name order')
-    batch.add_argument('--id', default='')
+    library = commands.add_parser('library').add_subparsers(dest='action', required=True)
+    library.add_parser('list')
+    state = library.add_parser('state')
+    state.add_argument('--plugin', required=True)
+    commit = library.add_parser('save')
+    commit.add_argument('--request', required=True)
+    remove = library.add_parser('delete')
+    remove.add_argument('--plugin', required=True)
+    remove.add_argument('--save', required=True)
+    migrate = library.add_parser('migrate')
+    migrate.add_argument('--apply', action='store_true', help='Write the ESP projects; without it only report the plan')
+    shipping = library.add_parser('export')
+    shipping.add_argument('--select', action='append', required=True, help='PLUGIN or PLUGIN@SAVE; the latest version by default')
+    target = shipping.add_mutually_exclusive_group(required=True)
+    target.add_argument('--archive')
+    target.add_argument('--mo2')
     args = parser.parse_args(remaining)
     backends = Backends(Path(settings.application), Path(settings.workspace))
     if settings.cancel_file:
@@ -82,32 +73,35 @@ def main():
                 backends.prepare_serializer()
             backends.adapter(args.adapter).mcp.run()
         return
+    elif args.command == 'library':
+        import product_library
+        if args.action == 'list':
+            result = dict(ok=True, projects=product_library.list_projects(settings.workspace))
+        elif args.action == 'state':
+            result = product_library.project_state(settings.workspace, args.plugin)
+        elif args.action == 'save':
+            result = product_library.save_request(settings.workspace, args.request, backends)
+        elif args.action == 'delete':
+            result = product_library.delete_save(settings.workspace, args.plugin, args.save)
+        elif args.action == 'migrate':
+            from product_library_migrate import migrate
+            result = migrate(settings.workspace, args.apply)
+        else:
+            from product_grouped import export_library
+            selections = [dict(zip(('plugin', 'save'), value.split('@', 1))) for value in args.select]
+            result = asyncio.run(export_library(settings.workspace, selections, backends, args.archive, args.mo2))
     else:
-        from product_packs import load_pack, build as build_packs
-        if args.action == 'inventory':
-            from product_coverage import inventory
-            result=inventory(settings.workspace,args.project)
-        elif args.action == 'validate':
+        from product_packs import load_pack
+        if args.action == 'validate':
             loaded = [load_pack(Path(p)) for p in args.pack]
             result = dict(ok=True, packs=[dict(id=p['manifest']['id'], objects=len(p['objects'])) for p in loaded],
                           runtimeCatalogValidated=False,
-                          message='Pack inputs checked. Building the source-plugin ESLs also validates the complete DIAMOND catalog.')
-        elif args.action in ('build', 'export'):
-            installation = Path(args.installation or str(Path(settings.workspace)/'workspace/installations/default'))
-            initial = args.initialize if args.action == 'build' else not (installation/'current.json').exists()
-            inputs = args.pack if args.action == 'build' else args.project
-            result = asyncio.run(build_packs(inputs, installation, backends, initial, args.archive, args.mo2))
+                          message='Pack inputs checked. Exporting the ESP project also validates the complete DIAMOND catalog.')
         elif args.action == 'inspect-project':
             from product_export import inspect_project
             project, weapons = inspect_project(Path(args.project).resolve())
             result = dict(ok=True, id=project['id'], name=project.get('name', project['id']),
                           revision=project['revision'], weapons=weapons, objects=len(project['objects']))
-        elif args.action == 'save-configuration':
-            from product_authoring import save_configuration
-            result=save_configuration(args.project,args.capture,backends,args.id,args.full,args.empty)
-        elif args.action == 'save-configurations':
-            from product_authoring import save_configurations
-            result=save_configurations(args.project,sorted(Path(args.captures).glob('*.json')),backends,args.id)
         else:
             from product_export import export_pack
             result = export_pack(args.project, args.output, backends, args.skip)

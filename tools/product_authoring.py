@@ -202,8 +202,11 @@ def checked(draft,record,backends):
         native_validate(draft.documents[record],Path(folder),backends)
 
 
-def save(project_path,captures,backends,pack_id='',full='',empty='',strict=True):
+def save(project_path,captures,backends,pack_id='',full='',empty='',strict=True,models=None):
     """Applies the captures in order and writes the project once.
+
+    `models` maps a lower-case magazine record to its (full, empty) finished
+    models; a capture of that magazine uses them instead of `full`/`empty`.
 
     With strict, any failure fails the save. Otherwise each failing capture is
     reported and left out while the others are saved. A template change must
@@ -241,7 +244,8 @@ def save(project_path,captures,backends,pack_id='',full='',empty='',strict=True)
         snapshot=capture['snapshot'];row=dict(selection=snapshot.get('selection',{}),capture=str(capture['path']))
         trial=Draft(path,copy.deepcopy(draft.project));trial.documents=copy.deepcopy(draft.documents)
         try:
-            apply_capture(trial,capture,full,empty)
+            magazine=form_key(snapshot.get('selection',{}).get('magazine',''))
+            apply_capture(trial,capture,*((models or {}).get(magazine) or (full,empty)))
             record=form_key(snapshot.get('weapon'))
             if not strict:
                 checked(trial,record,backends)

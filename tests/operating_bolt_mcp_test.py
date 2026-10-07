@@ -11,9 +11,9 @@ from server import command
 def simulation():return json.loads(Path(edit('export',dict(kind='simulation'))['path']).read_text())
 def run():
     work=ROOT/'local/operating-bolt-tests'/uuid.uuid4().hex;work.mkdir(parents=True);created=[]
-    original=ready()['project'];original_bytes=Path(original).read_bytes()
+    original=command('export',{'kind':'project'},ready()['revision'])['path'];original_bytes=Path(original).read_bytes()
     try:
-        edit('testbed',dict(name='timberwolf'));ready();project=Path(ready()['project']);saved=project.read_bytes()
+        edit('testbed',dict(name='timberwolf'));ready();project=Path(command('export',{'kind':'project'},ready()['revision'])['path']);saved=project.read_bytes()
         try:
             edit('workspace',dict(index=5));ready();before=simulation();settings=command('operating_setup_state')['settings'];recipe=command('reload')
             index=settings['operating'];identity=str(uuid.uuid4())
@@ -35,11 +35,11 @@ def run():
             (work/'result.json').write_text(json.dumps(dict(ok=True,inputTravel=cycle['inputTravel'],ejectProgress=cycle['ejectProgress']),indent=2))
             print('PASS authored lift/open/close/lock cycle, full-opening ejection and original Timberwolf restoration:',work,flush=True)
         finally:
-            project.write_bytes(saved);command('open_project',dict(path=str(project)),command('revision')['revision']);ready()
-            edit('save_project',dict(path=str(project)));project.write_bytes(saved)
+            project.write_bytes(saved);command('import_project',dict(path=str(project)),command('revision')['revision']);ready()
+            edit('export',dict(kind='project',path=str(project)));project.write_bytes(saved)
     finally:
-        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('revision')['revision']);ready()
-        edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
+        Path(original).write_bytes(original_bytes);command('import_project',dict(path=original),command('revision')['revision']);ready()
+        edit('export',dict(kind='project',path=original));Path(original).write_bytes(original_bytes)
         for file in created:
             path=Path(file).resolve();assert path.parent==(ROOT/'workspace/part-mechanisms').resolve() and path.stem==identity;path.unlink()
 

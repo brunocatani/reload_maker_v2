@@ -30,8 +30,8 @@ def counts():
 
 
 def run():
-    original=ready()['project'];original_bytes=Path(original).read_bytes()
-    edit('testbed',dict(name='glock'));session=Path(ready()['project']);session_bytes=session.read_bytes()
+    original=command('export',{'kind':'project'},ready()['revision'])['path'];original_bytes=Path(original).read_bytes()
+    edit('testbed',dict(name='glock'));session=Path(command('export',{'kind':'project'},ready()['revision'])['path']);session_bytes=session.read_bytes()
     try:
         state=ready()
         # A Glock pose: the library lists the newest first, and a pose authored
@@ -48,7 +48,7 @@ def run():
         print('PASS grip handles: move',move,'rotate',rotate,flush=True)
     finally:
         session.write_bytes(session_bytes)
-        Path(original).write_bytes(original_bytes);edit('open_project',dict(path=original));ready()
+        Path(original).write_bytes(original_bytes);edit('import_project',dict(path=original));ready()
 
 
 if __name__=='__main__':run()

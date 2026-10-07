@@ -1,10 +1,9 @@
-// Save all configurations (rework 06). Each of the weapon's receiver ×
-// operating part × magazine choices is selected with the loadout's own code,
-// prepared in Operate and captured with the single-save export. The bundled
-// tool then saves every passing capture into the pack project in one write;
-// a configuration saved from identical inputs is reported up to date. A
-// configuration that cannot be prepared or captured becomes an exception
-// that names its parts and the reason. It never stops the others.
+// Capturing all of a weapon's configurations (rework 06) for the ESP save.
+// Each of the weapon's receiver × operating part × magazine choices is
+// selected with the loadout's own code, prepared in Operate and captured as
+// its runtime configuration. A configuration that cannot be prepared or
+// captured becomes an exception that names its parts and the reason. It never
+// stops the others. The save (EspProject.cpp) commits the captures.
 #include "ReloadMakerController.h"
 #include "StudioPaths.h"
 #include "commands/CommandSupport.h"
@@ -14,7 +13,6 @@
 #include <QJsonDocument>
 #include <QSaveFile>
 #include <QTimer>
-#include <QUuid>
 
 #include <algorithm>
 
@@ -68,40 +66,6 @@ namespace reloadmaker
         return plan;
     }
 
-    // The project must exist: a magazine's first save brings its cooked
-    // world models, which only the single save takes.
-    QJsonObject ReloadMakerController::startSaveAllConfigurations(const QJsonObject& request)
-    {
-        require(!_packProcess && !_saveAll, "Wait for the current asset or pack job");
-        require(currentWeapon() && configuration() && !assemblyBusy(), "Load the weapon and wait until its assembly is ready");
-        const auto project = request["project"].toString();
-        require(!project.isEmpty() && QFileInfo(project).isFile(),
-                "Choose the weapon's pack project. Save one configuration of each new magazine with its cooked models first.");
-        setWorkspace(OperateWorkspace);
-        auto plan = saveAllPlan();
-        require(!plan.isEmpty(), "This weapon offers no receiver, operating part or magazine choices to save");
-        const auto id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-        SaveAllJob job;
-        job.request = request;
-        job.plan = std::move(plan);
-        job.folder = studioDataPath("local/authoring-captures/" + id);
-        require(QDir().mkpath(job.folder), "Cannot create the capture folder");
-        for (const auto& slot : configuration()->entries()) {
-            job.original[slot.key] = configuration()->selected(slot.key);
-        }
-        _packJob = { { "id", id },
-                     { "phase", "running" },
-                     { "operation", "save-all-configurations" },
-                     { "stage", "capturing" },
-                     { "total", job.plan.size() },
-                     { "done", 0 },
-                     { "exceptions", QJsonArray{} } };
-        _saveAll = std::move(job);
-        emit packJobChanged();
-        QTimer::singleShot(0, this, [this] { continueSaveAll(); });
-        return _packJob;
-    }
-
     // One step: wait for the assembly, select the next combination, or
     // capture the selected one.
     void ReloadMakerController::continueSaveAll()
@@ -140,8 +104,8 @@ namespace reloadmaker
             captureSaveAllConfiguration(combination);
             job.assembled = false;
             ++job.next;
-            _packJob["done"] = job.next;
-            _packJob["exceptions"] = job.exceptions;
+            _packJob["configuration"] = job.next;
+            _packJob["configurations"] = job.plan.size();
             emit packJobChanged();
         }
         QTimer::singleShot(0, this, [this] { continueSaveAll(); });
@@ -190,8 +154,7 @@ namespace reloadmaker
         }
     }
 
-    // Restores the author's selection, then hands the captures to the bundled
-    // tool. A cancelled job saves nothing.
+    // Restores the author's selection, then hands the captures to the save.
     void ReloadMakerController::finishSaveAll()
     {
         auto job = std::move(*_saveAll);
@@ -206,33 +169,8 @@ namespace reloadmaker
             refreshAttachments();
             rebuildWeapon();
         }
-        _packJob["done"] = job.next;
-        _packJob["exceptions"] = job.exceptions;
-        // Step errors belong to the job's exceptions, not to the editor's status.
-        setStatus(job.cancelled ? QStringLiteral("Save all configurations cancelled; the pack project is unchanged.")
-                                : QStringLiteral("Captured %1 of %2 configurations; %3 could not be prepared.")
-                                      .arg(job.captures).arg(job.plan.size()).arg(job.exceptions.size()));
-        if (job.cancelled || job.captures == 0) {
-            QDir(job.folder).removeRecursively();
-            _packJob["phase"] = job.cancelled ? "cancelled" : "failed";
-            _packJob["error"] = job.cancelled ? "Save cancelled; the pack is unchanged." : "No configuration could be captured; the pack is unchanged.";
-            _packJob["result"] = QJsonObject{ { "ok", false }, { "saved", 0 }, { "upToDate", 0 }, { "failed", job.exceptions.size() }, { "rows", QJsonArray{} } };
-            emit packJobChanged();
-            return;
-        }
-        try {
-            QString python;
-            QString id = _packJob["id"].toString();
-            auto arguments = packToolArguments(python, id);
-            arguments << "packs" << "save-configurations" << "--project" << job.request["project"].toString() << "--captures" << job.folder;
-            auto state = _packJob;
-            state["stage"] = "saving";
-            state["captureFolder"] = job.folder;
-            startPackProcess(python, arguments, state);
-        } catch (const std::exception& error) {
-            _packJob["phase"] = "failed";
-            _packJob["error"] = QString::fromUtf8(error.what());
-            emit packJobChanged();
+        if (job.finished) {
+            job.finished(job);
         }
     }
 

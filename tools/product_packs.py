@@ -212,7 +212,3 @@ async def verify_plugin(backend, plugin, ledger):
         require(value == obj['value'] and math.isclose(weight, obj['weight'], rel_tol=1e-6, abs_tol=1e-6), 'Generated inventory values mismatch')
         require(row.get('FULL') == obj['name'], 'Generated object name mismatch')
 
-
-async def build(packs, installation, backends, initialize=False, archive=None, mo2=None):
-    from product_grouped import build_grouped
-    return await build_grouped(packs, installation, backends, initialize, archive, mo2)

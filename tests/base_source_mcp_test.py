@@ -7,11 +7,11 @@ from server import command
 
 def run():
     work=ROOT/'local/base-source-tests'/uuid.uuid4().hex;work.mkdir(parents=True)
-    original=ready()['project'];saved=Path(original).read_bytes()
+    original=command('export',{'kind':'project'},ready()['revision'])['path'];saved=Path(original).read_bytes()
     try:
         assert not command('installation')['virtualFilesystem'],'Use a normal editor process for the explicit Data test'
-        edit('save_project',dict(path=str(work/'before.project.json')))
-        edit('base_game',{});state=ready();assert not state['project'],'Base import retained the old save destination'
+        edit('export',dict(kind='project',path=str(work/'before.project.json')))
+        edit('base_game',{});state=ready();assert not state['project'],'Base import kept the previous ESP project open'
         coverage=command('pack_coverage');loaded=coverage['loadedWeapons'];assert coverage['sourceMode']=='explicit-data',coverage['sourceMode']
         # Non-playable records (companion, creature and dummy weapons) are
         # hidden with a reason; the base game lists 88 playable weapons.
@@ -28,15 +28,15 @@ def run():
         edit('checklist',dict(operation='preset',id='pistol.slide-detachable.v1'));ready()
         assert command('checklist_state')['presetAssigned']
         assert 'behavior preset' not in command('simulation_state')['error']
-        base=work/'base.project.json';edit('save_project',dict(path=str(base)))
-        edit('open_project',dict(path=str(base)));ready()
+        base=work/'base.project.json';edit('export',dict(kind='project',path=str(base)))
+        edit('import_project',dict(path=str(base)));ready()
         assert command('pack_coverage')['sourceMode']=='explicit-data'
         (work/'result.json').write_text(json.dumps(dict(ok=True,weapons=len(loaded),selected=selected,simulation=command('simulation_state')),indent=2))
         print('PASS real base Data import, source/template resume and previous project preservation:',work,flush=True)
     except Exception:
         (work/'failure.json').write_text(json.dumps(dict(state=command('state'),diagnostics=command('diagnostics')),indent=2));print('Failure evidence:',work,flush=True);raise
     finally:
-        Path(original).write_bytes(saved);command('open_project',dict(path=original),command('revision')['revision']);ready()
-        edit('save_project',dict(path=original));Path(original).write_bytes(saved)
+        Path(original).write_bytes(saved);command('import_project',dict(path=original),command('revision')['revision']);ready()
+        edit('export',dict(kind='project',path=original));Path(original).write_bytes(saved)
 
 if __name__=='__main__':run()

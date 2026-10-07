@@ -8,7 +8,7 @@ from server import command
 
 def run():
     work=ROOT/'local/coverage-mcp-tests'/uuid.uuid4().hex;work.mkdir(parents=True)
-    before=ready();project=Path(before['project']);original=project.read_bytes()
+    before=ready();project=Path(command('export',{'kind':'project'},ready()['revision'])['path']);original=project.read_bytes()
     result=finish(command('pack_coverage',dict(refresh=True)))
     assert result['scope']=='authored-workspace'
     state=command('pack_coverage');after=ready()

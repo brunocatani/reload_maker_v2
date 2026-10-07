@@ -1,9 +1,11 @@
 """Run the built editor for automated checks without changing the authoring corpus.
 
-The editor saves its current session whenever it switches projects or closes, and
-records the last opened project in its settings. Nothing writes a project
-except an explicit save; automated checks still snapshot those files first and
-restore any that changed once the editor has closed.
+Nothing writes the ESP library except a deliberate save, and an unattended
+editor discards unsaved edits when it changes source or closes. Automated
+checks still record the settings file and the library first, then restore the
+settings and remove every library file a check added once the editor has
+closed. Library records and assets are content-named and never rewritten, so
+only the small index files need their bytes kept.
 """
 import configparser
 import os
@@ -21,10 +23,12 @@ PYTHON = ROOT / 'build-fast/dist/ReloadMakerV2/runtime/python/python.exe'
 SETTINGS = ROOT / 'local/settings/ReloadMakerV2/ReloadMakerV2.ini'
 ENDPOINT = ROOT / 'local/settings/endpoint.json'
 
+# The developer testbeds by id (workspace/library/development-sources.json).
 TESTBEDS = (
     'glock', 'ru556', 'm1a', 'timberwolf', 'l118a2', 'thanatos',
     'srep-service', 'srep-ar10', 'srep-honeybadger', 'srep-xm16e1',
 )
+LIBRARY = ROOT / 'workspace/library'
 
 READY_TIMEOUT_SECONDS = 300
 STARTUP_TIMEOUT_SECONDS = 120
@@ -87,35 +91,38 @@ def close_editor(process):
 
 
 def corpus_files():
-    """The settings file plus every session the testbed switcher can open or save,
-    with the checklist status file a weapon project keeps beside it (which may
-    not exist yet)."""
-    settings = configparser.ConfigParser(interpolation=None)
-    settings.optionxform = str
-    settings.read(SETTINGS, encoding='utf-8')
-    files = [SETTINGS]
-    keys = [('testbeds', name) for name in TESTBEDS] + [('projects', 'lastProject')]
-    for section, key in keys:
-        if settings.has_option(section, key):
-            files.append(Path(settings.get(section, key)))
-    files = [path for path in files if path.exists()]
-    return files + [path.with_name('status.json') for path in files if path.name == 'authoring.project.json']
+    """The settings file and every ESP library file. Only the files that are
+    replaced in place (indexes, export identity and history, the development
+    sources) have their bytes kept; the rest only need to be known."""
+    files = [SETTINGS] if SETTINGS.exists() else []
+    return files + sorted(path for path in LIBRARY.rglob('*') if path.is_file()) if LIBRARY.exists() else files
+
+
+def replaced_in_place(path):
+    relative = path.relative_to(LIBRARY).parts if path.is_relative_to(LIBRARY) else ()
+    return not relative or not any(part in ('saves', 'records', 'assets') for part in relative[:-1])
 
 
 def snapshot(paths):
-    return {path: path.read_bytes() if path.exists() else None for path in paths}
+    return {path: path.read_bytes() if replaced_in_place(path) else True for path in paths}
 
 
 def restore(saved):
     restored = []
     for path, data in saved.items():
-        if data is None:
-            if path.exists():
-                path.unlink()
-                restored.append(str(path))
-        elif not path.exists() or path.read_bytes() != data:
+        if data is True:
+            continue
+        if not path.exists() or path.read_bytes() != data:
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
             restored.append(str(path))
+    if LIBRARY.exists():
+        for path in sorted(LIBRARY.rglob('*'), reverse=True):
+            if path.is_file() and path not in saved:
+                path.unlink()
+                restored.append(str(path))
+            elif path.is_dir() and not any(path.iterdir()):
+                path.rmdir()
     return restored
 
 
@@ -154,5 +161,5 @@ class EditorRun:
         return code
 
     def report(self):
-        return {'restoredSessionFiles': self.restored,
+        return {'restoredCorpusFiles': self.restored,
                 'otherWorkspaceFilesWritten': files_written_since(ROOT / 'workspace', self.started)}

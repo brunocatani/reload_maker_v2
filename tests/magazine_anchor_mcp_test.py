@@ -32,7 +32,7 @@ def check_fit(grip):
  return scene
 results=[]
 for title,expected in [('M1A',4)]:
- project=ROOT/'workspace'/f'{title}-native-reload.project.json';edit('open_project',path=str(project));ready();edit('workspace',index=5);ready();op('reset')
+ project=ROOT/'workspace'/f'{title}-native-reload.project.json';edit('import_project',path=str(project));ready();edit('workspace',index=5);ready();op('reset')
  slots=ready()['slots'];mag=next(s for s in slots if s['name']=='Magazine');assert len(mag['choices'])==expected
  for c in mag['choices']:
   op('reset');current=next(s for s in ready()['slots'] if s['name']=='Magazine')

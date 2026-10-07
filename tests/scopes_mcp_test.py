@@ -43,8 +43,7 @@ async def run():
             await ready()
             await call('select_testbed', name='l118a2', expected_revision='current')
             state = await ready()
-            original = state['project']
-            await call('save_project', path=str(OUT/'initial.project.json'), expected_revision='current')
+            await call('export_authored_record', kind='project',path=str(OUT/'initial.project.json'), expected_revision='current')
             await op('open')
             if not (await call('get_scope_state'))['configured']:
                 # Scan the viewport for the sight and pick until a lens resolves.
@@ -87,8 +86,8 @@ async def run():
                 pose = await call('inspect_pose')
                 assert all(pose[k] == baseline_pose[k] for k in ('bones','parts','source')), 'Lens edits changed weapon/hand poses'
                 saved = OUT/'roundtrip.project.json'
-                await call('save_project', path=str(saved), expected_revision='current')
-                await call('open_project', path=str(saved), expected_revision='current')
+                await call('export_authored_record', kind='project',path=str(saved), expected_revision='current')
+                await call('import_project', path=str(saved), expected_revision='current')
                 await ready()
                 assert (await call('get_scope_state'))['profile'] == changed
                 # A different part must not inherit another model's lens.
@@ -125,7 +124,7 @@ async def run():
                 bad_project = OUT/'invalid.project.json'
                 bad_project.write_text(json.dumps(malformed), encoding='utf-8')
                 try:
-                    await call('open_project', path=str(bad_project), expected_revision='current')
+                    await call('import_project', path=str(bad_project), expected_revision='current')
                     raise AssertionError('Invalid project accepted')
                 except RuntimeError:
                     assert (await call('get_scope_state'))['profile'] == changed
@@ -138,10 +137,8 @@ async def run():
                         export_path.unlink(missing_ok=True)
                     else:
                         export_path.write_bytes(export_before)
-                await call('open_project', path=str(OUT/'initial.project.json'), expected_revision='current')
+                await call('import_project', path=str(OUT/'initial.project.json'), expected_revision='current')
                 await ready()
-                # Restore the original project path with the original authored draft.
-                await call('save_project', path=original, expected_revision='current')
             print('PASS real MCP scope edit/save/reopen/export/import, pose isolation and invalid input rejection')
 
 asyncio.run(run())

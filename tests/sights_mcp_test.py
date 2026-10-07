@@ -95,6 +95,6 @@ assert command('simulation_state')['ammunition']['slideLocked']
 shot('standard-locked-open')
 op('drop_magazine');attached();op('slide_release');finished();attached()
 op('reset');shot('handoff-ready')
-edit('save_project',{'path':str(ROOT/'workspace/Glock19x-simulation.project.json')})
+edit('export',{'kind':'project','path':str(ROOT/'workspace/Glock19x-simulation.project.json')})
 (OUT/'validated-variants.json').write_text(json.dumps(evidence,indent=2),encoding='utf-8')
 print('PASS: all five sights on standard/Agency slides, stationary attachment roots, manual rack/return, native fire/reload, reload graph, empty lock/release and saved clean handoff')

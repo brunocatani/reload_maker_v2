@@ -14,10 +14,10 @@ from server import command
 
 def run(fixture):
     work=ROOT/'local/shared-magazine-tests'/uuid.uuid4().hex;work.mkdir(parents=True)
-    original=ready()['project']
+    original=command('export',{'kind':'project'},ready()['revision'])['path']
     source=work/'source.project.json';shutil.copy2(fixture,source)
     try:
-        edit('open_project',dict(path=str(source)));ready();edit('workspace',dict(index=5));ready()
+        edit('import_project',dict(path=str(source)));ready();edit('workspace',dict(index=5));ready()
         settings=command('operating_setup_state')['settings']
         settings.update(mode='reload',operating=0,bolt=0,magazine=4,followers=[0,1,2,3],openFrame=-1,closedFrame=-1,fireMode='native')
         edit('operating_setup',dict(operation='save',settings=settings));ready()
@@ -45,8 +45,8 @@ def run(fixture):
         image=command('render',dict(view='iso',fit=True,zoom=1.4,preserveCamera=True))
         shutil.copy2(image['path'],work/'detached.png')
         edit('simulate',dict(operation='reset'))
-        saved=work/'configured.project.json';edit('save_project',dict(path=str(saved)))
-        edit('open_project',dict(path=str(saved)));ready();edit('workspace',dict(index=5));ready()
+        saved=work/'configured.project.json';edit('export',dict(kind='project',path=str(saved)))
+        edit('import_project',dict(path=str(saved)));ready();edit('workspace',dict(index=5));ready()
         assert command('magazine_setup_state')['pieces']==presentation['pieces']
         (work/'result.json').write_text(json.dumps(dict(ok=True,reference=reference,presentation=presentation,simulation=state),indent=2),encoding='utf-8')
         print('PASS real shared-receiver magazine carrier, reference, presentation and project resume:',work,flush=True)
@@ -54,7 +54,7 @@ def run(fixture):
         (work/'failure.json').write_text(json.dumps(dict(simulation=command('simulation_state'),setup=command('operating_setup_state')),indent=2),encoding='utf-8')
         print('Failure evidence:',work,flush=True);raise
     finally:
-        command('open_project',dict(path=original),command('revision')['revision']);ready()
+        command('import_project',dict(path=original),command('revision')['revision']);ready()
 
 
 if __name__=='__main__':

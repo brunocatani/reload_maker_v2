@@ -1,65 +1,66 @@
-"""Weapon switching saves independent per-ESP/context projects and resumes them."""
-import configparser,json,sys,uuid
+"""Weapons of one ESP share one in-memory project and one saved version.
+
+The Timberwolf testbed's source holds two weapons of the same plugin. Edits to
+both survive switching between them without any save, Save commits both in one
+dated version, and after the source is opened again each weapon loads its
+latest saved authoring. Every version this check creates is deleted.
+"""
+import sys
+import time
 from pathlib import Path
+
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'tests'))
-from template_mcp_test import ready,edit,simulation
+from template_mcp_test import ready,edit
 from server import command
 
+SAVE_TIMEOUT_SECONDS=1800
+
+
+def insertion():return command('weapon_properties_state')['insertion']['value']
+
+
+def flipped(value):return 'native-curve' if value=='straight' else 'straight'
+
+
+def saves():return [s['id'] for s in command('esp_project')['saves']]
+
+
+def select(state,editor):
+    edit('select_weapon',dict(index=next(w['index'] for w in state['weapons'] if w['editorId'].lower()==editor)));return ready()
+
+
 def run():
-    work=ROOT/'local/authoring-project-tests'/uuid.uuid4().hex;work.mkdir(parents=True)
-    original=ready()['project'];original_bytes=Path(original).read_bytes()
-    settings=configparser.ConfigParser(interpolation=None);settings.read(ROOT/'local/settings/ReloadMakerV2/ReloadMakerV2.ini',encoding='utf-8')
-    old_paths={name:Path(settings.get('testbeds',name)) for name in ('timberwolf','l118a2')}
-    old_bytes={name:p.read_bytes() for name,p in old_paths.items()};destinations={}
+    edit('testbed',dict(name='timberwolf'));state=ready()
+    project=command('esp_project');existing=saves();created=[]
     try:
-        edit('testbed',dict(name='timberwolf'));state=ready();edit('workspace',dict(index=5));ready()
-        before=simulation();first=Path(state['suggestedProject']);assert '/workspace/projects/l118a2.esp/' in first.as_posix().lower()
-        destinations[first]=first.read_bytes() if first.exists() else None
-        edit('save_project',dict(path=str(first)))
-        second_index=next(w['index'] for w in state['weapons'] if w['editorId'].lower()=='l118a2')
-        # Find the second canonical path without losing its existing file.
-        # Its source context is shared with Timberwolf; record IDs differ.
-        coverage=command('pack_coverage');second_key=next(w['record'] for w in coverage['loadedWeapons'] if w['selection']==second_index)
-        second=first.parent.parent.parent/second_key.split(':')[1]/first.parent.name/'authoring.project.json'
-        destinations[second]=second.read_bytes() if second.exists() else None
-        second.parent.mkdir(parents=True,exist_ok=True);second.write_bytes(b'{}')
-        try:edit('select_weapon',dict(index=second_index))
-        except RuntimeError:pass
-        else:raise AssertionError('Invalid saved destination replaced the current project')
-        rejected=command('state');assert Path(rejected['project'])==first and rejected['weaponIndex']==state['weaponIndex']
-        if destinations[second] is None:second.unlink()
-        else:second.write_bytes(destinations[second])
-        command('select_weapon',dict(index=second_index),rejected['revision']);state=ready()
-        assert Path(state['suggestedProject'])==second
-        edit('save_project',dict(path=str(second)));second_record=json.loads(second.read_text(encoding='utf-8'))
-        assert second_record['weapon'].lower()==second_key and second!=first
-        first_record=json.loads(first.read_text(encoding='utf-8'))
-        assert first_record['weapon']!=second_record['weapon']
-        first_index=next(w['index'] for w in state['weapons'] if w['editorId'].lower()=='c14timberwolf')
-        edit('select_weapon',dict(index=first_index));state=ready();assert Path(state['project'])==first
-        assert simulation()==before,'Changing weapon projects lost the existing motion or pose assignments'
-        assert json.loads(second.read_text(encoding='utf-8'))['weapon']==second_record['weapon']
-        # Open mod folder (owner, 2026-10-05): after the source reopens, a
-        # weapon with a saved project opens it, and changing weapons never
-        # saves a new document over it.
-        kept=json.loads(first.read_text(encoding='utf-8'))
-        edit('open_source',dict(path=state['source'],gameData=state['gameData']));state=ready()
-        index=lambda editor:next(w['index'] for w in state['weapons'] if w['editorId'].lower()==editor)
-        edit('select_weapon',dict(index=index('c14timberwolf')));state=ready()
-        assert Path(state['project'])==first,('A weapon with a saved project opened as a new document',state['project'])
-        edit('select_weapon',dict(index=index('l118a2')));state=ready()
-        assert Path(state['project'])==second,state['project']
-        reopened=json.loads(first.read_text(encoding='utf-8'))
-        assert reopened['weapon']==kept['weapon'] and reopened['authoringRoadmaps']==kept['authoringRoadmaps'],'A new document was saved over the project'
-        (work/'result.json').write_text(json.dumps(dict(ok=True,first=str(first),second=str(second),weapons=[first_record['weapon'],second_record['weapon']]),indent=2),encoding='utf-8')
-        print('PASS independent ESP/weapon source projects, autosave on switching, exact restored simulation and projects kept after Open mod folder:',work,flush=True)
+        # Both weapons belong to the open ESP project.
+        state=select(state,'c14timberwolf');first=insertion();edit('weapon_property',dict(name='insertion',value=flipped(first)))
+        state=select(ready(),'l118a2');assert command('esp_project')['plugin']==project['plugin'],'the second weapon opened another ESP project'
+        second=insertion();edit('weapon_property',dict(name='insertion',value=flipped(second)))
+        state=select(ready(),'c14timberwolf')
+        assert insertion()==flipped(first),'switching weapons lost the first weapon\'s unsaved edit'
+        assert len(command('esp_project')['unsavedWeapons'])==2,command('esp_project')['unsavedWeapons']
+        assert saves()==existing,'switching weapons wrote a version'
+        # One Save commits both weapons together.
+        job=edit('save_project',dict(note='two weapons'))
+        deadline=time.monotonic()+SAVE_TIMEOUT_SECONDS
+        while time.monotonic()<deadline:
+            job_state=command('pack_job')
+            if job_state.get('id')==job['id'] and job_state.get('phase') in ('complete','failed','cancelled'):break
+            time.sleep(0.5)
+        assert job_state.get('phase')=='complete',job_state
+        latest=command('esp_project')['latest'];created.append(latest)
+        assert saves()==existing+[latest] and not command('esp_project')['unsavedWeapons']
+        # Opening the source again loads the latest version for each weapon.
+        state=ready();edit('open_source',dict(path=state['source'],gameData=state['gameData']));state=ready()
+        state=select(state,'c14timberwolf');assert insertion()==flipped(first) and ready()['modified'] is False
+        state=select(state,'l118a2');assert insertion()==flipped(second) and ready()['modified'] is False
+        assert command('esp_project')['base']==latest
+        print('PASS one ESP project: unsaved edits kept across weapons, one Save commits both, latest reloads after reopening the source',flush=True)
     finally:
-        for name,path in old_paths.items():
-            path.write_bytes(old_bytes[name]);command('open_project',dict(path=str(path)),command('revision')['revision']);ready();edit('save_project',dict(path=str(path)));path.write_bytes(old_bytes[name])
-        for path,data in destinations.items():
-            assert path.resolve().is_relative_to((ROOT/'workspace/projects').resolve())
-            if data is None:path.unlink(missing_ok=True)
-            else:path.write_bytes(data)
-        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('revision')['revision']);ready();edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
+        for save_id in created:
+            try:edit('esp_version',dict(operation='delete',save=save_id));ready()
+            except RuntimeError as error:print('cleanup',save_id,error,flush=True)
+
 
 if __name__=='__main__':run()

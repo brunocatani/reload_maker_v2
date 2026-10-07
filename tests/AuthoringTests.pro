@@ -4,4 +4,4 @@ CONFIG -= app_bundle debug_and_release
 TEMPLATE = app
 TARGET = AuthoringTests
 INCLUDEPATH += ../src
-SOURCES += AuthoringTests.cpp ../src/CollisionDraftPolicy.cpp ../src/AuthoringPaths.cpp ../src/SourcePolicy.cpp
+SOURCES += AuthoringTests.cpp ../src/CollisionDraftPolicy.cpp ../src/areas/project/EspLibrary.cpp ../src/StudioPaths.cpp ../src/SourcePolicy.cpp

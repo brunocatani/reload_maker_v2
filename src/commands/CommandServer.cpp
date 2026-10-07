@@ -181,7 +181,7 @@ namespace reloadmaker
     {
         require(!_loadThread && !_reloadCapturing && !_rebuildTimer->isActive(),
                 "Source loading, assembly or reload capture is in progress; read state or cancel");
-        require(!_saveAll, "Save all configurations is selecting parts; read pack_job or cancel it");
+        require(!_saveAll && !espBusy(), "The project is being saved; read pack_job or cancel it");
     }
 
     QJsonObject ReloadMakerController::studioState() const
@@ -235,7 +235,7 @@ namespace reloadmaker
         for (auto it = _magazineGrabGrips.cbegin(); it != _magazineGrabGrips.cend(); ++it) {
             magazineGrabs[it.key()] = it.value();
         }
-        const bool busy = bool(_loadThread) || _reloadCapturing || _reloadCaptureQueued || _rebuildTimer->isActive();
+        const bool busy = bool(_loadThread) || _reloadCapturing || _reloadCaptureQueued || _rebuildTimer->isActive() || espBusy();
         return { { "revision", double(_revision) },
                  { "session", commandSession() },
                  { "busy", busy },
@@ -267,9 +267,9 @@ namespace reloadmaker
                  { "recipeTracks", _reloadRecipe ? int(_reloadRecipe->tracks.size()) : 0 },
                  { "status", _window->statusBar()->currentMessage() },
                  { "lastError", _lastError },
-                 { "project", _sessionPath },
-                 { "modified", documentDirty() },
-                 { "suggestedProject", suggestedSessionPath() },
+                 { "project", _esp ? QJsonObject{ { "plugin", _esp->plugin }, { "base", _esp->base } } : QJsonObject{} },
+                 { "modified", espDirty() },
+                 { "saving", espBusy() },
                  { "camera", _window->getGLView()->studioCameraState() },
                  { "nativeApplicationShell", false } };
     }

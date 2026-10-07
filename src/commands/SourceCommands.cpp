@@ -34,7 +34,7 @@ namespace reloadmaker
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
                             const QString path = params["path"].toString();
                             require(QFileInfo(path).exists(), "Source folder or ZIP does not exist");
-                            startPackageLoad(path, params["gameData"].toString(_gameDataText), true);
+                            startPackageLoad(path, params["gameData"].toString(_gameDataText));
                             return std::nullopt;
                         } });
 

@@ -42,8 +42,8 @@ def snapshot(label):
     r=command('render',{'view':'iso','fit':True,'preserveCamera':True})
     (OUT/(label+'.png')).write_bytes(Path(r['path']).read_bytes())
 
-initial=ready();original=initial['project'];before=OUT/'original.project.json'
-edit('save_project',path=str(before))
+initial=ready();original=command('export',{'kind':'project'},ready()['revision'])['path'];before=OUT/'original.project.json'
+edit('export',kind='project',path=str(before))
 results={}
 try:
     edit('testbed',name='glock');glock=ready();glock_grips=glock['magazineGrabGrips']
@@ -102,7 +102,7 @@ try:
         assert ended['ammunition']['shotsFired']>=2 if automatic_mode else ended['ammunition']['shotsFired']==1
         results['receivers'].append({'record':choice['record'],'automatic':automatic_mode})
     for key,value in original_choices.items():select(key,value)
-    edit('save_project',path=str(ROOT/'workspace/RU556-native-reload.project.json'))
+    edit('export',kind='project',path=str(ROOT/'workspace/RU556-native-reload.project.json'))
     exported=edit('export',kind='simulation');payload=json.loads(Path(exported['path']).read_text(encoding='utf-8'))
     assert payload['format']=='reload-maker-ar15-simulation' and payload['boltMotion']['poses']
     results['export']=exported['path']
@@ -115,4 +115,4 @@ try:
     (OUT/'validated.json').write_text(json.dumps(results,indent=2),encoding='utf-8')
     print('PASS all RU556 magazines, receiver modes, bolt/handle independence, physical insertion, native fits, export and Glock preservation')
 finally:
-    edit('open_project',path=str(before));ready();edit('save_project',path=original)
+    edit('import_project',path=str(before));ready();edit('export',kind='project',path=original)

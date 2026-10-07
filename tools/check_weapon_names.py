@@ -3,8 +3,8 @@
 Maker reads a weapon's behavior from its preset and detected properties, never
 from which weapon it is. This check scans the string literals in src/ for the
 development weapons' editor IDs, plugin files and animation folders, the names
-the old per-weapon branches used. The testbed picker opens those weapons by
-design and is exempt until P7 deletes it.
+the old per-weapon branches used. The developer testbeds are named only in
+workspace/library/development-sources.json, so no source file is exempt.
 
 Usage: check_weapon_names.py <src folder>
 """
@@ -19,8 +19,7 @@ NAMES = re.compile(
     r'|glock19xanims|ru556anims|mk18anims|m1aanims|c14timb|srep/|l118/',
     re.IGNORECASE)
 LITERAL = re.compile(r'"(?:[^"\\\n]|\\.)*"')
-# The development testbed picker (P7 deletes it with these entries).
-EXEMPT = {'StudioTestbeds.cpp', 'areas/sources/Testbeds.h'}
+EXEMPT = set()
 
 
 def code(line):

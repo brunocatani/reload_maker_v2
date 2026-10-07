@@ -1,4 +1,4 @@
-#include "AuthoringPaths.h"
+#include "areas/project/EspLibrary.h"
 #include "CollisionDraftPolicy.h"
 #include "SourcePolicy.h"
 #include <QCoreApplication>
@@ -15,14 +15,14 @@ int main(int argc,char** argv) {
         check(validSourcePolicy(sourceRules,policyError),"Valid add-on/blocked/group rules rejected");
         auto conflicting=sourceRules;conflicting["magazineCollections"]=QJsonArray{"example.ESP:000801"};check(!validSourcePolicy(conflicting,policyError),"One record accepted with incompatible roles");
         conflicting=sourceRules;conflicting["sourceOverride"]=QJsonObject{{"marker","Addon.esp:000000"},{"present",true}};check(!validSourcePolicy(conflicting,policyError),"Zero dependency record accepted");
-        const QJsonObject source{{"mode","mo2-profile"},{"profile","game test"}};
-        const auto path=authoringProjectPath("Example Weapon.esp:000AbC",source);
-        check(path.startsWith("workspace/projects/example weapon.esp/000abc/")&&path.endsWith("/authoring.project.json"),"Authoring path lost originating plugin/weapon grouping");
-        check(path==authoringProjectPath("example weapon.ESP:000abc",source),"Record case split one authoring identity");
-        check(path!=authoringProjectPath("Example Weapon.esp:000abc",{{"mode","mo2-profile"},{"profile","overhaul"}}),"Two source profiles share a save destination");
-        for(const auto* invalid:{"../Mod.esp:000abc","Folder\\Mod.esp:000abc","Mod.esp:1234567","Mod:000abc"})
-            check(authoringProjectPath(invalid,source).isEmpty(),"Unsafe or ambiguous weapon namespace accepted");
+        // One ESP project per originating plugin, whatever source loaded it.
+        application.setProperty("studioRoot","C:/workspace-root");
+        check(espProjectKey("Example Weapon.esp")=="example weapon.esp","ESP project key lost the originating plugin");
+        check(espProjectKey("example weapon.ESP")==espProjectKey("Example Weapon.esp"),"Plugin case split one ESP project");
+        check(espProjectFolder("Example Weapon.esp").endsWith("/workspace/library/plugins/example weapon.esp"),"ESP project outside the library");
+        for(const auto* invalid:{"../Mod.esp","Folder\\Mod.esp","Mod.esp:000abc","Mod","Mod.esp.json",""})
+            check(espProjectKey(invalid).isEmpty(),"Unsafe or ambiguous ESP project name accepted");
         QJsonObject drafts{{"full",QJsonObject{{"edit",QString(32,'a')},{"usable",true}}}};check(validCollisionDrafts(drafts),"Valid collision draft rejected");drafts["unknown"]=drafts["full"];check(!validCollisionDrafts(drafts),"Unknown collision state accepted");
-        QTextStream(stdout)<<"PASS source rules, authoring paths and bounded collision draft metadata\n";return 0;
+        QTextStream(stdout)<<"PASS source rules, ESP project keys and bounded collision draft metadata\n";return 0;
     }catch(const std::exception& e){QTextStream(stderr)<<e.what()<<'\n';return 1;}
 }

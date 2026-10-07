@@ -26,21 +26,21 @@ from pathlib import Path
 
 # The bundled runtime is isolated and does not add the script folder to the path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from editor_session import PYTHON, ROOT, SETTINGS, EditorRun, corpus_files, edit, ready
+from editor_session import PYTHON, ROOT, EditorRun, command, edit, ready
 
 TESTS = ROOT / 'tests'
 SUITE_TIMEOUT_SECONDS = 1800
 
-OFFLINE = ('coverage_test.py', 'presentation_identity_test.py', 'catalog_slots_test.py')
+OFFLINE = ('esp_library_test.py', 'presentation_identity_test.py', 'catalog_slots_test.py')
 
 # Suites with required command-line inputs that are not yet configured.
 NEEDS_INPUTS = {
     'asset_cook_test.py': '--model and --hulls',
-    'home_mcp_test.py': '--pack',
+    'home_mcp_test.py': '--plugin',
     'installation_mcp_test.py': 'installation paths',
     'multiweapon_pack_test.py': '--capture and --assets',
     'pack_builder_test.py': '--application, --workspace and --pack',
-    'pack_job_mcp_test.py': '--pack',
+    'pack_job_mcp_test.py': '--plugin',
     'portable_tools_test.py': '--application, --workspace and --nif',
     'product_authoring_test.py': '--captures',
     'shared_magazine_mcp_test.py': '--project',
@@ -69,11 +69,20 @@ def editor_suites():
 
 
 def open_reference_project():
-    """Editor suites were written against an open Glock testbed; each starts from it."""
+    """Editor suites were written against an open Glock testbed; each starts from
+    its latest saved version. Selecting the testbed already open keeps its
+    working state, so loading the latest version discards what the previous
+    suite left and rebuilds the weapon."""
     edit('testbed', {'name': 'glock'})
     state = ready()
     if state['lastError']:
         raise RuntimeError(state['lastError'])
+    latest = command('esp_project')['latest']
+    if latest:
+        edit('esp_version', {'operation': 'load', 'save': latest})
+        state = ready()
+        if state['lastError']:
+            raise RuntimeError(state['lastError'])
 
 
 def run_editor_suite(name, logs):
@@ -178,19 +187,10 @@ def prepare_worker(index):
     settings = worker / 'local/settings'
     shutil.rmtree(settings, ignore_errors=True)
     shutil.copytree(ROOT / 'local/settings', settings, ignore=shutil.ignore_patterns('endpoint.json'))
-    # The saved project paths must open the worker's copies, not this workspace's files:
-    # the editor only saves projects inside its own workspace.
+    # Settings that name this workspace's files must name the worker's copies.
     ini = settings / 'ReloadMakerV2/ReloadMakerV2.ini'
     own_root = re.compile(re.escape(ROOT.as_posix() + '/'), re.IGNORECASE)
     ini.write_text(own_root.sub(lambda match: worker.as_posix() + '/', ini.read_text(encoding='utf-8')), encoding='utf-8')
-    # Testbed projects kept outside the workspace folder are part of the corpus too.
-    for path in corpus_files():
-        path = path.resolve()
-        if path == SETTINGS or not path.exists() or not path.is_relative_to(ROOT) or path.is_relative_to(ROOT / 'workspace'):
-            continue
-        copy = worker / path.relative_to(ROOT)
-        copy.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(path, copy)
     (worker / 'local/tmp').mkdir(parents=True, exist_ok=True)
     return worker
 

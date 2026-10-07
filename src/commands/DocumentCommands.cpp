@@ -39,7 +39,7 @@ namespace reloadmaker
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
                             require(!_profileHandoff.isEmpty() && params["token"].toString() == _profileHandoff,
                                     "No matching MO2 handoff is pending");
-                            require(!_loadThread && !_reloadCapturing && !_packProcess && !documentDirty(),
+                            require(!_loadThread && !_reloadCapturing && !_packProcess && !espBusy() && !espDirty(),
                                     "The open editor has unsaved changes; save or discard them first. Source handoff cancelled");
                             _profileHandoff.clear();
                             QTimer::singleShot(0, _window, [this] { _window->close(); });
@@ -84,16 +84,37 @@ namespace reloadmaker
                             return std::nullopt;
                         } });
 
+        // The deliberate save of the whole ESP project: captures the edited
+        // weapons' configurations, then commits one new dated version. The
+        // job reports through pack_job(state); state.busy stays true until done.
         _commands.add({ "save_project", CommandAccess::Edit, CommandGate::WhenIdle,
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
-                            require(saveSession(params["path"].toString()), _lastError);
-                            return std::nullopt;
+                            require(!params.contains("path") || params["path"].toString().isEmpty(),
+                                    "Projects are saved per source ESP; there is no path to choose");
+                            return startEspSave(params);
                         } });
 
-        _commands.add({ "open_project", CommandAccess::Edit, CommandGate::WhenIdle,
+        _commands.add({ "esp_project", CommandAccess::Read, CommandGate::Always,
+                        [this](const QJsonObject&) -> std::optional<QJsonObject> { return espState(); } });
+
+        // Loads or deletes exactly one saved version of the open ESP project.
+        _commands.add({ "esp_version", CommandAccess::Edit, CommandGate::WhenIdle,
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
-                            openSession(params["path"].toString());
-                            return std::nullopt;
+                            const auto operation = params["operation"].toString();
+                            const auto save = params["save"].toString();
+                            require(!save.isEmpty(), "Choose a saved version");
+                            if (operation == "load") {
+                                return loadEspVersion(save);
+                            }
+                            require(operation == "delete", "Choose load or delete");
+                            return deleteEspVersion(save);
+                        } });
+
+        // An earlier per-weapon project, imported as unsaved edits of its
+        // weapon in that weapon's ESP project.
+        _commands.add({ "import_project", CommandAccess::Edit, CommandGate::WhenIdle,
+                        [this](const QJsonObject& params) -> std::optional<QJsonObject> {
+                            return importLegacyProject(params["path"].toString());
                         } });
 
         _commands.add({ "import_records", CommandAccess::Edit, CommandGate::WhenIdle,
@@ -103,6 +124,9 @@ namespace reloadmaker
 
         _commands.add({ "export", CommandAccess::Edit, CommandGate::WhenIdle,
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
+                            if (params["kind"].toString() == "project") {
+                                return exportWeaponProject(params["path"].toString());
+                            }
                             return exportRecord(params["kind"].toString());
                         } });
     }
@@ -281,7 +305,7 @@ namespace reloadmaker
             bytes = encodeHandPose(*pose, error);
             id = pose->id;
         } else {
-            require(false, "Export kind must be hand, grip, mechanism, reload, reload_bundle, simulation, slide, "
+            require(false, "Export kind must be project, hand, grip, mechanism, reload, reload_bundle, simulation, slide, "
                            "sounds, grab_locations, scope or runtime_configuration");
         }
         require(error.isEmpty() && !bytes.isEmpty(), error);

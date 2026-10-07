@@ -31,18 +31,18 @@ def simulation():
 
 def run(names):
     work=ROOT/'local/template-tests'/uuid.uuid4().hex;work.mkdir(parents=True)
-    original=ready()['project'];original_bytes=Path(original).read_bytes();results=[]
+    original=command('export',{'kind':'project'},ready()['revision'])['path'];original_bytes=Path(original).read_bytes();results=[]
     try:
         for name in names:
-            edit('testbed',{'name':name});ready();project=Path(ready()['project']);saved=project.read_bytes()
+            edit('testbed',{'name':name});ready();project=Path(command('export',{'kind':'project'},ready()['revision'])['path']);saved=project.read_bytes()
             try:
                 edit('workspace',{'index':5});ready();before=simulation()
                 state=command('checklist_state');expected=state['preset'];assert len(state['presets'])==5
                 assigned=edit('checklist',dict(operation='preset',id=expected));ready()
                 assert assigned['presetAssigned'] and assigned['preset']==expected
                 after=simulation();assert after==before,(name,'Template assignment changed the existing source behavior')
-                edit('save_project',{'path':str(work/(name+'.project.json'))})
-                edit('open_project',{'path':str(work/(name+'.project.json'))});ready()
+                edit('export',{'kind':'project','path':str(work/(name+'.project.json'))})
+                edit('import_project',{'path':str(work/(name+'.project.json'))});ready()
                 reopened=command('checklist_state');assert reopened['presetAssigned'] and reopened['preset']==expected
                 assert simulation()==before,(name,'Reopening an assigned template changed behavior')
                 try:edit('checklist',dict(operation='preset',id='unsupported.template'))
@@ -50,12 +50,12 @@ def run(names):
                 else:raise AssertionError('Unknown behavior template accepted')
                 results.append(dict(name=name,template=expected));print('PASS',name,expected,flush=True)
             finally:
-                project.write_bytes(saved);edit('open_project',{'path':str(project)});ready()
-                edit('save_project',{'path':str(project)});project.write_bytes(saved)
+                project.write_bytes(saved);edit('import_project',{'path':str(project)});ready()
+                edit('export',{'kind':'project','path':str(project)});project.write_bytes(saved)
         (work/'result.json').write_text(json.dumps(dict(ok=True,results=results),indent=2));print('Evidence:',work)
     finally:
-        Path(original).write_bytes(original_bytes);edit('open_project',{'path':original});ready()
-        edit('save_project',{'path':original});Path(original).write_bytes(original_bytes)
+        Path(original).write_bytes(original_bytes);edit('import_project',{'path':original});ready()
+        edit('export',{'kind':'project','path':original});Path(original).write_bytes(original_bytes)
 
 
 if __name__=='__main__':

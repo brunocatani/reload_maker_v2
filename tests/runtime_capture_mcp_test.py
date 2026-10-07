@@ -32,11 +32,11 @@ def main(names,editor_project=None):
     work=ROOT/'local/runtime-capture-tests'/uuid.uuid4().hex;work.mkdir(parents=True)
     entries=read(ROOT/'workspace/packs/verified-b5bf9bf910a249da8f180b951aa17ae1/projects.json')
     originals={row['name']:Path(row['path']) for row in entries}
-    original=ready()['project'];original_bytes=Path(original).read_bytes();results=[];errors=[]
+    original=command('export',{'kind':'project'},ready()['revision'])['path'];original_bytes=Path(original).read_bytes();results=[];errors=[]
     try:
         for name in names:
-            edit('open_project',{'path':editor_project}) if editor_project else edit('testbed',{'name':name})
-            ready();project=Path(ready()['project']);saved=project.read_bytes()
+            edit('import_project',{'path':editor_project}) if editor_project else edit('testbed',{'name':name})
+            ready();project=Path(command('export',{'kind':'project'},ready()['revision'])['path']);saved=project.read_bytes()
             folder=work/name;folder.mkdir()
             try:
                 reference=originals[NAMES[name]];owner=read(reference)['weapons'][0]
@@ -48,7 +48,7 @@ def main(names,editor_project=None):
                     key='|'.join(location[k] for k in ('weapon','group','sourceModel','sourcePath')).replace('\\','/').lower()
                     fixture.setdefault('grabLocations',{}).setdefault(key,location)
                 write(folder/'fixture.project.json',fixture)
-                edit('open_project',{'path':str(folder/'fixture.project.json')});ready()
+                edit('import_project',{'path':str(folder/'fixture.project.json')});ready()
                 edit('workspace',{'index':5});ready()
                 captured=read(Path(edit('export',{'kind':'runtime_configuration'})['path']));write(folder/'capture.json',captured)
                 variants=docs['profiles']['profiles'];selector=captured['selection']
@@ -91,13 +91,13 @@ def main(names,editor_project=None):
             except Exception as error:
                 errors.append(dict(testbed=name,error=str(error)));print('FAIL',name,str(error),flush=True)
             finally:
-                project.write_bytes(saved);command('open_project',{'path':str(project)},command('revision')['revision']);ready()
-                edit('save_project',{'path':str(project)});project.write_bytes(saved)
+                project.write_bytes(saved);command('import_project',{'path':str(project)},command('revision')['revision']);ready()
+                edit('export',{'kind':'project','path':str(project)});project.write_bytes(saved)
         write(work/'result.json',dict(ok=not errors,results=results,errors=errors));print('Evidence:',work,flush=True)
         assert not errors,errors
     finally:
-        Path(original).write_bytes(original_bytes);command('open_project',{'path':original},command('revision')['revision']);ready()
-        edit('save_project',{'path':original});Path(original).write_bytes(original_bytes)
+        Path(original).write_bytes(original_bytes);command('import_project',{'path':original},command('revision')['revision']);ready()
+        edit('export',{'kind':'project','path':original});Path(original).write_bytes(original_bytes)
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--testbed',action='append');parser.add_argument('--editor-project')

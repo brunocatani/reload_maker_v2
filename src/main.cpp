@@ -121,13 +121,11 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     window->show();
-    QTimer::singleShot(0, controller, [controller, &parser, root] {
+    QTimer::singleShot(0, controller, [controller, &parser] {
         if(parser.positionalArguments().isEmpty()&&!parser.isSet("library")&&QSettings().value("home/role").toString()=="player") {controller->showHome();return;}
-        const QString project=QSettings().value("projects/lastProject",QDir(root).filePath("workspace/current.project.json")).toString();
-        if (!parser.isSet("no-restore") && parser.positionalArguments().isEmpty() && !parser.isSet("library") && QFileInfo::exists(project)) {
-            try { controller->executeCommand({{"method","open_project"},{"params",QJsonObject{{"path",project}}}}); }
-            catch (const std::exception& e) { qWarning("Project restore: %s",e.what()); }
-        } else controller->openInitialPaths(parser.positionalArguments().value(0), parser.value("game-data"), parser.value("mo2-instance"), parser.isSet("library"));
+        if (!parser.isSet("no-restore") && parser.positionalArguments().isEmpty() && !parser.isSet("library") && QSettings().contains("session/last"))
+            controller->resumeLastSession();
+        else controller->openInitialPaths(parser.positionalArguments().value(0), parser.value("game-data"), parser.value("mo2-instance"), parser.isSet("library"));
     });
     return app.exec();
 }

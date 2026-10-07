@@ -16,24 +16,16 @@ namespace reloadmaker
         return index >= 0 && index < _weaponSelections.size() ? index : -1;
     }
 
+    // Opens the weapon's authoring from its ESP project (EspProject.cpp).
     void ReloadMakerController::selectWeapon(int index)
     {
         index = validWeaponIndex(index);
-        if (selectSavedWeapon(index)) {
+        if (index < 0 || (index == _selectedWeapon && currentWeapon())) {
             return;
         }
-        if (index == _selectedWeapon) {
-            return;
-        }
-        _selectedWeapon = index;
-        alignPluginToWeapon();
-        // Switching to a weapon with its own saved project reopens that
-        // project instead of reassembling here.
-        if (!beginWeaponProject(index)) {
+        if (!changeWeapon(index)) {
             refreshWeaponPicker();
-            refreshAttachments();
-            scheduleRebuild();
-            markDocumentClean();
+            return;
         }
         noteDocumentChange("weapon selection");
     }

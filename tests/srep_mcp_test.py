@@ -86,7 +86,7 @@ def main():
     catalog=json.loads((OUT/'catalog.json').read_text()) if len(sys.argv)>1 else {}
     for family,weapon,default,expected in [('service','00213f','00c7ac',14),('honeybadger','005bdd',None,14),('ar10','00d875','00d8bc',3),('xm16e1','00d8a5','00d89b',2)]:
         if len(sys.argv)>1 and family not in sys.argv[1:]:continue
-        project=ROOT/'workspace'/('srep-'+family+'-native-reload.project.json');edit('open_project',path=str(project));ready();edit('workspace',index=5);ready();op('reset')
+        project=ROOT/'workspace'/('srep-'+family+'-native-reload.project.json');edit('import_project',path=str(project));ready();edit('workspace',index=5);ready();op('reset')
         if default:select('1CAS_ServiceRifle.esp:'+default);op('reset')
         state=ready();magazines=next(s['choices'] for s in state['slots'] if s['name']=='Magazine');assert len(magazines)==expected
         receivers=next(s['choices'] for s in state['slots'] if s['name'].lower()=='receiver') if default else [{'record':'1CAS_ServiceRifle.esp:'+weapon,'name':'Fixed receiver'}]
@@ -121,7 +121,7 @@ def main():
                 print('PASS',family,receiver['record'],mag['record'],flush=True)
         catalog[family]=summary;(OUT/'catalog.json').write_text(json.dumps(catalog,indent=2))
         if default:select('1CAS_ServiceRifle.esp:'+default)
-        select(magazines[0]['record']);op('reset');edit('save_project',path=str(project))
+        select(magazines[0]['record']);op('reset');edit('export',kind='project',path=str(project))
     print('PASS',sum(len(c['variants']) for c in catalog.values()),'configurations; all magazine wrists, joints and reloads',flush=True)
 
 if __name__=='__main__':main()

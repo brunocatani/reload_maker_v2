@@ -79,7 +79,8 @@ namespace reloadmaker
         if (!currentWeapon()) {
             return {};
         }
-        return poseRecordKey(currentWeapon()->formId).toLower() + "|" + QFileInfo(suggestedSessionPath()).dir().dirName();
+        // One ESP project owns a weapon's rules, whatever source loaded it.
+        return poseRecordKey(currentWeapon()->formId).toLower();
     }
 
     bool ReloadMakerController::sourcePluginLoaded(const QString& plugin) const

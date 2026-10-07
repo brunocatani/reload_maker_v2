@@ -281,13 +281,13 @@ namespace reloadmaker
 
     void ReloadMakerController::openPackage(const QString& path)
     {
-        startPackageLoad(path, _gameDataText, true);
+        startPackageLoad(path, _gameDataText);
     }
 
     // With `reuse` (opening a project), the installed or a resident copy of
     // the same source is installed again when none of its files changed;
     // otherwise, and for every explicit open, the source is read.
-    void ReloadMakerController::startPackageLoad(const QString& path, const QString& dataPath, bool newDocument, bool reuse)
+    void ReloadMakerController::startPackageLoad(const QString& path, const QString& dataPath, bool reuse)
     {
         if (_loadThread) {
             return;
@@ -333,7 +333,7 @@ namespace reloadmaker
             }
         });
         _loadThread->setParent(this);
-        connect(_loadThread, &QThread::finished, this, [this, result, newDocument]() {
+        connect(_loadThread, &QThread::finished, this, [this, result]() {
             result->cancelled |= _loadThread->isInterruptionRequested();
             _loadThread->deleteLater();
             _loadThread = nullptr;
@@ -343,14 +343,12 @@ namespace reloadmaker
             setLoading(false);
             if (result->cancelled) {
                 _pendingSession = {};
-                _pendingSessionPath.clear();
                 _gameDataText = _gameData;
                 setStatus("Loading cancelled; previous source retained.");
                 return;
             }
             if (!result->error.isEmpty()) {
                 _pendingSession = {};
-                _pendingSessionPath.clear();
                 _gameDataText = _gameData;
                 setStatus(result->error, true);
                 return;
@@ -358,9 +356,10 @@ namespace reloadmaker
 
             _loadTimings.append(result->timings);
             StageClock install(_loadTimings, "source.install");
-            if (newDocument) {
-                _sessionPath.clear();
-            }
+            // A replaced source ends the working project; any unsaved edits
+            // were already saved or discarded when the replacement was requested.
+            _esp.reset();
+            _espIndexCache.clear();
             setLibraryResources(nullptr);
             if (result->reuseCurrent) {
                 takeCurrentPackage(*result);

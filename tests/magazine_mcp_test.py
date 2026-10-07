@@ -109,9 +109,9 @@ async def run():
             await call('set_workspace',index=5,expected_revision='current');await ready()
             s=await call('get_simulation_state');assert s['magazinePresent'] and len(visible(s))==2
             project=ROOT/'workspace/Glock19x-simulation.project.json'
-            await call('save_project',path=str(project),expected_revision='current')
+            await call('export_authored_record',kind='project',path=str(project),expected_revision='current')
             saved=json.loads(project.read_text(encoding='utf-8'));assert 'magazineInteraction' in saved
-            await call('open_project',path=str(project),expected_revision='current');await ready()
+            await call('import_project',path=str(project),expected_revision='current');await ready()
             final=await call('get_simulation_state');assert final['magazinePresent'] and final['magazineRail']['connectionName']=='P-Mag'
             (OUT/'validated-final-state.json').write_text(json.dumps(final,indent=2),encoding='utf-8')
             print('PASS real MCP empty/full variants, complete clearance, animated out/in, free loaded magazine, guided rail, withdrawal hysteresis, seating/cancel, workspace restoration and export/project persistence',flush=True)

@@ -41,12 +41,12 @@ def reference(path):return dict(path=str(path))
 
 def main(names):
     work=ROOT/'local/visible-geometry-suite'/uuid.uuid4().hex;work.mkdir(parents=True)
-    original=ready()['project'];edit('save_project',{'path':original});original_bytes=Path(original).read_bytes()
+    original=command('export',{'kind':'project'},ready()['revision'])['path'];edit('export',{'kind':'project','path':original});original_bytes=Path(original).read_bytes()
     results=[]
     try:
         for name in names or ['current']:
             if name!='current':edit('testbed',{'name':name});ready()
-            project=Path(ready()['project']);saved=project.read_bytes()
+            project=Path(command('export',{'kind':'project'},ready()['revision'])['path']);saved=project.read_bytes()
             folder=work/name;folder.mkdir()
             try:
                 edit('workspace',{'index':9});state=command('collision_state')
@@ -75,11 +75,11 @@ def main(names):
                 results.append(dict(testbed=name,prepared=prepared,cooked=cooked))
                 print('PASS',name,prepared['shapes'],'shapes,',prepared['triangles'],'triangles,',cooked['hulls'],'hulls',flush=True)
             finally:
-                project.write_bytes(saved);edit('open_project',{'path':str(project)});ready()
+                project.write_bytes(saved);edit('import_project',{'path':str(project)});ready()
         (work/'result.json').write_text(json.dumps(dict(ok=True,results=results),indent=2))
         print('Evidence:',work,flush=True)
     finally:
-        Path(original).write_bytes(original_bytes);edit('open_project',{'path':original});ready()
+        Path(original).write_bytes(original_bytes);edit('import_project',{'path':original});ready()
 
 
 if __name__=='__main__':

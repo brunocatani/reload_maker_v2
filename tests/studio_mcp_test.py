@@ -83,8 +83,8 @@ async def run():
             pose_id=next(p['id'] for p in state['handPoses'] if p['id'] not in old_pose_ids)
             await call('save_hand_pose',hand='left',name='Glock V2 integration · left',expected_revision='current')
             project=ROOT/'workspace/integration.project.json'
-            await call('save_project',path=str(project),expected_revision='current')
-            await call('open_project',path=str(project),expected_revision='current')
+            await call('export_authored_record',kind='project',path=str(project),expected_revision='current')
+            await call('import_project',path=str(project),expected_revision='current')
             await idle()
             restored={b['name']:b for b in (await call('inspect_pose'))['bones']}
             for name in ('LArm_Finger13','RArm_Finger13'):
@@ -143,8 +143,8 @@ async def run():
             assert live_record['id']==native_record['id'] and 'windows' not in native_record
             assert live_record['documentRevision']==(await call('get_state'))['revision']
             await capture('04-reload-workspace','iso')
-            await call('save_project',path=str(project),expected_revision='current')
-            await call('open_project',path=str(project),expected_revision='current')
+            await call('export_authored_record',kind='project',path=str(project),expected_revision='current')
+            await call('import_project',path=str(project),expected_revision='current')
             final=await idle()
             assert final['recipeTracks']>0
             restored_recipe=await call('get_reload_recipe')

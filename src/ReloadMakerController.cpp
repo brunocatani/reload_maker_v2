@@ -105,7 +105,13 @@ namespace reloadmaker
         _pinOverlay->contextRequested = [this](const QString& id, QPoint position) { showPinMenu(id, position); };
         setWorkspace(OperateWorkspace);
         startCommandServer();
-        _window->prepareClose = [this] { if(_packProcess){setStatus("Finish or cancel the pack build before closing.",true);return false;}return leaveDocument(QStringLiteral("closing")); };
+        _window->prepareClose = [this] {
+            if (_packProcess || _saveAll || espBusy()) {
+                setStatus("Finish or cancel the current save or export before closing.", true);
+                return false;
+            }
+            return leaveDocument(QStringLiteral("closing"), [this] { _window->close(); });
+        };
         _playbackTimer->setTimerType(Qt::PreciseTimer);
         _playbackTimer->setInterval(kPlaybackIntervalMilliseconds);
         connect(_playbackTimer, &QTimer::timeout, this, &ReloadMakerController::advancePlayback);

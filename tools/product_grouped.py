@@ -1,5 +1,7 @@
 """Complete, independently selectable source-plugin ESL distributions."""
+import contextlib
 import copy
+import filecmp
 import json
 import os
 from pathlib import Path
@@ -21,55 +23,6 @@ def plugin_name(master):
     stem = re.sub(r'[^a-z0-9_-]+', '_', Path(master).stem.lower()).strip('_')
     require(stem and len(stem) <= 100, 'Source plugin name cannot form a light ESP filename')
     return 'DIAMOND_' + stem + '.esp'
-
-
-def load_inputs(inputs, stage, backends):
-    from product_export import export_pack
-    packs = []
-    for index, value in enumerate(inputs):
-        source = Path(value).resolve()
-        if source.is_file():
-            frozen = stage/'inputs'/str(index)
-            export_pack(str(source), str(frozen), backends)
-            source = frozen
-        manifests = sorted(source.glob('F4SE/Plugins/DIAMOND/Packs/*/manifest.json'))
-        if manifests:
-            packs.extend(load_pack(source, path) for path in manifests)
-        else:
-            packs.append(load_pack(source))
-    require(packs and len({p['manifest']['id'] for p in packs}) == len(packs), 'Duplicate or empty pack selection')
-    return packs
-
-
-def retain_group_members(packs, published, installation, ledger):
-    if published is None:
-        return packs
-    masters = {w['record'].rsplit(':',1)[0].lower() for p in packs for w in p['manifest']['weapons']}
-    projects = {p['manifest'].get('authoringId',p['manifest']['id']) for p in packs}
-    records = {w['record'].lower() for p in packs for w in p['manifest']['weapons']}
-    roots = set()
-    for master in masters:
-        generation = ledger.get('groups', {}).get(master, {}).get('generation')
-        saved = within(installation, generation) if generation else published
-        root = saved/'output'
-        if not list(root.glob('F4SE/Plugins/DIAMOND/Packs/*/manifest.json')):
-            root = saved/'validation-Data'
-        roots.add(root)
-    result = list(packs)
-    for manifest in sorted(path for root in roots for path in root.glob('F4SE/Plugins/DIAMOND/Packs/*/manifest.json')):
-        root = manifest.parents[5]
-        metadata = read(manifest)
-        if metadata.get('authoringId',metadata['id']) in projects:
-            continue
-        selected = [w for w in metadata['weapons'] if w['record'].rsplit(':',1)[0].lower() in masters and w['record'].lower() not in records]
-        if not selected:
-            continue
-        pack = load_pack(root,manifest)
-        needed = {a[k] for w in selected for a in w['magazineObjects'] for k in ('full','empty')}
-        pack['manifest']['weapons'] = selected
-        pack['objects'] = [o for o in pack['objects'] if o['id'] in needed]
-        result.append(pack)
-    return result
 
 
 def partition(packs):
@@ -204,88 +157,172 @@ def deliver(output, archive=None, mo2=None):
                 allowed = name.startswith('Meshes/'+Path(current['plugin']).stem+'/') or name.startswith('F4SE/Plugins/DIAMOND/Packs/') or name in old.get('modelOverrides', []) or (renamed and name == previous_plugin)
                 require(allowed, 'Unexpected stale file outside this group')
                 if path.is_file(): path.unlink()
+        # Identical files are left alone; changed and new files are replaced
+        # whole. Comparing bytes only avoids copying, it admits nothing.
+        written = unchanged = 0
         for path in sorted(output.rglob('*')):
-            if path.is_file():
-                target = within(destination, path.relative_to(output).as_posix())
-                target.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(path, target)
-        return dict(installedTo=str(destination))
+            if not path.is_file():
+                continue
+            cancellation()
+            target = within(destination, path.relative_to(output).as_posix())
+            if target.is_file() and target.stat().st_size == path.stat().st_size and filecmp.cmp(path, target, shallow=False):
+                unchanged += 1
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            pending = target.with_name(target.name+'.'+uuid.uuid4().hex+'.pending')
+            try:
+                shutil.copy2(path, pending)
+                os.replace(pending, target)
+            finally:
+                if pending.exists():
+                    pending.unlink()
+            written += 1
+        return dict(installedTo=str(destination), written=written, unchanged=unchanged)
     return {}
 
 
-async def build_grouped(inputs, installation, backends, initialize=False, archive=None, mo2=None):
-    installation = installation.resolve(); installation.mkdir(parents=True, exist_ok=True)
-    lock = installation/'build.lock'
-    with lock.open('x', encoding='utf-8') as stream: stream.write(str(os.getpid()))
-    try:
-        cancellation(); current = installation/'current.json'
-        if current.exists():
-            published = within(installation, read(current)['generation'])
-            previous = read(published/'ledger.json')
-        else:
-            published = None
-            require(initialize, 'Initialize this new installation ledger first')
-            previous = dict(version=2, installation=str(uuid.uuid4()), groups={})
-        require(previous.get('version') in (1, 2), 'Unsupported installation ledger')
-        # New ESL identities are separate from the retired monolithic plugin.
-        # Do not alias old world references to unrelated compacted records.
-        ledger = copy.deepcopy(previous) if previous['version'] == 2 else dict(version=2, installation=previous['installation'], groups={})
-        generation = 'generations/'+uuid.uuid4().hex; stage = installation/generation; output = stage/'output'
-        output.mkdir(parents=True)
-        loaded = retain_group_members(load_inputs(inputs, stage, backends), published, installation, previous)
-        capability = backends.content_validation()
-        require(capability.get('sourcePluginLightESP') is True, 'Update DIAMOND and its bundled validator for ESL-flagged ESP exports')
-        limits = capability['limits']
-        require(len(loaded) <= limits['packs'], 'Too many selected reload packs')
-        groups = partition(loaded); native = backends.adapter('nif'); validated = set(); emitted_count = 0
-        backends.prepare_serializer(); backend = backends.adapter('plugin'); plugins = []
-        for master, parts in sorted(groups.items()):
-            cancellation(); plugin = plugin_name(master); stem = Path(plugin).stem
-            require(all(other == master or Path(g['plugin']).stem.lower() != stem.lower() for other, g in ledger['groups'].items()), 'Light ESP filename collides with an existing source group')
-            masters = ['Fallout4.esm'] + ([] if master == 'fallout4.esm' else [master])
-            emitted = [emit_pack(p, plugin, output, native, validated) for p in parts]
-            seed = ledger['groups'].get(master, dict(version=1, plugin=plugin, installation=ledger['installation'], nextId=0x800, objects={}))
-            require(seed['plugin'] in (plugin, str(Path(plugin).with_suffix('.esl'))), 'Unexpected source group plugin identity')
-            seed['plugin'] = plugin
-            seed['masters'] = masters
-            group = allocate(seed, emitted); require(group['nextId'] <= 0x1000, 'ESL record capacity exceeded for '+master)
-            group['generation'] = generation
-            ledger['groups'][master] = group
-            write_plugin_source(stage/'plugin-source'/stem, group)
-            result = json.loads(await backend.fo4_serialize_plugin(backend.SpriggitSerializeInput(
-                yaml_dir=str(stage/'plugin-source'/stem), output_path=str(output/plugin))))
-            require(result.get('status') == 'success', 'ESL serialization failed: '+str(result))
-            await verify_plugin(backend, output/plugin, group)
-            # Use the approved native reader to prove the emitted light flags.
-            result = json.loads(await backend.fo4_deserialize_plugin(backend.SpriggitDeserializeInput(
-                plugin_path=str(output/plugin), output_dir=str(stage/'readback'/stem))))
-            require(result.get('status') == 'success', 'Cannot read back generated ESL flags')
-            header = yaml.safe_load((stage/'readback'/stem/'RecordData.yaml').read_text(encoding='utf-8-sig'))
-            flags = set(header['ModHeader']['Flags'])
-            require('Small' in flags and 'Master' not in flags, 'Generated ESP must be ESL flagged without the Master flag')
-            bindings_path = 'F4SE/Plugins/DIAMOND/Generated/'+stem+'/objects.json'
-            bindings = dict(format='diamond-object-bindings', version=2, plugin=plugin, sourcePlugin=master,
-                            installation=ledger['installation'], packs=sorted(p['id'] for p in parts),
-                            objects={key: dict(form=f'{plugin}:{entry["localId"]:06x}', editorId=entry['editorId'],
-                                               model=entry['definition']['model'][7:], name=entry['definition']['name'], active=True)
-                                     for key, entry in group['objects'].items() if entry['active']})
-            write(output/bindings_path, bindings)
-            files = {plugin, bindings_path}
-            for pack in emitted:
-                files.update(pack['manifest']['files'])
-                files.add('F4SE/Plugins/DIAMOND/Packs/'+pack['manifest']['id']+'/manifest.json')
-            write(output/'F4SE/Plugins/DIAMOND/Generated'/stem/'files.json', dict(plugin=plugin, sourcePlugin=master, files=sorted(files), modelOverrides=sorted({path for p in emitted for path in p['manifest'].get('modelOverrides', [])})))
-            plugins.append(dict(plugin=plugin, master=master, objects=len(bindings['objects'])))
-            emitted_count += len(bindings['objects'])
-        require(emitted_count <= limits['worldObjects'], 'Selected active objects exceed DIAMOND runtime capacity')
-        (output/'DIAMOND Reload Packs.txt').write_text('Install this bundle as one MO2 mod. Enable only the ESL-flagged ESPs for the original source mods you use.\nRequires DIAMOND with source-plugin ESL support. Fallout 4 VR also requires an ESL loader such as Daytripper.\nGenerated magazine meshes are grouped under each plugin name. Weapon model overrides retain their required native paths.\nSource plugins, activation and load order are not modified by the exporter.\n', encoding='utf-8')
-        checked = backends.content_validation(output)
-        write(stage/'catalog-validation.json', checked)
-        require(checked.get('ok') and checked.get('objects') == emitted_count, 'DIAMOND rejected grouped content: '+json.dumps(checked))
-        write(stage/'ledger.json', ledger); cancellation()
-        delivered = deliver(output, archive, mo2)
-        receipt = dict(version=2, generation=generation)
-        write(stage/'receipt.json', receipt); write(current, receipt)
-        return dict(ok=True, output=str(output), generation=receipt, plugins=plugins,
-                    activeObjects=emitted_count, runtimeCatalog=checked, **delivered)
-    finally:
-        lock.unlink()
+async def emit_group(master, parts, seed, installation, output, stage, backend, native, validated):
+    """Builds one source plugin's ESL-flagged ESP, bindings and file receipt.
+    `seed` is the group's previous allocation ledger, or None for a new group."""
+    plugin = plugin_name(master); stem = Path(plugin).stem
+    masters = ['Fallout4.esm'] + ([] if master == 'fallout4.esm' else [master])
+    emitted = [emit_pack(p, plugin, output, native, validated) for p in parts]
+    seed = copy.deepcopy(seed) if seed else dict(version=1, plugin=plugin, installation=installation, nextId=0x800, objects={})
+    require(seed['plugin'] in (plugin, str(Path(plugin).with_suffix('.esl'))), 'Unexpected source group plugin identity')
+    seed['plugin'] = plugin
+    seed['masters'] = masters
+    seed.pop('generation', None)
+    group = allocate(seed, emitted); require(group['nextId'] <= 0x1000, 'ESL record capacity exceeded for '+master)
+    write_plugin_source(stage/'plugin-source'/stem, group)
+    result = json.loads(await backend.fo4_serialize_plugin(backend.SpriggitSerializeInput(
+        yaml_dir=str(stage/'plugin-source'/stem), output_path=str(output/plugin))))
+    require(result.get('status') == 'success', 'ESL serialization failed: '+str(result))
+    await verify_plugin(backend, output/plugin, group)
+    # Use the approved native reader to prove the emitted light flags.
+    result = json.loads(await backend.fo4_deserialize_plugin(backend.SpriggitDeserializeInput(
+        plugin_path=str(output/plugin), output_dir=str(stage/'readback'/stem))))
+    require(result.get('status') == 'success', 'Cannot read back generated ESL flags')
+    header = yaml.safe_load((stage/'readback'/stem/'RecordData.yaml').read_text(encoding='utf-8-sig'))
+    flags = set(header['ModHeader']['Flags'])
+    require('Small' in flags and 'Master' not in flags, 'Generated ESP must be ESL flagged without the Master flag')
+    bindings_path = 'F4SE/Plugins/DIAMOND/Generated/'+stem+'/objects.json'
+    bindings = dict(format='diamond-object-bindings', version=2, plugin=plugin, sourcePlugin=master,
+                    installation=installation, packs=sorted(p['id'] for p in parts),
+                    objects={key: dict(form=f'{plugin}:{entry["localId"]:06x}', editorId=entry['editorId'],
+                                       model=entry['definition']['model'][7:], name=entry['definition']['name'], active=True)
+                             for key, entry in group['objects'].items() if entry['active']})
+    write(output/bindings_path, bindings)
+    files = {plugin, bindings_path}
+    for pack in emitted:
+        files.update(pack['manifest']['files'])
+        files.add('F4SE/Plugins/DIAMOND/Packs/'+pack['manifest']['id']+'/manifest.json')
+    write(output/'F4SE/Plugins/DIAMOND/Generated'/stem/'files.json',
+          dict(plugin=plugin, sourcePlugin=master, files=sorted(files),
+               modelOverrides=sorted({path for p in emitted for path in p['manifest'].get('modelOverrides', [])})))
+    return group, dict(plugin=plugin, master=master, objects=len(bindings['objects'])), len(bindings['objects'])
+
+
+README = ('Install this bundle as one MO2 mod. Enable only the ESL-flagged ESPs for the original source mods you use.\n'
+          'Requires DIAMOND with source-plugin ESL support. Fallout 4 VR also requires an ESL loader such as Daytripper.\n'
+          'Generated magazine meshes are grouped under each plugin name. Weapon model overrides retain their required native paths.\n'
+          'Source plugins, activation and load order are not modified by the exporter.\n')
+
+
+async def export_library(workspace, selections, backends, archive=None, mo2=None):
+    """Exports chosen saved versions of ESP projects as one bundle.
+
+    Each selection names an ESP project and optionally a saved version (the
+    latest by default). Only committed authoring is read. Every weapon of the
+    version with saved reload behavior is exported; a weapon without it is
+    reported and the others continue. Object IDs come from each ESP's own
+    export identity and are recorded only after the bundle is delivered."""
+    import product_library as library
+    from product_export import export_pack
+    require(bool(archive) != bool(mo2), 'Choose Export to MO2 or Export ZIP / 7z')
+    workspace = Path(workspace).resolve()
+    require(isinstance(selections, list) and 0 < len(selections) <= 256, 'Select between one and 256 ESP projects')
+    chosen = {}
+    for selection in selections:
+        key = library.plugin_key(selection.get('plugin'))
+        require(key not in chosen, 'An ESP project is selected twice: '+selection['plugin'])
+        folder = library.library_root(workspace)/key
+        project = library.read_project(folder)
+        require(project is not None and project['saves'], 'No saved versions for '+selection['plugin'])
+        save = selection.get('save') or project['latest']
+        require(any(s['id'] == save for s in project['saves']), 'Unknown saved version '+str(save)+' of '+project['plugin'])
+        chosen[key] = dict(folder=folder, project=project, save=save)
+    stage = workspace/'local/tmp/library-export'/uuid.uuid4().hex
+    with contextlib.ExitStack() as locks:
+        for key in sorted(chosen):
+            locks.enter_context(library.locked(chosen[key]['folder']))
+        try:
+            output = stage/'output'
+            output.mkdir(parents=True)
+            capability = backends.content_validation()
+            require(capability.get('sourcePluginLightESP') is True, 'Update DIAMOND and its bundled validator for ESL-flagged ESP exports')
+            limits = capability['limits']
+            packs, skipped, warnings = [], [], []
+            for key, item in sorted(chosen.items()):
+                snapshot = library.read_snapshot(item['folder'], item['save'])
+                item['weapons'] = []
+                for record, entry in sorted(snapshot['weapons'].items()):
+                    cancellation()
+                    name = entry.get('name', record)
+                    if not entry.get('pack'):
+                        skipped.append(dict(plugin=snapshot['plugin'], record=record, name=name, reason='no saved reload behavior'))
+                        continue
+                    try:
+                        source = library.materialize_pack(item['folder'], entry['pack'], stage/'inputs'/key/record.split(':')[1]/'pack.project.json')
+                        frozen = stage/'frozen'/str(len(packs))
+                        export_pack(str(source), str(frozen), backends)
+                        packs.append(load_pack(frozen))
+                    except ValueError as error:
+                        skipped.append(dict(plugin=snapshot['plugin'], record=record, name=name, reason=str(error)))
+                        continue
+                    item['weapons'].append(record)
+                    progress = (entry.get('status') or {}).get('progress')
+                    if progress and progress != 'complete':
+                        warnings.append(dict(record=record, name=name, warning='checklist not complete ('+progress+')'))
+                    failed = (entry.get('packReport') or {}).get('failed')
+                    if failed:
+                        warnings.append(dict(record=record, name=name, warning=f'{failed} configuration(s) kept their earlier behavior at the last save'))
+            require(packs, 'Nothing to export: the selected versions contain no saved reload behavior')
+            require(len(packs) <= limits['packs'], 'Too many selected reload packs')
+            groups = partition(packs)
+            require(set(groups) <= set(chosen), 'A saved weapon does not belong to its ESP project')
+            native = backends.adapter('nif'); validated = set(); count = 0
+            backends.prepare_serializer(); backend = backends.adapter('plugin'); plugins = []; identities = {}
+            for master, parts in sorted(groups.items()):
+                cancellation()
+                folder = chosen[master]['folder']
+                value = library.read_identity(folder) or library.new_identity(master)
+                group, row, objects = await emit_group(master, parts, value.get('group'), value['installation'],
+                                                       output, stage, backend, native, validated)
+                value['group'] = group
+                identities[master] = value
+                plugins.append(dict(row, save=chosen[master]['save']))
+                count += objects
+            require(count <= limits['worldObjects'], 'Selected active objects exceed DIAMOND runtime capacity')
+            (output/'DIAMOND Reload Packs.txt').write_text(README, encoding='utf-8')
+            checked = backends.content_validation(output)
+            require(checked.get('ok') and checked.get('objects') == count, 'DIAMOND rejected grouped content: '+json.dumps(checked))
+            cancellation()
+            delivered = deliver(output, archive, mo2)
+            # The IDs are permanent from the moment the bundle is delivered.
+            moment = library.iso(library.now())
+            for master, value in identities.items():
+                folder = chosen[master]['folder']
+                write(folder/'export/identity.json', value)
+                published = library.read_published(folder)
+                destination = dict(kind='mo2', path=delivered['installedTo']) if mo2 else dict(kind='archive', path=delivered['archive'])
+                published['publications'].append(dict(save=chosen[master]['save'], exportedAt=moment, destination=destination,
+                                                      plugin=plugin_name(master), weapons=chosen[master]['weapons'],
+                                                      objects=sum(1 for e in value['group']['objects'].values() if e['active'])))
+                published['publications'] = published['publications'][-200:]
+                write(folder/'export/published.json', published)
+            return dict(ok=True, plugins=plugins, activeObjects=count, skipped=skipped, warnings=warnings,
+                        runtimeCatalog=checked, **delivered)
+        finally:
+            shutil.rmtree(stage, ignore_errors=True)
+
+

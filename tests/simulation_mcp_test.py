@@ -101,10 +101,10 @@ async def run():
             data=json.loads(Path(exported['path']).read_text(encoding='utf-8'))
             assert data['format']=='reload-maker-simulation' and data['sourceRecipe']['id']==data['recipeId']
             project=ROOT/'workspace/Glock19x-simulation.project.json'
-            await call('save_project',path=str(project),expected_revision='current')
+            await call('export_authored_record',kind='project',path=str(project),expected_revision='current')
             saved=json.loads(project.read_text(encoding='utf-8'))
             assert saved['workspace']==5 and saved['simulationSetup']['recipeId']==data['recipeId']
-            await call('open_project',path=str(project),expected_revision='current');await ready()
+            await call('import_project',path=str(project),expected_revision='current');await ready()
             final=await call('get_simulation_state');assert final['active'] and final['magazinePresent'] and final['slide']==0
             (EVIDENCE/'mcp-final-state.json').write_text(json.dumps(final,indent=2),encoding='utf-8')
             print('PASS: real MCP direct pull, independent barrel/cartridge curves, unchanged magazine/hands, return/cancel/hold, full magazine removal, fire persistence, automatic reload/reset, workspace restoration and project/export round trip',flush=True)

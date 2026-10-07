@@ -64,7 +64,7 @@ working = OUT/'test.project.json'
 originals = {p: p.read_bytes()
              for folder in ['hand-poses', 'part-grips']
              for p in (ROOT/'workspace'/folder).glob('*.json')}
-edit('save_project', path=str(snapshot))
+edit('export', kind='project',path=str(snapshot))
 data = json.loads(snapshot.read_text(encoding='utf-8'))
 data['workspace'] = 5
 data.pop('gripDraft', None)
@@ -72,7 +72,7 @@ data['magazineGripDrafts'] = {}
 working.write_text(json.dumps(data), encoding='utf-8')
 results = {}
 try:
-    edit('open_project', path=str(working)); ready()
+    edit('import_project', path=str(working)); ready()
     select(0x1000fa4)
     before = command('state')['magazineGrabGrips']
     old_id = command('state')['magazineEditor']['gripId']
@@ -103,7 +103,7 @@ try:
     saved = save(); new_id = saved["magazineEditor"]["gripId"]
     assert new_id != old_id and not saved['magazineEditor']['unsaved'], saved['magazineEditor']
     assert len(saved['magazineGrabGrips']) == len(before)
-    edit('save_project', path=str(working))  # nothing writes the project except Save (owner, 2026-10-05)
+    edit('export', kind='project',path=str(working))  # nothing writes the project except Save (owner, 2026-10-05)
     persisted = json.loads(working.read_text(encoding='utf-8'))
     # Fits are assigned per hand; no key without a hand survives a save.
     key = next(k for k, v in before.items() if v == old_id)
@@ -144,8 +144,8 @@ try:
     drum = save()
     assert drum['magazineEditor']['assignment'] == 'custom' and drum['magazineEditor']['canSave']
     drum_id = drum['magazineEditor']['gripId']
-    edit('save_project', path=str(working))  # nothing writes the project except Save (owner, 2026-10-05)
-    edit('open_project', path=str(working)); ready()
+    edit('export', kind='project',path=str(working))  # nothing writes the project except Save (owner, 2026-10-05)
+    edit('import_project', path=str(working)); ready()
     edit('workspace', index=5); ready();edit('configure_magazine')
     assert command('state')['magazineEditor']['gripId'] == drum_id
     nearly(record('grip')['pose']['placement']['handInAnchor'], draft['pose']['placement']['handInAnchor'])
@@ -166,7 +166,7 @@ try:
     blank['workspace']=5;blank.pop('gripDraft',None);blank['magazineGripDrafts']={}
     blank['magazineGrabGrips']={};blank['magazineGrabDefaults']={}
     empty = OUT/'unconfigured.project.json';empty.write_text(json.dumps(blank),encoding='utf-8')
-    edit('open_project',path=str(empty));ready();edit('configure_magazine')
+    edit('import_project',path=str(empty));ready();edit('configure_magazine')
     assert command('state')['magazineEditor']['assignment']=='none'
     edit('apply_magazine_pose',poseId=pose['id'])
     assert command('state')['magazineEditor']['canSave']
@@ -175,8 +175,8 @@ try:
     (OUT/'validated.json').write_text(json.dumps(results,indent=2),encoding='utf-8')
     print('PASS', ', '.join(results))
 finally:
-    edit('open_project',path=str(snapshot));ready()
-    edit('save_project',path=initial['project'])
+    edit('import_project',path=str(snapshot));ready()
+    edit('export',kind='project',path=command('export',{'kind':'project'},ready()['revision'])['path'])
     for path,content in originals.items():
         assert path.read_bytes()==content, f'Original library changed: {path}'
     # Only remove the exact test-owned UUID files; never touch user records.

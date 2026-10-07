@@ -1,7 +1,7 @@
-// Pack and asset jobs: one bundled product-tool process at a time builds,
-// validates, inspects or exports packs, saves a configured reload into a
-// pack project, lists pack coverage, or prepares and cooks world models.
-// Every dialog and command shares the one job state.
+// Pack and asset jobs: one bundled product-tool process at a time exports ESP
+// projects, commits or deletes their saved versions, validates or inspects
+// packs, or prepares and cooks world models. Every dialog and command shares
+// the one job state.
 #include "ReloadMakerController.h"
 #include "StudioPaths.h"
 #include "StudioWindow.h"
@@ -25,8 +25,8 @@ namespace reloadmaker
 {
     using commands::require;
 
-    // state; cancel; or start build, validate, inventory, export,
-    // inspect-project, save-configuration, cook or prepare.
+    // state; cancel; open/close the export window; export ESP projects; or
+    // start validate, freeze, inspect-project, cook or prepare.
     QJsonObject ReloadMakerController::packCommand(const QJsonObject& request)
     {
         const auto operation = request.value("operation").toString("state");
@@ -37,7 +37,7 @@ namespace reloadmaker
             cancelPackJob();
             return _packJob;
         }
-        require(!_packProcess && !_saveAll, "A pack job is already running");
+        require(!_packProcess && !_saveAll && !espBusy(), "A save or pack job is already running");
         if (operation == "close") {
             if(auto* dialog=_window->findChild<QDialog*>("ReloadExportDialog"))dialog->close();
             return {{"ok",true},{"phase","closed"}};
@@ -47,23 +47,13 @@ namespace reloadmaker
             return {{"ok",true},{"phase","dialog"}};
         }
         if (operation == "export") {
-            require(!request["archive"].toString().isEmpty() || !request["mo2"].toString().isEmpty(), "Choose archive or MO2 output");
-            auto build=request;build["operation"]="build";build["packs"]=QJsonArray{request["project"]};
-            if(build["installation"].toString().isEmpty())build["installation"]=studioDataPath("workspace/installations/default");
-            build["initialize"]=!QFileInfo(QDir(build["installation"].toString()).filePath("current.json")).exists();
-            return packCommand(build);
+            return espExport(request);
         }
-        const bool saving = operation == "save-configuration";
-        const bool inventory = operation == "inventory";
-        const bool authoring = operation == "freeze" || operation == "inspect-project" || saving;
+        const bool authoring = operation == "freeze" || operation == "inspect-project";
         const bool cooking = operation == "cook" || operation == "prepare";
-        require(operation == "build" || operation == "validate" || authoring || cooking || inventory, "Unknown pack operation");
+        require(operation == "validate" || authoring || cooking, "Unknown pack operation");
         const auto packs = request["packs"].toArray();
-        require(authoring || cooking || inventory || (!packs.isEmpty() && packs.size() <= 256), "Select between one and 256 finished pack folders");
-        // Export leaves out weapons whose checklist is not complete (owner,
-        // 2026-10-05: warn and export the rest, never block); Check project
-        // lists them in advance.
-        const auto skipped = operation == "freeze" || operation == "inspect-project" ? exportSkippedWeapons(request["project"].toString()) : QJsonArray{};
+        require(authoring || cooking || (!packs.isEmpty() && packs.size() <= 256), "Select between one and 256 finished pack folders");
         QString python;
         QString id;
         auto arguments = packToolArguments(python, id);
@@ -73,60 +63,16 @@ namespace reloadmaker
         } else {
             arguments << "packs" << operation;
         }
-        if (inventory) {
-            appendInventoryArguments(arguments, request);
-        } else if (authoring) {
+        if (authoring) {
             appendAuthoringArguments(arguments, request, operation);
-            if (operation == "freeze") {
-                for (const auto& weapon : skipped) {
-                    arguments << "--skip" << weapon.toObject()["record"].toString();
-                }
-            }
         } else if (!cooking) {
             for (const auto& pack : packs) {
-                require(pack.isString() && (QFileInfo(pack.toString()).isDir() || (operation == "build" && QFileInfo(pack.toString()).isFile())), "A selected pack folder is missing");
+                require(pack.isString() && QFileInfo(pack.toString()).isDir(), "A selected pack folder is missing");
                 arguments << "--pack" << pack.toString();
             }
         }
-        if (operation == "build") {
-            const auto installation = request["installation"].toString();
-            require(!installation.isEmpty(), "Select the installation ledger folder");
-            arguments << "--installation" << installation;
-            const auto archive = request["archive"].toString(), mo2 = request["mo2"].toString();
-            require(archive.isEmpty() || mo2.isEmpty(), "Choose Export to MO2 or Export ZIP / 7z");
-            if (!archive.isEmpty()) arguments << "--archive" << archive;
-            if (!mo2.isEmpty()) arguments << "--mo2" << mo2;
-            if (request["initialize"].toBool()) {
-                arguments << "--initialize";
-            }
-        }
-        QJsonObject job{ { "id", id }, { "phase", "running" }, { "operation", operation }, { "packs", packs } };
-        if (!skipped.isEmpty()) {
-            job["skipped"] = skipped;
-        }
-        startPackProcess(python, arguments, job);
+        startPackProcess(python, arguments, { { "id", id }, { "phase", "running" }, { "operation", operation }, { "packs", packs } });
         return _packJob;
-    }
-
-    QJsonArray ReloadMakerController::exportSkippedWeapons(const QString& project) const
-    {
-        QFile file(project);
-        require(file.size() <= 64 * 1024 * 1024 && file.open(QIODevice::ReadOnly), "Select an authored pack project");
-        const auto progress = weaponProgressIndex();
-        QJsonArray skipped;
-        for (const auto& value : QJsonDocument::fromJson(file.readAll()).object()["weapons"].toArray()) {
-            const auto weapon = value.toObject();
-            const auto record = weapon["record"].toString().toLower();
-            const auto state = progress.constFind(record);
-            if (state != progress.cend() && *state == WeaponProgress::Complete) {
-                continue;
-            }
-            skipped.append(QJsonObject{ { "record", record },
-                                        { "name", weapon["name"].toString(record) },
-                                        { "reason", state == progress.cend() ? QStringLiteral("no checklist for it in the loaded source")
-                                                                             : QStringLiteral("checklist not complete") } });
-        }
-        return skipped;
     }
 
     // The bundled tool's interpreter and its leading arguments, with a new
@@ -145,9 +91,14 @@ namespace reloadmaker
     }
 
     // The running tool stops at its next safe point once the cancel file
-    // exists; a capturing save-all job stops after its current step.
+    // exists; a capturing save stops after its current step.
     void ReloadMakerController::cancelPackJob()
     {
+        // A save between two weapons' captures has nothing running to stop.
+        if (_espSave && !_saveAll && !_packProcess) {
+            finishEspSave(false, QJsonObject{ { "error", "Save cancelled; nothing was written." }, { "cancelled", true } });
+            return;
+        }
         if (_saveAll) {
             _saveAll->cancelled = true;
             _packJob["phase"] = "cancelling";
@@ -164,33 +115,12 @@ namespace reloadmaker
         emit packJobChanged();
     }
 
-    // At most 512 explicit pack projects.
-    void ReloadMakerController::appendInventoryArguments(QStringList& arguments, const QJsonObject& request) const
-    {
-        const auto projects = request["projects"].toArray();
-        require(projects.size() <= 512, "Too many explicit pack projects");
-        for (const auto& project : projects) {
-            require(project.isString() && !project.toString().isEmpty(), "Choose a pack project path");
-            arguments << "--project" << project.toString();
-        }
-    }
-
-    // The pack project (a new one only when saving), the saved capture's
-    // inputs, and the export folder.
+    // The pack project and, for freeze, its new interchange folder.
     void ReloadMakerController::appendAuthoringArguments(QStringList& arguments, const QJsonObject& request, const QString& operation) const
     {
-        const bool saving = operation == "save-configuration";
         const auto project = request["project"].toString();
-        require(!project.isEmpty() && (saving || QFileInfo(project).isFile()), "Select an authored pack project");
+        require(!project.isEmpty() && QFileInfo(project).isFile(), "Select an authored pack project");
         arguments << "--project" << project;
-        if (saving) {
-            for (const auto* key : { "capture", "id", "full", "empty" }) {
-                const auto value = request[key].toString();
-                if (!value.isEmpty()) {
-                    arguments << ("--" + QString(key)) << value;
-                }
-            }
-        }
         if (operation == "freeze") {
             const auto output = request["output"].toString();
             require(!output.isEmpty(), "Choose a new local export folder");
@@ -199,7 +129,8 @@ namespace reloadmaker
     }
 
     // The tool's last output line is its JSON result. Output is kept to the
-    // last 2 MiB. A finished inventory refreshes the pack coverage.
+    // last 2 MiB. Library saves, deletions and exports update the working
+    // project and the library view.
     void ReloadMakerController::startPackProcess(const QString& python, const QStringList& arguments, const QJsonObject& job)
     {
         auto* process = new QProcess(this);
@@ -224,6 +155,9 @@ namespace reloadmaker
             _packJob["error"] = process->errorString();
             _packProcess = nullptr;
             process->deleteLater();
+            if (_packJob["operation"] == "library-save") {
+                finishEspSave(false, QJsonObject{ { "error", _packJob["error"] } });
+            }
             emit packJobChanged();
         });
         connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, [this, process, output, collect](int code, QProcess::ExitStatus status) {
@@ -231,6 +165,7 @@ namespace reloadmaker
             const auto lines = output->trimmed().split('\n');
             const auto result = QJsonDocument::fromJson(lines.isEmpty() ? QByteArray() : lines.back()).object();
             const bool success = code == 0 && status == QProcess::NormalExit && result["ok"].toBool();
+            const bool cancelled = !success && _packJob["phase"] == "cancelling";
             _packJob["phase"] = success ? "complete" : "failed";
             _packJob["result"] = result;
             if (!success) {
@@ -239,13 +174,15 @@ namespace reloadmaker
             QFile::remove(_packCancelFile);
             _packProcess = nullptr;
             process->deleteLater();
-            if (success && _packJob["operation"] == "inventory") {
-                updatePackCoverage(result);
+            const auto operation = _packJob["operation"].toString();
+            if (operation == "library-save") {
+                finishEspSave(success, success ? result : QJsonObject{ { "error", _packJob["error"] }, { "cancelled", cancelled } });
+            } else if (operation == "library-delete") {
+                finishEspDelete(success, success ? result : QJsonObject{ { "error", _packJob["error"] } });
             }
-            // A save-all job's captures only carry the configurations to the
-            // save; the pack project holds the result.
-            if (_packJob["operation"] == "save-all-configurations") {
-                QDir(_packJob["captureFolder"].toString()).removeRecursively();
+            if (operation.startsWith("library-")) {
+                _espIndexCache.clear();
+                updatePackCoverage();
             }
             emit packJobChanged();
         });
@@ -253,21 +190,4 @@ namespace reloadmaker
         emit packJobChanged();
     }
 
-    // Freezes the configuration prepared in Operate and saves it into the
-    // requested pack project.
-    QJsonObject ReloadMakerController::saveConfiguredReload(const QJsonObject& request)
-    {
-        require(!_packProcess, "Wait for the current asset or pack job");
-        const auto capture = exportRuntimeConfiguration();
-        const auto folder = studioDataPath("local/authoring-captures/" + QUuid::createUuid().toString(QUuid::WithoutBraces));
-        QDir().mkpath(folder);
-        const auto path = folder + "/configuration.json";
-        QSaveFile file(path);
-        const auto bytes = QJsonDocument(capture).toJson();
-        require(file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit(), "Cannot freeze the configured reload");
-        auto args = request;
-        args["operation"] = "save-configuration";
-        args["capture"] = path;
-        return packCommand(args);
-    }
 }

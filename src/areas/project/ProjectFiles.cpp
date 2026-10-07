@@ -1,10 +1,7 @@
-// Project files: one weapon's authoring session saved as a JSON record inside
-// the workspace. Opening one validates every authored value first, loads its
-// source, and restores the weapon, its authored data, the pose and the view
-// once the source is indexed.
+// Weapon records: one weapon's complete editor state as JSON. The ESP
+// project (EspProject.cpp) keeps one per weapon and commits them; an explicit
+// import validates an earlier project's record before anything changes.
 #include "ReloadMakerController.h"
-#include "areas/sources/Testbeds.h"
-#include "AuthoringPaths.h"
 #include "CollisionDraftPolicy.h"
 #include "MagazineGuide.h"
 #include "MagazineReference.h"
@@ -20,10 +17,6 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QMessageBox>
-#include <QSaveFile>
-#include <QScopeGuard>
-#include <QSettings>
 #include <QUuid>
 #include <algorithm>
 #include <utility>
@@ -32,14 +25,6 @@ namespace reloadmaker
 {
     namespace
     {
-        constexpr qint64 kMaximumProjectBytes = 64 * 1024 * 1024;
-
-        // Source identities compare with forward slashes and in lower case.
-        QString normalizedPath(QString value)
-        {
-            return value.replace('\\', '/').toLower();
-        }
-
         template <typename Map>
         QJsonObject stringMapJson(const Map& map)
         {
@@ -274,6 +259,19 @@ namespace reloadmaker
                     return false;
                 }
             }
+            // Finished world models: weapon|magazine -> full and empty paths.
+            const auto models = record["magazineModels"].toObject();
+            if ((record.contains("magazineModels") && !record["magazineModels"].isObject()) || models.size() > 512) {
+                message = "Invalid magazine model assignments.";
+                return false;
+            }
+            for (auto it = models.begin(); it != models.end(); ++it) {
+                const auto pair = it.value().toObject();
+                if (!it.key().contains('|') || it.key().size() > 1024 || !pair["full"].isString() || !pair["empty"].isString()) {
+                    message = "Invalid magazine model assignment.";
+                    return false;
+                }
+            }
             // Round choices: magazine record|model -> piece path -> round.
             const auto rounds = record["magazineRounds"].toObject();
             if ((record.contains("magazineRounds") && !record["magazineRounds"].isObject()) || rounds.size() > 512) {
@@ -370,88 +368,6 @@ namespace reloadmaker
         return identity;
     }
 
-    // The weapon's project path under the workspace, from its record and the
-    // source it was loaded from; empty when the originating plugin is unknown.
-    QString ReloadMakerController::suggestedSessionPath() const
-    {
-        if (!currentWeapon()) {
-            return studioDataPath("workspace/projects/new.project.json");
-        }
-        const auto relative = authoringProjectPath(poseRecordKey(currentWeapon()->formId), sessionSourceContext());
-        return relative.isEmpty() ? QString() : studioDataPath(relative);
-    }
-
-    // The loaded source, as weapon project paths identify it.
-    QJsonObject ReloadMakerController::sessionSourceContext() const
-    {
-        QJsonObject source{ { "data", normalizedPath(_gameData) } };
-        if (_libraryMode) {
-            source["mode"] = "mo2-profile";
-            source["instance"] = normalizedPath(_launchSnapshot.instancePath);
-            source["profile"] = _launchSnapshot.profileName.toLower();
-        } else {
-            source["mode"] = _package.resourceData.isEmpty() ? "ordered-packages" : "explicit-data";
-            if (!_package.plugins.isEmpty()) {
-                QJsonArray inputs;
-                for (const auto& path : _package.plugins) {
-                    inputs.append(normalizedPath(path));
-                }
-                source["plugins"] = inputs;
-            } else {
-                source["package"] = normalizedPath(_package.sourcePath);
-            }
-            if (!_package.resourceData.isEmpty()) {
-                source["resourceData"] = normalizedPath(_package.resourceData);
-            }
-        }
-        return source;
-    }
-
-    // Changing weapons leaves the current document (unsaved edits ask), then
-    // opens the next weapon's project when one exists; with none the caller
-    // starts a new document. With no weapon on screen (a source just opened)
-    // there is nothing to leave, but the chosen weapon still opens its saved
-    // project. Returns whether the change was handled here.
-    bool ReloadMakerController::beginWeaponProject(int selectedIndex)
-    {
-        const int previousIndex = _renderedWeapon;
-        if (_loadThread || !_pendingSession.isEmpty() || selectedIndex < 0 || previousIndex == selectedIndex) {
-            return false;
-        }
-        QString oldPath;
-        if (previousIndex >= 0) {
-            _selectedWeapon = validWeaponIndex(previousIndex);
-            if (_reloadCapturing || _packProcess) {
-                setStatus("Finish the current capture or pack job before changing weapons.", true);
-                refreshWeaponPicker();
-                return true;
-            }
-            if (!leaveDocument(QStringLiteral("changing weapons"))) {
-                refreshWeaponPicker();
-                return true;
-            }
-            oldPath = _sessionPath;
-        }
-        _selectedWeapon = validWeaponIndex(selectedIndex);
-        const auto next = suggestedSessionPath();
-        if (!QFileInfo(next).isFile()) {
-            _sessionPath.clear();
-            return false;
-        }
-        _selectedWeapon = validWeaponIndex(previousIndex);
-        const bool all = allWeaponsSelected();
-        openSession(next);
-        if (all && !_pendingSession.isEmpty()) {
-            _pendingSession["browserPlugin"] = kAllWeaponsSource;
-        }
-        if (!_loadThread && _pendingSession.isEmpty()) {
-            _selectedWeapon = validWeaponIndex(previousIndex);
-            _sessionPath = oldPath;
-            refreshWeaponPicker();
-        }
-        return true;
-    }
-
     // Source, weapon, settings and authored data; the drafts are added by
     // appendProjectDrafts.
     QJsonObject ReloadMakerController::projectRecord() const
@@ -537,6 +453,9 @@ namespace reloadmaker
         record["scopeSelection"] = currentScopeKey();
         record["operatingGrips"] = stringMapJson(_savedOperatingGrips);
         record["magazineGrabDefaults"] = stringMapJson(_magazineGrabDefaults);
+        if (!_magazineModels.isEmpty()) {
+            record["magazineModels"] = stringMapJson(_magazineModels);
+        }
         if (!_magazineRounds.isEmpty()) {
             QJsonObject rounds;
             for (auto it = _magazineRounds.cbegin(); it != _magazineRounds.cend(); ++it) {
@@ -622,7 +541,9 @@ namespace reloadmaker
         constexpr const char* kViewStateKeys[] = {
             "animation", "seconds", "motionMode", "transitions", "showArms", "workspace", "hand", "fingerJoint", "selectedHandPose",
             "browserPlugin", "choices", "recordChoices", "camera", "handsPage", "interactionHand", "scopeSelection", "body",
-            "simulationSetup", "magazineInteraction", "ammunitionConfiguration", "handPreview"
+            "simulationSetup", "magazineInteraction", "ammunitionConfiguration", "handPreview",
+            // Where the source came from is metadata, never authoring.
+            "package", "gameData", "library", "mo2Instance", "mo2Profile"
         };
 
         QJsonObject withoutViewState(QJsonObject record)
@@ -632,6 +553,11 @@ namespace reloadmaker
             }
             return record;
         }
+    }
+
+    QJsonObject ReloadMakerController::authoredPart(QJsonObject record)
+    {
+        return withoutViewState(std::move(record));
     }
 
     // The project record without its view state, with the drafts a save
@@ -649,6 +575,17 @@ namespace reloadmaker
         return withoutViewState(record);
     }
 
+    bool ReloadMakerController::validWeaponRecord(const QJsonObject& record, QString& message)
+    {
+        if (record["format"] != 1 || (record["kind"] != "reload-maker-v2-project" && record["kind"] != "reload-maker-v2-weapon-authoring") ||
+            record["weapon"].toString().isEmpty()) {
+            message = QStringLiteral("Unsupported or invalid weapon record.");
+            return false;
+        }
+        return validProjectAssignments(record, message) && validProjectPins(record, message) && validProjectProfiles(record, message) &&
+               validProjectGrips(record, message) && validProjectDrafts(record, message);
+    }
+
     bool ReloadMakerController::documentDirty() const
     {
         return currentWeapon() && !_loadThread && authoredRecord() != _savedAuthoring;
@@ -664,147 +601,6 @@ namespace reloadmaker
     {
         if (_window) {
             _window->setWindowModified(documentDirty());
-        }
-    }
-
-    // Leaving a document that Save would change: the editor asks; an
-    // unattended run discards, since its scripts save explicitly.
-    bool ReloadMakerController::leaveDocument(const QString& action)
-    {
-        rememberMagazineGrip();
-        if (!documentDirty() || qApp->property("unattended").toBool()) {
-            return true;
-        }
-        const auto* weapon = currentWeapon();
-        QMessageBox question(QMessageBox::Question, QStringLiteral("Unsaved changes"),
-                             QStringLiteral("Save the changes to %1 before %2?").arg(weapon->name.isEmpty() ? weapon->editorId : weapon->name, action),
-                             QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, _window);
-        question.setDefaultButton(QMessageBox::Save);
-        switch (question.exec()) {
-        case QMessageBox::Save:
-            return saveSession();
-        case QMessageBox::Discard:
-            return true;
-        default:
-            return false;
-        }
-
-    }
-
-    // Saves to `requested`, else the open project, else the weapon's project
-    // path. A missing weapon or unfinished source cannot report a successful save.
-    bool ReloadMakerController::saveSession(const QString& requested)
-    {
-        if (!currentWeapon() || _loadThread) {
-            setStatus("Load a weapon and finish loading before saving its project.", true);
-            return false;
-        }
-        const QString path = requested.isEmpty() ? (_sessionPath.isEmpty() ? suggestedSessionPath() : _sessionPath) : requested;
-        if (path.isEmpty()) {
-            setStatus("Cannot identify this weapon's originating plugin for saving.", true);
-            return false;
-        }
-        const QString absolute = QFileInfo(path).absoluteFilePath();
-        if (!absolute.startsWith(QDir(studioRoot()).absolutePath() + "/", Qt::CaseInsensitive)) {
-            setStatus("Save projects inside the Reload Maker V2 workspace.", true);
-            return false;
-        }
-        StageClock clock(_loadTimings, "project.save");
-        auto record = projectRecord();
-        QString message;
-        rememberMagazineGrip();
-        if (!appendProjectDrafts(record, message)) {
-            setStatus(message, true);
-            return false;
-        }
-        QFile previous(path);
-        if (previous.exists()) {
-            if (previous.size() > kMaximumProjectBytes || !previous.open(QIODevice::ReadOnly)) {
-                setStatus("Cannot inspect the existing project before saving.", true);
-                return false;
-            }
-            const auto saved = QJsonDocument::fromJson(previous.readAll()).object();
-            previous.close();
-            const auto weapon = record["weapon"].toString().toLower();
-            if (saved["kind"] == "reload-maker-v2-project" &&
-                (saved["weapon"].toString().compare(weapon, Qt::CaseInsensitive) != 0 ||
-                 (!saved["reloadTemplates"].toObject()[weapon].toString().isEmpty() && assignedTemplate().isEmpty()))) {
-                setStatus("This save would replace another weapon or its authored preset with an unconfigured draft. Open that project or save the draft to a different path.", true);
-                return false;
-            }
-        }
-        QDir().mkpath(QFileInfo(path).absolutePath());
-        QSaveFile file(path);
-        const auto bytes = QJsonDocument(record).toJson();
-        if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
-            setStatus("Project save failed: " + file.errorString(), true);
-            return false;
-        }
-        _sessionPath = absolute;
-        _savedAuthoring = withoutViewState(record);
-        refreshDocumentModified();
-        // Saving elsewhere does not change a testbed's default project.
-        refreshDevelopmentSources();
-        QSettings().setValue("projects/lastProject", absolute);
-        writeWeaponStatus(absolute);
-        setStatus("Project saved · " + QFileInfo(path).fileName());
-        return true;
-    }
-
-    // ---- Opening ----
-
-    // Validates every authored value before the source or a draft changes,
-    // then loads the project's source. restoreSessionSelection finishes once
-    // the source is indexed.
-    void ReloadMakerController::openSession(const QString& path)
-    {
-        if (_loadThread || _reloadCapturing) {
-            setStatus("Finish or cancel the current load first.", true);
-            return;
-        }
-        StageClock clock(_loadTimings, "project.read");
-        QFile file(path);
-        if (!file.open(QIODevice::ReadOnly) || file.size() > kMaximumProjectBytes) {
-            setStatus("Cannot read this project.", true);
-            return;
-        }
-        QJsonParseError parseError;
-        const auto parsed = QJsonDocument::fromJson(file.readAll(), &parseError);
-        const auto record = parsed.object();
-        if (parseError.error != QJsonParseError::NoError || record["format"] != 1 || record["kind"] != "reload-maker-v2-project") {
-            setStatus("Unsupported or invalid Reload Maker project.", true);
-            return;
-        }
-        if (!QFileInfo(record["gameData"].toString()).isDir() ||
-            (!record["library"].toBool() && !QFileInfo(record["package"].toString()).exists())) {
-            setStatus("Project source is missing. Restore its original package/Data path before opening.", true);
-            return;
-        }
-        QString message;
-        if (!validProjectAssignments(record, message) || !validProjectPins(record, message) || !validProjectProfiles(record, message) ||
-            !validProjectGrips(record, message) ||
-            !validProjectDrafts(record, message)) {
-            setStatus(message, true);
-            return;
-        }
-        _pendingSession = record;
-        _pendingSessionPath = QFileInfo(path).absoluteFilePath();
-        _gameDataText = record["gameData"].toString();
-        if (!record["mo2Instance"].toString().isEmpty()) {
-            _mo2Instance = record["mo2Instance"].toString();
-        }
-        if (record["library"].toBool() && !record["mo2Profile"].toString().isEmpty()) {
-            _requestedMo2Profile = record["mo2Profile"].toString();
-        }
-        if (record["library"].toBool()) {
-            startLibraryLoad(true);
-        } else {
-            startPackageLoad(record["package"].toString(), record["gameData"].toString(), false, true);
-        }
-        if (!_loadThread) {
-            _pendingSession = {};
-            _pendingSessionPath.clear();
-            _gameDataText = _gameData;
         }
     }
 
@@ -887,7 +683,23 @@ namespace reloadmaker
                 _weaponOverrides.insert(it.key(), overrides);
             }
         }
-        _sourcePolicies = record["sourcePolicies"].toObject();
+        // Rules were once keyed by weapon and source context; one ESP
+        // project now owns them by weapon alone.
+        _sourcePolicies = {};
+        const auto policies = record["sourcePolicies"].toObject();
+        for (auto it = policies.begin(); it != policies.end(); ++it) {
+            const auto weapon = it.key().section('|', 0, 0).toLower();
+            if (!_sourcePolicies.contains(weapon) || !it.key().contains('|')) {
+                _sourcePolicies[weapon] = it.value();
+            }
+        }
+        _magazineModels.clear();
+        const auto models = record["magazineModels"].toObject();
+        for (auto it = models.begin(); it != models.end(); ++it) {
+            if (it.key().contains('|') && it.value().isObject()) {
+                _magazineModels[it.key().toLower()] = it.value().toObject();
+            }
+        }
         _savedSounds.clear();
         const auto sounds = record["soundProfiles"].toObject();
         for (auto it = sounds.begin(); it != sounds.end(); ++it) {
@@ -1046,39 +858,32 @@ namespace reloadmaker
         }
     }
 
-    // Finishes opening a project once its source is indexed.
+    // Once a source is indexed: selects the requested weapon and opens its
+    // authoring from the ESP project. An explicit import then replaces that
+    // weapon's working state with the imported record, unsaved.
     void ReloadMakerController::restoreSessionSelection()
     {
         if (_pendingSession.isEmpty()) {
             return;
         }
-        const auto record = _pendingSession;
-        _pendingSession = {};
+        const auto request = std::exchange(_pendingSession, {});
         StageClock clock(_loadTimings, "project.restore");
-        if (!selectProjectWeapon(record)) {
-            _pendingSessionPath.clear();
-            _sessionPath.clear();
+        if (!selectProjectWeapon(request)) {
             return;
         }
-        _sessionPath = std::exchange(_pendingSessionPath, {});
-        // The project as opened is the clean state; later edits ask on leave.
-        const auto opened = qScopeGuard([this] {
-            markDocumentClean();
-            QSettings().setValue("projects/lastProject", _sessionPath);
-        });
-        restoreProjectLoadout(record);
-        restoreProjectAuthoring(record);
-        // Loadout restoration paints the header before the saved preset exists.
-        // Refresh from the restored authoring state even if assembly later fails.
-        refreshHeader();
-        rebuildWeapon();
-        if (!_clip.valid()) {
-            return;
+        openWeaponAuthoring();
+        if (request.contains("import") && _esp) {
+            auto& work = _esp->weapons[weaponRecordKey()];
+            const auto baseline = work.committed;
+            restoreWeaponRecord(request["import"].toObject(), baseline);
+            work.imported = true;
+            setStatus(documentDirty() ? QStringLiteral("Imported as unsaved edits. Save adds them to %1 as a new version; leaving discards them.").arg(_esp->plugin)
+                                      : QStringLiteral("Imported project matches the saved authoring of %1.").arg(_esp->plugin));
         }
-        QString error;
-        restoreProjectPose(record, error);
-        restoreProjectView(record);
-        setStatus(error.isEmpty() ? "Project restored · " + QFileInfo(_sessionPath).fileName() : "Project restored with a grip warning: " + error,
-                  !error.isEmpty());
+        if (request.contains("workspace")) {
+            const int workspace = request["workspace"].toInt(OperateWorkspace);
+            setWorkspace(validWorkspace(workspace) ? workspace : OperateWorkspace);
+        }
+        ++_revision;
     }
 }

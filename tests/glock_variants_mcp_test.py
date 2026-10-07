@@ -93,8 +93,8 @@ def full_cycle(key):
     count(finished(),capacity-1,True,False)
     coverage['cycles'].append({'key':key,'capacity':capacity,'profile':valid()['reloadProfile']});save_coverage()
 
-initial=ready();original_project=initial['project'];snapshot=OUT/'original-session.project.json'
-edit('save_project',{'path':str(snapshot)})
+initial=ready();original_project=command('export',{'kind':'project'},ready()['revision'])['path'];snapshot=OUT/'original-session.project.json'
+edit('export',{'kind':'project','path':str(snapshot)})
 slots={x['name']:x for x in initial['slots']}
 mag=slots['Magazine']['key'];scope=slots['Sights']['key'];receiver=slots['Receiver']['key']
 magazines=[0x1000fa4,0x1000fa5,0x100176f,0x1001770,0x1001779,0x100177a,0x1002e6c]
@@ -136,12 +136,12 @@ try:
             print('EQUIPMENT',rid,hex(mid),'PASS',flush=True);save_coverage()
     choose(receiver,receivers[0]);choose(mag,magazines[0]);choose(scope,0x1000fb1)
     exact=command('state')['animationSource']
-    persisted=OUT/'omod-source.project.json';edit('save_project',{'path':str(persisted)});edit('open_project',{'path':str(persisted)});ready()
+    persisted=OUT/'omod-source.project.json';edit('export',{'kind':'project','path':str(persisted)});edit('import_project',{'path':str(persisted)});ready()
     assert command('state')['animationSource']==exact,'Reopened project changed the OMOD-resolved animation source'
     coverage['persistence']={'animationSource':exact};save_coverage()
     assert len(coverage['equipment'])==140 and coverage['cycles']
     print('PASS Glock: OMOD-resolved reload cycles, 140 geometry/firing combinations and source persistence',flush=True)
 
 finally:
-    edit('open_project',{'path':str(snapshot)});ready()
-    if original_project:edit('save_project',{'path':original_project})
+    edit('import_project',{'path':str(snapshot)});ready()
+    if original_project:edit('export',{'kind':'project','path':original_project})

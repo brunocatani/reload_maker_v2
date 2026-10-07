@@ -42,8 +42,8 @@ def check_fit(g):
 def export(kind):
     r=edit('export',kind=kind);return json.loads(Path(r['path']).read_text(encoding='utf-8'))
 def run():
-    original=ready()['project']
-    edit('save_project',path=original)
+    original=command('export',{'kind':'project'},ready()['revision'])['path']
+    edit('export',kind='project',path=original)
     projects=['Glock19x-magazine-grips','RU556-native-reload','M1A-native-reload','Timberwolf-native-reload',
         'L118A2-native-reload','Thanatos-native-reload',
         'srep-service-native-reload','srep-honeybadger-native-reload','srep-ar10-native-reload','srep-xm16e1-native-reload']
@@ -51,7 +51,7 @@ def run():
     try:
         for name in projects:
             canonical=ROOT/'workspace'/(name+'.project.json')
-            edit('open_project',path=str(canonical));ready();edit('workspace',index=5);ready();op('reset')
+            edit('import_project',path=str(canonical));ready();edit('workspace',index=5);ready();op('reset')
             old=json.loads(canonical.read_text(encoding='utf-8'));payload=export('simulation')
             policy=payload['authoredInteractions']
             assert policy['operatingPosePolicy']=='authored-fingers-live-wrist'
@@ -87,10 +87,10 @@ def run():
             assert command('grab_locations_state')['profile']==points
             # Existing operating assignments retain their finger-only authority
             # after saving and reopening; all wrist placements remain absent.
-            scratch=OUT/(name+'-fingers.project.json');edit('save_project',path=str(scratch))
+            scratch=OUT/(name+'-fingers.project.json');edit('export',kind='project',path=str(scratch))
             saved=json.loads(scratch.read_text(encoding='utf-8'))
             for key in ['operatingGrips','magazineGrabGrips','magazineGrabDefaults','grabLocations']:assert saved.get(key,{})==old.get(key,{})
-            edit('open_project',path=str(scratch));ready();edit('workspace',index=5);ready();op('reset')
+            edit('import_project',path=str(scratch));ready();edit('workspace',index=5);ready();op('reset')
             assert export('simulation')['authoredInteractions']['operatingPosePolicy']=='authored-fingers-live-wrist'
             if name=='RU556-native-reload':
                 # A named library choice replaces only the selected hand/group
@@ -101,17 +101,17 @@ def run():
                 after=export('simulation')['authoredInteractions']['operatingFingers']
                 assert after[0]==before[0] and after[1]['sourcePoseId']==selected['id']
                 # Nothing writes the project except Save (owner, 2026-10-05).
-                edit('save_project',path=str(scratch));edit('open_project',path=str(scratch));ready();edit('workspace',index=5);ready()
+                edit('export',kind='project',path=str(scratch));edit('import_project',path=str(scratch));ready();edit('workspace',index=5);ready()
                 assert export('simulation')['authoredInteractions']['operatingFingers']==after
                 assigned=json.loads(scratch.read_text(encoding='utf-8'))
                 for key in ['magazineGrabGrips','magazineGrabDefaults','grabLocations']:assert assigned.get(key,{})==saved.get(key,{})
 
             # Restore only the canonical pointer, preserving the original file.
-            edit('open_project',path=str(canonical));ready();edit('save_project',path=str(canonical))
+            edit('import_project',path=str(canonical));ready();edit('export',kind='project',path=str(canonical))
             results.append(name);print('PASS',name,'authored fingers / live wrists; authored magazine transforms; points and persistence',flush=True)
         (OUT/'fingers-validated.json').write_text(json.dumps(results,indent=2),encoding='utf-8')
     finally:
-        edit('open_project',path=original);ready()
+        edit('import_project',path=original);ready()
     print('PASS',len(results),'testbeds; finger-only operation and authored magazines',flush=True)
 
 if __name__=='__main__':run()

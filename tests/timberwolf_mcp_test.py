@@ -49,8 +49,8 @@ def photo(name):
     r=command('render',{'view':'iso','fit':True,'preserveCamera':True})
     (OUT/(name+'.png')).write_bytes(Path(r['path']).read_bytes())
 
-original=ready()['project'];backup=OUT/'original.project.json'
-edit('save_project',path=str(backup));results={'magazines':[],'receivers':[],'ammo':[]}
+original=command('export',{'kind':'project'},ready()['revision'])['path'];backup=OUT/'original.project.json'
+edit('export',kind='project',path=str(backup));results={'magazines':[],'receivers':[],'ammo':[]}
 try:
     edit('testbed',name='timberwolf');s=ready();sim()
     slots={a['name']:a for a in s['slots']}
@@ -134,4 +134,4 @@ try:
     (OUT/'validated.json').write_text(json.dumps(results,indent=2),encoding='utf-8')
     print('PASS native C14 lift/pull/push/lock, spent/live ejection, manual hold, short strokes, magazine insertion, all reload/ammo/receiver choices and exports')
 finally:
-    edit('open_project',path=str(backup));ready();edit('save_project',path=original)
+    edit('import_project',path=str(backup));ready();edit('export',kind='project',path=original)

@@ -12,10 +12,10 @@ from server import command
 
 def run(names):
     work=ROOT/'local/magazine-world-tests'/uuid.uuid4().hex;work.mkdir(parents=True)
-    original=ready()['project'];original_bytes=Path(original).read_bytes();results=[]
+    original=command('export',{'kind':'project'},ready()['revision'])['path'];original_bytes=Path(original).read_bytes();results=[]
     try:
         for name in names:
-            edit('testbed',{'name':name});ready();project=Path(ready()['project']);saved=project.read_bytes()
+            edit('testbed',{'name':name});ready();project=Path(command('export',{'kind':'project'},ready()['revision'])['path']);saved=project.read_bytes()
             try:
                 for empty in (False,True):
                     folder=work/name/('empty' if empty else 'full');folder.mkdir(parents=True)
@@ -40,10 +40,10 @@ def run(names):
                     results.append(dict(testbed=name,presentation=folder.name,result=result,shapes=prepared['shapes']))
                     print('PASS',name,folder.name,prepared['shapes'],'shapes',result['hulls'],'hulls',flush=True)
             finally:
-                project.write_bytes(saved);command('open_project',{'path':str(project)},command('revision')['revision']);ready()
+                project.write_bytes(saved);command('import_project',{'path':str(project)},command('revision')['revision']);ready()
         (work/'result.json').write_text(json.dumps(dict(ok=True,results=results),indent=2));print('Evidence:',work,flush=True)
     finally:
-        Path(original).write_bytes(original_bytes);command('open_project',{'path':original},command('revision')['revision']);ready()
+        Path(original).write_bytes(original_bytes);command('import_project',{'path':original},command('revision')['revision']);ready()
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--testbed',action='append')

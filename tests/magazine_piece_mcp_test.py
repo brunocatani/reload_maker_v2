@@ -15,9 +15,9 @@ from product_packs import read,write
 
 def run():
     work=ROOT/'local/magazine-piece-tests'/uuid.uuid4().hex;work.mkdir(parents=True)
-    original=ready()['project'];original_bytes=Path(original).read_bytes()
+    original=command('export',{'kind':'project'},ready()['revision'])['path'];original_bytes=Path(original).read_bytes()
     try:
-        edit('testbed',dict(name='glock'));ready();project=Path(ready()['project']);saved=project.read_bytes()
+        edit('testbed',dict(name='glock'));ready();project=Path(command('export',{'kind':'project'},ready()['revision'])['path']);saved=project.read_bytes()
         try:
             edit('workspace',dict(index=5));ready();settings=command('magazine_setup_state')['settings']
             edit('capture_magazine_world',dict(empty=False));before=ready('collision_state');count=len(before['sources'])
@@ -44,10 +44,10 @@ def run():
             write(work/'result.json',dict(ok=True,sourceFullPieces=count,configuredFullPieces=count-1,models=models,pack=str(pack)))
             print('PASS piece exclusion, both cooked states, matched receipts and native runtime validation:',work,flush=True)
         finally:
-            project.write_bytes(saved);command('open_project',dict(path=str(project)),command('revision')['revision']);ready()
-            edit('save_project',dict(path=str(project)));project.write_bytes(saved)
+            project.write_bytes(saved);command('import_project',dict(path=str(project)),command('revision')['revision']);ready()
+            edit('export',dict(kind='project',path=str(project)));project.write_bytes(saved)
     finally:
-        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('revision')['revision']);ready()
-        edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
+        Path(original).write_bytes(original_bytes);command('import_project',dict(path=original),command('revision')['revision']);ready()
+        edit('export',dict(kind='project',path=original));Path(original).write_bytes(original_bytes)
 
 if __name__=='__main__':run()

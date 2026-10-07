@@ -6,7 +6,7 @@
 #include "ReloadTemplates.h"
 #include "StudioPaths.h"
 #include "StudioWindow.h"
-#include "areas/sources/Testbeds.h"
+#include "areas/project/EspLibrary.h"
 
 #include <QComboBox>
 #include <QDateTime>
@@ -23,132 +23,12 @@
 
 namespace reloadmaker
 {
-    namespace
-    {
-        constexpr qint64 kProjectSizeLimit = 64 * 1024 * 1024;
-        constexpr qint64 kSourceDefinitionSizeLimit = 64 * 1024;
-
-        bool developmentSource(const QString& source, const QString& bench)
-        {
-            if (source.startsWith(bench, Qt::CaseInsensitive)) {
-                return true;
-            }
-            if (!source.endsWith(".reloadsources.json", Qt::CaseInsensitive)) {
-                return false;
-            }
-            QFile file(source);
-            if (file.size() > kSourceDefinitionSizeLimit || !file.open(QIODevice::ReadOnly)) {
-                return false;
-            }
-            const auto definition = QJsonDocument::fromJson(file.readAll()).object();
-            if (definition["format"] != "reload-maker-source-pack" || definition["version"] != 1) {
-                return false;
-            }
-            const QDir directory = QFileInfo(source).dir();
-            for (const auto& input : definition["plugins"].toArray()) {
-                const auto path = QDir::cleanPath(directory.absoluteFilePath(input.toString()));
-                if (path.startsWith(bench, Qt::CaseInsensitive)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        // A source-pack testbed names its plugins in load order; the last one
-        // is the weapon's own plugin.
-        QString testbedPlugin(const QString& weapon, const QString& source)
-        {
-            QString plugin = weapon.section(':', 0, 0);
-            if (!source.endsWith(".reloadsources.json", Qt::CaseInsensitive)) {
-                return plugin;
-            }
-            QFile definition(source);
-            if (definition.size() > kSourceDefinitionSizeLimit || !definition.open(QIODevice::ReadOnly)) {
-                return plugin;
-            }
-            const QJsonArray inputs = QJsonDocument::fromJson(definition.readAll()).object()["plugins"].toArray();
-            if (!inputs.isEmpty()) {
-                plugin = QFileInfo(inputs.last().toString()).fileName();
-            }
-            return plugin;
-        }
-
-        // A dev bench id: the weapon record as a lowercase slug
-        // ("HKUSP9mm.esp:000800" -> "bench-hkusp9mm-000800").
-        QString devBenchId(const QString& weapon)
-        {
-            QString slug = QFileInfo(weapon.section(':', 0, 0)).completeBaseName().toLower() + '-' + weapon.section(':', 1).toLower();
-            slug.replace(QRegularExpression("[^a-z0-9]+"), "-");
-            return "bench-" + slug;
-        }
-    }
-
+    // The developer's testbeds and dev bench weapons: where each loads
+    // from. A consumer workspace has none.
     void ReloadMakerController::refreshDevelopmentSources()
     {
-        _testbedSources = {};
+        _testbedSources = readDevelopmentSources()["sources"].toArray();
         _testbedSourcesLoaded = true;
-        for (const char* id : kTestbedIds) {
-            const QString project = resolvedTestbedProject(id);
-            QFile file(project);
-            if (file.size() > kProjectSizeLimit || !file.open(QIODevice::ReadOnly)) {
-                continue;
-            }
-            const QJsonObject document = QJsonDocument::fromJson(file.readAll()).object();
-            const QString weapon = document["weapon"].toString();
-            if (document["library"].toBool() || weapon.isEmpty()) {
-                continue;
-            }
-            const QString source = document["package"].toString();
-            _testbedSources.append(QJsonObject{
-                { "id", id },
-                { "plugin", testbedPlugin(weapon, source) },
-                { "weapon", weapon },
-                { "project", project },
-                { "source", source },
-                { "name", document["weaponName"].toString(document["weaponEditorId"].toString(id)) },
-            });
-        }
-        // Dev bench weapons include ordered source packs. Master records can
-        // also acquire empty projects while browsing an unrelated mod; those
-        // must not displace a weapon's authored reload just by being newer.
-        const QString bench = QDir::cleanPath(studioDataPath(kDevBenchFolder)) + '/';
-        QMap<QString, QPair<QDateTime, QJsonObject>> benchWeapons;
-        QDirIterator projects(studioDataPath("workspace/projects"), { "authoring.project.json" }, QDir::Files, QDirIterator::Subdirectories);
-        while (projects.hasNext()) {
-            const QFileInfo project(projects.next());
-            QFile file(project.filePath());
-            if (file.size() > kProjectSizeLimit || !file.open(QIODevice::ReadOnly)) {
-                continue;
-            }
-            const QJsonObject document = QJsonDocument::fromJson(file.readAll()).object();
-            const QString weapon = document["weapon"].toString();
-            const QString source = QDir::cleanPath(document["package"].toString());
-            if (document["library"].toBool() || weapon.isEmpty() || !developmentSource(source, bench)) {
-                continue;
-            }
-            const QString id = devBenchId(weapon);
-            const bool authored = templateMechanism(document["reloadTemplates"].toObject()[weapon.toLower()].toString()).has_value();
-            if (benchWeapons.contains(id)) {
-                const auto& previous = benchWeapons[id];
-                const bool previousAuthored = previous.second["authored"].toBool();
-                if ((previousAuthored && !authored) || (previousAuthored == authored && previous.first >= project.lastModified())) {
-                    continue;
-                }
-            }
-            benchWeapons.insert(id, { project.lastModified(), QJsonObject{
-                { "id", id },
-                { "plugin", weapon.section(':', 0, 0) },
-                { "weapon", weapon },
-                { "project", project.filePath() },
-                { "source", source },
-                { "name", document["weaponName"].toString(document["weaponEditorId"].toString(id)) },
-                { "bench", true },
-                { "authored", authored },
-            } });
-        }
-        for (const auto& entry : benchWeapons) {
-            _testbedSources.append(entry.second);
-        }
     }
 
     QStringList ReloadMakerController::selectionPlugins(int index) const
@@ -382,7 +262,7 @@ namespace reloadmaker
             }
             _selectedWeapon = -1;
             clearAssetCaches();
-            _sessionPath.clear();
+            _esp.reset();
             refreshAttachments();
         }
         refreshWeaponPicker();

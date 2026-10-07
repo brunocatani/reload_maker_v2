@@ -14,7 +14,8 @@ mcp = FastMCP('Reload Maker V2', instructions=(
     'and actual multi-view renders. Author functional, immersive contacts; shallow clipping is '
     'preferable to hovering. Preserve source packages and keep exports local. Native and '
     'weapon-fixed motion are distinct. Offline preview is not full Havok behavior emulation '
-    'or proof of game integration. Save projects and authored records before switching work.'
+    'or proof of game integration. Authoring belongs to the originating ESP: save_project commits '
+    'every weapon of that ESP as a new dated version; nothing else saves.'
 ))
 
 _session: str | None = None
@@ -244,19 +245,64 @@ def get_reload_recipe() -> dict:
     return command('reload')
 
 @mcp.tool()
-def save_project(expected_revision: int, path: str = '') -> dict:
-    """Save source/configuration/time and current authored drafts atomically inside V2. Nothing else writes a project: save before changing weapons, testbeds or sources."""
-    return command('save_project',{'path':path},expected_revision)
+def save_project(expected_revision: int, note: str = '', wait_seconds: float = 900) -> dict:
+    """Deliberately save the open ESP project: every weapon of the originating
+    plugin with unsaved edits, together, as a new dated version that becomes the
+    latest. Edited weapons with a template have all their configurations captured
+    first (visible weapon/part switching), so the saved version exports what was
+    authored; a configuration that cannot be captured keeps its earlier behavior
+    and is reported. Nothing else saves: changing parts, weapons, sources or
+    exporting never writes. Waits for the save and returns the finished job."""
+    import time
+    job=command('save_project',{'note':note},expected_revision)
+    end=time.monotonic()+max(0.0,wait_seconds)
+    while time.monotonic()<end:
+        state=command('pack_job',{'operation':'state'})
+        if state.get('id')==job.get('id') and state.get('phase') in ('complete','failed','cancelled'):
+            return state
+        time.sleep(0.25)
+    return command('pack_job',{'operation':'state'})
 
 @mcp.tool()
-def open_project(path: str, expected_revision: int) -> dict:
-    """Validate and reopen an existing project; loading is asynchronous. The open weapon's unsaved edits are discarded; save_project first."""
-    return command('open_project',{'path':path},expected_revision)
+def get_esp_project() -> dict:
+    """The open ESP project: originating plugin, the version being edited (base),
+    the latest version, every saved version (id, UTC savedAt, weapons with
+    exportable/configuration counts), unsaved weapons and export history."""
+    return command('esp_project')
 
 @mcp.tool()
-def export_authored_record(kind: str, expected_revision: int) -> dict:
-    """Export hand/grip/mechanism/reload/simulation, slide, sounds, grab_locations, scope, runtime_configuration or reload_bundle locally. runtime_configuration captures the complete selected runtime motion, magazine fits, fingers, cues, grab policy and source evidence for pack authoring. sounds retains original descriptors. slide retains every closing-stroke sample/native rig path. reload_bundle embeds the recipe and assigned grips; unresolved references reject export. Never deploys."""
-    return command('export',{'kind':kind},expected_revision)
+def esp_version(operation: str, save: str, expected_revision: int) -> dict:
+    """load or delete exactly one saved version of the open ESP project.
+    load replaces the working project for this session (unsaved edits are
+    discarded in an unattended editor; save first); the next save creates a new
+    latest version and keeps this one. delete removes only that version; the next
+    newest becomes latest and export object IDs are never reset."""
+    return command('esp_version',{'operation':operation,'save':save},expected_revision)
+
+@mcp.tool()
+def import_project(path: str, expected_revision: int) -> dict:
+    """Explicitly import an earlier per-weapon project file as unsaved edits of
+    its weapon in that weapon's ESP project. Opens the project's own source only
+    when the current source lacks the weapon. Save to keep it as a new version."""
+    return command('import_project',{'path':path},expected_revision)
+
+@mcp.tool()
+def assign_magazine_models(full: str, empty: str, expected_revision: int, magazine: str = '', clear: bool = False) -> dict:
+    """Assign finished, Maker-cooked full and empty world models (with their
+    .receipt.json) to a magazine of the current weapon; magazine defaults to the
+    one prepared in Operate. The assignment is authoring: save_project copies the
+    models into the ESP project and uses them for that magazine's configurations."""
+    params={'magazine':magazine}
+    if clear: params['operation']='clear'
+    else: params.update(full=full,empty=empty)
+    return command('assign_magazine_models',params,expected_revision)
+
+@mcp.tool()
+def export_authored_record(kind: str, expected_revision: int, path: str = '') -> dict:
+    """Export project/hand/grip/mechanism/reload/simulation, slide, sounds, grab_locations, scope, runtime_configuration or reload_bundle locally. project writes a copy of the open weapon's working authoring to path (or exports/), for import_project; it is not a save. runtime_configuration captures the complete selected runtime motion, magazine fits, fingers, cues, grab policy and source evidence for pack authoring. sounds retains original descriptors. slide retains every closing-stroke sample/native rig path. reload_bundle embeds the recipe and assigned grips; unresolved references reject export. Never deploys."""
+    params={'kind':kind}
+    if path: params['path']=path
+    return command('export',params,expected_revision)
 
 @mcp.tool()
 def get_simulation_state() -> dict:
@@ -454,35 +500,10 @@ def configure_operating_setup(operation: str, expected_revision: int, settings: 
     return command('operating_setup',dict(operation=operation,settings=settings or {}),expected_revision)
 
 @mcp.tool()
-def save_configured_reload(project: str, expected_revision: int,
-                           pack_id: str = '', full_model: str = '', empty_model: str = '') -> dict:
-    """Replace/save the selected Operate configuration in a pack project.
-    A new project needs a pack ID and both carrier-space cooked models with
-    receipts. Existing model assignments
-    can be kept by omitting both paths. Other configurations and source rules are
-    preserved. Poll pack_job until complete/failed. No game installation occurs.
-    """
-    return command('save_configured_reload',dict(project=project,
-                   id=pack_id,full=full_model,empty=empty_model),expected_revision)
-
-@mcp.tool()
 def grip_tool(tool: str, expected_revision: int) -> dict:
     """Switch the viewport handles of the grip being placed: 'move' (arrows and the
     screen-plane square) or 'rotate' (rings)."""
     return command('grip_tool',dict(tool=tool),expected_revision)
-
-@mcp.tool()
-def save_all_configurations(project: str, expected_revision: int) -> dict:
-    """Save every receiver x operating part x magazine configuration of the loaded
-    weapon into an existing pack project, in one write. Each configuration is
-    assembled, prepared in Operate and captured like save_configured_reload; one
-    saved from identical inputs is reported up to date. Configurations that cannot
-    be prepared or that DIAMOND rejects are reported and do not stop the others.
-    The author's part selection is restored afterwards. Poll pack_job: total/done
-    while capturing, then result.rows (saved, up-to-date, failed) and exceptions.
-    Cancel with pack_job(operation='cancel'); a cancelled job writes nothing.
-    """
-    return command('save_all_configurations',dict(project=project),expected_revision)
 
 @mcp.tool()
 def capture_magazine_world(empty: bool, expected_revision: int) -> dict:
@@ -583,10 +604,10 @@ def load_base_game(expected_revision: int) -> dict:
 
 @mcp.tool()
 def get_pack_coverage(refresh: bool = False) -> dict:
-    """Show authored pack projects by source weapon. Refresh starts a background
-    inventory job; poll pack_job until complete, then read this again. Includes
-    workspace/packs and previously selected project paths. Saved coverage does
-    not establish current source compatibility or in-game enablement.
+    """Show the library's ESP projects and their latest versions' weapons
+    (configurations, magazines, exportable), with the loaded source's weapons.
+    Saved coverage does not establish current source compatibility or in-game
+    enablement.
     """
     return command('pack_coverage',dict(refresh=refresh))
 
@@ -605,25 +626,24 @@ def source_browser(operation: str = 'state', plugin: str = '', mode: str = '',
     return command('source_browser',dict(operation=operation,plugin=plugin,mode=mode,index=index),expected_revision)
 
 @mcp.tool()
-def pack_job(operation: str = 'state', packs: list[str] | None = None,
-             installation: str = '', initialize: bool = False,
-             project: str = '', output: str = '', archive: str = '', mo2: str = '',
-             expected_revision: int | None = None) -> dict:
-    """Export complete reload mods: one ESL-flagged ESP per source plugin, grouped meshes.
-    build accepts saved pack-project JSON files or finished pack folders in packs.
-    export accepts one project. Choose archive (.zip/.7z) or mo2 (one mod folder).
-    Both use the same native UI builder. New build ledgers need initialize=True;
-    export initializes only a missing ledger. Existing per-source IDs persist.
-    open/close show or close the export window. state/cancel observe or cancel the job.
-    freeze is internal authoring interchange only, not an installable export.
-    A completed export includes ESL-flagged ESPs, behavior, bindings and meshes. Neither
-    destination changes MO2 activation, load order or original source plugins.
-    Poll state to complete/failed, retaining the returned job ID.
+def pack_job(operation: str = 'state', selections: list[dict] | None = None,
+             packs: list[str] | None = None, project: str = '', output: str = '',
+             archive: str = '', mo2: str = '', expected_revision: int | None = None) -> dict:
+    """Export reload mods from saved ESP projects: one ESL-flagged ESP per source
+    plugin with its magazine meshes. export takes selections=[{plugin, save}]
+    (save omitted = latest; no selections = the open ESP) and archive (.zip/.7z)
+    or mo2 (one named mod folder). Only committed versions are exported; unsaved
+    edits are reported in unsavedNotIncluded, never saved. Object IDs belong to
+    each ESP project and never change between versions. MO2 export leaves
+    identical files in place and never changes activation, load order or source
+    plugins. open/close show or close the export window; state/cancel observe
+    or cancel the job (including a running save). validate/freeze/inspect-project
+    work on pack folders/projects (freeze is internal interchange only); cook and
+    prepare run the world-model tools. Poll state to complete/failed.
     """
     if operation not in ('state', 'cancel') and expected_revision is None:
         raise ValueError('Read the current document revision before starting a pack job')
-    return command('pack_job', dict(operation=operation, packs=packs or [],
-                                   installation=installation, initialize=initialize,
+    return command('pack_job', dict(operation=operation, selections=selections or [], packs=packs or [],
                                    project=project, output=output, archive=archive, mo2=mo2), expected_revision)
 
 @mcp.tool()

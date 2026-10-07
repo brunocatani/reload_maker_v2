@@ -39,7 +39,7 @@ def run():
     bench=devbench()
     if bench is None:
         print('SKIP bench assembly: no local/devbench folder',flush=True);return
-    original=ready()['project']
+    original=command('export',{'kind':'project'},ready()['revision'])['path']
     try:
         for folder,editor_id,slots,expectation in BENCH:
             if not (bench/folder).is_dir():
@@ -73,7 +73,7 @@ def run():
                 assert 'magazine='+chosen['Magazine']['record'].lower() in key.lower(),(editor_id,key)
             print('PASS',editor_id,expectation,{k:v['name'] for k,v in chosen.items() if k in slots},flush=True)
     finally:
-        edit('open_project',dict(path=original));ready()
+        edit('import_project',dict(path=original));ready()
 
 
 if __name__=='__main__':run()

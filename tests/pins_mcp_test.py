@@ -53,8 +53,8 @@ def pin_on_slide(text):
 
 
 def run():
-    original=ready()['project'];original_bytes=Path(original).read_bytes()
-    edit('testbed',dict(name='glock'));session=Path(ready()['project']);session_bytes=session.read_bytes()
+    original=command('export',{'kind':'project'},ready()['revision'])['path'];original_bytes=Path(original).read_bytes()
+    edit('testbed',dict(name='glock'));session=Path(command('export',{'kind':'project'},ready()['revision'])['path']);session_bytes=session.read_bytes()
     work=ROOT/'local/pin-tests'/uuid.uuid4().hex;work.mkdir(parents=True)
     try:
         edit('workspace',dict(index=5));ready()
@@ -93,11 +93,11 @@ def run():
         assert reopened['state']=='open' and 'resolution' not in reopened,reopened
 
         saved=work/'pins.project.json'
-        edit('save_project',dict(path=str(saved)));stored=json.loads(saved.read_text(encoding='utf-8'))['annotations']
+        edit('export',dict(kind='project',path=str(saved)));stored=json.loads(saved.read_text(encoding='utf-8'))['annotations']
         assert len(stored)==1 and stored[0]['id']==pin['id'] and 'screen' not in stored[0],stored
-        edit('open_project',dict(path=str(session)));ready()
+        edit('import_project',dict(path=str(session)));ready()
         assert pins()==[],'Pins leaked into another project'
-        edit('open_project',dict(path=str(saved)));ready()
+        edit('import_project',dict(path=str(saved)));ready()
         restored=pins()
         assert len(restored)==1 and {k:restored[0][k] for k in ('id','text','author','state','shape','slot','part')}=={k:reopened[k] for k in ('id','text','author','state','shape','slot','part')},(restored,reopened)
 
@@ -113,7 +113,7 @@ def run():
 
         state=edit('annotation',dict(operation='remove',id=pin['id']))
         assert state['annotations']==[] and state['selected']=='',state
-        edit('save_project',dict(path=str(saved)))
+        edit('export',dict(kind='project',path=str(saved)))
         assert 'annotations' not in json.loads(saved.read_text(encoding='utf-8')),'An empty pin list was saved'
         print('PASS pins: anchored to',pin['shape'],'in',pin['slotLabel'],'moved',round(travel,2),'units with the slide',
               'swap checked' if other else 'no alternative receiver',flush=True)
@@ -121,10 +121,10 @@ def run():
         # Saving elsewhere re-points the Glock testbed and the last project at
         # the temporary file; saving the originals again points them back.
         session.write_bytes(session_bytes)
-        edit('open_project',dict(path=str(session)));ready()
-        edit('save_project',dict(path=str(session)));session.write_bytes(session_bytes)
-        Path(original).write_bytes(original_bytes);edit('open_project',dict(path=original));ready()
-        edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
+        edit('import_project',dict(path=str(session)));ready()
+        edit('export',dict(kind='project',path=str(session)));session.write_bytes(session_bytes)
+        Path(original).write_bytes(original_bytes);edit('import_project',dict(path=original));ready()
+        edit('export',dict(kind='project',path=original));Path(original).write_bytes(original_bytes)
         shutil.rmtree(work,ignore_errors=True)
 
 

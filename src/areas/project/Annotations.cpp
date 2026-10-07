@@ -348,7 +348,7 @@ namespace reloadmaker
         return pins;
     }
 
-    // The record was validated when it was opened (readPins in openSession).
+    // The record was validated when it was opened (readPins in validWeaponRecord).
     void ReloadMakerController::restorePins(const QJsonObject& record)
     {
         QString error;

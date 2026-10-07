@@ -91,13 +91,13 @@ namespace reloadmaker
     QJsonObject ReloadMakerController::homeState() const
     {
         QSettings settings;
-        const QString recent = settings.value("projects/lastProject").toString();
+        const auto recent = QJsonDocument::fromJson(settings.value("session/last").toString().toUtf8()).object();
         const auto* dialog = _window->findChild<QDialog*>("MakerHome");
         return {
             { "role", settings.value("home/role").toString() },
             { "workspace", studioRoot() },
-            { "recentProject", recent },
-            { "canResume", !recent.isEmpty() && QFileInfo(recent).isFile() },
+            { "recentWeapon", recent["weapon"].toString() },
+            { "canResume", !recent.isEmpty() && QFileInfo(recent["gameData"].toString()).isDir() },
             { "visible", dialog && dialog->isVisible() },
             { "installation", installationState() },
             { "playerNeedsCreationKit", false },
@@ -251,7 +251,7 @@ namespace reloadmaker
         }
         _packageText = path;
         _gameDataText = check.dataPath;
-        startPackageLoad(path, check.dataPath, true);
+        startPackageLoad(path, check.dataPath);
         return true;
     }
 
@@ -337,14 +337,12 @@ namespace reloadmaker
             }
             if (result->cancelled) {
                 _pendingSession = {};
-                _pendingSessionPath.clear();
                 _gameDataText = _gameData;
                 setStatus("Library loading cancelled; previous source retained.");
                 return;
             }
             if (!result->error.isEmpty()) {
                 _pendingSession = {};
-                _pendingSessionPath.clear();
                 _gameDataText = _gameData;
                 for (const auto& plugin : result->plugins) {
                     if (!plugin.error.isEmpty()) {
@@ -375,9 +373,10 @@ namespace reloadmaker
     {
         setLibraryResources(nullptr);
         parkCurrentPackage();
-        if (_pendingSession.isEmpty()) {
-            _sessionPath.clear();
-        }
+        // A replaced source ends the working project; any unsaved edits were
+        // already saved or discarded when the replacement was requested.
+        _esp.reset();
+        _espIndexCache.clear();
         clearAssetCaches(keepTextures);
         _libraryMode = true;
         _launchSnapshot = library.snapshot;

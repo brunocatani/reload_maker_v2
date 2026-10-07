@@ -147,19 +147,21 @@ void ReloadMakerController::createUi() {
     connect(mainMenu->addAction("Reload checklist"),&QAction::triggered,this,&ReloadMakerController::showChecklist);
     connect(mainMenu->addAction("Reload library…"),&QAction::triggered,this,&ReloadMakerController::showPackCoverage);
     mainMenu->addSeparator();
-    auto* openProject=mainMenu->addAction("Open project…");
-    auto* saveProject=mainMenu->addAction("Save project");
-    auto* saveAs = mainMenu->addAction("Save project as…");
-    saveAs->setShortcut(QKeySequence::SaveAs);
-    connect(saveAs,&QAction::triggered,this,[this] {
-        const auto path=QFileDialog::getSaveFileName(_window,"Save Reload Maker project",suggestedSessionPath(),"Reload Maker project (*.json)");
-        if(!path.isEmpty())saveSession(path);
-    });
+    auto* saveProject=mainMenu->addAction("Save");
+    connect(mainMenu->addAction("Saved versions…"),&QAction::triggered,this,&ReloadMakerController::showEspVersions);
+    auto* openProject=mainMenu->addAction("Import earlier project…");
     auto* importRecords = mainMenu->addAction("Import…");
     auto* exportMenu = mainMenu->addMenu("Export");
-    connect(exportMenu->addAction("Save selected configuration to pack…"),&QAction::triggered,this,&ReloadMakerController::showConfigurationSaver);
-    connect(exportMenu->addAction("Export current reload…"),&QAction::triggered,this,&ReloadMakerController::showPackExporter);
-    connect(exportMenu->addAction("Export selected reload mods…"),&QAction::triggered,this,&ReloadMakerController::showPackBuilder);
+    connect(exportMenu->addAction("Export this ESP…"),&QAction::triggered,this,&ReloadMakerController::showPackExporter);
+    connect(exportMenu->addAction("Export reload mods…"),&QAction::triggered,this,&ReloadMakerController::showPackBuilder);
+    connect(exportMenu->addAction("Magazine world models…"),&QAction::triggered,this,&ReloadMakerController::showMagazineModels);
+    connect(exportMenu->addAction("Weapon authoring file…"),&QAction::triggered,this,[this]{
+        if(!currentWeapon())return;
+        const auto path=QFileDialog::getSaveFileName(_window,"Export this weapon's authoring",studioDataPath("exports/"+weaponRecordKey().replace(':','-')+".project.json"),"Reload Maker project (*.json)");
+        if(path.isEmpty())return;
+        try{const auto result=exportWeaponProject(path);setStatus("Exported a copy of this weapon's authoring · "+result["path"].toString());}
+        catch(const std::exception& e){setStatus(QString::fromUtf8(e.what()),true);}
+    });
     exportMenu->addSeparator();
     connect(exportMenu->addAction("Capture current configuration (authoring data)"),&QAction::triggered,this,[this]{
         try{const auto result=executeCommand({{"method","export"},{"params",QJsonObject{{"kind","runtime_configuration"}}}});setStatus("Captured configured reload · "+result["path"].toString());}
@@ -416,13 +418,19 @@ void ReloadMakerController::createUi() {
     connect(_builderStepButtons, &QButtonGroup::idToggled, this, [this](int step, bool checked) { if (checked) showBuilderStep(BuilderStep(step)); });
     connect(diagnostics, &QAction::toggled, _detailsDock, &QWidget::setVisible);
     connect(_detailsDock,&QDockWidget::visibilityChanged,diagnostics,&QAction::setChecked);
-    connect(saveProject, &QAction::triggered, this, [this] { saveSession(); });
+    const auto save = [this] {
+        try { (void)startEspSave({}); }
+        catch (const std::exception& error) { setStatus(QString::fromUtf8(error.what()), true); }
+    };
+    connect(saveProject, &QAction::triggered, this, save);
     connect(openProject, &QAction::triggered, this, [this] {
-        const QString path = QFileDialog::getOpenFileName(_window, "Open Reload Maker project", studioDataPath("workspace"), "Reload Maker project (*.json)");
-        if (!path.isEmpty() && leaveDocument(QStringLiteral("opening another project"))) openSession(path);
+        const QString path = QFileDialog::getOpenFileName(_window, "Import an earlier Reload Maker project", studioDataPath("workspace"), "Reload Maker project (*.json)");
+        if (path.isEmpty()) return;
+        try { (void)importLegacyProject(path); }
+        catch (const std::exception& error) { setStatus(QString::fromUtf8(error.what()), true); }
     });
     auto* saveShortcut = new QShortcut(QKeySequence::Save, _window);
-    connect(saveShortcut, &QShortcut::activated, this, [this] { saveSession(); });
+    connect(saveShortcut, &QShortcut::activated, this, save);
     auto* fitShortcut = new QShortcut(QKeySequence("F"), _window);
     connect(fitShortcut, &QShortcut::activated, this, [this] { (void)fitWeapon(); });
     for (int i = 0; i < int(std::size(pages)); ++i) {

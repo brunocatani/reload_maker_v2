@@ -45,6 +45,7 @@
 #include <QVector>
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 
 class NifModel;
@@ -99,6 +100,9 @@ namespace reloadmaker
         explicit ReloadMakerController(StudioWindow* window);
         ~ReloadMakerController() override;
         void showHome();
+        // Reopens the source and weapon last worked on; their authoring comes
+        // from the ESP library (areas/project/EspProject.cpp).
+        void resumeLastSession();
 
         void openInitialPaths(const QString& packagePath, const QString& gameDataPath,
                               const QString& mo2Instance = {}, bool library = false);
@@ -345,35 +349,106 @@ namespace reloadmaker
         QJsonObject configureSourcePolicy(const QJsonObject&);
         void showSourcePolicy();
         QJsonObject _sourcePolicies;
-        // Project files (src/areas/project).
-        bool saveSession(const QString& path = {});
-        // Explicit saves only (owner, 2026-10-05): nothing writes a project
-        // except Save. The authored part of the record, never the camera,
-        // part selection or playback, is compared with what the last save or
-        // open produced; leaving a changed document asks in the editor and
-        // discards in an unattended run, which saves explicitly.
+        // Weapon records (src/areas/project/ProjectFiles.cpp). One weapon's
+        // complete editor state: its authored part, drafts and view state.
+        // Explicit saves only (owner, 2026-10-05): the authored part, never
+        // the camera, part selection or playback, is compared with what the
+        // committed version produced.
         [[nodiscard]] QJsonObject authoredRecord() const;
+        [[nodiscard]] static QJsonObject authoredPart(QJsonObject record);
         [[nodiscard]] bool documentDirty() const;
         void markDocumentClean();
         void refreshDocumentModified();
-        bool leaveDocument(const QString& action);
         QJsonObject _savedAuthoring;
         bool _modifiedRefreshQueued{ false };
-        QString suggestedSessionPath() const;
-        QJsonObject sessionSourceContext() const;
-        bool beginWeaponProject(int selectedIndex);
         QJsonObject animationSourceIdentity() const;
         [[nodiscard]] QJsonObject projectRecord() const;
         bool appendProjectDrafts(QJsonObject& record, QString& message) const;
-        void openSession(const QString& path);
+        [[nodiscard]] static bool validWeaponRecord(const QJsonObject& record, QString& message);
+        // After a source is indexed: select the requested weapon, then open
+        // its authoring (and apply an explicitly imported record).
         void restoreSessionSelection();
         bool selectProjectWeapon(const QJsonObject& record);
+        void restoreWeaponRecord(const QJsonObject& record, const QJsonObject& baseline);
         void restoreProjectLoadout(const QJsonObject& record);
         void restoreProjectAuthoring(const QJsonObject& record);
         void restorePins(const QJsonObject& record);
         [[nodiscard]] QJsonArray pinsJson() const;
         void restoreProjectPose(const QJsonObject& record, QString& error);
         void restoreProjectView(const QJsonObject& record);
+
+        // The ESP-owned working project (src/areas/project/EspProject.cpp).
+        // Every authored weapon belongs to the plugin that defines its record.
+        // Entering a plugin's weapons loads that ESP's latest committed
+        // version once; switching between its weapons keeps each weapon's
+        // unsaved edits in memory. Only a deliberate Save commits a new
+        // version, and it commits every weapon of the ESP together.
+        struct EspWeaponWork
+        {
+            QJsonObject record;    // the complete editor record while off screen; empty until visited
+            QJsonObject committed; // the authored part as committed: the dirty baseline
+            QJsonObject status;    // checklist progress per configuration
+            bool dirty{ false };
+            bool imported{ false }; // replaced by an explicit import; unsaved until Save
+            bool unreadable{ false }; // its committed authoring could not be read; Save keeps that entry
+        };
+        struct EspWork
+        {
+            QString plugin;        // the originating plugin, as its file is spelled
+            QString base;          // the committed version these edits start from; empty for none
+            QJsonObject snapshot;  // that version
+            QHash<QString, EspWeaponWork> weapons; // by lower-case record
+        };
+        std::optional<EspWork> _esp;
+        // Capturing the edited weapons' configurations, then committing.
+        struct EspSaveJob
+        {
+            QString id;
+            QString folder;
+            QString note;
+            QStringList queue;     // weapons still to capture
+            QString returnWeapon;  // on screen when the save started
+            QHash<QString, QJsonArray> exceptions;
+            QSet<QString> captured;
+            QHash<QString, QString> captureFolders;
+            QJsonObject sent;      // record -> the authored part handed to the save
+            bool returned{ false }; // back on the author's weapon after the captures
+            int started{ 0 };       // weapons whose captures began
+            bool committing{ false };
+        };
+        std::optional<EspSaveJob> _espSave;
+        // Run after the Save chosen in a Save / Discard / Cancel prompt succeeds.
+        std::function<void()> _afterSave;
+        [[nodiscard]] QString weaponRecordKey() const;
+        [[nodiscard]] bool espBusy() const;
+        [[nodiscard]] bool espDirty() const;
+        [[nodiscard]] QStringList espDirtyWeapons() const;
+        bool changeWeapon(int index);
+        bool showWorkingWeapon(const QString& record, bool stash = true);
+        void openWeaponAuthoring();
+        void stashDisplayedWeapon();
+        [[nodiscard]] QJsonObject mergedWeaponStatus(QJsonObject status) const;
+        // Leaving the working project: unsaved edits ask Save / Discard /
+        // Cancel in the editor (Save runs `retry` once it has committed) and
+        // are discarded in an unattended run, whose scripts save explicitly.
+        bool leaveDocument(const QString& action, std::function<void()> retry = {});
+        QJsonObject espState() const;
+        QJsonObject startEspSave(const QJsonObject& request);
+        void continueEspSave();
+        void commitEspSave();
+        void finishEspSave(bool success, const QJsonObject& result);
+        QJsonObject loadEspVersion(const QString& save);
+        QJsonObject deleteEspVersion(const QString& save);
+        void finishEspDelete(bool success, const QJsonObject& result);
+        QJsonObject importLegacyProject(const QString& path);
+        QJsonObject exportWeaponProject(const QString& path);
+        QJsonObject assignMagazineModels(const QJsonObject& request);
+        QJsonObject espExport(const QJsonObject& request);
+        void rememberLastSession();
+        void showEspVersions();
+        void showMagazineModels();
+        mutable QHash<QString, QJsonObject> _espIndexCache;
+        QJsonObject espIndex(const QString& plugin) const;
 
         // Command pipe and registry; definitions live in src/commands by area.
         CommandRegistry _commands;
@@ -459,10 +534,9 @@ namespace reloadmaker
         void refreshChecklistUi();
         void runChecklistCommand(const QJsonObject& request);
         QString checklistRefreshKey() const;
-        // Each weapon project folder holds status.json beside it: the
-        // checklist progress per configuration, so the weapon list can show
-        // complete, draft and untouched weapons without opening projects.
-        void writeWeaponStatus(const QString& projectPath);
+        // Checklist progress by lower-case weapon record: the working
+        // project's weapons, then each loaded plugin's latest version, so the
+        // weapon list shows complete, draft and untouched weapons.
         QHash<QString, WeaponProgress> weaponProgressIndex() const;
         QWidget* _checklistList{nullptr};
         QLabel* _checklistCount{nullptr};
@@ -549,9 +623,6 @@ namespace reloadmaker
         QJsonObject _boltCycleSource;
         bool isRifleConfiguration() const;
         QString currentTestbed();
-        QString testbedProject(const QString& name) const;
-        QString resolvedTestbedProject(const QString& name) const;
-        bool selectSavedWeapon(int index);
         bool prepareRifleMotion();
         bool buildCurrentSimulationRig(SimulationRig&,QString&);
         Transformf rifleBoltPose(float progress) const;
@@ -634,6 +705,9 @@ namespace reloadmaker
         // round role the author changed from the detected one, keyed by their
         // path from the full carrier. A saved magazine setup decides instead.
         QHash<QString,QJsonObject> _magazineRounds;
+        // Finished full/empty world models assigned to a magazine, by
+        // lower-case "weapon|magazine". Saving copies them into the ESP project.
+        QHash<QString,QJsonObject> _magazineModels;
         QString magazineRoundsKey() const;
         QString magazineRoundPath(const QModelIndex& node, const QModelIndex& carrier) const;
         QJsonArray magazineRoundPieces() const;
@@ -643,11 +717,13 @@ namespace reloadmaker
         QJsonObject configureMagazineRounds(const QJsonObject&);
         void previewMagazineOutside(bool empty);
         void showMagazineRounds();
+        // The library's ESP projects with their latest versions' weapons
+        // (StudioCoverage.cpp); read again after every save, delete or export.
         QJsonObject packCoverageState(bool refresh=false);
         void showPackCoverage();
         QString selectionRecordKey(int selection) const;
         QString coverageLabel(const QString& record) const;
-        void updatePackCoverage(const QJsonObject&);
+        void updatePackCoverage();
         QJsonObject _packCoverage;
         QJsonObject _weaponLibraryReport;
         QHash<QString,QString> _coverageLabels;
@@ -655,8 +731,6 @@ namespace reloadmaker
         bool sampledMagazinePayload() const;
         bool buildSourceSimulationRig(SimulationRig&,QString&);
         bool buildConfiguredSimulationRig(const OperatingSetup&,SimulationRig&,QString&);
-        QJsonObject saveConfiguredReload(const QJsonObject& request);
-        void showConfigurationSaver();
         QJsonObject exportSlideProfile() const;
         void prepareMagazineInteraction();
         // Steps of prepareMagazineInteraction (src/areas/magazine).
@@ -815,9 +889,9 @@ namespace reloadmaker
         // Advances the revision for a document change that is not a view
         // refresh, remembering `source` when it happened outside a command.
         void noteDocumentChange(const QString& source);
+        // What to select once a source is indexed: {weapon, browserPlugin,
+        // workspace} and, for an explicit import, the imported record.
         QJsonObject _pendingSession;
-        QString _pendingSessionPath;
-        QString _sessionPath;
         QString _lastError;
         QComboBox* _fingerJoint{nullptr};
         std::array<QDoubleSpinBox*,3> _fingerAngles{};
@@ -1205,9 +1279,10 @@ namespace reloadmaker
             QJsonArray exceptions;
             int captures{ 0 };
             bool cancelled{ false };
+            // The ESP save's continuation; without one the job reports alone.
+            std::function<void(SaveAllJob&)> finished;
         };
         std::optional<SaveAllJob> _saveAll;
-        QJsonObject startSaveAllConfigurations(const QJsonObject& request);
         [[nodiscard]] ConfigurationPlan saveAllPlan() const;
         // The weapon's reload parts as slots: the receiver, a separate
         // operating part and the magazine. Authoring keys, Save all and the
@@ -1224,11 +1299,7 @@ namespace reloadmaker
         void finishSaveAll();
         bool selectConfigurationRecords(const QStringList& records);
         [[nodiscard]] bool assemblyBusy() const;
-        void appendInventoryArguments(QStringList& arguments, const QJsonObject& request) const;
         void appendAuthoringArguments(QStringList& arguments, const QJsonObject& request, const QString& operation) const;
-        // The pack project's weapons an export leaves out (checklist not
-        // complete in the loaded source), each {record, name, reason}.
-        [[nodiscard]] QJsonArray exportSkippedWeapons(const QString& project) const;
         void startPackProcess(const QString& python, const QStringList& arguments, const QJsonObject& job);
         [[nodiscard]] QJsonObject runtimeOperatingProfile() const;
         [[nodiscard]] QVector<int> runtimeOperatingTracks() const;
@@ -1264,7 +1335,7 @@ namespace reloadmaker
         // From setLoading(true) until setLoading(false); the load thread
         // starts just after the first and ends just before the second.
         bool _sourceLoading{ false };
-        void startPackageLoad(const QString& path, const QString& dataPath, bool newDocument = false, bool reuse = false);
+        void startPackageLoad(const QString& path, const QString& dataPath, bool reuse = false);
         // Resident sources (areas/sources/ResidentSources.cpp).
         void takeCurrentPackage(PackageLoad& load);
         void parkCurrentPackage();

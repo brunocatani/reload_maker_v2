@@ -15,7 +15,7 @@ def ready():
             assert not s['lastError'],s['lastError'];return s
         time.sleep(.03)
     raise AssertionError('Loading timeout')
-initial=ready();snapshot=OUT/'original.project.json';edit('save_project',{'path':str(snapshot)})
+initial=ready();snapshot=OUT/'original.project.json';edit('export',{'kind':'project','path':str(snapshot)})
 try:
     before=command('state')['camera']
     command('render',{'view':'iso','fit':True,'zoom':1.2,'preserveCamera':True})
@@ -45,10 +45,10 @@ try:
     edit('playback',{'mode':1,'seconds':command('state')['duration']*.5})
     edit('view',{'view':'side','fit':True})
     assert 1<command('state')['camera']['distance']<50,'Native reload props expanded weapon Fit'
-    edit('view',{'camera':before});project=OUT/'saved-camera.project.json';edit('save_project',{'path':str(project)})
-    edit('view',{'view':'top','fit':True});edit('open_project',{'path':str(project)});ready()
+    edit('view',{'camera':before});project=OUT/'saved-camera.project.json';edit('export',{'kind':'project','path':str(project)})
+    edit('view',{'view':'top','fit':True});edit('import_project',{'path':str(project)});ready()
     assert command('state')['camera']==before,'Project did not restore exact camera'
     (OUT/'validated.json').write_text(json.dumps({'baseline':baseline,'detached':detached,'otherBody':other_body,'restored':before},indent=2),encoding='utf-8')
     print('PASS Fit remains on weapon with distant loose magazine and alternate arms; zoom survives paint; inspection renders and project restore preserve camera')
 finally:
-    edit('open_project',{'path':str(snapshot)});ready();edit('save_project',{'path':initial['project']})
+    edit('import_project',{'path':str(snapshot)});ready();edit('export',{'kind':'project','path':command('export',{'kind':'project'},ready()['revision'])['path']})

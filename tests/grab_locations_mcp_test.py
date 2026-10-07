@@ -51,8 +51,8 @@ def exported(kind):
 
 ready()
 edit('testbed', name='glock')
-original = ready()['project']
-edit('save_project', path=str(OUT / 'original.project.json'))
+original = command('export',{'kind':'project'},ready()['revision'])['path']
+edit('export', kind='project',path=str(OUT / 'original.project.json'))
 op('open')
 # The Receiver slot holds the slide (the operating part) and the frame; a pick
 # on the frame is refused, so keep picking until two points stand.
@@ -86,8 +86,8 @@ try:
     pose = command('pose')
     assert all(pose[key] == baseline_pose[key] for key in ('bones', 'parts', 'source'))
     saved = OUT / 'multiple.project.json'
-    edit('save_project', path=str(saved))
-    edit('open_project', path=str(saved))
+    edit('export', kind='project',path=str(saved))
+    edit('import_project', path=str(saved))
     ready()
     assert points() == changed
     record = exported('grab_locations')
@@ -119,7 +119,7 @@ try:
     bad_path.write_text(json.dumps(invalid), encoding='utf-8')
     before = command('grab_locations_state')
     try:
-        edit('open_project', path=str(bad_path))
+        edit('import_project', path=str(bad_path))
         raise AssertionError('Invalid project accepted')
     except RuntimeError:
         after = command('grab_locations_state')
@@ -132,6 +132,6 @@ try:
     }, indent=2), encoding='utf-8')
     print('PASS native point editing, pose isolation, project persistence, exports and acquisition eligibility')
 finally:
-    edit('open_project', path=str(OUT / 'original.project.json'))
+    edit('import_project', path=str(OUT / 'original.project.json'))
     ready()
-    edit('save_project', path=original)
+    edit('export', kind='project',path=original)

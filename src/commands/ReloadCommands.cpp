@@ -38,7 +38,7 @@ namespace reloadmaker
         _commands.add({ "revision", CommandAccess::Read, CommandGate::Always,
                         [this](const QJsonObject&) -> std::optional<QJsonObject> {
                             // A cheap idle check for clients that would otherwise poll the full state.
-                            return QJsonObject{ { "busy", bool(_loadThread) || _reloadCapturing || _reloadCaptureQueued || _rebuildTimer->isActive() },
+                            return QJsonObject{ { "busy", bool(_loadThread) || _reloadCapturing || _reloadCaptureQueued || _rebuildTimer->isActive() || espBusy() },
                                                 { "lastError", _lastError } };
                         } });
 
@@ -71,13 +71,11 @@ namespace reloadmaker
                             return result;
                         } });
 
-        _commands.add({ "save_configured_reload", CommandAccess::Edit, CommandGate::Always,
+        // Finished full/empty world models for a magazine; Save copies them
+        // into the ESP project with the weapon's captured configurations.
+        _commands.add({ "assign_magazine_models", CommandAccess::Edit, CommandGate::WhenIdle,
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
-                            return saveConfiguredReload(params);
-                        } });
-        _commands.add({ "save_all_configurations", CommandAccess::Edit, CommandGate::WhenIdle,
-                        [this](const QJsonObject& params) -> std::optional<QJsonObject> {
-                            return startSaveAllConfigurations(params);
+                            return assignMagazineModels(params);
                         } });
     }
 }

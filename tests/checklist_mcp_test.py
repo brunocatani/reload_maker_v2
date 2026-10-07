@@ -70,11 +70,11 @@ def records(path):
 def run():
     work = ROOT / 'local/checklist-tests' / uuid.uuid4().hex
     work.mkdir(parents=True)
-    original = ready()['project']
+    original = command('export',{'kind':'project'},ready()['revision'])['path']
     original_bytes = Path(original).read_bytes() if original else None
     try:
         edit('testbed', dict(name='glock'))
-        project = Path(ready()['project'])
+        project = Path(command('export',{'kind':'project'},ready()['revision'])['path'])
         saved = project.read_bytes()
         try:
             edit('workspace', dict(index=5))
@@ -87,7 +87,7 @@ def run():
             assert command('checklist_state')['presetAssigned']
             confirm_all()
             draft = work / 'sources.project.json'
-            edit('save_project', dict(path=str(draft)))
+            edit('export', dict(kind='project',path=str(draft)))
             assert any('checklist' in v for v in records(draft).values()), 'Confirmations were not saved'
             assert not any('sources' in v for v in records(draft).values()), 'Source bytes were recorded'
             assert not any('step' in v or 'reviews' in v for v in records(draft).values()), 'Retired roadmap keys were saved'
@@ -128,9 +128,9 @@ def run():
             edit('workspace', dict(index=5))
             ready()
             reviewed = work / 'confirmed.project.json'
-            edit('save_project', dict(path=str(reviewed)))
+            edit('export', dict(kind='project',path=str(reviewed)))
             before = states()
-            edit('open_project', dict(path=str(reviewed)))
+            edit('import_project', dict(path=str(reviewed)))
             ready()
             assert states() == before, 'Reopening lost confirmations'
             edit('checklist', dict(operation='unconfirm', id='fire.motion'))
@@ -149,8 +149,8 @@ def run():
             assert command('checklist_state')['evaluated'], command('checklist_state')['problem']
             assert states() == kept, 'Another sight changed the checklist'
             reopened = work / 'other-sight.project.json'
-            edit('save_project', dict(path=str(reopened)))
-            edit('open_project', dict(path=str(reopened)))
+            edit('export', dict(kind='project',path=str(reopened)))
+            edit('import_project', dict(path=str(reopened)))
             ready()
             edit('workspace', dict(index=5))
             ready()
@@ -161,16 +161,16 @@ def run():
                   'reopen and parts outside the reload:', work, flush=True)
         finally:
             project.write_bytes(saved)
-            command('open_project', dict(path=str(project)), command('revision')['revision'])
+            command('import_project', dict(path=str(project)), command('revision')['revision'])
             ready()
-            edit('save_project', dict(path=str(project)))
+            edit('export', dict(kind='project',path=str(project)))
             project.write_bytes(saved)
     finally:
         if original:
             Path(original).write_bytes(original_bytes)
-            command('open_project', dict(path=original), command('revision')['revision'])
+            command('import_project', dict(path=original), command('revision')['revision'])
             ready()
-            edit('save_project', dict(path=original))
+            edit('export', dict(kind='project',path=original))
             Path(original).write_bytes(original_bytes)
 
 

@@ -48,8 +48,8 @@ def run():
         weapon=next(w for w in everything['weapons'] if w['record'].lower()=='glock19x.esp:000f9b')
         selected=edit(operation='weapon',index=weapon['index']);assert selected['plugin']=='*','Choosing a weapon left all-weapons mode'
         fixture=work/'all-weapons.project.json'
-        command('save_project',{'path':str(fixture)},ready()['revision'])
-        command('open_project',{'path':str(fixture)},ready()['revision']);ready()
+        command('export',{'kind':'project','path':str(fixture)},ready()['revision'])
+        command('import_project',{'path':str(fixture)},ready()['revision']);ready()
         assert command('source_browser')['plugin']=='*' and ready()['weaponIndex']==weapon['index'],'Reopening lost the all-weapons selection'
         save('all weapons across ESPs and project reopen')
         glock=edit(operation='plugin',plugin='Glock19x.esp')

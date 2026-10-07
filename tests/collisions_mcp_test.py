@@ -41,15 +41,15 @@ def collision(operation, **params):
     return edit('collisions', operation=operation, **params)
 
 
-original = ready()['project']
+original = command('export',{'kind':'project'},ready()['revision'])['path']
 original_workspace = command('state')['workspace']
 original_camera = command('state')['camera']
 results = {}
 try:
     # Store any current authoring data before the normal testbed switch.
-    edit('save_project', path=original)
+    edit('export', kind='project',path=original)
     edit('testbed', name='glock')
-    canonical = ready()['project']
+    canonical = command('export',{'kind':'project'},ready()['revision'])['path']
     edit('workspace', index=9)
     ready()
     before_pose = command('pose')
@@ -113,10 +113,10 @@ try:
     edit('configure', slot=slot['key'], mod=slot['selected'])
     ready()
     # Restore the canonical testbed's authoring state without saving test mutations.
-    edit('open_project', path=canonical)
+    edit('import_project', path=canonical)
     ready()
 finally:
-    edit('open_project', path=original)
+    edit('import_project', path=original)
     ready()
     edit('workspace', index=original_workspace)
     edit('view', camera=original_camera)

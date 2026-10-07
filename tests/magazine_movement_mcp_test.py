@@ -12,9 +12,9 @@ def rotate(q,v):
 
 def run():
     work=ROOT/'local/magazine-movement-tests'/uuid.uuid4().hex;work.mkdir(parents=True)
-    original=ready()['project'];original_bytes=Path(original).read_bytes();created=[];identity=str(uuid.uuid4())
+    original=command('export',{'kind':'project'},ready()['revision'])['path'];original_bytes=Path(original).read_bytes();created=[];identity=str(uuid.uuid4())
     try:
-        edit('testbed',dict(name='glock'));ready();project=Path(ready()['project']);saved=project.read_bytes()
+        edit('testbed',dict(name='glock'));ready();project=Path(command('export',{'kind':'project'},ready()['revision'])['path']);saved=project.read_bytes()
         try:
             edit('workspace',dict(index=5));ready()
             reference=command('magazine_reference_state')['settings'];reference['connectionMode']='custom';reference['connectionInCarrier']['translate'][0]+=.75
@@ -47,16 +47,16 @@ def run():
             for key,value in docs.items():(work/(key+'.json')).write_text(json.dumps(value),encoding='utf-8')
             check=subprocess.run([str(ROOT/'build-fast/dist/ReloadMakerV2/backends/diamond/DiamondProfileCheck.exe'),'--authored',*[str(work/(k+'.json')) for k in docs]],capture_output=True,text=True)
             assert check.returncode==0,(check.stdout,check.stderr)
-            path=work/'manual.project.json';edit('save_project',dict(path=str(path)));edit('open_project',dict(path=str(path)));ready()
+            path=work/'manual.project.json';edit('export',dict(kind='project',path=str(path)));edit('import_project',dict(path=str(path)));ready()
             assert simulation()==after
             edit('simulate',dict(operation='mag_out'));edit('simulate',dict(operation='step',seconds=1));render=command('render',dict(view='iso',fit=True))
             (work/'result.json').write_text(json.dumps(dict(ok=True,render=render,motion=captured['magazine']),indent=2),encoding='utf-8')
             edit('magazine_setup',dict(operation='reset'));ready();assert simulation()==before
             print('PASS authored translation/rotation, independent straight guide, frozen runtime path and reopen:',work,flush=True)
         finally:
-            project.write_bytes(saved);command('open_project',dict(path=str(project)),command('revision')['revision']);ready();edit('save_project',dict(path=str(project)));project.write_bytes(saved)
+            project.write_bytes(saved);command('import_project',dict(path=str(project)),command('revision')['revision']);ready();edit('export',dict(kind='project',path=str(project)));project.write_bytes(saved)
     finally:
-        Path(original).write_bytes(original_bytes);command('open_project',dict(path=original),command('revision')['revision']);ready();edit('save_project',dict(path=original));Path(original).write_bytes(original_bytes)
+        Path(original).write_bytes(original_bytes);command('import_project',dict(path=original),command('revision')['revision']);ready();edit('export',dict(kind='project',path=original));Path(original).write_bytes(original_bytes)
         for file in created:
             path=Path(file).resolve();assert path.parent==(ROOT/'workspace/part-mechanisms').resolve() and path.stem==identity;path.unlink()
 
