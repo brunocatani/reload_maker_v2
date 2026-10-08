@@ -1,4 +1,5 @@
 #include "AudioPreview.h"
+#include "domain/sounds/PreviewWave.h"
 #define NOMINMAX
 #include <Windows.h>
 #include <xaudio2.h>
@@ -30,24 +31,11 @@ AudioPreview::AudioPreview():impl_(std::make_unique<Impl>()){}
 AudioPreview::~AudioPreview(){clear();if(impl_->master)impl_->master->DestroyVoice();if(impl_->engine)impl_->engine->Release();if(impl_->com)CoUninitialize();}
 bool AudioPreview::contains(const QString& key) const{return impl_->samples.contains(key);}
 bool AudioPreview::cache(const QString& key,const QByteArray& wav,QString& error){
-    error.clear();const auto fail=[&](const char* message){error=QString::fromLatin1(message);return false;};
-    if(wav.size()<12||wav.size()>16*1024*1024||wav.left(4)!="RIFF"||wav.mid(8,4)!="WAVE")return fail("Preview requires a PCM WAV sample (up to 16 MiB).");
-    auto sample=std::make_shared<Impl::Sample>();bool format=false,data=false;
-    for(qsizetype at=12;at<=wav.size()-8;){
-        const auto count=qFromLittleEndian<quint32>(reinterpret_cast<const uchar*>(wav.constData()+at+4));const auto start=at+8;
-        if(count>quint32(wav.size()-start))return fail("Truncated WAV chunk.");
-        if(wav.mid(at,4)=="fmt "){
-            if(count<16)return fail("Truncated WAV format.");auto& f=sample->format;const auto* bytes=reinterpret_cast<const uchar*>(wav.constData()+start);
-            f.wFormatTag=qFromLittleEndian<quint16>(bytes);f.nChannels=qFromLittleEndian<quint16>(bytes+2);f.nSamplesPerSec=qFromLittleEndian<quint32>(bytes+4);
-            f.nAvgBytesPerSec=qFromLittleEndian<quint32>(bytes+8);f.nBlockAlign=qFromLittleEndian<quint16>(bytes+12);f.wBitsPerSample=qFromLittleEndian<quint16>(bytes+14);format=true;
-        }else if(wav.mid(at,4)=="data"){sample->pcm=wav.mid(start,count);data=true;}
-        at=start+count+(count&1);
-    }
-    const auto& f=sample->format;
-    if(!format||!data||sample->pcm.isEmpty()||f.wFormatTag!=WAVE_FORMAT_PCM||f.nChannels<1||f.nChannels>2||
-       (f.wBitsPerSample!=8&&f.wBitsPerSample!=16)||f.nSamplesPerSec<8000||f.nSamplesPerSec>192000||
-       f.nBlockAlign!=f.nChannels*f.wBitsPerSample/8||f.nAvgBytesPerSec!=f.nSamplesPerSec*f.nBlockAlign||sample->pcm.size()%f.nBlockAlign)return fail("Unsupported or invalid PCM sample format.");
-    if(impl_->samples.size()>=256&&!contains(key))return fail("Sound preview cache is full.");
+    error.clear();PreviewWave decoded;if(!decodePreviewWave(wav,decoded,error))return false;
+    auto sample=std::make_shared<Impl::Sample>();auto& f=sample->format;
+    f.wFormatTag=WAVE_FORMAT_PCM;f.nChannels=decoded.channels;f.nSamplesPerSec=decoded.sampleRate;f.wBitsPerSample=16;
+    f.nBlockAlign=WORD(decoded.channels*2);f.nAvgBytesPerSec=decoded.sampleRate*f.nBlockAlign;sample->pcm=std::move(decoded.pcm16);
+    if(impl_->samples.size()>=256&&!contains(key)){error="Sound preview cache is full.";return false;}
     impl_->samples.insert(key,std::move(sample));return true;
 }
 bool AudioPreview::play(const QString& key,float gain,QString& error){

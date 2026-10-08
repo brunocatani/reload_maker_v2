@@ -1,3 +1,4 @@
+#include "domain/sounds/PreviewWave.h"
 #include "SoundProfile.h"
 #include "EspReader.h"
 #include "LoadOrderLibrary.h"
@@ -7,7 +8,35 @@
 #include <stdexcept>
 using namespace reloadmaker;
 void check(bool condition,const char* message){if(!condition)throw std::runtime_error(message);}
+// A RIFF/WAVE file with one fmt chunk and one data chunk.
+QByteArray wave(const QByteArray& format,const QByteArray& data){
+    QByteArray body="WAVE";auto chunk=[&](const char* id,const QByteArray& bytes){body+=id;quint32 n=bytes.size();body.append(reinterpret_cast<const char*>(&n),4);body+=bytes;};
+    chunk("fmt ",format);chunk("data",data);quint32 n=body.size();return QByteArray("RIFF")+QByteArray(reinterpret_cast<const char*>(&n),4)+body;
+}
+QByteArray fmt(quint16 tag,quint16 channels,quint32 rate,quint16 bits,quint16 subtype=0){
+    QByteArray f;auto put=[&](auto v){f.append(reinterpret_cast<const char*>(&v),sizeof v);};
+    const quint16 align=channels*bits/8;put(tag);put(channels);put(rate);put(quint32(rate*align));put(align);put(bits);
+    if(tag==0xFFFE){put(quint16(22));put(bits);put(quint32(3));put(subtype);f+=QByteArray::fromHex("000000001000800000aa00389b71");}
+    return f;
+}
+qint16 at(const PreviewWave& w,int i){return reinterpret_cast<const qint16*>(w.pcm16.constData())[i];}
+void previewWaves(){
+    QString error;PreviewWave out;
+    // 32-bit integer PCM in an extensible container (the G3's foley).
+    QByteArray pcm32;for(qint32 v:{qint32(0x40000000),qint32(-0x40000000),qint32(0),qint32(0x7fffffff)})pcm32.append(reinterpret_cast<const char*>(&v),4);
+    check(decodePreviewWave(wave(fmt(0xFFFE,2,48000,32,1),pcm32),out,error),"Extensible 32-bit PCM refused");
+    check(out.channels==2&&out.sampleRate==48000&&out.pcm16.size()==8&&at(out,0)==0x4000&&at(out,1)==-0x4000&&at(out,2)==0&&at(out,3)==0x7fff,"32-bit PCM converted wrongly");
+    QByteArray pcm16;for(qint16 v:{qint16(1234),qint16(-5)})pcm16.append(reinterpret_cast<const char*>(&v),2);
+    check(decodePreviewWave(wave(fmt(1,1,22050,16),pcm16),out,error)&&out.pcm16==pcm16,"Plain 16-bit PCM changed");
+    check(decodePreviewWave(wave(fmt(1,1,44100,24),QByteArray::fromHex("0000400000c0")),out,error)&&at(out,0)==0x4000&&at(out,1)==-0x4000,"24-bit PCM converted wrongly");
+    QByteArray floats;for(float v:{.5f,-2.f})floats.append(reinterpret_cast<const char*>(&v),4);
+    check(decodePreviewWave(wave(fmt(0xFFFE,1,48000,32,3),floats),out,error)&&at(out,0)==16384&&at(out,1)==-32767,"Float samples converted wrongly");
+    check(!decodePreviewWave(wave(fmt(0xFFFE,2,48000,32,2),pcm32),out,error),"Compressed extensible subformat accepted");
+    check(!decodePreviewWave(wave(fmt(1,2,48000,16),QByteArray(3,0)),out,error),"Partial frame accepted");
+    check(!decodePreviewWave(QByteArray("RIFF"),out,error),"Truncated file accepted");
+}
 int main(int argc,char** argv){QCoreApplication app(argc,argv);try{
+    previewWaves();
     SoundProfile p{"Test.esp:001000","reload.hkx","Test.esp:002000",{}};
     SoundCue open;open.id="pull";open.label="Pull";open.trigger="opening";open.record="Test.esp:003000";open.editorId="SoundPull";open.files={"Sound/FX/Pull.wav"};open.progress=.5f;p.cues.append(open);
     auto close=open;close.id="return";close.trigger="closing";close.progress=.1f;p.cues.append(close);
