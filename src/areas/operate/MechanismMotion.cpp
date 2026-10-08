@@ -99,8 +99,10 @@ namespace reloadmaker
         if (reloadTrackStroke(recipe, bolt) >= kCompleteStroke) {
             return buildSimulationRig(recipe, rig, error, WeaponMechanism::Ar15, true);
         }
-        const QString path = resolveAnimationPath(QStringLiteral("WPNReload.hkx"));
-        if (path.isEmpty() || ResourceArchive::normalizeResourcePath(path) == ResourceArchive::normalizeResourcePath(recipe.source["animation"].toString())) {
+        // A tactical reload in its own folder (G3 QuickReload/WPNReload.hkx)
+        // has the same file name as the standard reload one folder up.
+        const QString path = resolveAnimationPath(QStringLiteral("WPNReload.hkx"), recipe.source["animation"].toString());
+        if (path.isEmpty()) {
             error = "This reload moves neither the charging handle nor the bolt, and the weapon has no standard reload to take the bolt stroke from.";
             return false;
         }

@@ -96,7 +96,7 @@ namespace reloadmaker
 
     // Resolves a graph's clip path by file name through the subgraph's
     // animation search stack, first match wins. Empty when no folder has it.
-    QString ReloadMakerController::resolveAnimationPath(const QString& graphAnimationPath) const
+    QString ReloadMakerController::resolveAnimationPath(const QString& graphAnimationPath, const QString& excluded) const
     {
         QString normalized = ResourceArchive::normalizeResourcePath(graphAnimationPath);
         if (normalized.endsWith(QStringLiteral(".hkt"), Qt::CaseInsensitive)) {
@@ -111,7 +111,8 @@ namespace reloadmaker
             const QString directory = meshesPath(ResourceArchive::normalizeResourcePath(searchPath));
             const QString candidate = ResourceArchive::normalizeResourcePath(QStringLiteral("%1/%2").arg(directory, fileName));
             const bool gameFallback = !_libraryMode && _package.resourceData.isEmpty() && _gameAnimations.contains(candidate);
-            if (_packageResources.contains(candidate) || gameFallback) {
+            if ((_packageResources.contains(candidate) || gameFallback) &&
+                (excluded.isEmpty() || candidate != ResourceArchive::normalizeResourcePath(excluded))) {
                 return candidate;
             }
         }

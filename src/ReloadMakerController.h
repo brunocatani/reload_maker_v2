@@ -1496,7 +1496,9 @@ namespace reloadmaker
         [[nodiscard]] QVector<std::uint32_t> activeAnimationKeywords() const;
         [[nodiscard]] QByteArray readAnimationResource(const QString& resourcePath,
                                                        QString& error) const;
-        [[nodiscard]] QString resolveAnimationPath(const QString& graphAnimationPath) const;
+        // The clip the search folders resolve first, skipping `excluded` (a
+        // configuration's own clip, to reach the next more general folder's).
+        [[nodiscard]] QString resolveAnimationPath(const QString& graphAnimationPath, const QString& excluded = {}) const;
         [[nodiscard]] QString animationSetRelativePath(const QString& path) const;
         [[nodiscard]] bool rebuildAnimationActions(QString& error);
         bool loadBehaviorGraph(const QString& requestedPath, int depth, HkxBehaviorGraph& combined,
