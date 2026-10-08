@@ -132,7 +132,13 @@ namespace {
         const auto borrowed=magazineGripFor("Fixture.esp:00dcba",grip.pose.placement,{sibling},{},{},error,grip.pose.hand,shared);
         check(borrowed&&borrowed->weaponRecord=="Fixture.esp:00dcba"&&borrowed->pose.id!=sibling.pose.id&&sameGripAnchor(borrowed->pose.placement,grip.pose.placement),"Sibling fit was not bound to the weapon");
         check(!magazineGripFor("Fixture.esp:00dcba",grip.pose.placement,{sibling},{},{},error,opposite.pose.hand,shared),"Sibling fit served the other hand");
-        check(!magazineGripFor("Fixture.esp:00dcba",wrong,{sibling},{},{},error,grip.pose.hand,shared),"Sibling fit served another magazine frame");
+        // Another magazine with no sibling default takes the sibling's first fit, rebound.
+        const auto firstSibling=magazineGripFor("Fixture.esp:00dcba",wrong,{sibling},{},{},error,grip.pose.hand,shared);
+        check(firstSibling&&sameGripAnchor(firstSibling->pose.placement,wrong),"A sibling's first fit did not serve an unfitted magazine");
+        // The same magazine on another frame rebinds the sibling fit (fits are fallbacks, never gates).
+        auto moved=grip.pose.placement;moved.anchorPath+="/Moved";
+        const auto rebound=magazineGripFor("Fixture.esp:00dcba",moved,{sibling},{},{},error,grip.pose.hand,shared);
+        check(rebound&&sameGripAnchor(rebound->pose.placement,moved),"Sibling fit was not rebound to another frame of its magazine");
         // A sibling's weapon default serves any magazine, rebound to its frame.
         const QHash<QString,QString> siblingDefault{{QString("default")+(grip.pose.hand==PoseHand::Left?"|left":"|right"),sibling.pose.id}};
         const auto defaulted=magazineGripFor("Fixture.esp:00dcba",drum,{sibling},{},{},error,grip.pose.hand,siblingDefault);

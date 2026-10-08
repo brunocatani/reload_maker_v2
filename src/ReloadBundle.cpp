@@ -51,13 +51,23 @@ std::optional<PartGrip> magazineGripFor(const QString& weapon,const HandPosePlac
             fit.mechanismId.clear();
             return fit;
         };
+        // A sibling fit authored on another frame is rebound like a default;
+        // a missing one falls through to the sibling's default (fits are
+        // fallbacks, never gates).
         const auto sharedId=shared.value(anchor.ownerRecord.toLower()+side);
         if(!sharedId.isEmpty()) {
-            for(const auto& grip:library)if(grip.pose.id==sharedId&&grip.pose.hand==*hand&&sameGripAnchor(grip.pose.placement,anchor))return std::optional<PartGrip>(bind(grip,sharedId,false));
-            return {};
+            for(const auto& grip:library)if(grip.pose.id==sharedId&&grip.pose.hand==*hand)
+                return std::optional<PartGrip>(bind(grip,sharedId,!sameGripAnchor(grip.pose.placement,anchor)));
         }
         const auto defaultId=shared.value(QStringLiteral("default")+side);
         for(const auto& grip:library)if(!defaultId.isEmpty()&&grip.pose.id==defaultId&&grip.pose.hand==*hand)return std::optional<PartGrip>(bind(grip,defaultId,true));
+        // No sibling default recorded: a sibling's first fit for this hand on
+        // any magazine is the fallback, as for the weapon's own fits.
+        QStringList keys=shared.keys();keys.sort();
+        for(const auto& k:keys)if(k.endsWith(side)&&!k.startsWith(QStringLiteral("default|"))) {
+            const auto candidate=shared.value(k);
+            for(const auto& grip:library)if(grip.pose.id==candidate&&grip.pose.hand==*hand)return std::optional<PartGrip>(bind(grip,candidate,true));
+        }
         return {};
     }
     const PartGrip* found=nullptr;
