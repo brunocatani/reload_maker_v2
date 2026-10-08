@@ -598,6 +598,11 @@ namespace reloadmaker
         // Projects save them under "authoringRoadmaps", the name of the retired
         // 12-step roadmap that first kept them.
         QString authoringRecordKey() const;
+        // The selected configuration's plan: its own fields, completed with
+        // the physical setups (operating, magazine guide/setup/reference) a
+        // same-ESP sibling authored for the same receiver/magazine choices.
+        // Writes always go to the weapon's own record.
+        [[nodiscard]] QJsonObject authoringPlan() const;
         bool savedOperatingSetup(OperatingSetup& setup, QString& error) const;
         void rememberCollisionDraft();
         QString assignedTemplate() const;
@@ -1081,6 +1086,18 @@ namespace reloadmaker
         QJsonObject exportGrabLocations() const;
         QJsonObject configureGrabLocation(const QJsonObject&);
         QHash<QString,OperatingGrabLocations> _grabLocations;
+        // Authoring the weapon's same-ESP siblings saved for the same physical
+        // parts (owner rule: same-model receivers share authoring instead of
+        // duplicating it): grab points by group|model|node, operating fingers
+        // by group[|model]|hand and magazine fits by magazine|hand. Read from the other weapons' records whenever a
+        // weapon opens. The weapon's own authoring always wins; editing a
+        // shared set saves it as the weapon's own.
+        void refreshSiblingAuthoring();
+        [[nodiscard]] bool grabLocationsConfigured(const OperatingGrabLocations& locations) const;
+        QHash<QString,OperatingGrabLocations> _siblingGrabLocations;
+        QHash<QString,QString> _siblingMagazineFits;
+        QHash<QString,QJsonObject> _siblingPlans; // by configuration choices (the key after '/')
+        QHash<QString,QString> _siblingOperatingGrips; // operating finger keys without the weapon
         QListWidget* _grabLocationList{};
         QLineEdit* _grabLocationName{};
         QDoubleSpinBox* _grabLocationPosition[3]{};

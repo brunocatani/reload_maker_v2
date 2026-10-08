@@ -375,7 +375,7 @@ namespace reloadmaker
             if (!magazineHandAllowed(hand)) {
                 continue;
             }
-            const auto grip = magazineGripFor(weapon, anchor, _partGrips, _magazineGrabGrips, _magazineGrabDefaults, error, hand);
+            const auto grip = magazineGripFor(weapon, anchor, _partGrips, _magazineGrabGrips, _magazineGrabDefaults, error, hand, _siblingMagazineFits);
             require(grip.has_value(), hand == PoseHand::Left ? "Configure the left magazine hand before capture" : "Configure the right magazine hand before capture");
             const auto bytes = encodeHandPose(grip->pose, error);
             require(!bytes.isEmpty(), error);
@@ -406,7 +406,7 @@ namespace reloadmaker
                     && invertUniformTransform(carrier, inverse),
                 "Cannot establish the magazine carrier frame");
         magazine["modelInMagazine"] = runtimePose(composed(inverse, referenceWorld));
-        const auto referenceSetup = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineReference").toObject();
+        const auto referenceSetup = authoringPlan().value("magazineReference").toObject();
         if (!referenceSetup.isEmpty() && referenceSetup.value("connectionMode") != "source") {
             const auto point = composed(inverse, rail.connection).translation;
             magazine["capturePointInMagazine"] = QJsonArray{ point.x, point.y, point.z };

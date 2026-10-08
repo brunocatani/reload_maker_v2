@@ -157,7 +157,7 @@ namespace reloadmaker
         if (!loaded) {
             return o;
         }
-        const auto saved = _authoringRecords.value(authoringRecordKey()).toObject();
+        const auto saved = authoringPlan();
 
         // Learned reload. The preset is done once it is assigned to the weapon.
         if (assignedTemplate().isEmpty()) {
@@ -270,7 +270,7 @@ namespace reloadmaker
                 }
                 QString error;
                 const auto fit = magazineGripFor(poseRecordKey(currentWeapon()->formId), simulationMagazineAnchor(), _partGrips, _magazineGrabGrips,
-                                                 _magazineGrabDefaults, error, hand);
+                                                 _magazineGrabDefaults, error, hand, _siblingMagazineFits);
                 const QString side = hand == PoseHand::Left ? QStringLiteral("Left") : QStringLiteral("Right");
                 if (fit) {
                     fitted << side + " · " + fit->pose.name;
@@ -374,7 +374,7 @@ namespace reloadmaker
             return view;
         }
         view.items = evaluateChecklist(checklistItems(view.preset->model), checklistObservations(*view.preset),
-                                       _authoringRecords.value(authoringRecordKey()).toObject().value("checklist").toObject());
+                                       authoringPlan().value("checklist").toObject());
         view.summary = summarizeChecklist(view.items);
         const bool busy = _loadThread || _reloadCapturing || _reloadCaptureQueued || (_rebuildTimer && _rebuildTimer->isActive());
         view.evaluated = configuration() && !busy && _reloadRecipe && _simulationRig && _simulationRig->recipeId == _reloadRecipe->id;

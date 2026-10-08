@@ -110,7 +110,7 @@ namespace reloadmaker
             fit = _magazineGripDrafts.value(key);
             resumed = true;
         } else {
-            fit = magazineGripFor(weapon, part, _partGrips, _magazineGrabGrips, _magazineGrabDefaults, error, _interactionHand);
+            fit = magazineGripFor(weapon, part, _partGrips, _magazineGrabGrips, _magazineGrabDefaults, error, _interactionHand, _siblingMagazineFits);
         }
         if (!error.isEmpty()) {
             setStatus(error, true);
@@ -173,7 +173,7 @@ namespace reloadmaker
         const auto weapon = poseRecordKey(currentWeapon()->formId);
         const auto key = handAssignmentKey(magazineGrabKey(weapon, part.ownerRecord), _interactionHand);
         QString error;
-        const auto fit = magazineGripFor(weapon, part, _partGrips, _magazineGrabGrips, _magazineGrabDefaults, error, _interactionHand);
+        const auto fit = magazineGripFor(weapon, part, _partGrips, _magazineGrabGrips, _magazineGrabDefaults, error, _interactionHand, _siblingMagazineFits);
         QString name = part.ownerRecord;
         if (const auto* config = configuration()) {
             for (const auto& slot : config->entries()) {
@@ -375,7 +375,7 @@ namespace reloadmaker
             return;
         }
         const auto weapon = poseRecordKey(currentWeapon()->formId);
-        const auto selected = magazineGripFor(weapon, anchor, _partGrips, _magazineGrabGrips, _magazineGrabDefaults, _magazineGrabError, _interactionHand);
+        const auto selected = magazineGripFor(weapon, anchor, _partGrips, _magazineGrabGrips, _magazineGrabDefaults, _magazineGrabError, _interactionHand, _siblingMagazineFits);
         if (!selected) {
             return;
         }

@@ -36,7 +36,31 @@ namespace reloadmaker
         }
         const auto& source = _handPoseAnchors[a].description;
         OperatingGrabLocations g{ poseRecordKey(currentWeapon()->formId), operatingGroup(), source.ownerModel, source.anchorPath, source.anchorName, {} };
-        return _grabLocations.value(grabLocationsKey(g), g);
+        const auto own = _grabLocations.constFind(grabLocationsKey(g));
+        if (own != _grabLocations.cend()) {
+            return *own;
+        }
+        // A same-ESP sibling's points for this very part, as this weapon's.
+        auto sibling = g;
+        sibling.weapon.clear();
+        const auto shared = _siblingGrabLocations.constFind(grabLocationsKey(sibling));
+        if (shared != _siblingGrabLocations.cend()) {
+            sibling = *shared;
+            sibling.weapon = g.weapon;
+            return sibling;
+        }
+        return g;
+    }
+
+    // Points of the weapon's own, or shared by a sibling for the same part.
+    bool ReloadMakerController::grabLocationsConfigured(const OperatingGrabLocations& locations) const
+    {
+        if (_grabLocations.contains(grabLocationsKey(locations))) {
+            return true;
+        }
+        auto sibling = locations;
+        sibling.weapon.clear();
+        return _siblingGrabLocations.contains(grabLocationsKey(sibling));
     }
 
     // Selecting a location shows its fields and its marker.
@@ -232,7 +256,7 @@ namespace reloadmaker
     QJsonObject ReloadMakerController::exportGrabLocations() const
     {
         const auto g = currentGrabLocations();
-        if (!_grabLocations.contains(grabLocationsKey(g))) {
+        if (!grabLocationsConfigured(g)) {
             return {};
         }
         auto json = grabLocationsJson(g);
@@ -246,7 +270,7 @@ namespace reloadmaker
     {
         const auto g = currentGrabLocations();
         const int selected = _grabLocationList ? _selectedGrabLocation : -1;
-        return { { "configured", _grabLocations.contains(grabLocationsKey(g)) }, { "profile", grabLocationsJson(g) }, { "selected", selected } };
+        return { { "configured", grabLocationsConfigured(g) }, { "profile", grabLocationsJson(g) }, { "selected", selected } };
     }
 
     // open, pick, save; and on the selected location (or the one named by

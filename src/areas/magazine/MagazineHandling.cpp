@@ -33,7 +33,7 @@ namespace reloadmaker
     // record cannot name the magazine.
     bool ReloadMakerController::magazineAnchorDecides() const
     {
-        if (isRifleConfiguration() || _authoringRecords.value(authoringRecordKey()).toObject().contains("magazineReference")) {
+        if (isRifleConfiguration() || authoringPlan().contains("magazineReference")) {
             return true;
         }
         const int index = currentMagazineAnchor();
@@ -50,7 +50,7 @@ namespace reloadmaker
     // Timberwolf's rounds model) are never the magazine.
     int ReloadMakerController::currentMagazineAnchor() const
     {
-        const auto saved = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineReference").toObject();
+        const auto saved = authoringPlan().value("magazineReference").toObject();
         if (!saved.isEmpty()) {
             MagazineReference reference;
             QString error;

@@ -37,7 +37,7 @@ namespace reloadmaker
         if (!_reloadRecipe || magazineSettingsBusy()) {
             fail("Wait for the magazine's current source capture");
         }
-        const auto saved = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineGuide").toObject();
+        const auto saved = authoringPlan().value("magazineGuide").toObject();
         if (!_simulationRig && saved.isEmpty()) {
             fail("Choose the operating and magazine roles first");
         }
@@ -158,7 +158,7 @@ namespace reloadmaker
                 { "record", placement.ownerRecord },
             });
         }
-        const auto saved = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineReference").toObject();
+        const auto saved = authoringPlan().value("magazineReference").toObject();
         MagazineReference initial;
         initial.recipeId = _reloadRecipe->id;
         const int selected = currentMagazineAnchor();
@@ -226,7 +226,7 @@ namespace reloadmaker
         if (!_reloadRecipe || !_simulationRig || magazineSettingsBusy()) {
             fail("Prepare the operating roles and native magazine first");
         }
-        const auto saved = _authoringRecords.value(authoringRecordKey()).toObject().value("magazineSetup").toObject();
+        const auto saved = authoringPlan().value("magazineSetup").toObject();
         if (!_magazineRail && saved.isEmpty()) {
             fail(_magazineError.isEmpty() ? QString("The magazine source is not ready") : _magazineError);
         }

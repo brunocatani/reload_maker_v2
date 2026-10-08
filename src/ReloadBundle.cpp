@@ -15,7 +15,7 @@ bool magazineGrabSupported(const HandPosePlacement& anchor) {
 }
 std::optional<PartGrip> magazineGripFor(const QString& weapon,const HandPosePlacement& anchor,
     const QVector<PartGrip>& library,const QHash<QString,QString>& assignments,
-    const QHash<QString,QString>& defaults,QString& error,std::optional<PoseHand> hand) {
+    const QHash<QString,QString>& defaults,QString& error,std::optional<PoseHand> hand,const QHash<QString,QString>& shared) {
     // The caller resolves the magazine role. A part's name is not its role;
     // explicit assignments still require the exact owner-qualified frame.
     error.clear();if(anchor.ownerRecord.isEmpty()||anchor.ownerModel.isEmpty()||anchor.anchorPath.isEmpty())return {};
@@ -29,7 +29,19 @@ std::optional<PartGrip> magazineGripFor(const QString& weapon,const HandPosePlac
     const auto customId=forHand(assignments,key);
     const bool custom=!customId.isEmpty();
     const auto id=custom?customId:forHand(defaults,weapon.toLower());
-    if(id.isEmpty())return {};
+    if(id.isEmpty()) {
+        // A sibling's fit of this magazine, for the same frame and hand.
+        const auto sharedId=hand?shared.value(anchor.ownerRecord.toLower()+(*hand==PoseHand::Left?"|left":"|right")):QString();
+        if(sharedId.isEmpty())return {};
+        for(const auto& grip:library)if(grip.pose.id==sharedId&&grip.pose.hand==*hand&&sameGripAnchor(grip.pose.placement,anchor)) {
+            // Bound to this weapon like a weapon default: same pose and frame.
+            PartGrip fit=grip;fit.weaponRecord=weapon;
+            fit.pose.id=QUuid::createUuidV5(QUuid(sharedId),(key+"|"+anchor.ownerModel.toLower()+"|"+anchor.anchorPath).toUtf8()).toString(QUuid::WithoutBraces);
+            fit.mechanismId.clear();
+            return fit;
+        }
+        return {};
+    }
     const PartGrip* found=nullptr;
     for(const auto& grip:library)if(grip.pose.id==id){if(found){error="Duplicate magazine grip ID";return {};}found=&grip;}
     if(!found||found->weaponRecord.compare(weapon,Qt::CaseInsensitive)!=0||(hand&&found->pose.hand!=*hand)) {

@@ -406,7 +406,7 @@ namespace reloadmaker
             _guideTravel->setValue(_magazineRail ? _magazineRail->travel : 0);
             _guidePickup->setValue(_magazineRail ? _magazineRail->captureRadius : 0);
             _guideRelease->setValue(_magazineRail ? _magazineRail->releaseMargin : 0);
-            const bool saved = !_authoringRecords.value(authoringRecordKey()).toObject().value("magazineGuide").toObject().isEmpty();
+            const bool saved = !authoringPlan().value("magazineGuide").toObject().isEmpty();
             for (auto* spin : { _guideDirection[0], _guideDirection[1], _guideDirection[2], _guideTravel, _guidePickup, _guideRelease }) {
                 spin->setEnabled(ready);
             }

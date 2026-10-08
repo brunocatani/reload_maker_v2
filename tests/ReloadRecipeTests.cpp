@@ -120,6 +120,14 @@ namespace {
         check(resolved&&resolved->pose.id==custom.pose.id,"Weapon default overwrote an individual fit");
         auto wrong=drum;wrong.ownerModel="Different.nif";
         check(!magazineGripFor(grip.weaponRecord,wrong,{grip,custom},assigned,defaults,error)&&!error.isEmpty(),"Mismatched custom fit silently fell back to default");
+        // A same-ESP sibling's fit of this magazine and frame serves a weapon
+        // without its own, bound to that weapon; another frame or hand does not.
+        auto sibling=grip;sibling.weaponRecord="Fixture.esp:00abcd";
+        const QHash<QString,QString> shared{{grip.pose.placement.ownerRecord.toLower()+(grip.pose.hand==PoseHand::Left?"|left":"|right"),sibling.pose.id}};
+        const auto borrowed=magazineGripFor("Fixture.esp:00dcba",grip.pose.placement,{sibling},{},{},error,grip.pose.hand,shared);
+        check(borrowed&&borrowed->weaponRecord=="Fixture.esp:00dcba"&&borrowed->pose.id!=sibling.pose.id&&sameGripAnchor(borrowed->pose.placement,grip.pose.placement),"Sibling fit was not bound to the weapon");
+        check(!magazineGripFor("Fixture.esp:00dcba",grip.pose.placement,{sibling},{},{},error,opposite.pose.hand,shared),"Sibling fit served the other hand");
+        check(!magazineGripFor("Fixture.esp:00dcba",wrong,{sibling},{},{},error,grip.pose.hand,shared),"Sibling fit served another magazine frame");
         auto named=grip;named.pose.placement.anchorName="CustomBox";named.pose.placement.anchorPath="Assembly/CustomBox";
         const auto namedFit=magazineGripFor(grip.weaponRecord,named.pose.placement,{named},bindings,{},error);
         check(namedFit&&sameGripAnchor(namedFit->pose.placement,named.pose.placement),"Explicit magazine role still depends on a hardcoded part name");

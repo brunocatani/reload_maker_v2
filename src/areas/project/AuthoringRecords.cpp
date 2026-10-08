@@ -43,6 +43,22 @@ namespace reloadmaker
     // ("none" for an empty slot). Every other part (barrel, grip, sights,
     // underbarrel, muzzle) leaves the key alone (owner, 2026-10-05). Before
     // Operate has recorded the parts, the weapon has one record, "<weapon>/weapon".
+    QJsonObject ReloadMakerController::authoringPlan() const
+    {
+        const auto key = authoringRecordKey();
+        auto plan = _authoringRecords.value(key).toObject();
+        const auto shared = _siblingPlans.constFind(key.section('/', 1));
+        if (key.isEmpty() || shared == _siblingPlans.cend()) {
+            return plan;
+        }
+        for (auto it = shared->begin(); it != shared->end(); ++it) {
+            if (!plan.contains(it.key())) {
+                plan.insert(it.key(), it.value());
+            }
+        }
+        return plan;
+    }
+
     QString ReloadMakerController::authoringRecordKey() const
     {
         if (!currentWeapon() || !configuration()) {
@@ -138,7 +154,7 @@ namespace reloadmaker
         }
         const auto weapon = poseRecordKey(currentWeapon()->formId).toLower();
         const auto recorded = _reloadAxes.value(weapon).toArray();
-        if (!recorded.isEmpty() && !_authoringRecords.value(authoringRecordKey()).toObject().contains("operating")) {
+        if (!recorded.isEmpty() && !authoringPlan().contains("operating")) {
             return;
         }
         QJsonArray next = recorded;

@@ -37,8 +37,20 @@ namespace reloadmaker
             return;
         }
         const auto assigned = [this](PoseHand hand) {
-            const auto id = _savedOperatingGrips.value(operatingGripKey(hand, true));
-            return id.isEmpty() ? _savedOperatingGrips.value(operatingGripKey(hand, false)) : id;
+            // The weapon's own (part model's, else weapon-wide), else a same-ESP
+            // sibling's for the same part.
+            for (const bool model : { true, false }) {
+                const auto key = operatingGripKey(hand, model);
+                if (const auto id = _savedOperatingGrips.value(key); !id.isEmpty()) {
+                    return id;
+                }
+            }
+            for (const bool model : { true, false }) {
+                if (const auto id = _siblingOperatingGrips.value(operatingGripKey(hand, model).section('|', 1)); !id.isEmpty()) {
+                    return id;
+                }
+            }
+            return QString();
         };
         for (const auto hand : { PoseHand::Left, PoseHand::Right }) {
             auto id = assigned(hand);
@@ -184,7 +196,7 @@ namespace reloadmaker
         }
         QString error;
         const auto weapon = poseRecordKey(currentWeapon()->formId);
-        const auto source = magazineGripFor(weapon, _handPoseAnchors[anchor].description, _partGrips, _magazineGrabGrips, _magazineGrabDefaults, error, _interactionHand);
+        const auto source = magazineGripFor(weapon, _handPoseAnchors[anchor].description, _partGrips, _magazineGrabGrips, _magazineGrabDefaults, error, _interactionHand, _siblingMagazineFits);
         if (!source) {
             setStatus(error.isEmpty() ? "Save a magazine fit for this hand first." : error, true);
             return false;
@@ -237,7 +249,7 @@ namespace reloadmaker
         }
         const QVector3D hitPoint(hit.x, hit.y, hit.z);
         const auto locations = currentGrabLocations();
-        if (_grabLocations.contains(grabLocationsKey(locations))) {
+        if (grabLocationsConfigured(locations)) {
             const int anchor = operatingAnchor();
             if (anchor < 0 || !candidates.contains(anchor)) {
                 return {};
@@ -281,7 +293,7 @@ namespace reloadmaker
         const auto locations = currentGrabLocations();
         const int handBit = _interactionHand == PoseHand::Left ? 1 : 2;
         const bool hasLocation = std::any_of(locations.points.cbegin(), locations.points.cend(), [&](const auto& p) { return p.hands & handBit; });
-        return currentWeapon() && _operatingFingerError.isEmpty() && (!_grabLocations.contains(grabLocationsKey(locations)) || hasLocation);
+        return currentWeapon() && _operatingFingerError.isEmpty() && (!grabLocationsConfigured(locations) || hasLocation);
     }
 
     QJsonObject ReloadMakerController::interactionGripState() const

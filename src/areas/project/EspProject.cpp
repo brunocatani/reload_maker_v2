@@ -7,6 +7,7 @@
 // bundled tool commits every weapon of the ESP as one new dated version
 // (tools/product_library.py owns the storage format).
 #include "ReloadMakerController.h"
+#include "OperatingGrabLocations.h"
 #include "areas/project/EspLibrary.h"
 #include "commands/CommandSupport.h"
 #include "domain/checklist/Checklist.h"
@@ -193,6 +194,7 @@ namespace reloadmaker
             applyEspModelOverrides();
         }
         auto& work = _esp->weapons[record];
+        refreshSiblingAuthoring();
         if (!work.record.isEmpty()) {
             restoreWeaponRecord(work.record, work.committed);
             setStatus(QStringLiteral("%1 · unsaved edits kept").arg(weapon->name.isEmpty() ? weapon->editorId : weapon->name));
@@ -240,6 +242,93 @@ namespace reloadmaker
         }
         work.committed = _savedAuthoring;
         rememberLastSession();
+    }
+
+    // What the open weapon's same-ESP siblings authored for physical parts:
+    // each sibling's own per-configuration setups, grab points, operating
+    // fingers and magazine fits, read from its edits in
+    // memory, else from the committed version. Siblings are taken in record
+    // order; the first one that authored a part provides it.
+    void ReloadMakerController::refreshSiblingAuthoring()
+    {
+        _siblingGrabLocations.clear();
+        _siblingMagazineFits.clear();
+        _siblingPlans.clear();
+        _siblingOperatingGrips.clear();
+        if (!_esp || !currentWeapon()) {
+            return;
+        }
+        const auto current = weaponRecordKey();
+        const auto committed = _esp->snapshot["weapons"].toObject();
+        QStringList records = committed.keys();
+        for (auto it = _esp->weapons.cbegin(); it != _esp->weapons.cend(); ++it) {
+            if (!records.contains(it.key())) {
+                records.append(it.key());
+            }
+        }
+        records.sort();
+        for (const auto& record : records) {
+            if (record == current) {
+                continue;
+            }
+            QJsonObject source = _esp->weapons.value(record).record;
+            if (source.isEmpty()) {
+                const auto entry = committed[record].toObject();
+                if (!entry.contains("authoring")) {
+                    continue;
+                }
+                QString error;
+                source = readEspRecord(_esp->plugin, entry["authoring"].toString(), error);
+                if (!error.isEmpty()) {
+                    continue;
+                }
+            }
+            const auto locations = source["grabLocations"].toObject();
+            for (auto it = locations.begin(); it != locations.end(); ++it) {
+                OperatingGrabLocations grabs;
+                QString error;
+                if (!readGrabLocations(it.value().toObject(), grabs, error) || grabs.weapon.toLower() != record || grabs.points.isEmpty()) {
+                    continue;
+                }
+                auto part = grabs;
+                part.weapon.clear();
+                const auto key = grabLocationsKey(part);
+                if (!_siblingGrabLocations.contains(key)) {
+                    _siblingGrabLocations.insert(key, grabs);
+                }
+            }
+            const auto plans = source["authoringRoadmaps"].toObject();
+            for (auto it = plans.begin(); it != plans.end(); ++it) {
+                if (it.key().section('/', 0, 0) != record) {
+                    continue;
+                }
+                auto& shared = _siblingPlans[it.key().section('/', 1)];
+                const auto plan = it.value().toObject();
+                for (const auto* field : { "operating", "magazineGuide", "magazineSetup", "magazineReference" }) {
+                    if (plan.contains(QLatin1String(field)) && !shared.contains(QLatin1String(field))) {
+                        shared.insert(QLatin1String(field), plan[QLatin1String(field)]);
+                    }
+                }
+            }
+            const auto fingers = source["operatingGrips"].toObject();
+            for (auto it = fingers.begin(); it != fingers.end(); ++it) {
+                const auto key = it.key().toLower();
+                if (key.section('|', 0, 0) == record && !_siblingOperatingGrips.contains(key.section('|', 1))) {
+                    _siblingOperatingGrips.insert(key.section('|', 1), it.value().toString());
+                }
+            }
+            const auto fits = source["magazineGrabGrips"].toObject();
+            for (auto it = fits.begin(); it != fits.end(); ++it) {
+                const auto parts = it.key().toLower().split('|');
+                if (parts.size() != 3 || parts[0] != record || (parts[2] != QLatin1String("left") && parts[2] != QLatin1String("right"))) {
+                    continue;
+                }
+                const auto key = parts[1] + '|' + parts[2];
+                if (!_siblingMagazineFits.contains(key)) {
+                    _siblingMagazineFits.insert(key, it.value().toString());
+                }
+            }
+        }
     }
 
     // The record restores everything; `baseline` is what counts as unsaved,

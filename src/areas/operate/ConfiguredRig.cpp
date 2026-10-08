@@ -289,7 +289,7 @@ namespace reloadmaker
         for (const auto& action : _animationActions) {
             clips.append(QJsonObject{ { "name", action.label }, { "path", action.resourcePath }, { "baseline", action.baselineResourcePath } });
         }
-        const bool saved = _authoringRecords.value(authoringRecordKey()).toObject().contains("operating");
+        const bool saved = authoringPlan().contains("operating");
         QString error;
         OperatingSetup setup;
         setup.recipeId = _reloadRecipe->id;

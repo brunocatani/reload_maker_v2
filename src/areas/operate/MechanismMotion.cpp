@@ -29,7 +29,7 @@ namespace reloadmaker
             return false;
         }
         OperatingSetup setup;
-        const bool authored = _authoringRecords.value(authoringRecordKey()).toObject().contains("operating");
+        const bool authored = authoringPlan().contains("operating");
         if (authored) {
             if (!savedOperatingSetup(setup, error) || !buildConfiguredSimulationRig(setup, rig, error)) {
                 return false;
@@ -61,7 +61,7 @@ namespace reloadmaker
     // is not in this reload.
     bool ReloadMakerController::savedOperatingSetup(OperatingSetup& setup, QString& error) const
     {
-        const auto saved = _authoringRecords.value(authoringRecordKey()).toObject().value("operating").toObject();
+        const auto saved = authoringPlan().value("operating").toObject();
         if (!_reloadRecipe || !readOperatingSetup(saved, setup, error)) {
             return false;
         }
