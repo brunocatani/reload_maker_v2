@@ -89,8 +89,8 @@ namespace reloadmaker
                 }
             }
             if (!source) {
-                _operatingFingerError = "Assigned operating finger pose is missing from the library.";
-                return;
+                // A deleted pose leaves the hand on ROCK's own pose; not a gate.
+                continue;
             }
             HandPose pose;
             if (!handPoseFingersFor(_skeleton, *source, hand, pose, _operatingFingerError)) {

@@ -109,7 +109,8 @@ namespace reloadmaker
         add("fire.motion", S::Fire, Sub::Fire, O::Auto, true, "What moves on fire");
         add("fire.afterShot", S::Fire, Sub::Fire, O::Preset, true, "After each shot");
         add("fire.ejection", S::Fire, Sub::Fire, O::Preset, true, "Case ejection");
-        add("fire.modes", S::Fire, Sub::Fire, O::Auto, true, "Fire modes");
+        // Informational: DIAMOND never reads the fire mode; the game fires natively.
+        add("fire.modes", S::Fire, Sub::Fire, O::Auto, false, "Fire modes");
         add("fire.dry", S::Fire, Sub::Fire, O::Auto, false, "Dry fire");
         add("fire.sound", S::Fire, Sub::Fire, O::Auto, false, "Fire sound");
         add("sounds.reload", S::Fire, Sub::Feed, O::Auto, false, "Reload sounds");

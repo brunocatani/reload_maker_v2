@@ -127,7 +127,6 @@ namespace reloadmaker
         require(_simulation.action == SimulationAction::Idle && _simulation.magazine.seated(), "Reset Operate to a seated magazine before capturing runtime data");
         const auto& recipe = *_reloadRecipe;
         const auto& rig = *_simulationRig;
-        require(rig.mechanism == WeaponMechanism::BoltAction || _slideSpringReturn, "This template requires spring return; enable it before export");
         const auto anchor = simulationMagazineAnchor();
         const auto weapon = poseRecordKey(currentWeapon()->formId);
         const auto* receiver = reloadReceiverObjectMod();
@@ -153,14 +152,15 @@ namespace reloadmaker
         }
         const auto interactions = exportInteractionGrips();
         require(!interactions.isEmpty(), "Resolve the operating finger assignments before capture");
+        // Fingers and grab points are optional refinements (owner,
+        // 2026-10-08): without authored fingers the game keeps ROCK's own hand
+        // pose, and without grab points the whole operating part is grabbable.
         const auto fingers = interactions["operatingFingers"].toArray();
-        require(type == WeaponMechanism::PistolSlide || fingers.size() == 2, "Configure operating fingers for both hands before capture");
         if (!fingers.isEmpty()) {
             profile["operatingFingers"] = fingers;
         }
         const auto magazine = runtimeMagazine(anchor, weapon);
         const auto grabs = exportGrabLocations();
-        require(type == WeaponMechanism::PistolSlide || !grabs.isEmpty(), "Configure the operating surface grab points before capture");
         auto header = runtimeProfileHeader(weapon, receiver != nullptr, receiverKey, magazineKey, selection);
         header["hkSlap"]=rig.hkSlap;
         header["lastShotHoldOpen"]=rig.lastShotHoldOpen;

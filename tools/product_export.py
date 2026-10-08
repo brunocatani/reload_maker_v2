@@ -29,7 +29,7 @@ def project_source(project, entry):
     return path
 
 
-def inspect_project(path, skip=frozenset()):
+def inspect_project(path, skip=frozenset(), failures=None):
     """Check a pack project. Weapons in `skip` (lower-case records) are left
     out of an export: their inputs are not read and they are not summarized,
     but they still own their object identities."""
@@ -55,27 +55,38 @@ def inspect_project(path, skip=frozenset()):
                         'Different weapon/magazine fits need distinct logical object identities')
                 identifiers.update((assignment['full'], assignment['empty']))
             continue
-        require(weapon.get('template') in TEMPLATES, 'Unsupported reload template')
-        documents = {kind: read(project_source(path, weapon[kind])) for kind in ('profiles', 'magazines', 'grabs', 'sounds')}
-        profile, magazines = documents['profiles'], documents['magazines']
-        require(form_key(profile['weapon']) == key and form_key(magazines['weapon']) == key,
-                'Prepared behavior belongs to a different weapon')
-        require(magazines['version'] == 3, 'Magazine export must use logical object bindings, without local world forms')
-        if weapon['template'] != 'pistol.slide-detachable.v1':
-            require(all('rightGrip' in m for m in magazines['magazines']), 'Rifle magazines need both authored hand fits')
-        records = {form_key(item['record']) for item in magazines['magazines']}
-        require(records == {form_key(item['magazine']) for item in profile['profiles']}, 'Magazine/configuration coverage differs')
-        assignments = weapon.get('magazineObjects', [])
-        require(len(assignments) == len(records) and {form_key(a['record']) for a in assignments} == records,
-                'Every authored magazine needs one full and one empty object')
-        for assignment in assignments:
-            require(assignment['full'] != assignment['empty'], 'Full and empty need independent object identities')
-            require(assignment['full'] not in identifiers and assignment['empty'] not in identifiers,
-                    'Different weapon/magazine fits need distinct logical object identities')
-            identifiers.update((assignment['full'], assignment['empty']))
-            included.update((assignment['full'], assignment['empty']))
-        summary.append(dict(record=key, name=weapon.get('name', key), template=weapon['template'],
-                            variants=len(profile['profiles']), magazines=len(records)))
+        # One weapon's problem skips that weapon, never the pack (owner,
+        # 2026-10-08). Without `failures` the first problem still raises.
+        try:
+            require(weapon.get('template') in TEMPLATES, 'Unsupported reload template')
+            documents = {kind: read(project_source(path, weapon[kind])) for kind in ('profiles', 'magazines', 'grabs', 'sounds')}
+            profile, magazines = documents['profiles'], documents['magazines']
+            require(form_key(profile['weapon']) == key and form_key(magazines['weapon']) == key,
+                    'Prepared behavior belongs to a different weapon')
+            require(magazines['version'] == 3, 'Magazine export must use logical object bindings, without local world forms')
+            if weapon['template'] != 'pistol.slide-detachable.v1':
+                require(all('rightGrip' in m for m in magazines['magazines']), 'Rifle magazines need both authored hand fits')
+            records = {form_key(item['record']) for item in magazines['magazines']}
+            require(records == {form_key(item['magazine']) for item in profile['profiles']}, 'Magazine/configuration coverage differs')
+            assignments = weapon.get('magazineObjects', [])
+            require(len(assignments) == len(records) and {form_key(a['record']) for a in assignments} == records,
+                    'Every authored magazine needs one full and one empty object')
+            for assignment in assignments:
+                require(assignment['full'] != assignment['empty'], 'Full and empty need independent object identities')
+                require(assignment['full'] not in identifiers and assignment['empty'] not in identifiers,
+                        'Different weapon/magazine fits need distinct logical object identities')
+            for assignment in assignments:
+                identifiers.update((assignment['full'], assignment['empty']))
+                included.update((assignment['full'], assignment['empty']))
+            summary.append(dict(record=key, name=weapon.get('name', key), template=weapon['template'],
+                                variants=len(profile['profiles']), magazines=len(records)))
+        except ValueError as error:
+            if failures is None:
+                raise
+            failures.append(dict(record=key, name=weapon.get('name', key), reason=str(error)))
+            for assignment in weapon.get('magazineObjects', []):
+                if isinstance(assignment, dict):
+                    identifiers.update(v for v in (assignment.get('full'), assignment.get('empty')) if v)
     require(summary, 'No weapon in this project is ready to export; complete a checklist first')
     object_ids = [obj.get('id') for obj in objects]
     require(len(set(object_ids)) == len(object_ids) and set(object_ids) == identifiers,
@@ -92,7 +103,9 @@ def export_pack(path, destination, backends, skip=()):
     weapons whose checklist is not complete), with only their objects."""
     path, destination = Path(path).resolve(), Path(destination).resolve()
     skip = frozenset(form_key(record) for record in skip)
-    project, summary = inspect_project(path, skip)
+    failures = []
+    project, summary = inspect_project(path, skip, failures)
+    skip = skip | {failure['record'] for failure in failures}
     exported = [weapon for weapon in project['weapons'] if form_key(weapon['record']) not in skip]
     owned = {a[state] for weapon in exported for a in weapon['magazineObjects'] for state in ('full', 'empty')}
     # Each publication is immutable. A failed export never replaces a previous
@@ -161,11 +174,12 @@ def export_pack(path, destination, backends, skip=()):
         write(stage/'export-report.json', dict(format='reload-maker-export-report', version=1,
             pack=pack, revision=project['revision'], weapons=summary, objects=len(objects),
             uniqueModels=len(verified),
-            gameTested=False, requirements=manifest['requirements'], skippedWeapons=sorted(skip)))
+            gameTested=False, requirements=manifest['requirements'], skippedWeapons=sorted(skip),
+            failedWeapons=failures))
         cancellation()
         os.replace(stage, destination)
         return dict(ok=True, output=str(destination), manifest=str(destination/prefix/'manifest.json'),
-                    weapons=len(weapons), skipped=sorted(skip), variants=sum(w['variants'] for w in summary),
+                    weapons=len(weapons), skipped=sorted(skip), failed=failures, variants=sum(w['variants'] for w in summary),
                     magazines=sum(w['magazines'] for w in summary), objects=len(objects))
     except Exception:
         # The uniquely created staging directory is the only cleanup target.

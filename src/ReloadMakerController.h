@@ -675,6 +675,7 @@ namespace reloadmaker
         bool isRifleConfiguration() const;
         QString currentTestbed();
         bool prepareRifleMotion();
+        bool prepareRifleMotionFromClips();
         bool buildCurrentSimulationRig(SimulationRig&,QString&);
         Transformf rifleBoltPose(float progress) const;
         Transformf rifleFireBoltPose() const;
@@ -1121,6 +1122,8 @@ namespace reloadmaker
         QVector<QPair<QString, QJsonObject>> _siblingRoadmaps; // sibling record -> its authoringRoadmaps
         mutable QString _operatingFallbackNote; // why an inherited operating setup was not used
         bool _mirroringMagazineFit{ false }; // the automatic other-hand mirror is saving
+        QString _fireFallbackNote; // why firing replays the reload stroke instead of the fire clips
+        QString _magazineNote; // a saved magazine setting this source cannot use, and what is used instead
         QHash<QString,QString> _siblingOperatingGrips; // operating finger keys without the weapon
         QListWidget* _grabLocationList{};
         QLineEdit* _grabLocationName{};

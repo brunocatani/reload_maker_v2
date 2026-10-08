@@ -180,7 +180,8 @@ namespace reloadmaker
         o["fire.afterShot"] = found(afterShotText(model), QStringLiteral("From the ") + preset.label + QStringLiteral(" preset."));
         o["fire.ejection"] = found(ejectionText(model.fire.ejection), QStringLiteral("From the preset."));
         o["fire.motion"] = found(motionText(model.fire.motion),
-                                 _rifleBoltSource.isEmpty() ? QStringLiteral("From the preset.") : QStringLiteral("Fire clip: ") + _rifleBoltSource);
+                                 !_fireFallbackNote.isEmpty() ? _fireFallbackNote
+                                 : _rifleBoltSource.isEmpty() ? QStringLiteral("From the preset.") : QStringLiteral("Fire clip: ") + _rifleBoltSource);
         for (const auto& m : model.mechanisms) {
             if (model.fire.lockOpenMechanism == m.id) {
                 o["action." + m.id + ".catch"] = found(QStringLiteral("Held open after the last shot"),
@@ -189,8 +190,9 @@ namespace reloadmaker
         }
         const auto ammunition = resolveWeaponAmmunition(*currentPlugin(), *currentWeapon(), *configuration(), _referenceNames);
         o["fire.modes"] = ammunition.valid() ? found(ammunition.automatic ? QStringLiteral("Automatic") : ammunition.repeatableSingleFire ? QStringLiteral("Repeating single fire") : QStringLiteral("Semi-automatic"),
-                                                     QStringLiteral("From the weapon record and its receiver."))
-                                             : missing(ammunition.error);
+                                                     ammunition.warnings.isEmpty() ? QStringLiteral("From the weapon record and its receiver.")
+                                                                                   : ammunition.warnings.join(' ') + QStringLiteral(" The game's own weapon decides in play."))
+                                             : found(QStringLiteral("Decided by the game"), ammunition.error + QStringLiteral(" The reload is unaffected; the game applies its own fire mode."));
 
         // Collision drafts are saved per configuration and need no rig.
         if (captured) {
@@ -302,6 +304,11 @@ namespace reloadmaker
                                                saved.contains("magazineSetup") ? QStringLiteral("Your models and payload settings.")
                                                : presentation.contains("rounds") ? QStringLiteral("Detected from the reload; rounds chosen by you.")
                                                                                  : QStringLiteral("Detected from the reload; rounds from piece names and materials."));
+                if (!_magazineNote.isEmpty()) {
+                    auto row = o["feed.presentation"];
+                    row.evidence += QLatin1Char(' ') + _magazineNote;
+                    o["feed.presentation"] = row;
+                }
                 o["feed.guide"] = found(QStringLiteral("%1 units outward").arg(_magazineRail->travel, 0, 'f', 1),
                                         saved.contains("magazineGuide") ? QStringLiteral("Your insertion guide.") : QStringLiteral("Detected from the reload."));
             } else if (_simulationActive) {

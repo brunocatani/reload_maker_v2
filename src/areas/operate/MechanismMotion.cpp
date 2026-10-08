@@ -163,8 +163,31 @@ namespace reloadmaker
     }
 
     // Rifle firing: the cadence from the native fire clips, and the bolt cycle
-    // the firing pose replays. Errors go to _simulationError.
+    // the firing pose replays. A weapon whose fire clips are missing,
+    // unreadable or strokeless still reloads (owner, 2026-10-08: the fire
+    // clip is not a reload gate): its bolt cycle replays the reload's own
+    // measured stroke at a nominal cycle, and the note says so.
     bool ReloadMakerController::prepareRifleMotion()
+    {
+        _fireFallbackNote.clear();
+        if (prepareRifleMotionFromClips()) {
+            return true;
+        }
+        const auto failure = _simulationError;
+        _simulationError.clear();
+        constexpr float kNominalCycleSeconds = .1f; // 600 rounds per minute
+        _rifleFireInterval = kNominalCycleSeconds;
+        HkxClip nominal;
+        nominal.durationSeconds = kNominalCycleSeconds;
+        if (_simulationRig && _simulationRig->bolt >= 0 && useReloadBoltStroke(nominal)) {
+            _fireFallbackNote = failure + " The reload's bolt stroke is replayed for firing; the game fires natively.";
+            return true;
+        }
+        _simulationError = failure;
+        return false;
+    }
+
+    bool ReloadMakerController::prepareRifleMotionFromClips()
     {
         _rifleBoltCycle.clear();
         _rifleBoltOpen = 0;

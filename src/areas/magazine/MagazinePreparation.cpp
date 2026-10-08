@@ -25,6 +25,7 @@ namespace reloadmaker
         _magazineRail.reset();
         _magazineVisuals.clear();
         _magazineError.clear();
+        _magazineNote.clear();
         _magazineSetup.reset();
         _m1aLoadedMagazineFrame = 0;
         _m1aEmptyMagazineFrame = 0;
@@ -102,8 +103,10 @@ namespace reloadmaker
         // The empty body's track maps onto this configuration's recipe by node.
         setup.emptyTrack = mapRecipeTrack(setup.trackAnchors, *_reloadRecipe, setup.emptyTrack);
         if (setup.emptyTrack < 0 || setup.loadedFrame >= _reloadRecipe->frames || setup.emptyFrame >= _reloadRecipe->frames) {
-            _magazineError = "The magazine presentation names a part or sample this configuration's reload does not have.";
-            return false;
+            // Authored for another reload of this magazine: not a gate
+            // (owner, 2026-10-08); the native presentation is used.
+            _magazineNote = "The saved magazine presentation does not fit this reload; the native presentation is used.";
+            return true;
         }
         setup.trackAnchors = recipeTrackAnchors(*_reloadRecipe);
         _magazineSetup = setup;
@@ -122,10 +125,11 @@ namespace reloadmaker
         MagazineReference reference;
         if (!referenceJson.isEmpty() &&
             (!readMagazineReference(referenceJson, reference, _magazineError) || currentMagazineAnchor() < 0)) {
-            if (_magazineError.isEmpty()) {
-                _magazineError = "Magazine reference changed. Review its current carrier and hand reference.";
-            }
-            return false;
+            // A reference whose node this source no longer has is ignored
+            // (owner, 2026-10-08: no review gates); the source connection is used.
+            _magazineNote = "The saved magazine reference names a part this source does not have; the source connection is used.";
+            _magazineError.clear();
+            reference = {};
         }
         const auto carrierNode = _sceneNodes[_reloadTrackNodes[rig.magazine]];
         if (!referenceJson.isEmpty() && reference.connectionMode != "source") {
@@ -359,25 +363,22 @@ namespace reloadmaker
             return isWithinBlock(*model, node, _sceneNodes[_reloadTrackNodes[rail.fullTrack]]) ||
                    isWithinBlock(*model, node, _sceneNodes[_reloadTrackNodes[rail.emptyTrack]]);
         };
+        // Saved roles apply to the pieces that still exist; a new piece keeps
+        // its native classification and a missing one is ignored (owner,
+        // 2026-10-08: no review gates). Pieces outside the carriers are spares.
         QSet<QString> seen;
         for (auto& visual : _magazineVisuals) {
             const auto path = magazinePiecePath(visual.node);
-            const auto role = _magazineSetup->pieces.value(path);
-            if (path.isEmpty() || seen.contains(path) || role.isEmpty()) {
-                _magazineError = "Native magazine pieces changed. Review every body, cartridge and spare.";
-                return false;
-            }
-            if (role != "spare" && !inCarrier(visual.node)) {
-                _magazineError = "Pieces outside the selected full/empty carriers must be marked as animation-only spares.";
-                return false;
-            }
+            const auto role = path.isEmpty() || seen.contains(path) ? QString() : _magazineSetup->pieces.value(path);
             seen.insert(path);
+            if (role.isEmpty()) {
+                if (!inCarrier(visual.node)) {
+                    visual.nativeOnly = true;
+                }
+                continue;
+            }
             visual.cartridge = role == "cartridge";
-            visual.nativeOnly = role == "spare";
-        }
-        if (seen.size() != _magazineSetup->pieces.size()) {
-            _magazineError = "A saved magazine piece is absent from this source.";
-            return false;
+            visual.nativeOnly = role == "spare" || !inCarrier(visual.node);
         }
         for (const bool emptyState : { false, true }) {
             const bool hasBody = std::any_of(_magazineVisuals.begin(), _magazineVisuals.end(), [&](const auto& v) {

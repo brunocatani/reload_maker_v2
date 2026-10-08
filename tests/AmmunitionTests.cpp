@@ -37,22 +37,22 @@ void resolution() {
     auto a=resolve();check(a.valid()&&a.capacity==17&&a.ammoName=="New ammo"&&a.ammoRecord=="Local.esp:000def"&&a.pistol,"Selected overrides failed");
     p.objectMods[0].ammoProperties[1].value2=605;
     a=resolve();check(a.valid()&&a.ammoRecord=="Local.esp:000def"&&a.capacity==17,"FormID,Int companion changed ammo selection");
-    p.objectMods[0].ammoProperties[0].value2=18;check(!resolve().valid(),"Ranged capacity accepted");
+    p.objectMods[0].ammoProperties[0].value2=18;{auto r=resolve();check(r.valid()&&r.capacity==17&&!r.warnings.isEmpty(),"Ranged capacity did not warn and use its first value");}
     p.objectMods[0].ammoProperties[0].value2=0;
     check(recordIdentity(p,0xabc)=="Base.esm:000abc","Master identity wrong");
     p.objectMods[0].ammoProperties[0].function=2;p.objectMods[0].ammoProperties[0].value1=2;
     check(resolve().capacity==10,"Additive capacity failed");
-    p.objectMods[0].ammoProperties[0].function=1;check(!resolve().valid(),"Unverified multiply operation accepted");
-    p.objectMods[0].ammoProperties[0].function=0;p.objectMods[0].ammoProperties[0].stepBits=1;check(!resolve().valid(),"Rank-scaled property accepted");
-    p.objectMods[0].ammoProperties[0].stepBits=0;p.objectMods[0].metadataWarning="Includes cannot be resolved";check(!resolve().valid(),"Partial metadata accepted");
+    p.objectMods[0].ammoProperties[0].function=1;check(resolve().valid(),"Multiply operation refused");
+    p.objectMods[0].ammoProperties[0].function=0;p.objectMods[0].ammoProperties[0].stepBits=1;{auto r=resolve();check(r.valid()&&!r.warnings.isEmpty(),"Rank-scaled property did not warn");}
+    p.objectMods[0].ammoProperties[0].stepBits=0;p.objectMods[0].metadataWarning="Includes cannot be resolved";{auto r=resolve();check(r.valid()&&!r.warnings.isEmpty(),"Partial metadata did not warn");}
     p.objectMods[0].metadataWarning.clear();p.objectMods[0].ammoProperties[0].value1=0;check(!resolve().valid(),"Zero capacity accepted");
     p.objectMods[0]=m;auto other=m;other.formId=2;other.attachPoint=20;other.ammoProperties[0].value1=33;p.objectMods.append(other);
     w.defaultObjectMods.append(2);check(resolve().capacity==17,"Unavailable part affected ammo");
-    w.attachParentSlots.append(20);check(!resolve().valid(),"Conflicting capacity overrides accepted");
-    p.objectMods[1].ammoProperties[0].function=2;check(!resolve().valid(),"Unknown set/add ordering accepted");
-    p.objectMods[1].ammoProperties={{61,4,0,0xabc,0,0}};check(!resolve().valid(),"Conflicting ammo types accepted");
+    w.attachParentSlots.append(20);{auto r=resolve();check(r.valid()&&(r.capacity==17||r.capacity==33)&&!r.warnings.isEmpty(),"Conflicting capacities did not warn and take one");}
+    p.objectMods[1].ammoProperties[0].function=2;{auto r=resolve();check(r.valid()&&r.capacity==50&&!r.warnings.isEmpty(),"Set/add was not applied as set then add");}
+    p.objectMods[1].ammoProperties={{61,4,0,0xabc,0,0}};{auto r=resolve();check(r.valid()&&!r.warnings.isEmpty(),"Conflicting ammo types did not warn");}
     p.objectMods[1].ammoProperties.clear();p.objectMods[1].addedKeywords.clear();p.objectMods[0].addedKeywords.clear();w.keywords.append(100);p.objectMods[0].removedKeywords={100};check(!resolve().pistol,"Removed grip keyword still locks");
-    p.objectMods[1].addedKeywords={100};check(!resolve().valid(),"Conflicting grip edits depended on display sorting");
+    p.objectMods[1].addedKeywords={100};{auto r=resolve();check(r.valid()&&r.pistol&&!r.warnings.isEmpty(),"Conflicting grip edits did not warn and take the addition");}
     w.ammoDataKnown=false;check(!resolve().valid(),"Unknown base data accepted");
 }
 void glock(const QString& path) {

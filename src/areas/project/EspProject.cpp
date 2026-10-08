@@ -1053,9 +1053,22 @@ namespace reloadmaker
             const auto reference = capture["referencePose"].toObject();
             // The model holds only the magazine's pieces in its own carrier
             // frame, so weapons sharing the magazine share its models.
-            require(meta["engineCooked"].toBool() && reference["magazineRecord"].toString().compare(magazine, Qt::CaseInsensitive) == 0 &&
-                        reference["presentation"].toString() == QLatin1String(presentation),
-                    QStringLiteral("The %1 model was cooked for another magazine or presentation").arg(presentation));
+            // Records sharing one magazine model share its cooked models (owner,
+            // 2026-10-08): compare the model, not the record.
+            const auto modelOf = [this](const QString& record) {
+                for (const auto& mod : currentPlugin()->objectMods) {
+                    if (poseRecordKey(mod.formId).compare(record, Qt::CaseInsensitive) == 0) {
+                        return normalizeNifPath(mod.modelPath);
+                    }
+                }
+                return QString();
+            };
+            const auto cookedFor = reference["magazineRecord"].toString();
+            const auto cookedModel = normalizeNifPath(reference["model"].toString());
+            const bool sameMagazine = cookedFor.compare(magazine, Qt::CaseInsensitive) == 0 ||
+                                      (!cookedModel.isEmpty() && cookedModel == modelOf(magazine));
+            require(meta["engineCooked"].toBool() && sameMagazine && reference["presentation"].toString() == QLatin1String(presentation),
+                    QStringLiteral("The %1 model was cooked for a different magazine model or presentation").arg(presentation));
             models[QLatin1String(presentation)] = path;
         }
         _magazineModels[key] = models;
