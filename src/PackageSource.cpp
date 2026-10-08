@@ -497,9 +497,21 @@ namespace reloadmaker
         }
     }
 
+    void ResourceArchive::setOverrides(const QHash<QString, QString>& files, const QString& provider)
+    {
+        _overrides.clear();
+        for (auto it = files.cbegin(); it != files.cend(); ++it) {
+            _overrides.insert(normalizeResourcePath(it.key()), it.value());
+        }
+        _overrideProvider = provider;
+    }
+
     QString ResourceArchive::provider(const QString& resourcePath) const
     {
         const auto key = normalizeResourcePath(resourcePath);
+        if (const auto saved = _overrides.constFind(key); saved != _overrides.cend()) {
+            return QStringLiteral("%1: %2").arg(_overrideProvider, saved.value());
+        }
         const auto loose = _looseFiles.constFind(key);
         return loose != _looseFiles.cend() ? QStringLiteral("Loose file: %1").arg(loose.value()) : _providers.value(key);
     }
@@ -511,6 +523,8 @@ namespace reloadmaker
         _providers.clear();
         _layers.clear();
         _archive.reset();
+        _overrides.clear();
+        _overrideProvider.clear();
     }
 
     bool ResourceArchive::isOpen() const noexcept
@@ -535,6 +549,9 @@ namespace reloadmaker
 
     bool ResourceArchive::contains(const QString& resourcePath) const
     {
+        if (!_overrides.isEmpty() && _overrides.contains(normalizeResourcePath(resourcePath))) {
+            return true;
+        }
         if(!_layers.empty())return _providers.contains(normalizeResourcePath(resourcePath));
         if (!_archive) {
             return false;
@@ -550,6 +567,14 @@ namespace reloadmaker
     QByteArray ResourceArchive::read(const QString& resourcePath, QString& error) const
     {
         error.clear();
+        if (const auto saved = _overrides.constFind(normalizeResourcePath(resourcePath)); saved != _overrides.cend()) {
+            QFile file(saved.value());
+            if (!file.open(QIODevice::ReadOnly)) {
+                error = QStringLiteral("Cannot read the saved model override '%1': %2").arg(saved.value(), file.errorString());
+                return {};
+            }
+            return file.readAll();
+        }
         if(!_layers.empty()) {
             for(auto i=_layers.rbegin();i!=_layers.rend();++i)if((*i)->contains(resourcePath))return (*i)->read(resourcePath,error);
             error="Resource is missing from the source pack: "+resourcePath;return {};

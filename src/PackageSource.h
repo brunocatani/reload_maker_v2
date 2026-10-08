@@ -62,6 +62,10 @@ namespace reloadmaker
         [[nodiscard]] bool contains(const QString& resourcePath) const;
         [[nodiscard]] QByteArray read(const QString& resourcePath, QString& error) const;
         [[nodiscard]] QString provider(const QString& resourcePath) const;
+        // Files that win over every layer of this source: the model overrides
+        // saved in the open ESP project. Keys are resource paths, values the
+        // library files; an empty map removes the overlay.
+        void setOverrides(const QHash<QString, QString>& files, const QString& provider);
 
         [[nodiscard]] static QString normalizeResourcePath(const QString& path);
 
@@ -71,5 +75,7 @@ namespace reloadmaker
         QHash<QString, QString> _providers;
         QStringList _files;
         std::vector<std::unique_ptr<ResourceArchive>> _layers;
+        QHash<QString, QString> _overrides;
+        QString _overrideProvider;
     };
 }

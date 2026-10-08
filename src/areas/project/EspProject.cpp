@@ -62,10 +62,11 @@ namespace reloadmaker
         return currentWeapon() ? poseRecordKey(currentWeapon()->formId).toLower() : QString();
     }
 
-    // A save, or a deletion of a saved version, is still running.
+    // A save, or a deletion of a saved version, is still running, or a
+    // weapon opened from a saved version has not settled yet.
     bool ReloadMakerController::espBusy() const
     {
-        return _espSave.has_value() || (_packProcess && _packJob["operation"] == "library-delete");
+        return _espSave.has_value() || _openSettling || (_packProcess && _packJob["operation"] == "library-delete");
     }
 
     QJsonObject ReloadMakerController::espIndex(const QString& plugin) const
@@ -167,6 +168,7 @@ namespace reloadmaker
                 }
             }
             _esp = std::move(work);
+            applyEspModelOverrides();
         }
         auto& work = _esp->weapons[record];
         if (!work.record.isEmpty()) {
@@ -195,6 +197,8 @@ namespace reloadmaker
             refreshHeader();
             scheduleRebuild();
             markDocumentClean();
+            _openSettling = true;
+            QTimer::singleShot(0, this, [this, weapon = weaponRecordKey()] { settleOpenedWeapon(weapon); });
             if (!error.isEmpty()) {
                 work.unreadable = true;
                 setStatus("The saved authoring of this weapon could not be read (" + error +
@@ -213,6 +217,12 @@ namespace reloadmaker
         const auto clean = qScopeGuard([this, &baseline] {
             _savedAuthoring = baseline.isEmpty() ? authoredRecord() : baseline;
             refreshDocumentModified();
+            if (baseline.isEmpty()) {
+                // Opened from a saved version: the saved state is clean once
+                // the weapon newly shown has finished assembling.
+                _openSettling = true;
+                QTimer::singleShot(0, this, [this, weapon = weaponRecordKey()] { settleOpenedWeapon(weapon); });
+            }
         });
         restoreProjectLoadout(record);
         restoreProjectAuthoring(record);
@@ -228,6 +238,64 @@ namespace reloadmaker
         if (!error.isEmpty()) {
             setStatus("Weapon restored with a grip warning: " + error, true);
         }
+    }
+
+    // The meshes the open ESP version replaces (an articulated receiver, for
+    // instance) are saved in its weapons' packs. They win over the loaded
+    // source, so the authoring resolves the same through a testbed, the dev
+    // bench, a package or MO2, without the private folder they came from.
+    void ReloadMakerController::applyEspModelOverrides()
+    {
+        QHash<QString, QString> files;
+        if (_esp) {
+            const QDir folder(espProjectFolder(_esp->plugin));
+            const auto weapons = _esp->snapshot["weapons"].toObject();
+            for (auto it = weapons.begin(); it != weapons.end(); ++it) {
+                const auto pack = it.value().toObject()["pack"].toString();
+                if (pack.isEmpty()) {
+                    continue;
+                }
+                QString error;
+                const auto project = readEspRecord(_esp->plugin, pack, error);
+                if (!error.isEmpty()) {
+                    appendDiagnostic("LIBRARY: " + error);
+                    continue;
+                }
+                for (const auto& value : project["modelOverrides"].toArray()) {
+                    const auto entry = value.toObject();
+                    const auto model = entry["model"].toString();
+                    const auto file = folder.filePath(entry["path"].toString());
+                    if (model.isEmpty() || !QFileInfo(file).isFile()) {
+                        appendDiagnostic("LIBRARY: a saved model override of " + it.key() + " is missing: " + model);
+                        continue;
+                    }
+                    files.insert(model, file);
+                }
+            }
+        }
+        _packageResources.setOverrides(files, _esp ? "Saved in " + _esp->plugin : QString());
+    }
+
+    // Nothing can edit the weapon while it settles (espBusy keeps commands
+    // waiting), so its settled state is exactly what the version holds.
+    void ReloadMakerController::settleOpenedWeapon(const QString& weapon)
+    {
+        if (!_openSettling) {
+            return;
+        }
+        if (_loadThread || _reloadCapturing || _reloadCaptureQueued || _rebuildTimer->isActive()) {
+            QTimer::singleShot(kPollMilliseconds, this, [this, weapon] { settleOpenedWeapon(weapon); });
+            return;
+        }
+        _openSettling = false;
+        if (weaponRecordKey() == weapon) {
+            _savedAuthoring = authoredRecord();
+            if (_esp && _esp->weapons.contains(weapon) && _esp->weapons[weapon].record.isEmpty()) {
+                _esp->weapons[weapon].committed = _savedAuthoring;
+            }
+            refreshDocumentModified();
+        }
+        ++_revision;
     }
 
     // Keeps the weapon on screen in memory before another one is shown.
@@ -591,6 +659,7 @@ namespace reloadmaker
         _esp->base = save["id"].toString();
         QString error;
         _esp->snapshot = readEspSnapshot(_esp->plugin, _esp->base, error);
+        applyEspModelOverrides();
         const auto displayed = weaponRecordKey();
         for (auto it = job.sent.begin(); it != job.sent.end(); ++it) {
             auto& work = _esp->weapons[it.key()];
@@ -685,6 +754,7 @@ namespace reloadmaker
         _esp->base = save;
         _esp->snapshot = snapshot;
         _esp->weapons.clear();
+        applyEspModelOverrides();
         openWeaponAuthoring();
         ++_revision;
         return espState();
@@ -729,6 +799,7 @@ namespace reloadmaker
             _esp->snapshot = readEspSnapshot(_esp->plugin, _esp->base, error);
         }
         _esp->weapons.clear();
+        applyEspModelOverrides();
         openWeaponAuthoring();
         ++_revision;
     }

@@ -290,6 +290,24 @@ namespace {
         require(!libraryResourcesActive(), "dangling renderer resource service");
         require(!resources.openLoadOrder(dir.path(), {}, error, {}, []() { return true; }), "index cancellation ignored");
         require(!resources.isOpen(), "cancelled index installed partial resources");
+        // A model override saved in an ESP project wins over every source
+        // layer, including meshes the source itself lacks, until removed.
+        const auto receiver = QStringLiteral("meshes/weapons/rifle/receiver.nif");
+        const auto added = QStringLiteral("meshes/weapons/rifle/articulated_handle.nif");
+        write(dir.filePath(receiver), "source receiver");
+        write(dir.filePath("library/receiver.nif"), "saved articulated receiver");
+        write(dir.filePath("library/handle.nif"), "saved handle");
+        require(resources.openPackages({ dir.path() }, error), "package source failed");
+        resources.setOverrides({ { "Meshes\\Weapons\\Rifle\\Receiver.nif", dir.filePath("library/receiver.nif") },
+                                 { added, dir.filePath("library/handle.nif") } }, "Saved in Rifle.esp");
+        require(resources.read(receiver, error) == "saved articulated receiver" && error.isEmpty(), "source mesh won over the saved override");
+        require(resources.contains(added) && resources.read(added, error) == "saved handle", "override absent from the source not resolved");
+        require(resources.provider(receiver).startsWith("Saved in Rifle.esp"), "override provider not reported");
+        resources.setOverrides({}, {});
+        require(resources.read(receiver, error) == "source receiver" && !resources.contains(added), "removed overlay still applied");
+        resources.setOverrides({ { receiver, dir.filePath("library/receiver.nif") } }, "Saved in Rifle.esp");
+        resources.close();
+        require(!resources.contains(receiver), "closing the source kept its overlay");
     }
     void realArchiveTest(const QStringList& arguments) {
         require(arguments.size() == 5, "usage: LibraryTests --archive archive entry bsa_mcp-reference");

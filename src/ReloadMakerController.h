@@ -400,6 +400,7 @@ namespace reloadmaker
             QHash<QString, EspWeaponWork> weapons; // by lower-case record
         };
         std::optional<EspWork> _esp;
+        bool _openSettling{ false }; // a weapon opened from a saved version is still assembling
         // Capturing the edited weapons' configurations, then committing.
         struct EspSaveJob
         {
@@ -427,6 +428,8 @@ namespace reloadmaker
         bool showWorkingWeapon(const QString& record, bool stash = true);
         void openWeaponAuthoring();
         void stashDisplayedWeapon();
+        void applyEspModelOverrides();
+        void settleOpenedWeapon(const QString& weapon);
         [[nodiscard]] QJsonObject mergedWeaponStatus(QJsonObject status) const;
         // Leaving the working project: unsaved edits ask Save / Discard /
         // Cancel in the editor (Save runs `retry` once it has committed) and
