@@ -120,12 +120,7 @@ namespace
         check(find(evaluated, "feed.guide").state == ChecklistState::Done && find(evaluated, "feed.guide").value == "4 degrees steeper",
               "A changed value is not done");
 
-        // Retired confirmations in older records are valid and ignored.
-        QJsonObject saved{ { "feed.fits", QJsonObject{ { "state", "confirmed" }, { "value", "old" }, { "at", "2026-10-04T14:02:00Z" } } } };
-        auto missingFit = observed;
-        missingFit["feed.fits"] = { true, false, true, {}, {}, "Fit the left hand" };
-        check(find(evaluateChecklist(items, missingFit, saved), "feed.fits").state == ChecklistState::Missing,
-              "A retired confirmation hid missing data");
+        QJsonObject saved;
 
         // While the weapon loads nothing is reported missing or done.
         auto loading = observed;
@@ -146,8 +141,10 @@ namespace
         check(find(evaluated, "fire.sound").state == ChecklistState::NotApplicable && find(evaluated, "fire.sound").byYou, "Optional skip");
         check(find(evaluated, "feed.guide").state == ChecklistState::Done, "Required item skipped");
 
-        saved["feed.fits"] = QJsonObject{ { "state", "confirmed" }, { "value", "old" }, { "at", "2026-10-04T14:02:00Z" } };
         check(validChecklistEntries(saved), "Saved checklist entries rejected");
+        // Only skips are saved; the retired confirmation format is not accepted.
+        check(!validChecklistEntries({ { "feed.fits", QJsonObject{ { "state", "confirmed" }, { "value", "old" }, { "at", "2026-10-04T14:02:00Z" } } } }),
+              "A retired confirmation entry was accepted");
         check(!validChecklistEntries({ { "feed.guide", QJsonObject{ { "state", "maybe" }, { "at", "" } } } }) &&
                   !validChecklistEntries({ { "../x", skip } }) && !validChecklistEntries({ { "feed.guide", "n/a" } }),
               "Invalid checklist entries accepted");

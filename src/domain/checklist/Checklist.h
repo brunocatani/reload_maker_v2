@@ -93,8 +93,6 @@ namespace reloadmaker
     };
 
     // A skipped optional item is saved as {"state": "n/a", "at": ISO time}.
-    // Older records also hold {"state": "confirmed", ...} entries from the
-    // retired confirmation step; they stay valid and are ignored.
     inline constexpr char kChecklistNotApplicable[] = "n/a";
     [[nodiscard]] QJsonObject checklistSkip(const QString& at);
 

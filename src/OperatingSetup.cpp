@@ -36,19 +36,29 @@ bool readOperatingSetup(const QJsonObject& json,OperatingSetup& output,QString& 
     if(value.mode=="manual"&&!value.movements.contains(value.parts.operating))return fail("Assign the saved operating movement");
     output=std::move(value);error.clear();return true;
 }
+// Only the operating part and its bolt define the mechanism and must exist
+// in this reload. The magazine track belongs to the magazine: when this
+// reload has no track at the saved one's path (another magazine model) it is
+// left -1 and the rig uses the magazine track the reload itself detects; on
+// another reload a matched track that only rides a magazine node is that node.
+// Followers and movement targets this assembly lacks are skipped; a different
+// model of a moving part is not a different mechanism.
 bool remapOperatingSetup(OperatingSetup& setup,const ReloadRecipe& recipe,QString& error) {
-    const auto map=[&](int& track) {
-        const int mapped=mapRecipeTrack(setup.trackAnchors,recipe,track);
+    const auto map=[&](int track){return track<0?-1:mapRecipeTrack(setup.trackAnchors,recipe,track);};
+    const auto required=[&](int& track) {
+        if(track<0)return true;
+        const int mapped=map(track);
         if(mapped<0){error="An authored operating part is missing or ambiguous in this assembly";return false;}
         track=mapped;return true;
     };
-    if(!map(setup.parts.operating)||!map(setup.parts.bolt)||!map(setup.parts.magazine))return false;
-    for(auto& track:setup.parts.followers)if(!map(track))return false;
+    if(!required(setup.parts.operating)||!required(setup.parts.bolt))return false;
+    setup.parts.magazine=map(setup.parts.magazine);
+    if(setup.recipeId!=recipe.id)setup.parts.magazine=magazineCarrier(recipe,setup.parts.magazine);
+    QVector<int> followers;
+    for(const int track:setup.parts.followers)if(const int mapped=map(track);mapped>=0&&!followers.contains(mapped))followers.append(mapped);
+    setup.parts.followers=followers;
     QHash<int,QString> movements;
-    for(auto it=setup.movements.cbegin();it!=setup.movements.cend();++it) {
-        int track=it.key();if(!map(track)||movements.contains(track)){error="An authored movement target is missing or ambiguous";return false;}
-        movements.insert(track,it.value());
-    }
+    for(auto it=setup.movements.cbegin();it!=setup.movements.cend();++it)if(const int mapped=map(it.key());mapped>=0&&!movements.contains(mapped))movements.insert(mapped,it.value());
     setup.movements=movements;setup.trackAnchors=recipeTrackAnchors(recipe);setup.recipeId=recipe.id;return true;
 }
 QJsonObject operatingSetupJson(const OperatingSetup& value) {

@@ -16,6 +16,43 @@ bool descendant(const ReloadRecipe& r,int child,int parent) {
     }
     return false;
 }
+// The track's pose in its ancestor's frame never changes over the reload.
+bool ridesOn(const ReloadRecipe& r,int child,int ancestor) {
+    if(child==ancestor||!descendant(r,child,ancestor))return false;
+    const auto& c=r.tracks[child].poses;const auto& a=r.tracks[ancestor].poses;
+    if(c.isEmpty()||c.size()!=a.size())return false;
+    const auto local=[&](int i) {
+        const auto& q=a[i].rotation;const Quaternionf inverse{-q.x,-q.y,-q.z,q.w};
+        Transformf pose;
+        pose.translation=rotated(inverse,Vec3f{c[i].translation.x-a[i].translation.x,c[i].translation.y-a[i].translation.y,c[i].translation.z-a[i].translation.z});
+        pose.rotation=multiplied(inverse,c[i].rotation);
+        return pose;
+    };
+    const auto first=local(0);
+    for(int i=1;i<c.size();++i)if(reloadPoseDistance(first,local(i))>1e-3f)return false;
+    return true;
+}
+bool magazineSurface(const ReloadTrack& t) {
+    return t.surface&&t.anchor.anchorName.compare("WeaponMagazine",Qt::CaseInsensitive)==0;
+}
+}
+int magazineCarrier(const ReloadRecipe& r,int track) {
+    if(track<0||track>=r.tracks.size())return track;
+    int carrier=track;
+    for(int a=r.tracks[track].parent,count=0;a>=0&&a<r.tracks.size()&&count<r.tracks.size();a=r.tracks[a].parent,++count) {
+        if(magazineSurface(r.tracks[a])&&ridesOn(r,track,a))carrier=a;
+    }
+    return carrier;
+}
+int detectMagazineTrack(const ReloadRecipe& r) {
+    int found=-1;
+    for(int i=0;i<r.tracks.size();++i) {
+        if(!magazineSurface(r.tracks[i]))continue;
+        const int carrier=magazineCarrier(r,i);
+        if(found>=0&&found!=carrier)return -1;
+        found=carrier;
+    }
+    return found;
 }
 bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& error,WeaponMechanism profile,bool deriveHandleFromBolt,const QVector<Transformf>& boltOverride,const SimulationParts* selected) {
     error.clear();SimulationRig rig;rig.recipeId=r.id;rig.mechanism=profile;
@@ -27,9 +64,12 @@ bool buildSimulationRig(const ReloadRecipe& r,SimulationRig& output,QString& err
             if(rig.slide>=0){error="This assembly has multiple slide owners.";return false;}rig.slide=i;
         }
         if(t.surface&&(selected?i==selected->bolt:t.anchor.anchorName.compare("WeaponBolt",Qt::CaseInsensitive)==0))rig.bolt=i;
-        if(t.surface&&(selected?i==selected->magazine:t.anchor.anchorName.compare("WeaponMagazine",Qt::CaseInsensitive)==0)) {
-            if(rig.magazine>=0){error="This assembly has multiple magazine owners.";return false;}rig.magazine=i;
-        }
+        if(selected&&t.surface&&i==selected->magazine)rig.magazine=i;
+    }
+    if(!selected) {
+        bool any=false;for(const auto& t:r.tracks)any|=magazineSurface(t);
+        rig.magazine=detectMagazineTrack(r);
+        if(any&&rig.magazine<0){error="This assembly has multiple magazine owners.";return false;}
     }
     if(rig.slide<0||rig.magazine<0){error="Direct simulation currently requires a resolved slide and magazine.";return false;}
     // Some bolt-action receivers contain both the action and magazine carrier.

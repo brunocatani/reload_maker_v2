@@ -191,9 +191,7 @@ namespace reloadmaker
         for (auto it = saved.begin(); it != saved.end(); ++it) {
             const auto entry = it.value().toObject();
             const auto state = entry.value("state").toString();
-            if (!id.match(it.key()).hasMatch() || !it.value().isObject() || entry.size() > 3 ||
-                (state != QLatin1String("confirmed") && state != QLatin1String(kChecklistNotApplicable)) ||
-                (entry.contains("value") && (!entry.value("value").isString() || entry.value("value").toString().size() > 200)) ||
+            if (!id.match(it.key()).hasMatch() || !it.value().isObject() || entry.size() != 2 || state != QLatin1String(kChecklistNotApplicable) ||
                 !entry.value("at").isString() || entry.value("at").toString().size() > 40) {
                 return false;
             }

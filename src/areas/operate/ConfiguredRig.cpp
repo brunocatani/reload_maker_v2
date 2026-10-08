@@ -348,7 +348,7 @@ namespace reloadmaker
             OperatingSetup setup;
             QString error;
             SimulationRig checked;
-            if (!readOperatingSetup(request["settings"].toObject(), setup, error) || !remapOperatingSetup(setup, *_reloadRecipe, error) || !buildConfiguredSimulationRig(setup, checked, error)) {
+            if (!readOperatingSetup(request["settings"].toObject(), setup, error) || !matchOperatingSetup(setup, error) || !buildConfiguredSimulationRig(setup, checked, error)) {
                 throw std::runtime_error(error.toStdString());
             }
             setup.recipeId = _reloadRecipe->id;

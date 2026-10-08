@@ -218,15 +218,9 @@ namespace reloadmaker
         if (!magazineGripFor(weapon, part, _partGrips, {}, _magazineGrabDefaults, error, _interactionHand)) {
             return false;
         }
-        const auto base = magazineGrabKey(weapon, part.ownerRecord);
-        const auto key = handAssignmentKey(base, _interactionHand);
+        const auto key = handAssignmentKey(magazineGrabKey(weapon, part.ownerRecord), _interactionHand);
         const auto assignments = _magazineGrabGrips;
         const auto drafts = _magazineGripDrafts;
-        for (const auto& grip : _partGrips) {
-            if (grip.pose.id == _magazineGrabGrips.value(base) && grip.pose.hand == _interactionHand) {
-                _magazineGrabGrips.remove(base);
-            }
-        }
         _magazineGrabGrips.remove(key);
         _magazineGripDrafts.remove(key);
         _partGripDraft.reset();
@@ -285,27 +279,11 @@ namespace reloadmaker
             setStatus(error, true);
             return false;
         }
-        // A save for one hand supersedes a legacy key without a hand that holds
-        // a fit for that same hand, as Use weapon default does; left in place
-        // it could never be read again.
-        const auto assign = [&](QHash<QString, QString>& values, const QString& base) {
-            for (const auto& saved : _partGrips) {
-                if (saved.pose.id == values.value(base) && saved.pose.hand == grip.pose.hand) {
-                    values.remove(base);
-                }
-            }
-            values[handAssignmentKey(base, grip.pose.hand)] = grip.pose.id;
-        };
+        const auto assign = [&](QHash<QString, QString>& values, const QString& base) { values[handAssignmentKey(base, grip.pose.hand)] = grip.pose.id; };
         assign(_magazineGrabGrips, magazineGrabKey(grip.weaponRecord, grip.pose.placement.ownerRecord));
         // The first fit placed for a hand is the weapon's fallback for every
         // magazine (owner, 2026-10-08); later fits refine single magazines.
-        const auto hasDefault = [&](PoseHand hand) {
-            if (_magazineGrabDefaults.contains(handAssignmentKey(grip.weaponRecord.toLower(), hand))) {
-                return true;
-            }
-            const auto legacy = _magazineGrabDefaults.value(grip.weaponRecord.toLower());
-            return std::any_of(_partGrips.cbegin(), _partGrips.cend(), [&](const auto& g) { return g.pose.id == legacy && g.pose.hand == hand; });
-        };
+        const auto hasDefault = [&](PoseHand hand) { return _magazineGrabDefaults.contains(handAssignmentKey(grip.weaponRecord.toLower(), hand)); };
         const bool firstForHand = !hasDefault(grip.pose.hand);
         if (allMagazines || firstForHand) {
             assign(_magazineGrabDefaults, grip.weaponRecord.toLower());

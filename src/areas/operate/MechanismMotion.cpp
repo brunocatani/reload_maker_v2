@@ -37,7 +37,7 @@ namespace reloadmaker
             if (!savedOperatingSetup(setup, inherited) || !buildConfiguredSimulationRig(setup, rig, inherited)) {
                 // The part's own setup must work; an anchor or sibling setup
                 // that does not fit this reload falls back to the source rig.
-                if (field.source == PlanSource::Own || field.source == PlanSource::Combination) {
+                if (field.source == PlanSource::Own) {
                     error = inherited;
                     return false;
                 }
@@ -80,7 +80,25 @@ namespace reloadmaker
         if (!_reloadRecipe || !readOperatingSetup(saved, setup, error)) {
             return false;
         }
-        return remapOperatingSetup(setup, *_reloadRecipe, error);
+        return matchOperatingSetup(setup, error);
+    }
+
+    // A saved setup matched onto this configuration's reload by node. The
+    // magazine track belongs to the magazine: when the saved one's path is
+    // not in this reload, the track the reload itself detects carries it.
+    bool ReloadMakerController::matchOperatingSetup(OperatingSetup& setup, QString& error) const
+    {
+        if (!remapOperatingSetup(setup, *_reloadRecipe, error)) {
+            return false;
+        }
+        if (setup.parts.magazine < 0) {
+            setup.parts.magazine = detectMagazineTrack(*_reloadRecipe);
+            if (setup.parts.magazine < 0) {
+                error = QStringLiteral("The magazine track is missing or ambiguous in this reload");
+                return false;
+            }
+        }
+        return true;
     }
 
     // The rig from the captured reload (rework 14, items 9-13). An AR-15

@@ -83,7 +83,7 @@ class QLocalSocket;
 namespace reloadmaker
 {
     // Where a part-scoped authoring field came from (AnchorsAndFallbacksPlan).
-    enum class PlanSource { None, Own, Combination, Anchor, Sibling };
+    enum class PlanSource { None, Own, Anchor, Sibling };
     struct PlanField
     {
         QJsonValue value;
@@ -608,24 +608,24 @@ namespace reloadmaker
         // 12-step roadmap that first kept them.
         QString authoringRecordKey() const;
         // Authoring belongs to parts, never to receiver x magazine
-        // combinations (owner, 2026-10-08): the operating setup to the moving
-        // parts ("<weapon>/@moving:<choices>"), magazine guide, reference,
+        // combinations: the operating setup to the moving parts
+        // ("<weapon>/@moving:<records>"), magazine guide, reference,
         // presentation and collision drafts to the magazine
-        // ("<weapon>/@magazine:<record>"). Checklist confirmations stay per
-        // configuration. A field resolves from its own part, then legacy
-        // combination entries holding that part, then the weapon's anchor (the
-        // first part authored, "<weapon>/@anchors"), then any authored part,
-        // then a same-ESP sibling the same way. See
-        // Docs/reload_maker_v2/docs/AnchorsAndFallbacksPlan.md.
+        // ("<weapon>/@magazine:<record>"). The configuration key keeps only its
+        // checklist skips. A field resolves from its own part, then the
+        // weapon's anchor of that kind (the first authored, "<weapon>/@anchors"),
+        // then any part of that kind, then a same-ESP sibling the same way.
         [[nodiscard]] QJsonObject authoringPlan() const;
         [[nodiscard]] PlanField authoringPlanField(const QString& field) const;
         [[nodiscard]] QJsonObject authoringPlanSources() const;
         [[nodiscard]] QString magazineScopeRecord() const;
+        [[nodiscard]] QStringList movingScopeRecords() const;
         [[nodiscard]] QString planScopeKey(const QString& field) const;
         // Sets (or, with an undefined value, removes) one field in its part
         // scope. The first part authored for a kind becomes its anchor.
         void writePlanField(const QString& field, const QJsonValue& value);
         bool savedOperatingSetup(OperatingSetup& setup, QString& error) const;
+        bool matchOperatingSetup(OperatingSetup&, QString&) const;
         void rememberCollisionDraft();
         QString assignedTemplate() const;
         void assignReloadPreset(const QString& id);

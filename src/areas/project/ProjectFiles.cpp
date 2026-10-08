@@ -203,6 +203,12 @@ namespace reloadmaker
             return true;
         }
 
+        // Fit assignments are keyed by hand: "...|left" or "...|right".
+        bool handedKey(const QString& key)
+        {
+            return key.endsWith(QLatin1String("|left")) || key.endsWith(QLatin1String("|right"));
+        }
+
         // Magazine defaults, operating grips, magazine grip drafts and magazine
         // grip assignments.
         bool validProjectGrips(const QJsonObject& record, QString& message)
@@ -214,7 +220,7 @@ namespace reloadmaker
                 return false;
             }
             for (auto it = magazineDefaults.begin(); it != magazineDefaults.end(); ++it) {
-                if (it.key().isEmpty() || it.key().size() > 512 || !it.value().isString() || QUuid(it.value().toString()).isNull()) {
+                if (!handedKey(it.key()) || it.key().size() > 512 || !it.value().isString() || QUuid(it.value().toString()).isNull()) {
                     message = "Invalid magazine default identity.";
                     return false;
                 }
@@ -225,7 +231,7 @@ namespace reloadmaker
                 return false;
             }
             for (auto it = operating.begin(); it != operating.end(); ++it) {
-                if (it.key().size() > 1024 || !it.key().contains('|') || QUuid(it.value().toString()).isNull()) {
+                if (it.key().size() > 1024 || !handedKey(it.key()) || QUuid(it.value().toString()).isNull()) {
                     message = "Invalid operating grip identity.";
                     return false;
                 }
@@ -238,8 +244,7 @@ namespace reloadmaker
             for (auto it = magazineDrafts.begin(); it != magazineDrafts.end(); ++it) {
                 PartGrip grip;
                 if (!decodePartGrip(QJsonDocument(it.value().toObject()).toJson(), grip, error) ||
-                    (it.key() != magazineGrabKey(grip.weaponRecord, grip.pose.placement.ownerRecord) &&
-                     it.key() != handAssignmentKey(magazineGrabKey(grip.weaponRecord, grip.pose.placement.ownerRecord), grip.pose.hand))) {
+                    it.key() != handAssignmentKey(magazineGrabKey(grip.weaponRecord, grip.pose.placement.ownerRecord), grip.pose.hand)) {
                     message = "Invalid magazine draft: " + error;
                     return false;
                 }
@@ -254,7 +259,7 @@ namespace reloadmaker
                 return false;
             }
             for (auto it = magazineGrabs.begin(); it != magazineGrabs.end(); ++it) {
-                if (!it.key().contains('|') || it.key().size() > 1024 || !it.value().isString() || QUuid(it.value().toString()).isNull()) {
+                if (!handedKey(it.key()) || it.key().size() > 1024 || !it.value().isString() || QUuid(it.value().toString()).isNull()) {
                     message = "Invalid magazine grip assignment identity.";
                     return false;
                 }
@@ -705,16 +710,7 @@ namespace reloadmaker
     // Unsaved drafts from the previous project are dropped.
     void ReloadMakerController::restoreProjectAuthoring(const QJsonObject& record)
     {
-        // "step" and "reviews" belonged to the retired 12-step roadmap
-        // (2026-10-04); nothing reads them, so they are not kept.
-        _authoringRecords = {};
-        const auto records = record["authoringRoadmaps"].toObject();
-        for (auto it = records.begin(); it != records.end(); ++it) {
-            auto saved = it.value().toObject();
-            saved.remove(QStringLiteral("step"));
-            saved.remove(QStringLiteral("reviews"));
-            _authoringRecords.insert(it.key(), saved);
-        }
+        _authoringRecords = record["authoringRoadmaps"].toObject();
         _reloadTemplateAssignments = record["reloadTemplates"].toObject();
         _reloadAxes = record["reloadAxes"].toObject();
         restorePins(record);

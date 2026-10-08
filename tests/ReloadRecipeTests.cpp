@@ -76,7 +76,7 @@ namespace {
         grip.pose.id=QUuid::createUuid().toString(QUuid::WithoutBraces);grip.pose.name="Chosen magazine grip";grip.pose.createdUtc="2026-09-29T22:00:00.000Z";
         grip.pose.hand=PoseHand::Left;grip.pose.placement=r.tracks[2].anchor;grip.pose.placement.handInAnchor=pose({1,2,3},37);
         grip.pose.fingers[0]=pose({.25f,.5f,1.f},61);
-        const QHash<QString,QString> bindings{{magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord),grip.pose.id}};
+        const QHash<QString,QString> bindings{{handAssignmentKey(magazineGrabKey(grip.weaponRecord,grip.pose.placement.ownerRecord),grip.pose.hand),grip.pose.id}};
         const auto bytes=encodeReloadBundle(r,{grip},{},bindings,error);check(!bytes.isEmpty(),error);
         const auto bundle=QJsonDocument::fromJson(bytes).object();check(bundle["grips"].toArray().size()==1,"Shared grip exported more than once");
         PartGrip restored;check(decodePartGrip(QJsonDocument(bundle["grips"].toArray()[0].toObject()).toJson(),restored,error),error);
@@ -89,8 +89,8 @@ namespace {
         auto twoHands=bindings;twoHands[handAssignmentKey(baseKey,opposite.pose.hand)]=opposite.pose.id;
         const auto original=magazineGripFor(grip.weaponRecord,grip.pose.placement,{grip,opposite},twoHands,{},error,grip.pose.hand);
         const auto alternate=magazineGripFor(grip.weaponRecord,grip.pose.placement,{grip,opposite},twoHands,{},error,opposite.pose.hand);
-        check(original&&original->pose.id==grip.pose.id&&alternate&&alternate->pose.id==opposite.pose.id,"Per-hand assignment overwrote legacy fit");
-        check(!magazineGripFor(grip.weaponRecord,grip.pose.placement,{grip},bindings,{},error,opposite.pose.hand),"Other hand inherited a wrong-side legacy fit");
+        check(original&&original->pose.id==grip.pose.id&&alternate&&alternate->pose.id==opposite.pose.id,"One hand's fit overwrote the other's");
+        check(!magazineGripFor(grip.weaponRecord,grip.pose.placement,{grip},bindings,{},error,opposite.pose.hand),"Other hand inherited a wrong-side fit");
         const auto dual=QJsonDocument::fromJson(encodeReloadBundle(r,{grip,opposite},{},twoHands,error)).object();
         check(dual["version"]==2&&dual["magazineGrabBindings"].toArray().size()==2,"Both magazine hands missing from versioned export");
         check(encodeReloadBundle(r,{}, {},bindings,error).isEmpty(),"Unresolved grip exported");
@@ -101,7 +101,7 @@ namespace {
         auto withPart=QJsonDocument::fromJson(encodeReloadBundle(r,{bad},{part},bindings,error)).object();
         check(withPart["mechanisms"].toArray().size()==1,"Shared part definition was not embedded");
         auto other=bad;other.pose.id=QUuid::createUuid().toString(QUuid::WithoutBraces);other.pose.placement.ownerRecord="OtherMagazine.esp:123456";
-        auto otherBindings=bindings;otherBindings[magazineGrabKey(grip.weaponRecord,other.pose.placement.ownerRecord)]=other.pose.id;
+        auto otherBindings=bindings;otherBindings[handAssignmentKey(magazineGrabKey(grip.weaponRecord,other.pose.placement.ownerRecord),other.pose.hand)]=other.pose.id;
         // Both magazine assignments name one part definition; the grip whose
         // anchor differs from the definition is refused.
         check(encodeReloadBundle(r,{bad,other},{part},otherBindings,error).isEmpty(),"Reused definition hid a mismatched grip anchor");
@@ -114,17 +114,18 @@ namespace {
         check(firstFit&&sameGripAnchor(firstFit->pose.placement,drum)&&reloadPoseDistance(firstFit->pose.placement.handInAnchor,grip.pose.placement.handInAnchor)<.0001f,
               "The weapon's first fit did not serve an unconfigured magazine");
         check(!magazineGripFor(grip.weaponRecord,drum,{grip},bindings,{},error,grip.pose.hand==PoseHand::Left?PoseHand::Right:PoseHand::Left),"First fit served the other hand");
-        const QHash<QString,QString> defaults{{grip.weaponRecord.toLower(),grip.pose.id}};
-        const auto inherited=magazineGripFor(grip.weaponRecord,drum,{grip},bindings,defaults,error);
+        const QHash<QString,QString> defaults{{handAssignmentKey(grip.weaponRecord.toLower(),grip.pose.hand),grip.pose.id}};
+        const auto inherited=magazineGripFor(grip.weaponRecord,drum,{grip},bindings,defaults,error,grip.pose.hand);
         check(inherited.has_value()&&sameGripAnchor(inherited->pose.placement,drum),"Default did not bind the concrete magazine");
         check(QJsonDocument::fromJson(encodeHandPose(inherited->pose,error))["fingerLocalTransforms"]==QJsonDocument::fromJson(encodeHandPose(grip.pose,error))["fingerLocalTransforms"],"Default changed finger transforms");
         check(reloadPoseDistance(inherited->pose.placement.handInAnchor,grip.pose.placement.handInAnchor)<.0001f,"Default lost hand rotation/position");
         auto custom=*inherited;custom.pose.id=QUuid::createUuid().toString(QUuid::WithoutBraces);custom.pose.placement.handInAnchor.translation.x+=3;
-        auto assigned=bindings;assigned[magazineGrabKey(grip.weaponRecord,drum.ownerRecord)]=custom.pose.id;
-        const auto resolved=magazineGripFor(grip.weaponRecord,drum,{grip,custom},assigned,defaults,error);
+        auto assigned=bindings;assigned[handAssignmentKey(magazineGrabKey(grip.weaponRecord,drum.ownerRecord),grip.pose.hand)]=custom.pose.id;
+        const auto resolved=magazineGripFor(grip.weaponRecord,drum,{grip,custom},assigned,defaults,error,grip.pose.hand);
         check(resolved&&resolved->pose.id==custom.pose.id,"Weapon default overwrote an individual fit");
         auto wrong=drum;wrong.ownerModel="Different.nif";
-        check(!magazineGripFor(grip.weaponRecord,wrong,{grip,custom},assigned,defaults,error)&&!error.isEmpty(),"Mismatched custom fit silently fell back to default");
+        auto wrongAssigned=assigned;wrongAssigned[handAssignmentKey(magazineGrabKey(grip.weaponRecord,wrong.ownerRecord),grip.pose.hand)]=custom.pose.id;
+        check(!magazineGripFor(grip.weaponRecord,wrong,{grip,custom},wrongAssigned,defaults,error,grip.pose.hand)&&!error.isEmpty(),"Mismatched custom fit silently fell back to default");
         // A same-ESP sibling's fit of this magazine and frame serves a weapon
         // without its own, bound to that weapon; another frame or hand does not.
         auto sibling=grip;sibling.weaponRecord="Fixture.esp:00abcd";
@@ -146,7 +147,7 @@ namespace {
               reloadPoseDistance(defaulted->pose.placement.handInAnchor,grip.pose.placement.handInAnchor)<.0001f,"Sibling default was not rebound to the magazine");
         check(!magazineGripFor("Fixture.esp:00dcba",drum,{sibling},{},{},error,opposite.pose.hand,siblingDefault),"Sibling default served the other hand");
         auto named=grip;named.pose.placement.anchorName="CustomBox";named.pose.placement.anchorPath="Assembly/CustomBox";
-        const auto namedFit=magazineGripFor(grip.weaponRecord,named.pose.placement,{named},bindings,{},error);
+        const auto namedFit=magazineGripFor(grip.weaponRecord,named.pose.placement,{named},bindings,{},error,named.pose.hand);
         check(namedFit&&sameGripAnchor(namedFit->pose.placement,named.pose.placement),"Explicit magazine role still depends on a hardcoded part name");
         auto defaultRecipe=r;defaultRecipe.tracks[2].anchor=drum;
         defaultRecipe.id=reloadRecipeIdentity(defaultRecipe);
