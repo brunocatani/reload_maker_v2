@@ -19,6 +19,9 @@ namespace reloadmaker {
     [[nodiscard]] QByteArray encodePartGrip(const PartGrip& grip, QString& error);
     [[nodiscard]] bool decodePartGrip(const QByteArray& bytes, PartGrip& grip, QString& error);
     [[nodiscard]] bool sameGripAnchor(const HandPosePlacement& a, const HandPosePlacement& b);
+    // Same name, hand, part, hand placement and fingers, within the rounding
+    // a saved grip gains when it is encoded and read again.
+    [[nodiscard]] bool sameGripFit(const PartGrip& a, const PartGrip& b);
     // Reject both missing and ambiguous parts. Never substitute a same-named bone
     // owned by another model, nor a different weapon after load-order changes.
     [[nodiscard]] int resolveGripAnchor(const PartGrip& grip, const QString& weaponRecord,

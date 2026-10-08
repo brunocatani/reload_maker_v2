@@ -80,6 +80,7 @@ namespace reloadmaker
                 part.partInWeaponAtRest = composed(inverse, world);
                 _mechanismDraft = part;
             }
+            markMechanismOpened();
             // A new part starts without a hand; not a user choice.
             _workshopPoseChoice.clear();
             showWorkshopPoseChoice();
@@ -146,6 +147,9 @@ namespace reloadmaker
             setGripDraftName(_partGripDraft->pose.name + " · " + _mechanismDraft->name);
             setArmsShown(true);
             showPartGripValues();
+        }
+        if (!_workshopGripDirty) {
+            markPartGripOpened();
         }
         if (!applyPose(_playbackTime)) {
             return;

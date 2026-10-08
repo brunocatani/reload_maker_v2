@@ -156,6 +156,7 @@ namespace reloadmaker
         } else {
             selectMechanism(QString());
         }
+        markMechanismOpened();
         setStatus(QStringLiteral("Saved shared part definition, revision %1. Save the hand grip to persist its definition link.").arg(_mechanismDraft->revision));
         updatePartGripControls();
     }

@@ -2,9 +2,10 @@
 import contextlib
 import copy
 import filecmp
+import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import shutil
 import subprocess
@@ -227,19 +228,31 @@ README = ('Install this bundle as one MO2 mod. Enable only the ESL-flagged ESPs 
           'Source plugins, activation and load order are not modified by the exporter.\n')
 
 
-async def export_library(workspace, selections, backends, archive=None, mo2=None):
+def scope_profile_path(model):
+    """Where True Scopes reads an optic's profile; the name is the model's
+    file name and a short digest of its path, as Maker's own export."""
+    base = PurePosixPath(model.replace('\\', '/')).name.rsplit('.', 1)[0]
+    name = re.sub(r'[^a-zA-Z0-9_-]', '_', base)
+    return 'F4SE/Plugins/TrueScopesVR/Scopes/'+name+'-'+hashlib.sha256(model.encode('utf-8')).hexdigest()[:12]+'.json'
+
+
+async def export_library(workspace, selections, backends, archive=None, mo2=None, loaded=None, scopes=False):
     """Exports chosen saved versions of ESP projects as one bundle.
 
     Each selection names an ESP project and optionally a saved version (the
     latest by default). Only committed authoring is read. Every weapon of the
     version with saved reload behavior is exported; a weapon without it is
-    reported and the others continue. Object IDs come from each ESP's own
-    export identity and are recorded only after the bundle is delivered."""
+    reported and the others continue. With `loaded` (weapon records of the
+    source Maker has open), weapons outside it are reported and skipped. With
+    `scopes`, the True Scopes profiles of the exported weapons join the same
+    bundle. Object IDs come from each ESP's own export identity and are
+    recorded only after the bundle is delivered."""
     import product_library as library
     from product_export import export_pack
     require(bool(archive) != bool(mo2), 'Choose Export to MO2 or Export ZIP / 7z')
     workspace = Path(workspace).resolve()
     require(isinstance(selections, list) and 0 < len(selections) <= 256, 'Select between one and 256 ESP projects')
+    loaded = None if loaded is None else {library.weapon_key(record) for record in loaded}
     chosen = {}
     for selection in selections:
         key = library.plugin_key(selection.get('plugin'))
@@ -260,13 +273,24 @@ async def export_library(workspace, selections, backends, archive=None, mo2=None
             capability = backends.content_validation()
             require(capability.get('sourcePluginLightESP') is True, 'Update DIAMOND and its bundled validator for ESL-flagged ESP exports')
             limits = capability['limits']
-            packs, skipped, warnings = [], [], []
+            packs, skipped, warnings, optics = [], [], [], {}
             for key, item in sorted(chosen.items()):
                 snapshot = library.read_snapshot(item['folder'], item['save'])
                 item['weapons'] = []
                 for record, entry in sorted(snapshot['weapons'].items()):
                     cancellation()
                     name = entry.get('name', record)
+                    if loaded is not None and library.weapon_key(record) not in loaded:
+                        skipped.append(dict(plugin=snapshot['plugin'], record=record, name=name, reason='not in the loaded source'))
+                        continue
+                    if scopes and entry.get('authoring'):
+                        authoring = library.get_record(item['folder'], entry['authoring'])
+                        for profile in (authoring.get('scopeProfiles') or {}).values():
+                            path = scope_profile_path(profile['model'])
+                            if path not in optics:
+                                optics[path] = profile
+                            elif optics[path] != profile:
+                                warnings.append(dict(record=record, name=name, warning='another weapon already exported a different profile for '+profile['model']))
                     if not entry.get('pack'):
                         skipped.append(dict(plugin=snapshot['plugin'], record=record, name=name, reason='no saved reload behavior'))
                         continue
@@ -285,26 +309,30 @@ async def export_library(workspace, selections, backends, archive=None, mo2=None
                     failed = (entry.get('packReport') or {}).get('failed')
                     if failed:
                         warnings.append(dict(record=record, name=name, warning=f'{failed} configuration(s) kept their earlier behavior at the last save'))
-            require(packs, 'Nothing to export: the selected versions contain no saved reload behavior')
+            require(packs or optics, 'Nothing to export: the selected versions contain no saved reload behavior'+(' or scope profiles' if scopes else ''))
             require(len(packs) <= limits['packs'], 'Too many selected reload packs')
-            groups = partition(packs)
-            require(set(groups) <= set(chosen), 'A saved weapon does not belong to its ESP project')
-            native = backends.adapter('nif'); validated = set(); count = 0
-            backends.prepare_serializer(); backend = backends.adapter('plugin'); plugins = []; identities = {}
-            for master, parts in sorted(groups.items()):
-                cancellation()
-                folder = chosen[master]['folder']
-                value = library.read_identity(folder) or library.new_identity(master)
-                group, row, objects = await emit_group(master, parts, value.get('group'), value['installation'],
-                                                       output, stage, backend, native, validated)
-                value['group'] = group
-                identities[master] = value
-                plugins.append(dict(row, save=chosen[master]['save']))
-                count += objects
-            require(count <= limits['worldObjects'], 'Selected active objects exceed DIAMOND runtime capacity')
-            (output/'DIAMOND Reload Packs.txt').write_text(README, encoding='utf-8')
-            checked = backends.content_validation(output)
-            require(checked.get('ok') and checked.get('objects') == count, 'DIAMOND rejected grouped content: '+json.dumps(checked))
+            plugins, identities, count, checked = [], {}, 0, None
+            if packs:
+                groups = partition(packs)
+                require(set(groups) <= set(chosen), 'A saved weapon does not belong to its ESP project')
+                native = backends.adapter('nif'); validated = set()
+                backends.prepare_serializer(); backend = backends.adapter('plugin')
+                for master, parts in sorted(groups.items()):
+                    cancellation()
+                    folder = chosen[master]['folder']
+                    value = library.read_identity(folder) or library.new_identity(master)
+                    group, row, objects = await emit_group(master, parts, value.get('group'), value['installation'],
+                                                           output, stage, backend, native, validated)
+                    value['group'] = group
+                    identities[master] = value
+                    plugins.append(dict(row, save=chosen[master]['save']))
+                    count += objects
+                require(count <= limits['worldObjects'], 'Selected active objects exceed DIAMOND runtime capacity')
+                (output/'DIAMOND Reload Packs.txt').write_text(README, encoding='utf-8')
+                checked = backends.content_validation(output)
+                require(checked.get('ok') and checked.get('objects') == count, 'DIAMOND rejected grouped content: '+json.dumps(checked))
+            for path, profile in sorted(optics.items()):
+                write(output/path, profile)
             cancellation()
             delivered = deliver(output, archive, mo2)
             # The IDs are permanent from the moment the bundle is delivered.
@@ -319,7 +347,7 @@ async def export_library(workspace, selections, backends, archive=None, mo2=None
                                                       objects=sum(1 for e in value['group']['objects'].values() if e['active'])))
                 published['publications'] = published['publications'][-200:]
                 write(folder/'export/published.json', published)
-            return dict(ok=True, plugins=plugins, activeObjects=count, skipped=skipped, warnings=warnings,
+            return dict(ok=True, plugins=plugins, activeObjects=count, scopeProfiles=len(optics), skipped=skipped, warnings=warnings,
                         runtimeCatalog=checked, **delivered)
         finally:
             shutil.rmtree(stage, ignore_errors=True)

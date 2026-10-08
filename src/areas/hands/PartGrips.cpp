@@ -133,6 +133,7 @@ namespace reloadmaker
         showPartGripValues();
         (void)applyPose(_playbackTime);
         updateHandPoseControls();
+        markPartGripOpened();
     }
 
     // Applies the form's pose (hand, fingers, wrist rotation) to the draft,
@@ -239,6 +240,7 @@ namespace reloadmaker
             return false;
         }
         _partGripDraft = grip;
+        markPartGripOpened();
         refreshPartGripLibrary();
         if (partGripListed(grip.pose.id)) {
             selectPartGrip(grip.pose.id);
@@ -307,6 +309,7 @@ namespace reloadmaker
         showPartGripValues();
         (void)applyPose(_playbackTime);
         updateHandPoseControls();
+        markPartGripOpened();
         return _gripPreviewValid;
     }
 

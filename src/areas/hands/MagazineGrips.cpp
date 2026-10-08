@@ -10,41 +10,9 @@
 #include <QDateTime>
 #include <QTimer>
 #include <QUuid>
-#include <cmath>
 
 namespace reloadmaker
 {
-    namespace
-    {
-        bool samePlacement(const Transformf& a, const Transformf& b)
-        {
-            const auto near = [](float x, float y) { return std::abs(x - y) < .00002f; };
-            if (!near(a.translation.x, b.translation.x) || !near(a.translation.y, b.translation.y) || !near(a.translation.z, b.translation.z) ||
-                !near(a.scale.x, b.scale.x) || !near(a.scale.y, b.scale.y) || !near(a.scale.z, b.scale.z)) {
-                return false;
-            }
-            const auto& x = a.rotation;
-            const auto& y = b.rotation;
-            const float sign = x.x * y.x + x.y * y.y + x.z * y.z + x.w * y.w < 0 ? -1.f : 1.f;
-            return near(x.x, sign * y.x) && near(x.y, sign * y.y) && near(x.z, sign * y.z) && near(x.w, sign * y.w);
-        }
-
-        // Same name, hand, part, placement and fingers.
-        bool sameFit(const PartGrip& a, const PartGrip& b, const QString& name)
-        {
-            if (name != b.pose.name || a.pose.hand != b.pose.hand || !sameGripAnchor(a.pose.placement, b.pose.placement) ||
-                !samePlacement(a.pose.placement.handInAnchor, b.pose.placement.handInAnchor)) {
-                return false;
-            }
-            for (int i = 0; i < 15; ++i) {
-                if (!samePlacement(a.pose.fingers[i], b.pose.fingers[i])) {
-                    return false;
-                }
-            }
-            return true;
-        }
-    }
-
     // Index of the magazine anchor the placement belongs to, or -1. When the
     // anchor decides the magazine, that one anchor; otherwise (a pistol
     // magazine that brings its own bone) a grab-capable magazine of the
@@ -127,6 +95,7 @@ namespace reloadmaker
         const auto key = handAssignmentKey(magazineGrabKey(weapon, part.ownerRecord), _interactionHand);
         QString error;
         std::optional<PartGrip> fit;
+        bool resumed = false; // an unsaved draft stays unsaved when reopened
         if (!savedId.isEmpty()) {
             for (const auto& grip : _partGrips) {
                 if (grip.pose.id == savedId) {
@@ -139,6 +108,7 @@ namespace reloadmaker
             }
         } else if (_magazineGripDrafts.contains(key)) {
             fit = _magazineGripDrafts.value(key);
+            resumed = true;
         } else {
             fit = magazineGripFor(weapon, part, _partGrips, _magazineGrabGrips, _magazineGrabDefaults, error, _interactionHand);
         }
@@ -166,6 +136,9 @@ namespace reloadmaker
         if (fit) {
             if (!loadGripRecord(*fit)) {
                 return false;
+            }
+            if (resumed) {
+                _partGripOpened.clear();
             }
         } else {
             restoreHandPosePreview();
@@ -211,7 +184,7 @@ namespace reloadmaker
             }
         }
         const bool editing = _partGripDraft && magazineGrabAnchor(_partGripDraft->pose.placement) == anchor;
-        const bool dirty = editing && (!fit || !sameFit(*_partGripDraft, *fit, _gripDraftName.trimmed()));
+        const bool dirty = editing && partGripSnapshot(*_partGripDraft) != _partGripOpened;
         const bool custom = _magazineGrabGrips.contains(key) || (fit && _magazineGrabGrips.value(magazineGrabKey(weapon, part.ownerRecord)) == fit->pose.id);
         return {
             { "magazine", name },
@@ -332,6 +305,7 @@ namespace reloadmaker
             _partGripDraft->pose.id = grip.pose.id;
             _partGripDraft->pose.name = grip.pose.name;
         }
+        markPartGripOpened();
         rememberMagazineGrip();
         refreshPartGripLibrary();
         resolveMagazineGrabGrip();

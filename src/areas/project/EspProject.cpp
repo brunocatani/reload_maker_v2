@@ -17,6 +17,7 @@
 #include <QApplication>
 #include <QDateTime>
 #include <QDir>
+#include <QSet>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -186,6 +187,16 @@ namespace reloadmaker
                 saved = {};
             }
         }
+        // Where the author left this weapon comes from its session, never
+        // from the saved version (older versions still carry a loadout).
+        const auto session = weaponSession(record);
+        if (!saved.isEmpty() || (!session.isEmpty() && error.isEmpty())) {
+            saved = saved.isEmpty() ? QJsonObject{ { "format", 1 }, { "kind", "reload-maker-v2-project" }, { "weapon", poseRecordKey(weapon->formId) } }
+                                    : authoredPart(saved);
+            for (auto it = session.begin(); it != session.end(); ++it) {
+                saved[it.key()] = it.value();
+            }
+        }
         if (!saved.isEmpty()) {
             restoreWeaponRecord(saved, {});
             setStatus(QStringLiteral("%1 · saved %2").arg(weapon->name.isEmpty() ? weapon->editorId : weapon->name,
@@ -308,6 +319,7 @@ namespace reloadmaker
         if (espProjectKey(record.section(':', 0, 0)) != espProjectKey(_esp->plugin)) {
             return;
         }
+        keepWeaponSession();
         auto& work = _esp->weapons[record];
         rememberMagazineGrip();
         auto value = projectRecord();
@@ -413,6 +425,7 @@ namespace reloadmaker
 
     bool ReloadMakerController::leaveDocument(const QString& action, std::function<void()> retry)
     {
+        keepWeaponSession();
         rememberMagazineGrip();
         if (!espDirty() || qApp->property("unattended").toBool()) {
             return true;
@@ -583,7 +596,7 @@ namespace reloadmaker
                     continue;
                 }
                 const auto path = job.folder + QStringLiteral("/weapons/%1.json").arg(++number, 4, 10, QChar('0'));
-                commands::writeFileAtomically(path, QJsonDocument(it->record).toJson(QJsonDocument::Compact));
+                commands::writeFileAtomically(path, QJsonDocument(versionRecord(it->record)).toJson(QJsonDocument::Compact));
                 QJsonObject models;
                 const auto assigned = it->record["magazineModels"].toObject();
                 for (auto model = assigned.begin(); model != assigned.end(); ++model) {
@@ -913,13 +926,36 @@ namespace reloadmaker
     }
 
     // Exports committed versions only; unsaved edits are listed, not saved.
+    // scope "everything" exports every saved ESP project with weapons in the
+    // loaded source: their reloads (other weapons are skipped) and their
+    // True Scopes profiles. Otherwise the chosen projects, or the open ESP.
     QJsonObject ReloadMakerController::espExport(const QJsonObject& request)
     {
         require(!_packProcess && !_saveAll && !espBusy(), "Wait for the current save or pack job");
         const auto archive = request["archive"].toString(), mo2 = request["mo2"].toString();
         require(archive.isEmpty() != mo2.isEmpty(), "Choose Export to MO2 or Export ZIP / 7z");
+        const bool everything = request["scope"].toString() == QLatin1String("everything");
         auto selections = request["selections"].toArray();
-        if (selections.isEmpty() && _esp) {
+        QJsonArray loaded;
+        if (everything) {
+            require(!_weaponSelections.isEmpty(), "Load a source first; Export everything exports the weapons it contains");
+            QSet<QString> owners;
+            for (int i = 0; i < _weaponSelections.size(); ++i) {
+                const auto record = selectionRecordKey(i);
+                loaded.append(record);
+                owners.insert(espProjectKey(record.section(':', 0, 0)));
+            }
+            selections = {};
+            const QDir root(espLibraryRoot());
+            for (const auto& folder : root.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
+                QString error;
+                const auto index = espProjectKey(folder).isEmpty() ? QJsonObject{} : readEspProject(folder, error);
+                if (!index.isEmpty() && !index["saves"].toArray().isEmpty() && owners.contains(espProjectKey(index["plugin"].toString()))) {
+                    selections.append(QJsonObject{ { "plugin", index["plugin"] } });
+                }
+            }
+            require(!selections.isEmpty(), "No saved ESP project has weapons in the loaded source");
+        } else if (selections.isEmpty() && _esp) {
             selections.append(QJsonObject{ { "plugin", _esp->plugin } });
         }
         require(!selections.isEmpty() && selections.size() <= 256, "Choose between one and 256 ESP projects to export");
@@ -927,6 +963,11 @@ namespace reloadmaker
         QString id;
         auto arguments = packToolArguments(python, id);
         arguments << "library" << "export";
+        if (everything) {
+            const auto path = studioDataPath("local/tmp/pack-" + id + ".loaded.json");
+            commands::writeFileAtomically(path, QJsonDocument(loaded).toJson(QJsonDocument::Compact));
+            arguments << "--loaded" << path << "--scopes";
+        }
         QJsonArray unsaved;
         for (const auto& value : selections) {
             const auto selection = value.toObject();
@@ -943,7 +984,8 @@ namespace reloadmaker
         } else {
             arguments << "--mo2" << mo2;
         }
-        QJsonObject job{ { "id", id }, { "phase", "running" }, { "operation", "library-export" }, { "selections", selections } };
+        QJsonObject job{ { "id", id }, { "phase", "running" }, { "operation", "library-export" }, { "scope", everything ? "everything" : "esp" },
+                         { "selections", selections } };
         if (!unsaved.isEmpty()) {
             job["unsavedNotIncluded"] = unsaved;
         }

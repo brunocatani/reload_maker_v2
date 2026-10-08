@@ -626,22 +626,26 @@ def source_browser(operation: str = 'state', plugin: str = '', mode: str = '',
 @mcp.tool()
 def pack_job(operation: str = 'state', selections: list[dict] | None = None,
              job: str = '', output: str = '', archive: str = '', mo2: str = '',
-             expected_revision: int | None = None) -> dict:
+             scope: str = '', expected_revision: int | None = None) -> dict:
     """Export reload mods from saved ESP projects: one ESL-flagged ESP per source
     plugin with its magazine meshes. export takes selections=[{plugin, save}]
     (save omitted = latest; no selections = the open ESP) and archive (.zip/.7z)
-    or mo2 (one named mod folder). Only committed versions are exported; unsaved
+    or mo2 (one named mod folder). scope='everything' instead exports the latest
+    version of every saved ESP project with weapons in the loaded source: their
+    reloads (weapons the source lacks are skipped and listed) and the True Scopes
+    profiles of those weapons, in the same bundle. Only committed versions are exported; unsaved
     edits are reported in unsavedNotIncluded, never saved. Object IDs belong to
     each ESP project and never change between versions. MO2 export leaves
     identical files in place and never changes activation, load order or source
-    plugins. open/close show or close the export window; state/cancel observe
+    plugins. open (with scope 'esp' or 'everything' for the header windows)/close
+    show or close the export window; state/cancel observe
     or cancel the job (including a running save). cook and prepare run the
     world-model tools on job, writing output. Poll state to complete/failed.
     """
     if operation not in ('state', 'cancel') and expected_revision is None:
         raise ValueError('Read the current document revision before starting a pack job')
     return command('pack_job', dict(operation=operation, selections=selections or [], job=job,
-                                   output=output, archive=archive, mo2=mo2), expected_revision)
+                                   output=output, archive=archive, mo2=mo2, scope=scope), expected_revision)
 
 @mcp.tool()
 def configure_installation(game_root: str, creation_kit_root: str, same_tools_root: bool,

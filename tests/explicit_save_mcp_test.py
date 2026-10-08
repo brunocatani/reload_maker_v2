@@ -1,6 +1,7 @@
 """Nothing saves except Save; Save commits a dated version of the ESP project.
 
-Choosing another part and moving the camera never mark the weapon. An authored
+Choosing another part and moving the camera never mark the weapon, and a
+saved version holds no loadout, camera or page. An authored
 change marks it, and leaving for another testbed in an unattended editor
 discards it without writing a version. Save writes one new version, which
 becomes the latest and loads automatically when the ESP is opened again. An
@@ -14,8 +15,10 @@ import time
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tests'))
+sys.path.insert(0,str(ROOT/'tools'))
 from template_mcp_test import ready,edit
 from server import command
+import product_library as library
 
 TESTBEDS=('glock','ru556','m1a','thanatos','timberwolf','l118a2')
 SAVE_TIMEOUT_SECONDS=1800
@@ -62,7 +65,7 @@ def saves():return [s['id'] for s in command('esp_project')['saves']]
 
 
 def run():
-    name,state=clean_testbed()
+    name,state=clean_testbed();print('testbed',name,flush=True)
     project=command('esp_project');plugin=project['plugin'];existing=saves();created=[]
     away='ru556' if name!='ru556' else 'glock'
     try:
@@ -71,8 +74,12 @@ def run():
         # View state: another choice in a slot with alternatives, then the camera.
         slot=next(s for s in state['slots'] if len(s['choices'])>1 and s['selected'] not in ('','0'))
         other=next(c['id'] for c in slot['choices'] if c['id']!=slot['selected'])
+        opened=working_record()
         edit('configure',dict(slot=slot['key'],mod=other));state=ready()
-        assert state['modified'] is False,'choosing a part marked the weapon'
+        if state['modified']:
+            after=working_record()
+            changed=sorted(k for k in set(opened)|set(after) if opened.get(k)!=after.get(k))
+            raise AssertionError(('choosing a part marked the weapon',changed))
         edit('view',dict(view='top',zoom=2.5));state=ready()
         assert state['modified'] is False,'moving the camera marked the weapon'
         edit('testbed',dict(name=away));ready()
@@ -92,6 +99,14 @@ def run():
         current=command('esp_project')
         assert ready()['modified'] is False and not current['unsavedWeapons'],'Save left the weapon marked'
         assert saves()==existing+[latest] and current['base']==latest,'Save did not commit exactly one new latest version'
+        # The version holds authoring only: loadout, camera and page stay in the session.
+        folder=library.project_folder(ROOT,plugin);snapshot=library.read_snapshot(folder,latest)
+        previous=library.read_snapshot(folder,existing[-1])['weapons'] if existing else {}
+        written=[e for r,e in snapshot['weapons'].items() if previous.get(r,{}).get('authoring')!=e['authoring']]
+        assert written,'Save wrote no weapon record'
+        for entry in written:
+            kept=set(library.get_record(folder,entry['authoring']))&{'choices','recordChoices','camera','workspace','body','handsPage','animation'}
+            assert not kept,('a saved version holds session state',sorted(kept))
         # Reopening the ESP loads the latest version automatically.
         edit('testbed',dict(name=away));ready();edit('testbed',dict(name=name));ready()
         assert insertion()==changed and command('esp_project')['base']==latest,'the latest version did not load automatically'

@@ -82,6 +82,10 @@ namespace reloadmaker
         _rebuildTimer->setSingleShot(true);
         _rebuildTimer->setInterval(60);
         connect(_rebuildTimer, &QTimer::timeout, this, &ReloadMakerController::rebuildWeapon);
+        _sessionTimer = new QTimer(this);
+        _sessionTimer->setInterval(3000);
+        connect(_sessionTimer, &QTimer::timeout, this, &ReloadMakerController::keepWeaponSession);
+        _sessionTimer->start();
         // The theme comes first so every widget is built with it; it needs the
         // workspace for its icon cache.
         applyStyle();

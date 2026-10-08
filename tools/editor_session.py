@@ -29,6 +29,8 @@ TESTBEDS = (
     'srep-service', 'srep-ar10', 'srep-honeybadger', 'srep-xm16e1',
 )
 LIBRARY = ROOT / 'workspace/library'
+# Where each weapon was left (loadout, camera, page), written by the editor.
+SESSIONS = ROOT / 'local/sessions'
 
 READY_TIMEOUT_SECONDS = 300
 STARTUP_TIMEOUT_SECONDS = 120
@@ -90,12 +92,32 @@ def close_editor(process):
         raise RuntimeError('Reload Maker did not close; a dialog may be waiting in its window')
 
 
+def session_files():
+    return sorted(path for path in SESSIONS.glob('*.json') if path.is_file()) if SESSIONS.exists() else []
+
+
 def corpus_files():
-    """The settings file and every ESP library file. Only the files that are
-    replaced in place (indexes, export identity and history, the development
-    sources) have their bytes kept; the rest only need to be known."""
-    files = [SETTINGS] if SETTINGS.exists() else []
+    """The settings file, the weapon sessions and every ESP library file. Only
+    the files that are replaced in place (settings, sessions, indexes, export
+    identity and history, the development sources) have their bytes kept; the
+    rest only need to be known."""
+    files = ([SETTINGS] if SETTINGS.exists() else []) + session_files()
     return files + sorted(path for path in LIBRARY.rglob('*') if path.is_file()) if LIBRARY.exists() else files
+
+
+# The sessions as they were before any editor of this run; reset_sessions
+# returns to them so one suite's loadouts never reach the next.
+SESSION_BASELINE = {path: path.read_bytes() for path in session_files()}
+
+
+def reset_sessions():
+    for path in session_files():
+        if path not in SESSION_BASELINE:
+            path.unlink()
+    for path, data in SESSION_BASELINE.items():
+        if not path.exists() or path.read_bytes() != data:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
 
 
 def replaced_in_place(path):
@@ -115,6 +137,10 @@ def restore(saved):
         if not path.exists() or path.read_bytes() != data:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
+            restored.append(str(path))
+    for path in session_files():
+        if path not in saved:
+            path.unlink()
             restored.append(str(path))
     if LIBRARY.exists():
         for path in sorted(LIBRARY.rglob('*'), reverse=True):

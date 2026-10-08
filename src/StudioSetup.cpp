@@ -54,7 +54,7 @@ void ReloadMakerController::showSetup() {
     auto* buttons=new QDialogButtonBox(QDialogButtonBox::Save|QDialogButtonBox::Cancel,&dialog);layout->addWidget(buttons);
     auto* connectSource=buttons->addButton("Save and connect MO2",QDialogButtonBox::ActionRole);
     auto* packs=buttons->addButton("Export reload mods…",QDialogButtonBox::ActionRole);
-    connect(packs,&QPushButton::clicked,&dialog,[&]{dialog.accept();QTimer::singleShot(0,this,&ReloadMakerController::showPackBuilder);});
+    connect(packs,&QPushButton::clicked,&dialog,[&]{dialog.accept();QTimer::singleShot(0,this,[this]{showPackBuilder();});});
     connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
     connect(buttons,&QDialogButtonBox::accepted,&dialog,[&]{if(configureInstallation(installationJson(value())))dialog.accept();else report->setPlainText(_lastError);});
     connect(connectSource,&QPushButton::clicked,&dialog,[&]{const auto c=checkInstallation(value());if(!c.gameReady||!c.profileReady){refresh();return;}

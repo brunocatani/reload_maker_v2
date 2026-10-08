@@ -26,7 +26,7 @@ from pathlib import Path
 
 # The bundled runtime is isolated and does not add the script folder to the path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from editor_session import PYTHON, ROOT, EditorRun, command, edit, ready
+from editor_session import PYTHON, ROOT, EditorRun, command, edit, ready, reset_sessions
 
 TESTS = ROOT / 'tests'
 SUITE_TIMEOUT_SECONDS = 1800
@@ -87,6 +87,8 @@ def open_reference_project():
 
 def run_editor_suite(name, logs):
     try:
+        # Each suite starts from the weapons' sessions as the run found them.
+        reset_sessions()
         open_reference_project()
     except Exception as error:
         result = {'suite': name, 'status': 'blocked', 'seconds': 0, 'last': 'Could not open the Glock testbed: %s' % error}

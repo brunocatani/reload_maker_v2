@@ -1,5 +1,6 @@
-// Export reload mods: choose ESP projects and a saved version of each (the
-// latest by default), then export them to one MO2 mod folder or one archive.
+// Export reload mods to one MO2 mod folder or one archive: the ESP projects
+// ticked in the list (a saved version of each, the latest by default), the
+// ESP open in the picker, or everything the loaded source has saved work for.
 // Export reads committed versions only; unsaved edits are named, not saved.
 #include "ReloadMakerController.h"
 #include "StudioWindow.h"
@@ -32,20 +33,24 @@ QString localTime(const QString& utc) {
 }
 }
 
-void ReloadMakerController::showPackExporter() {
-    if(_esp)QSettings().setValue("packBuilder/selected",QStringList{_esp->plugin});
-    showPackBuilder();
-}
-
-void ReloadMakerController::showPackBuilder() {
-    QDialog dialog(_window);dialog.setObjectName("ReloadExportDialog");dialog.setWindowTitle("Export reload mods");dialog.resize(900,700);
+void ReloadMakerController::showPackBuilder(ExportScope scope) {
+    const bool chosenList=scope==ExportScope::Chosen;
+    if(scope==ExportScope::OpenEsp&&!_esp){setStatus("Open a weapon of the ESP to export first.",true);return;}
+    QDialog dialog(_window);dialog.setObjectName("ReloadExportDialog");
+    dialog.setWindowTitle(scope==ExportScope::Everything?"Export everything":scope==ExportScope::OpenEsp?"Export ESP reloads":"Export reload mods");
+    dialog.resize(chosenList?900:720,chosenList?700:460);
     auto* layout=new QVBoxLayout(&dialog);
-    auto* intro=new QLabel("Choose the source ESPs to export. Each exports its chosen saved version, the latest by default, as one ESL-flagged ESP with its magazine meshes. Only saved versions are exported. MO2 activation and load order are never changed.");
+    auto* intro=new QLabel(
+        scope==ExportScope::Everything?QString("Every saved ESP project with weapons in the loaded source: the reloads DIAMOND can use, one ESL-flagged ESP per source ESP with its magazine meshes, and the weapons' True Scopes profiles. Weapons the source does not contain are skipped and listed. Only the latest saved versions are exported."):
+        scope==ExportScope::OpenEsp?QString("The reloads of %1's latest saved version: one ESL-flagged ESP with its magazine meshes.").arg(_esp->plugin):
+        QString("Choose the source ESPs to export. Each exports its chosen saved version, the latest by default, as one ESL-flagged ESP with its magazine meshes. Only saved versions are exported."));
     intro->setWordWrap(true);layout->addWidget(intro);
+    auto* never=new QLabel("MO2 activation and load order are never changed.");never->setObjectName("Hint");layout->addWidget(never);
     QSettings settings;
     const auto selected=settings.value("packBuilder/selected").toStringList();
     auto* list=new QTreeWidget;list->setColumnCount(4);list->setHeaderLabels({"Source ESP","Saved version","Weapons","Last export"});list->setRootIsDecorated(false);
     list->header()->setSectionResizeMode(0,QHeaderView::Stretch);list->setColumnWidth(1,260);list->setColumnWidth(2,150);list->setColumnWidth(3,170);layout->addWidget(list,1);
+    list->setVisible(chosenList);
     const QDir root(espLibraryRoot());
     for(const auto& folder:root.entryList(QDir::Dirs|QDir::NoDotAndDotDot,QDir::Name)) {
         if(espProjectKey(folder).isEmpty())continue;
@@ -74,6 +79,7 @@ void ReloadMakerController::showPackBuilder() {
     auto* browse=new QPushButton("Choose mods folder...");destinationRow->addWidget(browse);
     connect(browse,&QPushButton::clicked,&dialog,[&]{const auto folder=QFileDialog::getExistingDirectory(&dialog,"MO2 mods folder",instance);if(!folder.isEmpty())mo2->setText(QDir(folder).filePath("DIAMOND Reload Packs"));});
     auto* report=new QPlainTextEdit;report->setReadOnly(true);layout->addWidget(report,1);
+    if(!chosenList)report->setMinimumHeight(140);
     auto* actions=new QHBoxLayout;layout->addLayout(actions);
     auto* toMo2=new QPushButton("Export to MO2");auto* toArchive=new QPushButton("Export ZIP / 7z");auto* cancel=new QPushButton("Cancel export");
     for(auto* button:{toMo2,toArchive,cancel})actions->addWidget(button);
@@ -89,7 +95,9 @@ void ReloadMakerController::showPackBuilder() {
         else if(phase=="failed")report->setPlainText("Failed: "+state["error"].toString());
         else if(state["operation"]=="library-export") {
             const auto result=state["result"].toObject();
-            QString text=QString("Export complete: %1 ESL-flagged ESPs, %2 magazine objects\n%3").arg(result["plugins"].toArray().size()).arg(result["activeObjects"].toInt()).arg(result["installedTo"].toString(result["archive"].toString()));
+            QString text=QString("Export complete: %1 ESL-flagged ESPs, %2 magazine objects").arg(result["plugins"].toArray().size()).arg(result["activeObjects"].toInt());
+            if(result.contains("scopeProfiles"))text+=QString(", %1 True Scopes profiles").arg(result["scopeProfiles"].toInt());
+            text+="\n"+result["installedTo"].toString(result["archive"].toString());
             if(result.contains("written"))text+=QString("\n%1 files written, %2 unchanged files left in place").arg(result["written"].toInt()).arg(result["unchanged"].toInt());
             for(const auto& value:result["plugins"].toArray()){const auto group=value.toObject();text+="\n"+group["master"].toString()+" -> "+group["plugin"].toString()+QString(" · %1 objects").arg(group["objects"].toInt());}
             for(const auto& value:result["skipped"].toArray()){const auto weapon=value.toObject();text+="\nNot exported: "+weapon["name"].toString()+" ("+weapon["reason"].toString()+")";}
@@ -101,13 +109,19 @@ void ReloadMakerController::showPackBuilder() {
     connect(saveNow,&QPushButton::clicked,&dialog,[&]{try{startEspSave({});update();}catch(const std::exception& e){report->setPlainText(e.what());}});
     const auto run=[&](const QString& destination,const QString& key){
         if(destination.isEmpty())return;
-        QJsonArray selections;QStringList chosen;
-        for(int i=0;i<list->topLevelItemCount();++i){auto* item=list->topLevelItem(i);if(item->checkState(0)!=Qt::Checked)continue;
-            const auto plugin=item->data(0,Qt::UserRole).toString();chosen.append(plugin);
-            auto* versions=qobject_cast<QComboBox*>(list->itemWidget(item,1));selections.append(QJsonObject{{"plugin",plugin},{"save",versions?versions->currentData().toString():QString()}});}
-        if(selections.isEmpty()){report->setPlainText("Tick at least one source ESP to export.");return;}
-        settings.setValue("packBuilder/selected",chosen);settings.setValue("packBuilder/mo2",mo2->text());
-        try{packCommand({{"operation","export"},{"selections",selections},{key,destination}});update();}
+        QJsonObject request{{"operation","export"},{key,destination}};
+        if(scope==ExportScope::Everything){request["scope"]="everything";}
+        else if(scope==ExportScope::OpenEsp){request["selections"]=QJsonArray{QJsonObject{{"plugin",_esp->plugin}}};}
+        else{
+            QJsonArray selections;QStringList chosen;
+            for(int i=0;i<list->topLevelItemCount();++i){auto* item=list->topLevelItem(i);if(item->checkState(0)!=Qt::Checked)continue;
+                const auto plugin=item->data(0,Qt::UserRole).toString();chosen.append(plugin);
+                auto* versions=qobject_cast<QComboBox*>(list->itemWidget(item,1));selections.append(QJsonObject{{"plugin",plugin},{"save",versions?versions->currentData().toString():QString()}});}
+            if(selections.isEmpty()){report->setPlainText("Tick at least one source ESP to export.");return;}
+            settings.setValue("packBuilder/selected",chosen);request["selections"]=selections;
+        }
+        settings.setValue("packBuilder/mo2",mo2->text());
+        try{packCommand(request);update();}
         catch(const std::exception& e){report->setPlainText(e.what());}
     };
     connect(toMo2,&QPushButton::clicked,&dialog,[&]{if(mo2->text().trimmed().isEmpty()){report->setPlainText("Choose your MO2 mods folder first.");return;}run(mo2->text(),"mo2");});
@@ -118,7 +132,7 @@ void ReloadMakerController::showPackBuilder() {
         run(file,"archive");
     });
     connect(cancel,&QPushButton::clicked,&dialog,[&]{try{packCommand({{"operation","cancel"}});}catch(const std::exception& e){report->setPlainText(e.what());}});
-    if(list->topLevelItemCount()==0)report->setPlainText("No saved ESP projects yet. Save a weapon's authoring first.");
+    if(chosenList&&list->topLevelItemCount()==0)report->setPlainText("No saved ESP projects yet. Save a weapon's authoring first.");
     update();dialog.exec();
 }
 }

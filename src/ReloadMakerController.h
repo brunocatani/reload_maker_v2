@@ -356,6 +356,12 @@ namespace reloadmaker
         // committed version produced.
         [[nodiscard]] QJsonObject authoredRecord() const;
         [[nodiscard]] static QJsonObject authoredPart(QJsonObject record);
+        [[nodiscard]] static QJsonObject sessionPart(const QJsonObject& record);
+        [[nodiscard]] static QJsonObject versionRecord(const QJsonObject& record);
+        // Per-weapon session (src/areas/project/WeaponSession.cpp).
+        [[nodiscard]] QString sessionFile(const QString& plugin) const;
+        [[nodiscard]] QJsonObject weaponSession(const QString& record) const;
+        void keepWeaponSession();
         [[nodiscard]] bool documentDirty() const;
         void markDocumentClean();
         void refreshDocumentModified();
@@ -498,8 +504,11 @@ namespace reloadmaker
         QJsonObject installationState() const;
         bool configureInstallation(const QJsonObject&);
         void showSetup();
-        void showPackBuilder();
-        void showPackExporter();
+        // Which saved projects an export window exports: the ones ticked in
+        // its list, the ESP open in the picker, or every saved ESP project
+        // with weapons in the loaded source (reloads and scope profiles).
+        enum class ExportScope { Chosen, OpenEsp, Everything };
+        void showPackBuilder(ExportScope scope = ExportScope::Chosen);
         void showCollisionCooker();
         QJsonObject capturePreparedPart(const QString& output);
         QJsonObject captureMagazineWorld(bool empty);
@@ -1616,6 +1625,18 @@ namespace reloadmaker
         QLineEdit* _partSearch{ nullptr };
         QLabel* _configurationSummary{ nullptr };
         QTimer* _rebuildTimer{ nullptr };
+        QTimer* _sessionTimer{ nullptr };
+        // What the grip and mechanism editors opened with (an assigned or
+        // saved grip, a pose placed on a part, a saved definition). A draft
+        // equal to it is not unsaved work; opening an editor changes nothing.
+        QByteArray _partGripOpened;
+        QByteArray _mechanismOpened;
+        [[nodiscard]] QByteArray partGripSnapshot(const PartGrip& grip) const;
+        void markPartGripOpened();
+        void markMechanismOpened();
+        // The session last written for a weapon (keepWeaponSession).
+        QString _keptSessionWeapon;
+        QJsonObject _keptSession;
         SlotOverlay* _slotOverlay{ nullptr };
         PartPicker* _partPicker{ nullptr };
         PinOverlay* _pinOverlay{ nullptr };

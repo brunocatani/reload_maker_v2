@@ -40,6 +40,8 @@ def main():
     migrate.add_argument('--apply', action='store_true', help='Write the ESP projects; without it only report the plan')
     shipping = library.add_parser('export')
     shipping.add_argument('--select', action='append', required=True, help='PLUGIN or PLUGIN@SAVE; the latest version by default')
+    shipping.add_argument('--loaded', help='JSON file listing the weapon records of the loaded source; other weapons are skipped')
+    shipping.add_argument('--scopes', action='store_true', help='Also export the True Scopes profiles of the exported weapons')
     target = shipping.add_mutually_exclusive_group(required=True)
     target.add_argument('--archive')
     target.add_argument('--mo2')
@@ -80,7 +82,8 @@ def main():
         else:
             from product_grouped import export_library
             selections = [dict(zip(('plugin', 'save'), value.split('@', 1))) for value in args.select]
-            result = asyncio.run(export_library(settings.workspace, selections, backends, args.archive, args.mo2))
+            loaded = json.loads(Path(args.loaded).read_text(encoding='utf-8')) if args.loaded else None
+            result = asyncio.run(export_library(settings.workspace, selections, backends, args.archive, args.mo2, loaded, args.scopes))
     print(json.dumps(result, allow_nan=False))
 
 

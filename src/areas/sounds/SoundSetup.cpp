@@ -15,8 +15,9 @@ namespace reloadmaker
         return (_soundProfile.weapon + "|" + _soundProfile.animation).toLower();
     }
 
-    // Prepared with the operating rig. The previous profile is kept with the
-    // saved profiles before switching.
+    // Prepared with the operating rig. Unapplied edits to the previous profile
+    // are kept with the saved profiles before switching; a profile only read
+    // from the animation is not kept, so preparing sounds changes nothing.
     void ReloadMakerController::prepareSounds()
     {
         if (!currentWeapon() || !currentPlugin() || !_reloadRecipe || !_simulationRig) {
@@ -28,7 +29,7 @@ namespace reloadmaker
             _fireSoundContext.clear();
             return;
         }
-        if (!_soundProfile.weapon.isEmpty()) {
+        if (!_soundProfile.weapon.isEmpty() && _soundsDirty) {
             _savedSounds[soundProfileKey()] = _soundProfile;
         }
         _audio.clear();
@@ -50,7 +51,6 @@ namespace reloadmaker
         addDefaultSoundCues(sources, defaults);
         if (_savedSounds.contains(key)) {
             _soundProfile = _savedSounds.value(key);
-            _soundProfile.magazine = magazine;
         }
         // A bolt catch released by hand: profiles saved before this cue existed get it too.
         const bool boltRelease = std::any_of(_soundProfile.cues.cbegin(), _soundProfile.cues.cend(), [](const auto& c) { return c.id == "bolt-release"; });

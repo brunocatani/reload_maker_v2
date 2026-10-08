@@ -113,6 +113,18 @@ void ReloadMakerController::createUi() {
         modes->addSegment(title, int(page));
     }
     header->addWidget(modes);
+    // Exports are one click away: the open ESP's reloads, or everything the
+    // loaded source has saved work for (reloads and scope profiles).
+    auto* exportEsp = new QPushButton("Export ESP reloads", header);
+    exportEsp->setObjectName("HeaderExportEsp");
+    exportEsp->setToolTip("Export the reloads of the open ESP's latest saved version to MO2 or a ZIP / 7z");
+    header->addWidget(exportEsp);
+    connect(exportEsp, &QPushButton::clicked, this, [this] { showPackBuilder(ExportScope::OpenEsp); });
+    auto* exportAll = new QPushButton("Export everything", header);
+    exportAll->setObjectName("HeaderExportAll");
+    exportAll->setToolTip("Export every saved reload and scope profile of the weapons in the loaded source to MO2 or a ZIP / 7z");
+    header->addWidget(exportAll);
+    connect(exportAll, &QPushButton::clicked, this, [this] { showPackBuilder(ExportScope::Everything); });
     auto* menuButton = new QToolButton(header);
     menuButton->setObjectName("MenuButton");
     menuButton->setIcon(icon(Icon::Menu, color::textSecondary));
@@ -152,8 +164,7 @@ void ReloadMakerController::createUi() {
     auto* openProject=mainMenu->addAction("Import earlier project…");
     auto* importRecords = mainMenu->addAction("Import…");
     auto* exportMenu = mainMenu->addMenu("Export");
-    connect(exportMenu->addAction("Export this ESP…"),&QAction::triggered,this,&ReloadMakerController::showPackExporter);
-    connect(exportMenu->addAction("Export reload mods…"),&QAction::triggered,this,&ReloadMakerController::showPackBuilder);
+    connect(exportMenu->addAction("Export reload mods…"),&QAction::triggered,this,[this]{showPackBuilder();});
     connect(exportMenu->addAction("Magazine world models…"),&QAction::triggered,this,&ReloadMakerController::showMagazineModels);
     connect(exportMenu->addAction("Weapon authoring file…"),&QAction::triggered,this,[this]{
         if(!currentWeapon())return;

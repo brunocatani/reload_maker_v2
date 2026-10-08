@@ -43,7 +43,8 @@ namespace reloadmaker
             return {{"ok",true},{"phase","closed"}};
         }
         if (operation == "open") {
-            QMetaObject::invokeMethod(this,[this]{showPackBuilder();},Qt::QueuedConnection);
+            const auto scope = request["scope"].toString();
+            QMetaObject::invokeMethod(this,[this,scope]{showPackBuilder(scope=="everything"?ExportScope::Everything:scope=="esp"?ExportScope::OpenEsp:ExportScope::Chosen);},Qt::QueuedConnection);
             return {{"ok",true},{"phase","dialog"}};
         }
         if (operation == "export") {
@@ -143,6 +144,7 @@ namespace reloadmaker
                 _packJob["error"] = result.value("error").toString(QString::fromUtf8(process->readAllStandardError()).right(8192));
             }
             QFile::remove(_packCancelFile);
+            QFile::remove(studioDataPath("local/tmp/pack-" + _packJob["id"].toString() + ".loaded.json"));
             _packProcess = nullptr;
             process->deleteLater();
             const auto operation = _packJob["operation"].toString();

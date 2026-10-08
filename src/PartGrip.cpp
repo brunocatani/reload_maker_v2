@@ -36,6 +36,22 @@ namespace reloadmaker {
             key(a.anchorPath)==key(b.anchorPath) && key(a.ownerModel)==key(b.ownerModel) &&
             key(a.ownerRecord)==key(b.ownerRecord);
     }
+    namespace {
+        bool samePlacement(const Transformf& a, const Transformf& b) {
+            const auto near=[](float x,float y){return std::abs(x-y)<.00002f;};
+            if(!near(a.translation.x,b.translation.x)||!near(a.translation.y,b.translation.y)||!near(a.translation.z,b.translation.z)||
+               !near(a.scale.x,b.scale.x)||!near(a.scale.y,b.scale.y)||!near(a.scale.z,b.scale.z)) { return false; }
+            const auto& x=a.rotation; const auto& y=b.rotation;
+            const float sign=x.x*y.x+x.y*y.y+x.z*y.z+x.w*y.w<0?-1.f:1.f;
+            return near(x.x,sign*y.x)&&near(x.y,sign*y.y)&&near(x.z,sign*y.z)&&near(x.w,sign*y.w);
+        }
+    }
+    bool sameGripFit(const PartGrip& a, const PartGrip& b) {
+        if(a.pose.name!=b.pose.name||a.pose.hand!=b.pose.hand||!sameGripAnchor(a.pose.placement,b.pose.placement)||
+           !samePlacement(a.pose.placement.handInAnchor,b.pose.placement.handInAnchor)) { return false; }
+        for(int i=0;i<15;++i) { if(!samePlacement(a.pose.fingers[i],b.pose.fingers[i])) { return false; } }
+        return true;
+    }
     int resolveGripAnchor(const PartGrip& grip, const QString& weaponRecord,
                           const QVector<HandPosePlacement>& anchors, QString& error) {
         error.clear();

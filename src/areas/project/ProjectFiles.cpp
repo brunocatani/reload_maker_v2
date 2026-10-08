@@ -384,7 +384,6 @@ namespace reloadmaker
                             { "mo2Profile", _libraryMode ? _launchSnapshot.profileName : QString() },
                             { "weapon", poseRecordKey(weapon->formId) },
                             { "body", _armsBody },
-                            { "animationSource", animationSourceIdentity() },
                             { "animation", _activeAnimationPath },
                             { "seconds", _playbackTime },
                             { "motionMode", _weaponFixedMotion ? 0 : 1 },
@@ -436,7 +435,9 @@ namespace reloadmaker
         for (auto it = _savedSounds.cbegin(); it != _savedSounds.cend(); ++it) {
             sounds[it.key()] = soundProfileJson(it.value());
         }
-        if (!_soundProfile.weapon.isEmpty()) {
+        // The shown profile is authoring once edited; read from the
+        // animation it is not (applied ones are in _savedSounds).
+        if (!_soundProfile.weapon.isEmpty() && _soundsDirty) {
             sounds[soundProfileKey()] = soundProfileJson(_soundProfile);
         }
         record["soundProfiles"] = sounds;
@@ -462,15 +463,6 @@ namespace reloadmaker
                 rounds[it.key()] = it.value();
             }
             record["magazineRounds"] = rounds;
-        }
-        if (_simulationRig && _reloadRecipe) {
-            record["simulationSetup"] = simulationRigJson(*_reloadRecipe, *_simulationRig, _slideSpringReturn);
-        }
-        if (_magazineRail) {
-            record["magazineInteraction"] = magazineRailJson(*_magazineRail);
-        }
-        if (_simulationAmmo.valid()) {
-            record["ammunitionConfiguration"] = _simulationAmmo.json();
         }
         return record;
     }
@@ -513,7 +505,7 @@ namespace reloadmaker
             record["handPreview"] = QJsonDocument::fromJson(bytes).object();
         }
         const auto& authoredGrip = simulationWorkspace(_workspace) ? _operateSuspendedGrip : _partGripDraft;
-        if (authoredGrip) {
+        if (authoredGrip && partGripSnapshot(*authoredGrip) != _partGripOpened) {
             const auto bytes = encodePartGrip(*authoredGrip, error);
             if (!error.isEmpty()) {
                 message = "Finish the grip before saving: " + error;
@@ -527,6 +519,9 @@ namespace reloadmaker
                 message = "Finish the mechanism step before saving: " + error;
                 return false;
             }
+            if (bytes == _mechanismOpened) {
+                return true;
+            }
             record["mechanismDraft"] = QJsonDocument::fromJson(bytes).object();
         }
         return true;
@@ -534,30 +529,79 @@ namespace reloadmaker
 
     namespace
     {
-        // What looking around, choosing parts, scrubbing and previewing
-        // write: a save keeps it, but it never asks for one. The hand preview
-        // is the pose shown on the hand, dropped by every rebuild; finger,
-        // grip, mechanism and magazine-grip drafts are unsaved work and count.
-        constexpr const char* kViewStateKeys[] = {
-            "animation", "seconds", "motionMode", "transitions", "showArms", "workspace", "hand", "fingerJoint", "selectedHandPose",
-            "browserPlugin", "choices", "recordChoices", "camera", "handsPage", "interactionHand", "scopeSelection", "body",
-            "simulationSetup", "magazineInteraction", "ammunitionConfiguration", "handPreview",
-            // Where the source came from is metadata, never authoring.
-            "package", "gameData", "library", "mo2Instance", "mo2Profile"
+        // What a reload, grab point or scope is made of: only these mark a
+        // weapon unsaved and only these enter a saved version. Finger, grip,
+        // mechanism and magazine-grip drafts are unsaved work and count once
+        // they differ from what their editor opened with.
+        constexpr const char* kAuthoringKeys[] = {
+            "format", "kind", "weapon", "weaponName", "weaponEditorId",
+            "authoringRoadmaps", "reloadTemplates", "reloadAxes", "weaponProperties", "sourcePolicies", "annotations",
+            "simulationSpringReturn", "glockReloadNoExtender", "soundProfiles", "grabLocations", "scopeProfiles",
+            "operatingGrips", "magazineGrabGrips", "magazineGrabDefaults", "magazineModels", "magazineRounds",
+            "magazineGripDrafts", "fingerDrafts", "gripDraft", "mechanismDraft", "unfinishedDraft"
+        };
+        // Where the author left the weapon: loadout, arms, camera, page, clip
+        // and hand. Kept automatically per weapon outside every version
+        // (sessionFile); it never marks a weapon unsaved.
+        constexpr const char* kSessionKeys[] = {
+            "body", "choices", "recordChoices", "browserPlugin", "camera", "workspace", "handsPage", "animation", "seconds",
+            "motionMode", "transitions", "showArms", "hand", "fingerJoint", "selectedHandPose", "interactionHand", "scopeSelection"
         };
 
-        QJsonObject withoutViewState(QJsonObject record)
+        template <std::size_t N>
+        QJsonObject onlyKeys(const QJsonObject& record, const char* const (&keys)[N])
         {
-            for (const char* key : kViewStateKeys) {
-                record.remove(QLatin1String(key));
+            QJsonObject part;
+            for (const char* key : keys) {
+                if (const auto value = record.value(QLatin1String(key)); !value.isUndefined()) {
+                    part[QLatin1String(key)] = value;
+                }
             }
-            return record;
+            return part;
         }
+    }
+
+    // The grip as the editor shows it, with its name from the form.
+    QByteArray ReloadMakerController::partGripSnapshot(const PartGrip& grip) const
+    {
+        auto named = grip;
+        named.pose.name = _gripDraftName.trimmed();
+        QString error;
+        return encodePartGrip(named, error);
+    }
+
+    void ReloadMakerController::markPartGripOpened()
+    {
+        _partGripOpened = _partGripDraft ? partGripSnapshot(*_partGripDraft) : QByteArray();
+    }
+
+    void ReloadMakerController::markMechanismOpened()
+    {
+        QString error;
+        _mechanismOpened = _mechanismDraft ? encodeMechanism(*_mechanismDraft, error) : QByteArray();
     }
 
     QJsonObject ReloadMakerController::authoredPart(QJsonObject record)
     {
-        return withoutViewState(std::move(record));
+        return onlyKeys(record, kAuthoringKeys);
+    }
+
+    QJsonObject ReloadMakerController::sessionPart(const QJsonObject& record)
+    {
+        return onlyKeys(record, kSessionKeys);
+    }
+
+    // A saved version holds the authoring and, as metadata beside it, the
+    // source the weapon was read from.
+    QJsonObject ReloadMakerController::versionRecord(const QJsonObject& record)
+    {
+        auto version = authoredPart(record);
+        for (const char* key : { "package", "gameData", "library", "mo2Instance", "mo2Profile" }) {
+            if (record.contains(QLatin1String(key))) {
+                version[QLatin1String(key)] = record[QLatin1String(key)];
+            }
+        }
+        return version;
     }
 
     // The project record without its view state, with the drafts a save
@@ -572,7 +616,7 @@ namespace reloadmaker
         if (!appendProjectDrafts(record, message)) {
             record["unfinishedDraft"] = message;
         }
-        return withoutViewState(record);
+        return authoredPart(record);
     }
 
     bool ReloadMakerController::validWeaponRecord(const QJsonObject& record, QString& message)
@@ -758,7 +802,13 @@ namespace reloadmaker
         for (auto it = magazineDrafts.begin(); it != magazineDrafts.end(); ++it) {
             PartGrip grip;
             QString error;
-            if (decodePartGrip(QJsonDocument(it.value().toObject()).toJson(), grip, error)) {
+            if (!decodePartGrip(QJsonDocument(it.value().toObject()).toJson(), grip, error)) {
+                continue;
+            }
+            // Opening the editor once stored the fit it showed as a draft;
+            // such a copy of a saved fit is not unsaved work.
+            const auto saved = std::find_if(_partGrips.cbegin(), _partGrips.cend(), [&](const auto& s) { return s.pose.id == grip.pose.id; });
+            if (saved == _partGrips.cend() || !sameGripFit(grip, *saved)) {
                 _magazineGripDrafts[handAssignmentKey(magazineGrabKey(grip.weaponRecord, grip.pose.placement.ownerRecord), grip.pose.hand)] = grip;
             }
         }

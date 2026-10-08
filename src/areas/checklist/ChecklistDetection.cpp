@@ -349,7 +349,9 @@ namespace reloadmaker
         const auto profile = exportSounds();
         o["sounds.reload"] = !profile.isEmpty() && _soundError.isEmpty()
                                  ? found(QStringLiteral("%1 of %2 cues play").arg(enabled).arg(_soundProfile.cues.size()),
-                                         _soundsDirty ? QStringLiteral("Unsaved changes on the Sounds page.") : QStringLiteral("Applied on the Sounds page."))
+                                         _soundsDirty                              ? QStringLiteral("Unsaved changes on the Sounds page.")
+                                         : _savedSounds.contains(soundProfileKey()) ? QStringLiteral("Applied on the Sounds page.")
+                                                                                    : QStringLiteral("Read from the reload's animation."))
                                  : missing(_soundError.isEmpty() ? QStringLiteral("Open Sounds and save the reload's cues.") : _soundError);
         return o;
     }
