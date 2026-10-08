@@ -317,6 +317,26 @@ namespace reloadmaker
                     _siblingOperatingGrips.insert(key.section('|', 1), it.value().toString());
                 }
             }
+            // Weapon defaults by hand: "<record>|left", or a legacy "<record>"
+            // whose hand is the fit's own.
+            const auto defaults = source["magazineGrabDefaults"].toObject();
+            for (auto it = defaults.begin(); it != defaults.end(); ++it) {
+                const auto key = it.key().toLower();
+                QString side = key.section('|', 1);
+                if (key.section('|', 0, 0) != record || (!side.isEmpty() && side != QLatin1String("left") && side != QLatin1String("right"))) {
+                    continue;
+                }
+                if (side.isEmpty()) {
+                    const auto grip = std::find_if(_partGrips.cbegin(), _partGrips.cend(), [&](const auto& g) { return g.pose.id == it.value().toString(); });
+                    if (grip == _partGrips.cend()) {
+                        continue;
+                    }
+                    side = grip->pose.hand == PoseHand::Left ? QStringLiteral("left") : QStringLiteral("right");
+                }
+                if (!_siblingMagazineFits.contains("default|" + side)) {
+                    _siblingMagazineFits.insert("default|" + side, it.value().toString());
+                }
+            }
             const auto fits = source["magazineGrabGrips"].toObject();
             for (auto it = fits.begin(); it != fits.end(); ++it) {
                 const auto parts = it.key().toLower().split('|');

@@ -128,6 +128,12 @@ namespace {
         check(borrowed&&borrowed->weaponRecord=="Fixture.esp:00dcba"&&borrowed->pose.id!=sibling.pose.id&&sameGripAnchor(borrowed->pose.placement,grip.pose.placement),"Sibling fit was not bound to the weapon");
         check(!magazineGripFor("Fixture.esp:00dcba",grip.pose.placement,{sibling},{},{},error,opposite.pose.hand,shared),"Sibling fit served the other hand");
         check(!magazineGripFor("Fixture.esp:00dcba",wrong,{sibling},{},{},error,grip.pose.hand,shared),"Sibling fit served another magazine frame");
+        // A sibling's weapon default serves any magazine, rebound to its frame.
+        const QHash<QString,QString> siblingDefault{{QString("default")+(grip.pose.hand==PoseHand::Left?"|left":"|right"),sibling.pose.id}};
+        const auto defaulted=magazineGripFor("Fixture.esp:00dcba",drum,{sibling},{},{},error,grip.pose.hand,siblingDefault);
+        check(defaulted&&defaulted->weaponRecord=="Fixture.esp:00dcba"&&sameGripAnchor(defaulted->pose.placement,drum)&&
+              reloadPoseDistance(defaulted->pose.placement.handInAnchor,grip.pose.placement.handInAnchor)<.0001f,"Sibling default was not rebound to the magazine");
+        check(!magazineGripFor("Fixture.esp:00dcba",drum,{sibling},{},{},error,opposite.pose.hand,siblingDefault),"Sibling default served the other hand");
         auto named=grip;named.pose.placement.anchorName="CustomBox";named.pose.placement.anchorPath="Assembly/CustomBox";
         const auto namedFit=magazineGripFor(grip.weaponRecord,named.pose.placement,{named},bindings,{},error);
         check(namedFit&&sameGripAnchor(namedFit->pose.placement,named.pose.placement),"Explicit magazine role still depends on a hardcoded part name");

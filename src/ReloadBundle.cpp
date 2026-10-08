@@ -30,16 +30,24 @@ std::optional<PartGrip> magazineGripFor(const QString& weapon,const HandPosePlac
     const bool custom=!customId.isEmpty();
     const auto id=custom?customId:forHand(defaults,weapon.toLower());
     if(id.isEmpty()) {
-        // A sibling's fit of this magazine, for the same frame and hand.
-        const auto sharedId=hand?shared.value(anchor.ownerRecord.toLower()+(*hand==PoseHand::Left?"|left":"|right")):QString();
-        if(sharedId.isEmpty())return {};
-        for(const auto& grip:library)if(grip.pose.id==sharedId&&grip.pose.hand==*hand&&sameGripAnchor(grip.pose.placement,anchor)) {
-            // Bound to this weapon like a weapon default: same pose and frame.
+        // A sibling's fit of this magazine for the same frame and hand, else
+        // the sibling's weapon default; either is bound to this weapon.
+        if(!hand)return {};
+        const QString side=*hand==PoseHand::Left?"|left":"|right";
+        const auto bind=[&](const PartGrip& grip,const QString& source,bool rebind) {
             PartGrip fit=grip;fit.weaponRecord=weapon;
-            fit.pose.id=QUuid::createUuidV5(QUuid(sharedId),(key+"|"+anchor.ownerModel.toLower()+"|"+anchor.anchorPath).toUtf8()).toString(QUuid::WithoutBraces);
+            fit.pose.id=QUuid::createUuidV5(QUuid(source),(key+"|"+anchor.ownerModel.toLower()+"|"+anchor.anchorPath).toUtf8()).toString(QUuid::WithoutBraces);
+            if(rebind){const auto placement=fit.pose.placement.handInAnchor;fit.pose.placement=anchor;fit.pose.placement.handInAnchor=placement;fit.surfaceContact.reset();}
             fit.mechanismId.clear();
             return fit;
+        };
+        const auto sharedId=shared.value(anchor.ownerRecord.toLower()+side);
+        if(!sharedId.isEmpty()) {
+            for(const auto& grip:library)if(grip.pose.id==sharedId&&grip.pose.hand==*hand&&sameGripAnchor(grip.pose.placement,anchor))return std::optional<PartGrip>(bind(grip,sharedId,false));
+            return {};
         }
+        const auto defaultId=shared.value(QStringLiteral("default")+side);
+        for(const auto& grip:library)if(!defaultId.isEmpty()&&grip.pose.id==defaultId&&grip.pose.hand==*hand)return std::optional<PartGrip>(bind(grip,defaultId,true));
         return {};
     }
     const PartGrip* found=nullptr;
