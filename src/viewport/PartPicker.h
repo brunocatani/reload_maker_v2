@@ -77,5 +77,6 @@ namespace reloadmaker
         QPointF _hoverPoint;
         QTimer _hoverTimer;
         bool _active{ false };
+        bool _outlined{ false }; // the view shows this picker's outlines
     };
 }

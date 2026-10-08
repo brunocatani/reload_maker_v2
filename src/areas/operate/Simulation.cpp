@@ -157,10 +157,13 @@ namespace reloadmaker
             prepareSounds();
         }
         (void)applyPose(0);
-        _magazineViewport->setActive(true);
+        // Magazines shares the simulation without Operate's drag controls.
+        const bool drive = _workspace != MagazinesWorkspace;
+        _magazineViewport->setActive(drive);
         _simulationDrive->clearCurve();
-        _simulationDrive->setActive(true, true);
+        _simulationDrive->setActive(drive, drive);
         updateSimulationControls();
+        presentMagazineStep();
         ++_revision;
     }
 
@@ -305,6 +308,10 @@ namespace reloadmaker
         _magazineRail.reset();
         _ghostNatives.clear();
         refreshNativeGhost({});
+        updateMagazineAuthoring();
+        if (_workspace == MagazinesWorkspace) {
+            refreshMagazinesUi();
+        }
     }
 
     // Runs one Operate action by name (the buttons and MCP use the same names).

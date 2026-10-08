@@ -1,5 +1,6 @@
 #include "ReloadMakerController.h"
 #include "commands/CommandSupport.h"
+#include "MagazineGuide.h"
 
 #include <QComboBox>
 #include <QPushButton>
@@ -16,6 +17,18 @@ namespace reloadmaker
 
         _commands.add({ "magazine_guide", CommandAccess::Edit, CommandGate::Always,
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
+                            // edit: the panel's typed guide on Reload builder > Magazines,
+                            // applied to the prepared rail without preparing it again.
+                            if (params["operation"] == "edit") {
+                                require(_workspace == MagazinesWorkspace, "Open Reload builder > Magazines (workspace 10) first");
+                                MagazineGuide guide;
+                                QString error;
+                                auto settings = params["settings"].toObject();
+                                settings["version"] = 2;
+                                require(readMagazineGuide(settings, guide, error), error);
+                                applyMagazineGuideEdit(guide);
+                                return magazineGuideState();
+                            }
                             return configureMagazineGuide(params);
                         } });
 
@@ -32,6 +45,13 @@ namespace reloadmaker
 
         _commands.add({ "magazine_setup", CommandAccess::Edit, CommandGate::Always,
                         [this](const QJsonObject& params) -> std::optional<QJsonObject> {
+                            // role: one piece's role as the Pieces step sets it (a round
+                            // choice where the magazine owns it, else the setup).
+                            if (params["operation"] == "role") {
+                                require(_workspace == MagazinesWorkspace, "Open Reload builder > Magazines (workspace 10) first");
+                                setMagazinePieceRole(params["path"].toString(), params["role"].toString());
+                                return magazineSetupState();
+                            }
                             return configureMagazineSetup(params);
                         } });
 

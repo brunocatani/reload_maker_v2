@@ -245,6 +245,7 @@ namespace reloadmaker
                  { "gameData", _gameData },
                  { "library", _libraryMode },
                  { "workspace", _workspace },
+                 { "magazineStep", magazineStep() ? int(*magazineStep()) : -1 },
                  { "weaponIndex", _selectedWeapon },
                  { "weapons", weapons },
                  { "slots", configurationSlots },

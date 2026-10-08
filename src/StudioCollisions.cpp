@@ -19,26 +19,21 @@
 namespace reloadmaker {
 void ReloadMakerController::createCollisionsUi(){
     _collisionsDock=new QDockWidget("COLLISIONS",_window);_collisionsDock->setObjectName("CollisionsDock");_collisionsDock->setFeatures(QDockWidget::NoDockWidgetFeatures);_collisionsDock->setMinimumWidth(340);_collisionsDock->setMaximumWidth(470);
-    // Magazines (Reload builder) shows the magazine setup above the collision
-    // tools; Weapon collision shows the tools alone (showCollisionSubject).
+    // Magazines › World models (Reload builder) shows the step bar and the
+    // loose magazine captures above the collision tools; Weapon collision
+    // shows the tools alone (showCollisionSubject).
     auto* content=new QWidget;auto* contentLayout=new QVBoxLayout(content);contentLayout->setContentsMargins(0,0,0,0);contentLayout->setSpacing(0);
     _magazineSetupPanel=new QWidget(content);
     auto* setup=new QVBoxLayout(_magazineSetupPanel);setup->setContentsMargins(16,10,16,0);setup->setSpacing(8);
-    setup->addWidget(design::sectionLabel("Magazine setup",_magazineSetupPanel));
-    setup->addWidget(design::hintLabel("These open with the weapon prepared in Operate, so the magazine moves live while you edit.",_magazineSetupPanel));
-    auto* guide=new QPushButton("Insertion guide…");guide->setToolTip("The line the hand follows to insert and remove the magazine");
-    auto* models=new QPushButton("Models and payload…");models->setToolTip("Installed, loose full and loose empty magazines, rounds and follower");
-    for(auto* button:{guide,models})setup->addWidget(button);
-    connect(guide,&QPushButton::clicked,this,[this]{setWorkspace(OperateWorkspace);showMagazineGuide();});
-    connect(models,&QPushButton::clicked,this,[this]{setWorkspace(OperateWorkspace);showMagazineSetup();});
+    setup->addWidget(createMagazineStepBar(_magazineSetupPanel));
     setup->addSpacing(8);setup->addWidget(design::sectionLabel("Loose magazine capture",_magazineSetupPanel));
     setup->addWidget(design::hintLabel("Capture the loose magazine at the end of its guide, then generate its collision below.",_magazineSetupPanel));
     auto* captures=new QHBoxLayout;captures->setSpacing(6);setup->addLayout(captures);
     for(bool empty:{false,true}){auto* model=new QPushButton(empty?"Capture empty":"Capture full");captures->addWidget(model);
         model->setToolTip(empty?"Capture the loose empty magazine":"Capture the loose full magazine");
         connect(model,&QPushButton::clicked,this,[this,empty]{
-            // The capture reads Operate's prepared magazine; it returns here.
-            if(_workspace!=OperateWorkspace)setWorkspace(OperateWorkspace);
+            // The capture reads the magazine Magazines prepares; it returns here.
+            if(_workspace!=MagazinesWorkspace)setWorkspace(MagazinesWorkspace);
             try{captureMagazineWorld(empty);}catch(const std::exception& e){setWorkspace(CollisionsWorkspace);setStatus(QString::fromUtf8(e.what()),true);}
         });}
     contentLayout->addWidget(_magazineSetupPanel);

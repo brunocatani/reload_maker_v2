@@ -69,9 +69,14 @@ namespace reloadmaker
         }
     }
 
-    // Hover first, so the selection draws over it where they meet.
+    // Hover first, so the selection draws over it where they meet. While
+    // inactive the outlines belong to another tool (Magazines' pieces), so
+    // they are cleared once, when picking stops, and then left alone.
     void PartPicker::refreshHighlights()
     {
+        if (!_active && !_outlined) {
+            return;
+        }
         QVector<GLView::ReloadMakerHighlight> highlights;
         if (_active) {
             if (_hovered && _hovered != _selected) {
@@ -83,6 +88,7 @@ namespace reloadmaker
                 highlights.append({ _blocksBySlot.value(*_selected), QColor::fromRgba(design::color::selection), kSelectedOutlineWidth });
             }
         }
+        _outlined = _active;
         _view->reloadMakerSetHighlights(std::move(highlights));
     }
 

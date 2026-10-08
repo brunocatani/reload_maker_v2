@@ -31,8 +31,9 @@ namespace reloadmaker
     // magazine world object, generated with ROCK's defaults.
     QJsonObject ReloadMakerController::captureMagazineWorld(bool empty)
     {
-        require(_workspace == OperateWorkspace && _simulationActive && _simulationRig && _reloadRecipe && _magazineRail && currentWeapon(),
-                "Prepare the selected weapon in Operate first");
+        require((_workspace == OperateWorkspace || _workspace == MagazinesWorkspace) && _simulationActive && _simulationRig && _reloadRecipe && _magazineRail &&
+                    currentWeapon(),
+                "Prepare the selected weapon in Operate or Reload builder › Magazines first");
         require(_simulation.action == SimulationAction::Idle && !_packProcess, "Finish the current interaction or asset job first");
         require(_simulationError.isEmpty() && _magazineError.isEmpty(), "Resolve the current magazine simulation error first");
         const auto anchor = simulationMagazineAnchor();

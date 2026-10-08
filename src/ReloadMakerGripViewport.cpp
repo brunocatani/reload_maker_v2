@@ -65,7 +65,11 @@ namespace reloadmaker {
         }else {_gripViewport->setSimulation(false);_gripViewport->setTeaching(false);}
         if(_slotOverlay) _slotOverlay->setActive(loadoutPageActive() && _showPartLabels && !active);
         // Clicking the model selects parts on the loadout page, unless the grip tools own the viewport.
+        // The loadout picker and Magazines' pieces share the part outlines:
+        // the one leaving clears them before the other draws.
+        if(_workspace!=MagazinesWorkspace) updateMagazineAuthoring();
         if(_partPicker) _partPicker->setActive(loadoutPageActive() && !active);
+        if(_workspace==MagazinesWorkspace) updateMagazineAuthoring();
         if(_pinOverlay) _pinOverlay->setActive(loadoutPageActive() && !active);
         if(points){
             const auto g=currentGrabLocations();const int i=_grabLocationList?_selectedGrabLocation:-1,a=operatingAnchor();

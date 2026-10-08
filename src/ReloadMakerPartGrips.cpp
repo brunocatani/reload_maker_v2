@@ -34,6 +34,8 @@ namespace reloadmaker {
             layout->addWidget(sectionLabel(title,page));
             if(!hint.isEmpty())layout->addWidget(hintLabel(hint,page));
         };
+        // Shown while this page is Magazines › Hand fit.
+        _partGripMagazineSteps=createMagazineStepBar(page);_partGripMagazineSteps->hide();layout->addWidget(_partGripMagazineSteps);
         layout->addWidget(hintLabel(QStringLiteral("Select a magazine or part in the loadout, place its hand, then save. The part stays fixed while you move and rotate the hand."),page));
         _magazineFitStatus=new QLabel(page);_magazineFitStatus->setWordWrap(true);_magazineFitStatus->setObjectName("StatusCard");layout->addWidget(_magazineFitStatus);
         _editMagazineGrip=new QPushButton("Configure selected magazine",page);layout->addWidget(_editMagazineGrip);
@@ -118,18 +120,12 @@ namespace reloadmaker {
         actions->addWidget(_gripSave); actions->addWidget(_gripEnd); layout->addLayout(actions);
         connect(_useMagazineGrip,&QPushButton::clicked,this,[this]{(void)useMagazineGrabGrip();});
         _gripStatus=new QLabel(page); _gripStatus->setObjectName("Callout"); _gripStatus->setTextFormat(Qt::PlainText); _gripStatus->setWordWrap(true); layout->addWidget(_gripStatus);
-        auto* back=new QPushButton("Back to Operate",page);layout->addWidget(back);
-        connect(back,&QPushButton::clicked,this,[this]{rememberMagazineGrip();setWorkspace(OperateWorkspace);});
 
         layout->addSpacing(4);
         auto* advanced=new QWidget(page);auto* advancedLayout=new QVBoxLayout(advanced);advancedLayout->setContentsMargins(0,0,0,0);advancedLayout->setSpacing(8);
         layout->addWidget(disclosure(QStringLiteral("Other parts and saved fit history"),advanced,page));
         auto* otherPart=new QPushButton("Configure another part",advanced);advancedLayout->addWidget(otherPart);
-        connect(otherPart,&QPushButton::clicked,this,[this]{
-            rememberMagazineGrip();_editingMagazine=false;
-            if(_magazineFitPreview)stopSimulation();
-            restoreHandPosePreview();updatePartGripControls();
-        });
+        connect(otherPart,&QPushButton::clicked,this,[this]{leaveMagazineGripEditing();syncRail();});
         auto* mechanism=new QPushButton(QStringLiteral("Define or edit this part's mechanism"),advanced);
         connect(mechanism,&QPushButton::clicked,this,&ReloadMakerController::openMechanismForPart);
         advancedLayout->addWidget(sectionLabel(QStringLiteral("Reference part"),advanced));advancedLayout->addWidget(_gripReferenceCombo);

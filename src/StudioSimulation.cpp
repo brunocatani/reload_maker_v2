@@ -150,6 +150,7 @@ void flowTiles(QGridLayout* grid,std::initializer_list<QWidget*> tiles) {
 }
 
 void ReloadMakerController::updateSimulationControls() {
+    if(_workspace==MagazinesWorkspace)updateMagazineAuthoring();
     if(!_simulationStatus)return;
     _simulationDock->widget()->setEnabled(currentWeapon()!=nullptr);
     updateInteractionGripUi();

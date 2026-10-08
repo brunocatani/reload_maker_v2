@@ -101,6 +101,11 @@ QFrame#ModeSwitch { background:@panel; border:1px solid @borderStrong; border-ra
 QFrame#ModeSwitch QPushButton { background:transparent; border:0; border-radius:6px; padding:0 14px; min-height:30px; color:@textSecondary; }
 QFrame#ModeSwitch QPushButton:hover { color:@text; background:@rowHover; }
 QFrame#ModeSwitch QPushButton:checked { background:@primary; color:@onPrimary; font-weight:600; }
+QFrame#StepSwitch { background:@panel; border:1px solid @borderStrong; border-radius:8px; }
+QFrame#StepSwitch QPushButton { background:transparent; border:0; border-radius:6px; padding:0 8px; min-height:28px; color:@textSecondary; }
+QFrame#StepSwitch QPushButton:hover { color:@text; background:@rowHover; }
+QFrame#StepSwitch QPushButton:checked { background:@selected; color:@text; font-weight:600; }
+QFrame#StepSwitch QPushButton:disabled { color:@textDisabled; }
 QToolButton#MenuButton { background:transparent; border:1px solid @borderStrong; border-radius:6px; min-width:34px; min-height:34px; }
 QToolButton#MenuButton:hover { background:@rowHover; }
 QToolButton#MenuButton::menu-indicator { image:none; width:0; }

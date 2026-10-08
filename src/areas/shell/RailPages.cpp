@@ -32,6 +32,7 @@ namespace reloadmaker
             return _handEditorPage == HandEditorPage::FingerPoses ? RailPage::Poses : RailPage::Builder;
         case PhasesWorkspace:
         case CollisionsWorkspace:
+        case MagazinesWorkspace:
             return RailPage::Builder;
         default:
             return std::nullopt;
@@ -43,7 +44,7 @@ namespace reloadmaker
         if (_workspace == PhasesWorkspace) {
             return BuilderStep::Reload;
         }
-        if (_workspace == CollisionsWorkspace) {
+        if (magazineStep()) {
             return BuilderStep::Magazines;
         }
         if (_workspace != GripsWorkspace) {
@@ -114,6 +115,10 @@ namespace reloadmaker
             setWorkspace(PhasesWorkspace);
             break;
         case BuilderStep::PartGrips:
+            // Part grips is every other part; a magazine's fit is Magazines › Hand fit.
+            if (_editingMagazine) {
+                leaveMagazineGripEditing();
+            }
             handStep(HandEditorPage::PartGrip);
             break;
         case BuilderStep::Mechanisms:
@@ -123,8 +128,8 @@ namespace reloadmaker
             (void)openGrabLocations();
             break;
         case BuilderStep::Magazines:
-            setWorkspace(CollisionsWorkspace);
-            break;
+            showMagazineStep(_magazineStep);
+            return;
         }
         syncRail();
     }
@@ -166,6 +171,7 @@ namespace reloadmaker
         }
         if (_handPoseHeader) {
             const QString title = page == RailPage::Poses                          ? QStringLiteral("Capture and reuse hand poses")
+                                  : magazineStep() == MagazineStep::HandFit        ? QStringLiteral("Magazines")
                                   : _handEditorPage == HandEditorPage::PartGrip    ? QStringLiteral("Part grips")
                                   : _handEditorPage == HandEditorPage::Mechanism   ? QStringLiteral("Mechanisms")
                                                                                    : QStringLiteral("Grab points");
@@ -173,6 +179,10 @@ namespace reloadmaker
             _handPoseHeader->setTitle(title);
             _handPoseDock->setWindowTitle(title);
         }
+        if (const auto step = magazineStep()) {
+            _magazineStep = *step;
+        }
+        syncMagazineStepBars();
         // The open checklist section follows the builder step.
         refreshChecklistUi();
     }

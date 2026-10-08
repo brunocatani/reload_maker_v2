@@ -77,9 +77,21 @@ namespace reloadmaker
                             const int page = params["handsPage"].toInt(-1);
                             require(!params.contains("handsPage") || (index == GripsWorkspace && page >= 0 && page <= 3),
                                     "handsPage needs workspace 2 and a page from 0 to 3");
+                            // magazineStep picks the Magazines sub-step on workspace 10:
+                            // 0 Pieces, 1 Insertion guide (2 Hand fit, 3 World models are
+                            // workspaces 2 and 7).
+                            const int step = params["magazineStep"].toInt(-1);
+                            require(!params.contains("magazineStep") || (index == MagazinesWorkspace && (step == 0 || step == 1)),
+                                    "magazineStep needs workspace 10 and step 0 or 1");
+                            if (params.contains("magazineStep")) {
+                                _magazineStep = MagazineStep(step);
+                            }
                             setWorkspace(index);
                             if (params.contains("handsPage") && _workspace == GripsWorkspace) {
                                 setHandEditorPage(HandEditorPage(page));
+                            }
+                            if (params.contains("magazineStep")) {
+                                showMagazineStep(MagazineStep(step));
                             }
                             return std::nullopt;
                         } });

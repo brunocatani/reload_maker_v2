@@ -89,6 +89,9 @@ namespace reloadmaker
     struct PinMarker;
     class GripViewport;
     class MagazineViewport;
+    class MagazineAuthoringViewport;
+    struct GuideShape;
+    struct MagazineGuide;
     class CollisionPanel;
     namespace design { class PanelHeader; class ChecklistRow; class IconTile; class TileChoice; class ElidedLabel; }
     struct PackageLoad;
@@ -185,9 +188,11 @@ namespace reloadmaker
         // importer uses OperateWorkspace = 5). Retired ids (0 Source, 1 Preview,
         // 3 Mechanisms) are rejected; projects saved on them reopen in Operate.
         // CollisionsWorkspace is the builder's loose magazine world models;
-        // WeaponCollisionWorkspace the whole weapon and its installed parts.
-        enum Workspace : int { GripsWorkspace = 2, PhasesWorkspace = 4, OperateWorkspace = 5, SoundsWorkspace = 6, CollisionsWorkspace = 7, ScopesWorkspace = 8, WeaponCollisionWorkspace = 9 };
-        static bool simulationWorkspace(int value) { return value==OperateWorkspace||value==SoundsWorkspace; }
+        // WeaponCollisionWorkspace the whole weapon and its installed parts;
+        // MagazinesWorkspace the builder's magazine pieces and insertion guide,
+        // on Operate's simulation without its drag controls.
+        enum Workspace : int { GripsWorkspace = 2, PhasesWorkspace = 4, OperateWorkspace = 5, SoundsWorkspace = 6, CollisionsWorkspace = 7, ScopesWorkspace = 8, WeaponCollisionWorkspace = 9, MagazinesWorkspace = 10 };
+        static bool simulationWorkspace(int value) { return value==OperateWorkspace||value==SoundsWorkspace||value==MagazinesWorkspace; }
         static bool collisionWorkspace(int value) { return value == CollisionsWorkspace || value == WeaponCollisionWorkspace; }
         static constexpr int kMaximumDiagnosticLines = 3000;
         // Hands editor pages, in tab order; saved in projects as handsPage.
@@ -196,8 +201,15 @@ namespace reloadmaker
         // hand editor page (src/areas/shell/RailPages.cpp).
         enum class RailPage : int { Operate, Builder, Poses, Sounds, Scopes };
         enum class BuilderStep : int { Reload, PartGrips, Mechanisms, GrabPoints, Magazines };
+        // Reload builder › Magazines sub-steps (StudioMagazines.cpp): Pieces and
+        // Insertion guide are MagazinesWorkspace; Hand fit is the magazine's part
+        // grip editor and World models the collisions page. Also MCP's
+        // workspace magazineStep.
+        enum class MagazineStep : int { Pieces, Guide, HandFit, WorldModels };
         [[nodiscard]] std::optional<RailPage> railPage() const;
         [[nodiscard]] std::optional<BuilderStep> builderStep() const;
+        [[nodiscard]] std::optional<MagazineStep> magazineStep() const;
+        void showMagazineStep(MagazineStep step);
         void showRailPage(RailPage page);
         void showBuilderStep(BuilderStep step);
         void syncRail();
@@ -704,14 +716,12 @@ namespace reloadmaker
         void showOperatingSetup();
         QJsonObject magazineGuideState() const;
         QJsonObject configureMagazineGuide(const QJsonObject&);
-        void showMagazineGuide();
         QJsonObject magazineSetupState() const;
         QJsonObject magazineReferenceState() const;
         QJsonObject configureMagazineReference(const QJsonObject&);
         void showMagazineReference();
         bool magazineReferenceCandidate(int anchor) const;
         QJsonObject configureMagazineSetup(const QJsonObject&);
-        void showMagazineSetup();
         // Rounds hidden when the magazine is empty (src/areas/magazine/
         // MagazineRounds.cpp): per magazine record and model, the pieces whose
         // round role the author changed from the detected one, keyed by their
@@ -727,8 +737,58 @@ namespace reloadmaker
         QJsonObject magazinePresentationJson(const QJsonObject& setup) const;
         QJsonObject magazineRoundsState() const;
         QJsonObject configureMagazineRounds(const QJsonObject&);
-        void previewMagazineOutside(bool empty);
-        void showMagazineRounds();
+        // The magazine at the end of its guide, full or empty, on any
+        // simulation page.
+        void presentMagazineOutside(bool empty);
+        // Reload builder › Magazines (StudioMagazines.cpp, areas/magazine/
+        // MagazineAuthoring.cpp).
+        void createMagazinesUi();
+        QWidget* createMagazineStepBar(QWidget* parent);
+        void syncMagazineStepBars();
+        void refreshMagazinesUi();
+        void presentMagazineStep();
+        void updateMagazineAuthoring();
+        // The magazine's pieces with role, presentation, block and name.
+        QJsonArray magazinePieceRows() const;
+        // Throws when the role cannot be used; also MCP's magazine_setup role.
+        void setMagazinePieceRole(const QString& path, const QString& role);
+        void setMagazineAdvanced(const QJsonObject& changes);
+        void restoreMagazinePieces();
+        [[nodiscard]] std::optional<GuideShape> magazineGuideShape() const;
+        void editMagazineGuide(const GuideShape& shape, bool commit);
+        // A typed guide (direction in the connection's frame): applied live,
+        // or saved and prepared again when there is no rail. Also MCP's
+        // magazine_guide edit.
+        void applyMagazineGuideEdit(const MagazineGuide& guide);
+        void typeMagazineGuide();
+        void testMagazineGuide();
+        void leaveMagazineGripEditing();
+        MagazineStep _magazineStep{ MagazineStep::Pieces }; // view memory, not saved
+        bool _magazineShowsEmpty{false};
+        QString _selectedMagazinePiece;
+        QDockWidget* _magazinesDock{nullptr};
+        design::PanelHeader* _magazinesHeader{nullptr};
+        QStackedWidget* _magazinePages{nullptr};
+        QVector<QButtonGroup*> _magazineStepGroups;
+        QListWidget* _magazinePieceList{nullptr};
+        QButtonGroup* _magazinePresentation{nullptr};
+        QButtonGroup* _magazinePieceRole{nullptr};
+        QLabel* _magazinePiecesStatus{nullptr};
+        QComboBox* _magazineEmptyBody{nullptr};
+        QComboBox* _magazineMotion{nullptr};
+        QComboBox* _magazineMovement{nullptr};
+        QPushButton* _magazineRestorePieces{nullptr};
+        std::array<QDoubleSpinBox*,3> _guideDirection{};
+        QDoubleSpinBox* _guideTravel{nullptr};
+        QDoubleSpinBox* _guidePickup{nullptr};
+        QDoubleSpinBox* _guideRelease{nullptr};
+        QLabel* _guideStatus{nullptr};
+        QPushButton* _guideTest{nullptr};
+        QPushButton* _guideRestore{nullptr};
+        QWidget* _partGripMagazineSteps{nullptr};
+        MagazineAuthoringViewport* _magazineAuthoring{nullptr};
+        // The guide as a handle drag found it; a drag that ends there writes nothing.
+        QJsonObject _guideEditStart;
         // The library's ESP projects with their latest versions' weapons
         // (StudioCoverage.cpp); read again after every save, delete or export.
         QJsonObject packCoverageState(bool refresh=false);

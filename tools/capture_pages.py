@@ -12,14 +12,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from editor_session import EditorRun, command, edit, ready
 
-# (file name, workspace id, hand editor page or None)
+# (file name, workspace id, hand editor page or Magazines sub-step, or None)
 PAGES = [
     ('operate', 5, None),
     ('builder-reload', 4, None),
     ('builder-part-grips', 2, 1),
     ('builder-mechanisms', 2, 2),
     ('builder-grab-points', 2, 3),
-    ('builder-magazines', 7, None),
+    ('builder-magazines-pieces', 10, 0),
+    ('builder-magazines-guide', 10, 1),
+    ('builder-magazines-world', 7, None),
     ('poses-library', 2, 0),
     ('sounds', 6, None),
     ('scopes', 8, None),
@@ -40,7 +42,7 @@ def main():
         for name, workspace, page in PAGES:
             params = {'index': workspace}
             if page is not None:
-                params['handsPage'] = page
+                params['magazineStep' if workspace == 10 else 'handsPage'] = page
             edit('workspace', params)
             ready()
             result = command('window_capture')

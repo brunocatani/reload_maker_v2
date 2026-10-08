@@ -395,6 +395,7 @@ void ReloadMakerController::createUi() {
         createSimulationUi();
         createSoundsUi();
     createCollisionsUi();
+    createMagazinesUi();
     createScopesUi();
         createGrabLocationsUi();
 
@@ -431,7 +432,7 @@ void ReloadMakerController::createUi() {
     _soundsDock->setTitleBarWidget(new PanelHeader("Sounds", "Reload sounds", _soundsDock));
     _scopesDock->setTitleBarWidget(new PanelHeader("Scopes", "Scope profile", _scopesDock));
     _reloadGraphDock->setTitleBarWidget(new PanelHeader("When each part moves", {}, _reloadGraphDock));
-    for (auto* side : {_handPoseDock, _collisionsDock, _reloadDock, _simulationDock, _soundsDock, _scopesDock}) {
+    for (auto* side : {_handPoseDock, _collisionsDock, _magazinesDock, _reloadDock, _simulationDock, _soundsDock, _scopesDock}) {
         side->setMinimumWidth(360);
     }
 
@@ -525,7 +526,7 @@ bool ReloadMakerController::mechanismPageActive() const {
 // Part labels and model picking belong to the loadout page: outside Reload,
 // and not while a source loads.
 bool ReloadMakerController::loadoutPageActive() const {
-    return !_reloadWorkspaceActive && !_sourceLoading;
+    return !_reloadWorkspaceActive && !_sourceLoading && _workspace != MagazinesWorkspace;
 }
 
 void ReloadMakerController::setWorkspace(int workspace) {
@@ -544,8 +545,18 @@ void ReloadMakerController::setWorkspace(int workspace) {
         _operateSuspendedGrip = _partGripDraft;
         _partGripDraft.reset();
     }
+    const int previous = _workspace;
     _workspace = workspace;
     if(workspace!=GripsWorkspace)_magazineFitPreview=false;
+    // Operate and Sounds drive the weapon by hand; Magazines shares their
+    // simulation without those controls. Leaving Magazines starts Operate
+    // from Ready, not with the magazine waiting at its guide.
+    if (_simulationActive && simulationWorkspace(previous) && simulationWorkspace(workspace)) {
+        const bool drive = workspace != MagazinesWorkspace;
+        _simulationDrive->setActive(drive, drive);
+        _magazineViewport->setActive(drive);
+        if (drive && previous == MagazinesWorkspace) { _simulationTimer->stop(); _simulation.reset(); updateMagazinePose(); }
+    }
     syncRail();
     // The learned reload opens its inspector and the graph of its moving
     // parts; every other page keeps the loadout in the left panel.
@@ -555,6 +566,7 @@ void ReloadMakerController::setWorkspace(int workspace) {
     _simulationDock->setVisible(workspace == OperateWorkspace);
     _soundsDock->setVisible(workspace==SoundsWorkspace);
     _collisionsDock->setVisible(collisionWorkspace(workspace));
+    _magazinesDock->setVisible(workspace==MagazinesWorkspace);
     _scopesDock->setVisible(workspace==ScopesWorkspace);
     if(workspace==ScopesWorkspace){if(_playing)togglePlayback();_reloadPlaying=false;_reloadPreviewTimer->stop();refreshScopeTargets();}
     if(collisionWorkspace(workspace)){if(_playing)togglePlayback();_reloadPlaying=false;_reloadPreviewTimer->stop();showCollisionSubject();refreshCollisions();}
@@ -570,6 +582,8 @@ void ReloadMakerController::setWorkspace(int workspace) {
     // Operate needs the learned reload for its rig; learning no longer depends
     // on the Reload page being visible.
     if (simulationWorkspace(workspace)) { if(!_simulationActive){startReloadCapture();prepareSimulation();}refreshSoundsUi(); }
+    presentMagazineStep();
+    updateMagazineAuthoring();
     ++_revision;
 }
 

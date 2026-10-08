@@ -118,7 +118,7 @@ namespace reloadmaker
         }
         // Reuse the existing detached-magazine presentation, frozen for hand editing.
         // The magazine's pose remains the reference; gizmos never drive its geometry.
-        if (_workspace == OperateWorkspace && _simulationActive && _magazineRail) {
+        if ((_workspace == OperateWorkspace || _workspace == MagazinesWorkspace) && _simulationActive && _magazineRail) {
             _simulationTimer->stop();
             _simulation.reset();
             if (!selectSimulationClip(false, false)) {
