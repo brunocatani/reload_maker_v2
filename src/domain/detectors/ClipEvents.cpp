@@ -37,7 +37,7 @@ namespace reloadmaker
             if (sound.endsWith(QStringLiteral("magin"), Qt::CaseInsensitive) && !sound.endsWith(QStringLiteral("clothmagin"), Qt::CaseInsensitive)) {
                 return 2;
             }
-            if (sound.endsWith(QStringLiteral("drumin"), Qt::CaseInsensitive)) {
+            if (sound.endsWith(QStringLiteral("drumin"), Qt::CaseInsensitive) || sound.endsWith(QStringLiteral("magindrum"), Qt::CaseInsensitive)) {
                 return 2;
             }
             return std::nullopt;
@@ -51,7 +51,8 @@ namespace reloadmaker
             if (sound.endsWith(QStringLiteral("magout"), Qt::CaseInsensitive) && !sound.endsWith(QStringLiteral("clothmagout"), Qt::CaseInsensitive)) {
                 return 0;
             }
-            if (sound.endsWith(QStringLiteral("drumout"), Qt::CaseInsensitive)) {
+            // A drum's own removal sound: WPNG3MagOutDrum.
+            if (sound.endsWith(QStringLiteral("drumout"), Qt::CaseInsensitive) || sound.endsWith(QStringLiteral("magoutdrum"), Qt::CaseInsensitive)) {
                 return 0;
             }
             return std::nullopt;

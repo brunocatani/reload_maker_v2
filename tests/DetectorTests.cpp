@@ -64,6 +64,11 @@ namespace
         expectMagazine("Glock", sounds({ { .23f, "WPNGlock19xClothMagOut" }, { .33f, "WPNGlock19xMagOut" }, { .97f, "WPNGlock19xMagIns1" },
                                          { 1.17f, "WPNGlock19xMagIns2" }, { 1.43f, "WPNGlock19xMagIn" } }),
                        .97f, .33f, 1);
+        // g3/drummag/wpnreload.hkx event names: the drum names its removal
+        // MagOutDrum and its insertion the plain MagIn.
+        expectMagazine("G3 drum", sounds({ { .3f, "WPNG3BoltBack" }, { .9f, "WPNG3MagRelease" }, { 1.f, "WPNG3MagOutDrum" },
+                                           { 2.4f, "WPNG3MagIn" }, { 3.5f, "WPNG3BoltForward" } }),
+                       2.4f, 1.f);
         // Other events and names without a magazine ending find nothing.
         QVector<ClipEvent> unrelated{ { .5f, QStringLiteral("reloadComplete") }, { .6f, QStringLiteral("CullBone.WeaponMagazine") } };
         unrelated += sounds({ { .7f, "WPNRU556MagSlap" }, { .8f, "WPNRU556MagCatch" } });
