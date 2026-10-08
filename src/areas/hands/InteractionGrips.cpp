@@ -45,9 +45,26 @@ namespace reloadmaker
                     return id;
                 }
             }
+            // The weapon's first fingers for this group on any part model.
+            const QString group = operatingGripKey(hand, false).section('|', 0, 1);
+            const QString side = hand == PoseHand::Left ? QStringLiteral("|left") : QStringLiteral("|right");
+            QStringList keys = _savedOperatingGrips.keys();
+            keys.sort();
+            for (const auto& key : keys) {
+                if (key.startsWith(group + '|') && key.endsWith(side) && !_savedOperatingGrips.value(key).isEmpty()) {
+                    return _savedOperatingGrips.value(key);
+                }
+            }
             for (const bool model : { true, false }) {
                 if (const auto id = _siblingOperatingGrips.value(operatingGripKey(hand, model).section('|', 1)); !id.isEmpty()) {
                     return id;
+                }
+            }
+            QStringList shared = _siblingOperatingGrips.keys();
+            shared.sort();
+            for (const auto& key : shared) {
+                if (key.section('|', 0, 0) == group.section('|', 1) && key.endsWith(side)) {
+                    return _siblingOperatingGrips.value(key);
                 }
             }
             return QString();

@@ -82,6 +82,15 @@ class QLocalSocket;
 
 namespace reloadmaker
 {
+    // Where a part-scoped authoring field came from (AnchorsAndFallbacksPlan).
+    enum class PlanSource { None, Own, Combination, Anchor, Sibling };
+    struct PlanField
+    {
+        QJsonValue value;
+        PlanSource source{ PlanSource::None };
+        QString from; // the authoring record key it came from
+    };
+
     class ReloadGraph;
     class SlotOverlay;
     class PartPicker;
@@ -598,11 +607,24 @@ namespace reloadmaker
         // Projects save them under "authoringRoadmaps", the name of the retired
         // 12-step roadmap that first kept them.
         QString authoringRecordKey() const;
-        // The selected configuration's plan: its own fields, completed with
-        // the physical setups (operating, magazine guide/setup/reference) a
-        // same-ESP sibling authored for the same receiver/magazine choices.
-        // Writes always go to the weapon's own record.
+        // Authoring belongs to parts, never to receiver x magazine
+        // combinations (owner, 2026-10-08): the operating setup to the moving
+        // parts ("<weapon>/@moving:<choices>"), magazine guide, reference,
+        // presentation and collision drafts to the magazine
+        // ("<weapon>/@magazine:<record>"). Checklist confirmations stay per
+        // configuration. A field resolves from its own part, then legacy
+        // combination entries holding that part, then the weapon's anchor (the
+        // first part authored, "<weapon>/@anchors"), then any authored part,
+        // then a same-ESP sibling the same way. See
+        // Docs/reload_maker_v2/docs/AnchorsAndFallbacksPlan.md.
         [[nodiscard]] QJsonObject authoringPlan() const;
+        [[nodiscard]] PlanField authoringPlanField(const QString& field) const;
+        [[nodiscard]] QJsonObject authoringPlanSources() const;
+        [[nodiscard]] QString magazineScopeRecord() const;
+        [[nodiscard]] QString planScopeKey(const QString& field) const;
+        // Sets (or, with an undefined value, removes) one field in its part
+        // scope. The first part authored for a kind becomes its anchor.
+        void writePlanField(const QString& field, const QJsonValue& value);
         bool savedOperatingSetup(OperatingSetup& setup, QString& error) const;
         void rememberCollisionDraft();
         QString assignedTemplate() const;
@@ -1096,7 +1118,9 @@ namespace reloadmaker
         [[nodiscard]] bool grabLocationsConfigured(const OperatingGrabLocations& locations) const;
         QHash<QString,OperatingGrabLocations> _siblingGrabLocations;
         QHash<QString,QString> _siblingMagazineFits;
-        QHash<QString,QJsonObject> _siblingPlans; // by configuration choices (the key after '/')
+        QVector<QPair<QString, QJsonObject>> _siblingRoadmaps; // sibling record -> its authoringRoadmaps
+        mutable QString _operatingFallbackNote; // why an inherited operating setup was not used
+        bool _mirroringMagazineFit{ false }; // the automatic other-hand mirror is saving
         QHash<QString,QString> _siblingOperatingGrips; // operating finger keys without the weapon
         QListWidget* _grabLocationList{};
         QLineEdit* _grabLocationName{};

@@ -40,14 +40,46 @@ namespace reloadmaker
         if (own != _grabLocations.cend()) {
             return *own;
         }
-        // A same-ESP sibling's points for this very part, as this weapon's.
+        // The weapon's anchor: its first authored points for this group on
+        // the same node path (another receiver/handguard model), else for the
+        // group at all; points are part-local, so a near-identical model
+        // reuses them as they are (owner, 2026-10-08).
+        const auto inherit = [&](const OperatingGrabLocations& from) {
+            auto result = from;
+            result.weapon = g.weapon;
+            result.sourceModel = g.sourceModel;
+            result.sourcePath = g.sourcePath;
+            result.sourceName = g.sourceName;
+            return result;
+        };
+        const auto pick = [&](const QHash<QString, OperatingGrabLocations>& sets, const QString& weapon, bool samePath) -> const OperatingGrabLocations* {
+            QStringList keys = sets.keys();
+            keys.sort();
+            for (const auto& key : keys) {
+                const auto& set = sets[key];
+                if ((weapon.isEmpty() || set.weapon.compare(weapon, Qt::CaseInsensitive) == 0) && set.group == g.group && !set.points.isEmpty() &&
+                    (!samePath || set.sourcePath.compare(g.sourcePath, Qt::CaseInsensitive) == 0)) {
+                    return &set;
+                }
+            }
+            return nullptr;
+        };
+        for (const bool samePath : { true, false }) {
+            if (const auto* own = pick(_grabLocations, g.weapon, samePath)) {
+                return inherit(*own);
+            }
+        }
+        // A same-ESP sibling's points for this very part, then its anchor.
         auto sibling = g;
         sibling.weapon.clear();
         const auto shared = _siblingGrabLocations.constFind(grabLocationsKey(sibling));
         if (shared != _siblingGrabLocations.cend()) {
-            sibling = *shared;
-            sibling.weapon = g.weapon;
-            return sibling;
+            return inherit(*shared);
+        }
+        for (const bool samePath : { true, false }) {
+            if (const auto* other = pick(_siblingGrabLocations, {}, samePath)) {
+                return inherit(*other);
+            }
         }
         return g;
     }
@@ -55,12 +87,9 @@ namespace reloadmaker
     // Points of the weapon's own, or shared by a sibling for the same part.
     bool ReloadMakerController::grabLocationsConfigured(const OperatingGrabLocations& locations) const
     {
-        if (_grabLocations.contains(grabLocationsKey(locations))) {
-            return true;
-        }
-        auto sibling = locations;
-        sibling.weapon.clear();
-        return _siblingGrabLocations.contains(grabLocationsKey(sibling));
+        // Own, anchor or sibling points all count: currentGrabLocations
+        // resolves them for this part.
+        return !locations.points.isEmpty() || _grabLocations.contains(grabLocationsKey(locations));
     }
 
     // Selecting a location shows its fields and its marker.
@@ -270,7 +299,8 @@ namespace reloadmaker
     {
         const auto g = currentGrabLocations();
         const int selected = _grabLocationList ? _selectedGrabLocation : -1;
-        return { { "configured", grabLocationsConfigured(g) }, { "profile", grabLocationsJson(g) }, { "selected", selected } };
+        return { { "configured", grabLocationsConfigured(g) }, { "own", _grabLocations.contains(grabLocationsKey(g)) },
+                 { "profile", grabLocationsJson(g) }, { "selected", selected } };
     }
 
     // open, pick, save; and on the selected location (or the one named by

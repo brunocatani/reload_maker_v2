@@ -335,11 +335,8 @@ namespace reloadmaker
         presentMagazineOutside(false);
         if (commit) {
             const auto json = magazineGuideJson(guide);
-            const auto key = authoringRecordKey();
-            auto plan = _authoringRecords.value(key).toObject();
-            if (json != _guideEditStart && plan["magazineGuide"].toObject() != json) {
-                plan["magazineGuide"] = json;
-                _authoringRecords[key] = plan;
+            if (json != _guideEditStart && authoringPlanField(QStringLiteral("magazineGuide")).value.toObject() != json) {
+                writePlanField(QStringLiteral("magazineGuide"), json);
                 noteDocumentChange(QStringLiteral("magazine guide"));
             }
             _guideEditStart = {};

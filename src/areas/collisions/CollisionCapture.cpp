@@ -305,12 +305,11 @@ namespace reloadmaker
                        return source.key == hull.source && source.worldIncluded;
                    });
         });
-        auto record = _authoringRecords.value(key).toObject();
-        auto drafts = record.value("collisionDrafts").toObject();
+        // Drafts belong to the magazine, like its world models.
+        auto drafts = authoringPlanField(QStringLiteral("collisionDrafts")).value.toObject();
         drafts[presentation] = QJsonObject{
             { "usable", usable },
             { "edit", QUuid::createUuid().toString(QUuid::WithoutBraces).remove('-') } };
-        record["collisionDrafts"] = drafts;
-        _authoringRecords[key] = record;
+        writePlanField(QStringLiteral("collisionDrafts"), drafts);
     }
 }

@@ -7,6 +7,7 @@
 #include "commands/CommandSupport.h"
 
 #include <algorithm>
+#include <optional>
 
 namespace reloadmaker
 {
@@ -43,20 +44,269 @@ namespace reloadmaker
     // ("none" for an empty slot). Every other part (barrel, grip, sights,
     // underbarrel, muzzle) leaves the key alone (owner, 2026-10-05). Before
     // Operate has recorded the parts, the weapon has one record, "<weapon>/weapon".
+    namespace
+    {
+        bool magazineField(const QString& field)
+        {
+            return field == QLatin1String("magazineGuide") || field == QLatin1String("magazineReference") ||
+                   field == QLatin1String("magazineSetup") || field == QLatin1String("collisionDrafts");
+        }
+
+        bool partField(const QString& field)
+        {
+            return magazineField(field) || field == QLatin1String("operating");
+        }
+
+        // "role=record;role=record" of a legacy combination key.
+        QStringList comboChoices(const QString& suffix)
+        {
+            QStringList values;
+            for (const auto& part : suffix.split(';')) {
+                if (part.contains('=')) {
+                    values.append(part.section('=', 1).toLower());
+                }
+            }
+            return values;
+        }
+
+        // One field from one weapon's roadmaps, along the part chain.
+        PlanField resolveIn(const QJsonObject& roadmaps, const QString& weapon, const QString& field,
+                                                   const QString& magazine, const QStringList& moving, const QString& combo, bool own)
+        {
+            using Source = PlanSource;
+            const bool forMagazine = magazineField(field);
+            const QString prefix = weapon + '/';
+            const QString scope = forMagazine ? prefix + "@magazine:" + magazine : prefix + "@moving:" + moving.join(';');
+            const auto found = [&](const QString& key, Source source) -> std::optional<PlanField> {
+                const auto plan = roadmaps.value(key).toObject();
+                if (!plan.contains(field)) {
+                    return std::nullopt;
+                }
+                return PlanField{ plan[field], source, key };
+            };
+            const auto first = own ? Source::Own : Source::Sibling;
+            if ((forMagazine && !magazine.isEmpty()) || !forMagazine) {
+                if (auto f = found(scope, first)) {
+                    return *f;
+                }
+            }
+            if (!combo.isEmpty()) {
+                if (auto f = found(prefix + combo, own ? Source::Combination : Source::Sibling)) {
+                    return *f;
+                }
+            }
+            // Legacy combinations that hold this part.
+            QStringList keys = roadmaps.keys();
+            keys.sort();
+            for (const auto& key : keys) {
+                const auto suffix = key.mid(prefix.size());
+                if (!key.startsWith(prefix) || suffix.startsWith('@') || !suffix.contains('=')) {
+                    continue;
+                }
+                const auto values = comboChoices(suffix);
+                const bool holds = forMagazine ? (!magazine.isEmpty() && values.contains(magazine))
+                                               : std::all_of(moving.cbegin(), moving.cend(), [&](const auto& v) { return values.contains(v); });
+                if (holds) {
+                    if (auto f = found(key, own ? Source::Combination : Source::Sibling)) {
+                        return *f;
+                    }
+                }
+            }
+            // Reference, presentation and collision drafts name nodes inside
+            // one magazine model: they never cross to another magazine.
+            if (field != QLatin1String("magazineGuide") && forMagazine) {
+                return {};
+            }
+            // The weapon's anchor, else the first authored part of the kind.
+            const auto anchors = roadmaps.value(prefix + "@anchors").toObject();
+            const auto anchor = anchors.value(forMagazine ? "magazineScope" : "movingScope").toString();
+            if (!anchor.isEmpty()) {
+                if (auto f = found(anchor, own ? Source::Anchor : Source::Sibling)) {
+                    return *f;
+                }
+            }
+            for (const auto& key : keys) {
+                const auto suffix = key.mid(prefix.size());
+                if (key.startsWith(prefix) && (suffix.startsWith(forMagazine ? "@magazine:" : "@moving:") || (!suffix.startsWith('@') && suffix.contains('=')))) {
+                    if (auto f = found(key, own ? Source::Anchor : Source::Sibling)) {
+                        return *f;
+                    }
+                }
+            }
+            return {};
+        }
+
+        QString sourceName(PlanSource source)
+        {
+            using Source = PlanSource;
+            switch (source) {
+            case Source::Own: return QStringLiteral("own");
+            case Source::Combination: return QStringLiteral("combination");
+            case Source::Anchor: return QStringLiteral("anchor");
+            case Source::Sibling: return QStringLiteral("sibling");
+            case Source::None: break;
+            }
+            return QStringLiteral("none");
+        }
+    }
+
+    // The magazine this configuration loads, read from the rig's magazine
+    // track or the learned reload (never from simulationMagazineAnchor, which
+    // itself reads the plan), else the recorded magazine axis.
+    QString ReloadMakerController::magazineScopeRecord() const
+    {
+        if (_reloadRecipe && _simulationRig && _simulationRig->magazine >= 0 && _simulationRig->magazine < _reloadRecipe->tracks.size()) {
+            const auto owner = _reloadRecipe->tracks[_simulationRig->magazine].anchor.ownerRecord;
+            if (!owner.isEmpty()) {
+                return owner.toLower();
+            }
+        }
+        if (_reloadRecipe) {
+            QString owner;
+            for (const auto& track : _reloadRecipe->tracks) {
+                if (track.anchor.anchorName.compare("WeaponMagazine", Qt::CaseInsensitive) == 0 && !track.anchor.ownerRecord.isEmpty()) {
+                    if (!owner.isEmpty() && owner.compare(track.anchor.ownerRecord, Qt::CaseInsensitive) != 0) {
+                        owner.clear();
+                        break;
+                    }
+                    owner = track.anchor.ownerRecord;
+                }
+            }
+            if (!owner.isEmpty()) {
+                return owner.toLower();
+            }
+        }
+        const auto key = authoringRecordKey();
+        for (const auto& part : key.section('/', 1).split(';')) {
+            if (part.startsWith(QLatin1String("magazine="))) {
+                return part.section('=', 1).toLower();
+            }
+        }
+        return {};
+    }
+
+    QString ReloadMakerController::planScopeKey(const QString& field) const
+    {
+        const auto key = authoringRecordKey();
+        if (key.isEmpty() || !partField(field)) {
+            return key;
+        }
+        const auto weapon = key.section('/', 0, 0);
+        if (magazineField(field)) {
+            const auto magazine = magazineScopeRecord();
+            return magazine.isEmpty() ? key : weapon + "/@magazine:" + magazine;
+        }
+        const auto magazine = magazineScopeRecord();
+        QStringList moving;
+        for (const auto& value : comboChoices(key.section('/', 1))) {
+            if (value != magazine) {
+                moving.append(value);
+            }
+        }
+        return weapon + "/@moving:" + (moving.isEmpty() ? QStringLiteral("weapon") : moving.join(';'));
+    }
+
+    PlanField ReloadMakerController::authoringPlanField(const QString& field) const
+    {
+        const auto key = authoringRecordKey();
+        if (key.isEmpty()) {
+            return {};
+        }
+        if (!partField(field)) {
+            const auto plan = _authoringRecords.value(key).toObject();
+            return plan.contains(field) ? PlanField{ plan[field], PlanSource::Own, key } : PlanField{};
+        }
+        const auto weapon = key.section('/', 0, 0);
+        const auto combo = key.section('/', 1);
+        const auto magazine = magazineScopeRecord();
+        QStringList moving;
+        for (const auto& value : comboChoices(combo)) {
+            if (value != magazine) {
+                moving.append(value);
+            }
+        }
+        if (moving.isEmpty()) {
+            moving.append(QStringLiteral("weapon"));
+        }
+        if (auto own = resolveIn(_authoringRecords, weapon, field, magazine, moving, combo, true); own.source != PlanSource::None) {
+            return own;
+        }
+        for (const auto& [record, roadmaps] : _siblingRoadmaps) {
+            if (auto shared = resolveIn(roadmaps, record, field, magazine, moving, combo, false); shared.source != PlanSource::None) {
+                return shared;
+            }
+        }
+        return {};
+    }
+
+    // The configuration's resolved plan: checklist confirmations of this
+    // configuration and every part field along its chain.
     QJsonObject ReloadMakerController::authoringPlan() const
     {
         const auto key = authoringRecordKey();
-        auto plan = _authoringRecords.value(key).toObject();
-        const auto shared = _siblingPlans.constFind(key.section('/', 1));
-        if (key.isEmpty() || shared == _siblingPlans.cend()) {
-            return plan;
+        if (key.isEmpty()) {
+            return {};
         }
-        for (auto it = shared->begin(); it != shared->end(); ++it) {
-            if (!plan.contains(it.key())) {
+        QJsonObject plan;
+        const auto own = _authoringRecords.value(key).toObject();
+        for (auto it = own.begin(); it != own.end(); ++it) {
+            if (!partField(it.key())) {
                 plan.insert(it.key(), it.value());
             }
         }
+        for (const auto* field : { "operating", "magazineGuide", "magazineReference", "magazineSetup", "collisionDrafts" }) {
+            const auto resolved = authoringPlanField(QLatin1String(field));
+            if (resolved.source != PlanSource::None) {
+                plan.insert(QLatin1String(field), resolved.value);
+            }
+        }
         return plan;
+    }
+
+    // Where each part field comes from, for the UI and MCP state.
+    QJsonObject ReloadMakerController::authoringPlanSources() const
+    {
+        QJsonObject sources;
+        for (const auto* field : { "operating", "magazineGuide", "magazineReference", "magazineSetup", "collisionDrafts" }) {
+            const auto resolved = authoringPlanField(QLatin1String(field));
+            sources.insert(QLatin1String(field), QJsonObject{ { "source", sourceName(resolved.source) }, { "from", resolved.from } });
+        }
+        return sources;
+    }
+
+    void ReloadMakerController::writePlanField(const QString& field, const QJsonValue& value)
+    {
+        const auto scope = planScopeKey(field);
+        if (scope.isEmpty()) {
+            return;
+        }
+        auto plan = _authoringRecords.value(scope).toObject();
+        if (value.isUndefined()) {
+            plan.remove(field);
+            // A reset also clears the legacy entry of this exact configuration.
+            const auto combo = authoringRecordKey();
+            if (combo != scope && _authoringRecords.contains(combo)) {
+                auto legacy = _authoringRecords.value(combo).toObject();
+                legacy.remove(field);
+                _authoringRecords[combo] = legacy;
+            }
+        } else {
+            plan[field] = value;
+            if (partField(field)) {
+                const auto anchorsKey = scope.section('/', 0, 0) + "/@anchors";
+                auto anchors = _authoringRecords.value(anchorsKey).toObject();
+                const auto kind = magazineField(field) ? QStringLiteral("magazineScope") : QStringLiteral("movingScope");
+                if (!anchors.contains(kind)) {
+                    anchors[kind] = scope;
+                    _authoringRecords[anchorsKey] = anchors;
+                }
+            }
+        }
+        if (plan.isEmpty()) {
+            _authoringRecords.remove(scope);
+        } else {
+            _authoringRecords[scope] = plan;
+        }
     }
 
     QString ReloadMakerController::authoringRecordKey() const
@@ -189,7 +439,7 @@ namespace reloadmaker
         QStringList previous;
         for (auto it = _authoringRecords.constBegin(); it != _authoringRecords.constEnd(); ++it) {
             const auto suffix = it.key().mid(prefix.size());
-            if (!it.key().startsWith(prefix) || (suffix != QLatin1String(kWholeWeapon) && !suffix.contains('='))) {
+            if (!it.key().startsWith(prefix) || suffix.startsWith('@') || (suffix != QLatin1String(kWholeWeapon) && !suffix.contains('='))) {
                 continue;
             }
             QHash<QString, QString> named;

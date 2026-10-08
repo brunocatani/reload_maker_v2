@@ -253,7 +253,7 @@ namespace reloadmaker
     {
         _siblingGrabLocations.clear();
         _siblingMagazineFits.clear();
-        _siblingPlans.clear();
+        _siblingRoadmaps.clear();
         _siblingOperatingGrips.clear();
         if (!_esp || !currentWeapon()) {
             return;
@@ -297,18 +297,15 @@ namespace reloadmaker
                     _siblingGrabLocations.insert(key, grabs);
                 }
             }
+            QJsonObject roadmaps;
             const auto plans = source["authoringRoadmaps"].toObject();
             for (auto it = plans.begin(); it != plans.end(); ++it) {
-                if (it.key().section('/', 0, 0) != record) {
-                    continue;
+                if (it.key().section('/', 0, 0) == record) {
+                    roadmaps.insert(it.key(), it.value());
                 }
-                auto& shared = _siblingPlans[it.key().section('/', 1)];
-                const auto plan = it.value().toObject();
-                for (const auto* field : { "operating", "magazineGuide", "magazineSetup", "magazineReference" }) {
-                    if (plan.contains(QLatin1String(field)) && !shared.contains(QLatin1String(field))) {
-                        shared.insert(QLatin1String(field), plan[QLatin1String(field)]);
-                    }
-                }
+            }
+            if (!roadmaps.isEmpty()) {
+                _siblingRoadmaps.append({ record, roadmaps });
             }
             const auto fingers = source["operatingGrips"].toObject();
             for (auto it = fingers.begin(); it != fingers.end(); ++it) {

@@ -226,14 +226,23 @@ namespace reloadmaker
         for (const auto& m : model.mechanisms) {
             const QString prefix = "action." + m.id;
             if (m.driver == MechanismDriver::Hand) {
-                o[prefix + ".part"] = found(label(r.slide), followers.isEmpty() ? QStringLiteral("No followers.") : QStringLiteral("Followers: ") + followers.join(", "));
+                // Say where the setup comes from: this part, or the anchor
+                // (owner, 2026-10-08) - author this part only if it looks wrong.
+                const auto setup = authoringPlanField(QStringLiteral("operating"));
+                const QString origin = setup.source == PlanSource::Anchor ? QStringLiteral(" Anchor setup reused from ") + setup.from.section('/', 1) + '.'
+                                     : setup.source == PlanSource::Sibling ? QStringLiteral(" Setup reused from sibling weapon ") + setup.from.section('/', 0, 0) + '.'
+                                     : !_operatingFallbackNote.isEmpty() ? ' ' + _operatingFallbackNote
+                                                                          : QString();
+                o[prefix + ".part"] = found(label(r.slide), (followers.isEmpty() ? QStringLiteral("No followers.") : QStringLiteral("Followers: ") + followers.join(", ")) + origin);
                 o[prefix + ".motion"] = found(QStringLiteral("Open at frame %1 · closed at frame %2").arg(r.openFrame).arg(r.closedFrame),
                                               r.mechanicalSource["animation"].toString());
                 QStringList names;
                 for (const auto& point : grabs.points) {
                     names << point.name;
                 }
-                o[prefix + ".grab"] = !names.isEmpty() ? found(QStringLiteral("%1 point(s)").arg(names.size()), names.join(", "))
+                const bool ownPoints = _grabLocations.contains(grabLocationsKey(grabs));
+                o[prefix + ".grab"] = !names.isEmpty() ? found(QStringLiteral("%1 point(s)").arg(names.size()),
+                                                               names.join(", ") + (ownPoints ? QString() : QStringLiteral(" · reused from the anchor part")))
                                       : pistol ? found(QStringLiteral("Whole slide"), QStringLiteral("Pistol slides keep the default grab when no point is picked."))
                                                : missing(QStringLiteral("Pick where a hand may grab it in Grab points."));
             } else {
@@ -401,7 +410,7 @@ namespace reloadmaker
             presets.append(QJsonObject{ { "id", preset.id }, { "label", preset.label }, { "category", preset.category } });
         }
         return { { "preset", view.preset ? view.preset->id : QString() }, { "presetLabel", view.preset ? view.preset->label : QString() },
-                 { "presetAssigned", !assignedTemplate().isEmpty() }, { "presets", presets }, { "authoringKey", authoringRecordKey() },
+                 { "presetAssigned", !assignedTemplate().isEmpty() }, { "planSources", authoringPlanSources() }, { "presets", presets }, { "authoringKey", authoringRecordKey() },
                  { "evaluated", view.evaluated }, { "problem", view.problem }, { "items", items },
                  { "summary", QJsonObject{ { "total", s.total }, { "done", s.done }, { "mandatory", s.mandatory }, { "mandatoryDone", s.mandatoryDone },
                                            { "missing", s.missing }, { "notChecked", s.notChecked }, { "started", s.started }, { "complete", s.complete },

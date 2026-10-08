@@ -11,9 +11,11 @@ QString handAssignmentKey(const QString& key,PoseHand hand);
 bool magazineGrabSupported(const HandPosePlacement& anchor);
 // Explicit magazine fits win over a weapon default. Defaults are instantiated
 // against the actual magazine identity; they never change the magazine frame.
-// shared: fits of same-ESP siblings by lower-case magazine|hand (same frame
-// required) and their weapon defaults by default|hand, used only when the
-// weapon has neither its own fit nor its own default.
+// Resolution (owner, 2026-10-08: fits are optional refinements): this
+// magazine's own fit, the weapon default, else the weapon's first fit for the
+// hand on any magazine (rebound to this magazine), then `shared` - fits of
+// same-ESP siblings by lower-case magazine|hand (same frame required) and
+// their defaults by default|hand.
 std::optional<PartGrip> magazineGripFor(const QString& weapon,const HandPosePlacement& anchor,
     const QVector<PartGrip>& library,const QHash<QString,QString>& assignments,
     const QHash<QString,QString>& defaults,QString& error,std::optional<PoseHand> hand={},

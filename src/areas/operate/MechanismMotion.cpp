@@ -24,18 +24,33 @@ namespace reloadmaker
     // A saved operating setup decides the rig; without one the source reload does.
     bool ReloadMakerController::buildCurrentSimulationRig(SimulationRig& rig, QString& error)
     {
+        _operatingFallbackNote.clear();
         if (!_assignedMechanism) {
             error = "Confirm this weapon's behavior preset in the Reload checklist first.";
             return false;
         }
         OperatingSetup setup;
-        const bool authored = authoringPlan().contains("operating");
+        const auto field = authoringPlanField(QStringLiteral("operating"));
+        bool authored = field.source != PlanSource::None;
         if (authored) {
-            if (!savedOperatingSetup(setup, error) || !buildConfiguredSimulationRig(setup, rig, error)) {
+            QString inherited;
+            if (!savedOperatingSetup(setup, inherited) || !buildConfiguredSimulationRig(setup, rig, inherited)) {
+                // The part's own setup must work; an anchor or sibling setup
+                // that does not fit this reload falls back to the source rig.
+                if (field.source == PlanSource::Own || field.source == PlanSource::Combination) {
+                    error = inherited;
+                    return false;
+                }
+                _operatingFallbackNote = "The anchor setup (" + field.from + ") does not fit this reload (" + inherited + "); the preset's source rig is used.";
+                authored = false;
+                rig = {};
+                setup = {};
+            }
+        }
+        if (!authored) {
+            if (!buildSourceSimulationRig(rig, error)) {
                 return false;
             }
-        } else if (!buildSourceSimulationRig(rig, error)) {
-            return false;
         }
         // Explicit per-configuration fire choices override the family default.
         // Replaying the measured stroke never substitutes a generic distance.

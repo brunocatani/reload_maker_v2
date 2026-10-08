@@ -76,10 +76,9 @@ namespace reloadmaker
         if (!_reloadRecipe || magazineSettingsBusy()) {
             fail("Wait for the magazine's current source capture");
         }
-        const auto key = authoringRecordKey();
-        auto plan = _authoringRecords.value(key).toObject();
+        QJsonValue next;
         if (request["operation"] == "reset") {
-            plan.remove("magazineGuide");
+            next = QJsonValue(QJsonValue::Undefined);
         } else if (request["operation"] == "save") {
             MagazineGuide guide;
             QString error;
@@ -96,12 +95,12 @@ namespace reloadmaker
                     fail(error);
                 }
             }
-            plan["magazineGuide"] = magazineGuideJson(guide);
+            next = magazineGuideJson(guide);
         } else {
             fail("Choose save or reset for the magazine guide");
         }
         stopSimulation();
-        _authoringRecords[key] = plan;
+        writePlanField(QStringLiteral("magazineGuide"), next);
         noteDocumentChange(QStringLiteral("magazine guide"));
         prepareSimulation();
         return magazineGuideState();
@@ -184,10 +183,9 @@ namespace reloadmaker
     QJsonObject ReloadMakerController::configureMagazineReference(const QJsonObject& request)
     {
         (void)magazineReferenceState();
-        const auto key = authoringRecordKey();
-        auto plan = _authoringRecords.value(key).toObject();
+        QJsonValue next;
         if (request["operation"] == "reset") {
-            plan.remove("magazineReference");
+            next = QJsonValue(QJsonValue::Undefined);
         } else if (request["operation"] == "save") {
             MagazineReference reference;
             QString error;
@@ -208,12 +206,12 @@ namespace reloadmaker
             if (found < 0) {
                 fail("The selected magazine reference is missing");
             }
-            plan["magazineReference"] = magazineReferenceJson(reference);
+            next = magazineReferenceJson(reference);
         } else {
             fail("Choose save or reset for magazine references");
         }
         stopSimulation();
-        _authoringRecords[key] = plan;
+        writePlanField(QStringLiteral("magazineReference"), next);
         prepareSimulation();
         noteDocumentChange(QStringLiteral("magazine reference"));
         return magazineReferenceState();
@@ -305,11 +303,12 @@ namespace reloadmaker
         if (!_reloadRecipe || !_simulationRig || magazineSettingsBusy()) {
             fail("Wait for the native magazine source");
         }
-        const auto key = authoringRecordKey();
-        const auto previous = _authoringRecords.value(key);
-        auto plan = previous.toObject();
+        const auto scope = planScopeKey(QStringLiteral("magazineSetup"));
+        const auto previous = _authoringRecords.value(scope);
+        const auto previousAnchors = _authoringRecords.value(scope.section('/', 0, 0) + "/@anchors");
+        QJsonValue next;
         if (request["operation"] == "reset") {
-            plan.remove("magazineSetup");
+            next = QJsonValue(QJsonValue::Undefined);
         } else if (request["operation"] == "save") {
             MagazineSetup value;
             QString error;
@@ -320,20 +319,26 @@ namespace reloadmaker
             checkMagazineSetup(value);
             value.recipeId = _reloadRecipe->id;
             value.trackAnchors = recipeTrackAnchors(*_reloadRecipe);
-            plan["magazineSetup"] = magazineSetupJson(value);
+            next = magazineSetupJson(value);
         } else {
             fail("Choose save or reset for magazine presentation");
         }
         stopSimulation();
-        _authoringRecords[key] = plan;
+        writePlanField(QStringLiteral("magazineSetup"), next);
         prepareSimulation();
         if (!_magazineError.isEmpty() || !_simulationError.isEmpty()) {
             const auto failure = _magazineError.isEmpty() ? _simulationError : _magazineError;
             stopSimulation();
+            const auto anchorsKey = scope.section('/', 0, 0) + "/@anchors";
             if (previous.isUndefined()) {
-                _authoringRecords.remove(key);
+                _authoringRecords.remove(scope);
             } else {
-                _authoringRecords[key] = previous;
+                _authoringRecords[scope] = previous;
+            }
+            if (previousAnchors.isUndefined()) {
+                _authoringRecords.remove(anchorsKey);
+            } else {
+                _authoringRecords[anchorsKey] = previousAnchors;
             }
             prepareSimulation();
             fail(failure);

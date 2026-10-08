@@ -3,6 +3,7 @@
 // weapon's default; editing keeps unsaved fits per magazine and hand, and
 // saving assigns a new library snapshot and saves the project.
 #include "ReloadMakerController.h"
+#include <algorithm>
 #include "MagazineViewport.h"
 #include "ReloadBundle.h"
 #include "areas/loadout/SceneTree.h"
@@ -296,7 +297,17 @@ namespace reloadmaker
             values[handAssignmentKey(base, grip.pose.hand)] = grip.pose.id;
         };
         assign(_magazineGrabGrips, magazineGrabKey(grip.weaponRecord, grip.pose.placement.ownerRecord));
-        if (allMagazines) {
+        // The first fit placed for a hand is the weapon's fallback for every
+        // magazine (owner, 2026-10-08); later fits refine single magazines.
+        const auto hasDefault = [&](PoseHand hand) {
+            if (_magazineGrabDefaults.contains(handAssignmentKey(grip.weaponRecord.toLower(), hand))) {
+                return true;
+            }
+            const auto legacy = _magazineGrabDefaults.value(grip.weaponRecord.toLower());
+            return std::any_of(_partGrips.cbegin(), _partGrips.cend(), [&](const auto& g) { return g.pose.id == legacy && g.pose.hand == hand; });
+        };
+        const bool firstForHand = !hasDefault(grip.pose.hand);
+        if (allMagazines || firstForHand) {
             assign(_magazineGrabDefaults, grip.weaponRecord.toLower());
         }
         if (sameGripAnchor(_partGripDraft->pose.placement, grip.pose.placement)) {
@@ -310,6 +321,19 @@ namespace reloadmaker
         refreshPartGripLibrary();
         resolveMagazineGrabGrip();
         noteDocumentChange(QStringLiteral("magazine fit"));
+        // The other hand starts as this fit's mirror when it has nothing yet.
+        const PoseHand other = grip.pose.hand == PoseHand::Left ? PoseHand::Right : PoseHand::Left;
+        if (!_mirroringMagazineFit && magazineHandAllowed(other) && !hasDefault(other)) {
+            _mirroringMagazineFit = true;
+            const auto hand = _interactionHand;
+            const bool mirrored = mirrorMagazineGrip();
+            _mirroringMagazineFit = false;
+            _interactionHand = hand;
+            if (!mirrored) {
+                setStatus("Saved; the other hand could not be mirrored automatically. Fit it in Part grips.", true);
+            }
+            resolveMagazineGrabGrip();
+        }
         updatePartGripControls();
         setStatus(allMagazines ? "Weapon default set. Other custom magazine fits are preserved."
                                : "Magazine fit replaced. Grab Magazine now uses this fit.");

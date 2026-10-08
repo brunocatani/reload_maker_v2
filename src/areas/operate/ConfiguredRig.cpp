@@ -320,6 +320,8 @@ namespace reloadmaker
         return {
             { "settings", operatingSetupJson(setup) },
             { "saved", saved },
+            { "source", authoringPlanSources()["operating"] },
+            { "anchorNote", _operatingFallbackNote },
             { "tracks", tracks },
             { "movements", movements },
             { "clips", clips },
@@ -339,9 +341,9 @@ namespace reloadmaker
         if (!_reloadRecipe || _loadThread || _reloadCapturing || _reloadCaptureQueued || _rebuildTimer->isActive() || key.isEmpty()) {
             throw std::runtime_error("Wait for the current source capture");
         }
-        auto plan = _authoringRecords.value(key).toObject();
+        QJsonValue next;
         if (request["operation"] == "reset") {
-            plan.remove("operating");
+            next = QJsonValue(QJsonValue::Undefined);
         } else if (request["operation"] == "save") {
             OperatingSetup setup;
             QString error;
@@ -351,12 +353,12 @@ namespace reloadmaker
             }
             setup.recipeId = _reloadRecipe->id;
             setup.trackAnchors = recipeTrackAnchors(*_reloadRecipe);
-            plan["operating"] = operatingSetupJson(setup);
+            next = operatingSetupJson(setup);
         } else {
             throw std::runtime_error("Choose save or reset for the operating setup");
         }
         stopSimulation();
-        _authoringRecords[key] = plan;
+        writePlanField(QStringLiteral("operating"), next);
         _simulationRig.reset();
         noteDocumentChange(QStringLiteral("operating setup"));
         prepareSimulation();

@@ -108,7 +108,12 @@ namespace {
         auto drum=grip.pose.placement;drum.ownerModel="Weapons/Glock19x/Attachments/Glock19x_Mag_50RND.nif";
         check(magazineGrabSupported(drum),"Drum authoring was excluded");
         drum.ownerRecord="Glock19x.esp:002e6c";
-        check(!magazineGripFor(grip.weaponRecord,drum,{grip},bindings,{},error),"Unconfigured drum inherited an unrelated custom fit");
+        // A weapon's first fit for a hand is its fallback on every magazine
+        // (owner, 2026-10-08): the unconfigured drum uses it, rebound.
+        const auto firstFit=magazineGripFor(grip.weaponRecord,drum,{grip},bindings,{},error,grip.pose.hand);
+        check(firstFit&&sameGripAnchor(firstFit->pose.placement,drum)&&reloadPoseDistance(firstFit->pose.placement.handInAnchor,grip.pose.placement.handInAnchor)<.0001f,
+              "The weapon's first fit did not serve an unconfigured magazine");
+        check(!magazineGripFor(grip.weaponRecord,drum,{grip},bindings,{},error,grip.pose.hand==PoseHand::Left?PoseHand::Right:PoseHand::Left),"First fit served the other hand");
         const QHash<QString,QString> defaults{{grip.weaponRecord.toLower(),grip.pose.id}};
         const auto inherited=magazineGripFor(grip.weaponRecord,drum,{grip},bindings,defaults,error);
         check(inherited.has_value()&&sameGripAnchor(inherited->pose.placement,drum),"Default did not bind the concrete magazine");

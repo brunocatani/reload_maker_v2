@@ -28,7 +28,17 @@ std::optional<PartGrip> magazineGripFor(const QString& weapon,const HandPosePlac
     };
     const auto customId=forHand(assignments,key);
     const bool custom=!customId.isEmpty();
-    const auto id=custom?customId:forHand(defaults,weapon.toLower());
+    auto id=custom?customId:forHand(defaults,weapon.toLower());
+    if(id.isEmpty()&&hand) {
+        // No default recorded (older authoring): the weapon's first fit for
+        // this hand on any magazine is its fallback, rebound like a default.
+        QStringList keys=assignments.keys();keys.sort();
+        const QString prefix=weapon.toLower()+"|",suffix=*hand==PoseHand::Left?"|left":"|right";
+        for(const auto& k:keys)if(k.startsWith(prefix)&&(k.endsWith(suffix)||(!k.endsWith("|left")&&!k.endsWith("|right")))){
+            const auto candidate=assignments.value(k);
+            if(std::any_of(library.cbegin(),library.cend(),[&](const PartGrip& g){return g.pose.id==candidate&&g.pose.hand==*hand&&g.weaponRecord.compare(weapon,Qt::CaseInsensitive)==0;})){id=candidate;break;}
+        }
+    }
     if(id.isEmpty()) {
         // A sibling's fit of this magazine for the same frame and hand, else
         // the sibling's weapon default; either is bound to this weapon.
