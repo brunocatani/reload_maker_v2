@@ -267,7 +267,6 @@ namespace reloadmaker
             const QSignalBlocker block(_loopCheck);
             _loopCheck->setChecked(loop);
         }
-        noteDocumentChange("loop playback");
     }
 
     // Clip length plus the approximate exit blend when transitions are shown.

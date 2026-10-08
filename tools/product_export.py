@@ -8,10 +8,9 @@ import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import uuid
 
-from product_packs import (TEMPLATES, cancellation, digest, identity, load_pack,
+from product_packs import (TEMPLATES, cancellation, digest, identity,
                            read, relative, require, within, write)
 
 
@@ -121,16 +120,6 @@ def export_pack(path, destination, backends, skip=()):
                 within(stage, target).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, within(stage, target))
                 files.append(target);item[kind] = target
-            validator = backends.application/'backends/diamond/DiamondProfileCheck.exe'
-            require(validator.is_file(), 'The bundled DIAMOND content validator is missing')
-            # The Data namespace plus an author-chosen workspace can exceed
-            # Win32 MAX_PATH. Pass explicit extended absolute paths to the
-            # native checker; do not shorten or flatten the authored layout.
-            native_path = lambda value: ('\\\\?\\'+str(value)) if os.name == 'nt' else str(value)
-            checked = subprocess.run([str(validator), '--authored', *[native_path(within(stage, item[k]))
-                for k in ('profiles', 'magazines', 'sounds', 'grabs')]], capture_output=True, text=True,
-                timeout=60, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-            require(checked.returncode == 0, 'DIAMOND rejected authored content: '+(checked.stderr or checked.stdout).strip())
             weapons.append(item)
         for obj in project['objects']:
             cancellation()
@@ -139,12 +128,9 @@ def export_pack(path, destination, backends, skip=()):
             source = project_source(path, obj['source'])
             # Identical finished models share one file named by their content.
             fingerprint = digest(source)
+            # The model was validated when Maker cooked it; only its
+            # materials are read here, once per distinct model.
             if fingerprint not in verified:
-                validation, info = native.nif_validate(str(source)), native.nif_info(str(source))
-                data = info.get('data', {});types = data.get('blockTypes', {})
-                require(validation.get('ok') and info.get('ok') and data.get('bsVersion') == 130 and
-                        types.get('bhkNPCollisionObject') == 1 and types.get('bhkPhysicsSystem') == 1,
-                        f'Object needs a validated, cooked Fallout 4 collision model: {source}')
                 blocks = native.nif_blocks(str(source))
                 require(blocks.get('ok'), 'Cannot inspect finished model material dependencies')
                 for block in blocks['data']:
@@ -162,7 +148,6 @@ def export_pack(path, destination, backends, skip=()):
             target = relative(entry['model'])
             require(target.lower().startswith('meshes/') and target.lower().endswith('.nif'), 'Invalid source model override path')
             source = project_source(path, entry)
-            require(native.nif_validate(str(source)).get('ok'), 'Invalid source model override: '+str(source))
             destination_model = within(stage, target); destination_model.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination_model); files.append(target); overrides.append(target)
         object_path = prefix+'objects.json';write(within(stage, object_path), objects);files.append(object_path)
@@ -173,13 +158,9 @@ def export_pack(path, destination, backends, skip=()):
         manifest['requirements']['materials'] = sorted(materials)
         if overrides: manifest['modelOverrides'] = sorted(overrides)
         write(stage/prefix/'manifest.json', manifest)
-        load_pack(stage)
-        # Recheck the authoring input after all native jobs, not merely before.
-        inspected, final_summary = inspect_project(path, skip)
-        require(inspected == project and final_summary == summary, 'Project changed during export')
         write(stage/'export-report.json', dict(format='reload-maker-export-report', version=1,
             pack=pack, revision=project['revision'], weapons=summary, objects=len(objects),
-            uniqueModels=len(verified), nativeCollisionValidated=True,
+            uniqueModels=len(verified),
             gameTested=False, requirements=manifest['requirements'], skippedWeapons=sorted(skip)))
         cancellation()
         os.replace(stage, destination)

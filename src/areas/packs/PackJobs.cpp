@@ -26,7 +26,7 @@ namespace reloadmaker
     using commands::require;
 
     // state; cancel; open/close the export window; export ESP projects; or
-    // start validate, freeze, inspect-project, cook or prepare.
+    // cook or prepare a world model.
     QJsonObject ReloadMakerController::packCommand(const QJsonObject& request)
     {
         const auto operation = request.value("operation").toString("state");
@@ -49,29 +49,13 @@ namespace reloadmaker
         if (operation == "export") {
             return espExport(request);
         }
-        const bool authoring = operation == "freeze" || operation == "inspect-project";
-        const bool cooking = operation == "cook" || operation == "prepare";
-        require(operation == "validate" || authoring || cooking, "Unknown pack operation");
-        const auto packs = request["packs"].toArray();
-        require(authoring || cooking || (!packs.isEmpty() && packs.size() <= 256), "Select between one and 256 finished pack folders");
+        require(operation == "cook" || operation == "prepare", "Unknown pack operation: use state, cancel, open, close, export, cook or prepare");
+        require(QFileInfo(request["job"].toString()).isFile() && !request["output"].toString().isEmpty(), "Select an asset job and a finished NIF path");
         QString python;
         QString id;
         auto arguments = packToolArguments(python, id);
-        if (cooking) {
-            require(QFileInfo(request["job"].toString()).isFile() && !request["output"].toString().isEmpty(), "Select a frozen asset job and new finished NIF path");
-            arguments << (operation == "cook" ? "cook-object" : "prepare-object") << "--job" << request["job"].toString() << "--output" << request["output"].toString();
-        } else {
-            arguments << "packs" << operation;
-        }
-        if (authoring) {
-            appendAuthoringArguments(arguments, request, operation);
-        } else if (!cooking) {
-            for (const auto& pack : packs) {
-                require(pack.isString() && QFileInfo(pack.toString()).isDir(), "A selected pack folder is missing");
-                arguments << "--pack" << pack.toString();
-            }
-        }
-        startPackProcess(python, arguments, { { "id", id }, { "phase", "running" }, { "operation", operation }, { "packs", packs } });
+        arguments << (operation == "cook" ? "cook-object" : "prepare-object") << "--job" << request["job"].toString() << "--output" << request["output"].toString();
+        startPackProcess(python, arguments, { { "id", id }, { "phase", "running" }, { "operation", operation } });
         return _packJob;
     }
 
@@ -113,19 +97,6 @@ namespace reloadmaker
         cancel.close();
         _packJob["phase"] = "cancelling";
         emit packJobChanged();
-    }
-
-    // The pack project and, for freeze, its new interchange folder.
-    void ReloadMakerController::appendAuthoringArguments(QStringList& arguments, const QJsonObject& request, const QString& operation) const
-    {
-        const auto project = request["project"].toString();
-        require(!project.isEmpty() && QFileInfo(project).isFile(), "Select an authored pack project");
-        arguments << "--project" << project;
-        if (operation == "freeze") {
-            const auto output = request["output"].toString();
-            require(!output.isEmpty(), "Choose a new local export folder");
-            arguments << "--output" << output;
-        }
     }
 
     // The tool's last output line is its JSON result. Output is kept to the

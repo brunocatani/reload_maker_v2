@@ -70,7 +70,6 @@ namespace reloadmaker
         _weaponFixedMotion = fixed;
         showWeaponFixedMotion();
         refreshPoseMode();
-        noteDocumentChange("motion mode");
     }
 
     void ReloadMakerController::showWeaponFixedMotion()
@@ -89,7 +88,6 @@ namespace reloadmaker
         _approximateTransitions = enabled;
         showChecked(_transitionCheck, enabled);
         refreshPoseMode();
-        noteDocumentChange("clip transitions");
     }
 
     void ReloadMakerController::setArmsShown(bool shown)
@@ -100,7 +98,6 @@ namespace reloadmaker
         _armsShown = shown;
         showChecked(_showArmsCheck, shown);
         setArmsVisible(shown);
-        noteDocumentChange("arms shown");
     }
 
     // The caller reassembles the weapon, which picks the reload clip.

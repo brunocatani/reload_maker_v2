@@ -88,7 +88,6 @@ namespace reloadmaker
         if (muted) {
             _audio.stop();
         }
-        noteDocumentChange("muted sounds");
     }
 
     bool ReloadMakerController::saveSounds()

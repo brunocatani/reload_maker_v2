@@ -83,7 +83,6 @@ namespace reloadmaker
         _showGripHistory = show;
         showGripHistory();
         refreshPartGripList();
-        noteDocumentChange("grip history shown");
     }
 
     // This weapon's saved grips; a magazine grip that no binding uses only

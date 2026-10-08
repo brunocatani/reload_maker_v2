@@ -1301,7 +1301,6 @@ namespace reloadmaker
         void finishSaveAll();
         bool selectConfigurationRecords(const QStringList& records);
         [[nodiscard]] bool assemblyBusy() const;
-        void appendAuthoringArguments(QStringList& arguments, const QJsonObject& request, const QString& operation) const;
         void startPackProcess(const QString& python, const QStringList& arguments, const QJsonObject& job);
         [[nodiscard]] QJsonObject runtimeOperatingProfile() const;
         [[nodiscard]] QVector<int> runtimeOperatingTracks() const;

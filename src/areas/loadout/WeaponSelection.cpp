@@ -43,7 +43,6 @@ namespace reloadmaker
         }
         _armsBody = body;
         showArmsBody();
-        noteDocumentChange("arms body");
     }
 
     void ReloadMakerController::showArmsBody()

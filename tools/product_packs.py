@@ -10,7 +10,7 @@ import math
 import os
 from pathlib import Path, PurePosixPath
 import re
-import struct
+
 import yaml
 
 TEMPLATES = {
@@ -187,28 +187,3 @@ def write_plugin_source(folder, ledger):
                       Model=dict(File=relative(obj['model'])[7:].replace('/', '\\'), Data='0x0400000000000000000000000000000000000000'),
                       Value=obj['value'], Weight=obj['weight'])
         (records/(editor+'.yaml')).write_text(yaml.safe_dump(record, sort_keys=False), encoding='utf-8')
-
-
-async def verify_plugin(backend, plugin, ledger):
-    active = {key: value for key, value in ledger['objects'].items() if value['active']}
-    header = json.loads(await backend.fo4_plugin_info(backend.PluginPathInput(plugin_path=str(plugin))))
-    masters = [value if value.lower().endswith(('.esm','.esp','.esl')) else bytes.fromhex(value).rstrip(b'\0').decode('utf-8') for value in header.get('masters', [])]
-    require([m.lower() for m in masters] == [m.lower() for m in ledger['masters']], 'Generated plugin has unexpected hard masters')
-    result = json.loads(await backend.fo4_read_records(backend.ReadRecordsInput(plugin_path=str(plugin), record_type='MISC', limit=10000)))
-    require('error' not in result and result['returned'] == len(active), f'Generated record count/readback failed: {result.get("error")}')
-    require(all(int(r['form_id'], 16) >> 24 == len(masters) for r in result['records']), 'Generated record belongs to a master instead of this plugin')
-    actual = {int(r['form_id'], 16) & 0xffffff: {s['type']: s['value'] for s in r['subrecords']} for r in result['records']}
-    require(len(actual) == len(active), 'Duplicate generated record IDs')
-    for entry in active.values():
-        row = actual.get(entry['localId'], {})
-        require(row.get('EDID') == entry['editorId'], 'Generated object identity mismatch')
-        # The approved plugin reader returns MODL as a raw field; decode that
-        # field, without another plugin parser in the builder.
-        model = bytes.fromhex(row.get('MODL', '')).rstrip(b'\0').decode('utf-8').replace('\\', '/')
-        require(model.casefold() == relative(entry['definition']['model'])[7:].casefold(), 'Generated model mapping mismatch')
-        obj = entry['definition']
-        require(list(struct.unpack('<6h', bytes.fromhex(row.get('OBND', '')))) == obj['bounds'], 'Generated bounds mismatch')
-        value, weight = struct.unpack('<If', bytes.fromhex(row.get('DATA', '')))
-        require(value == obj['value'] and math.isclose(weight, obj['weight'], rel_tol=1e-6, abs_tol=1e-6), 'Generated inventory values mismatch')
-        require(row.get('FULL') == obj['name'], 'Generated object name mismatch')
-

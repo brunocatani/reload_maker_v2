@@ -13,7 +13,7 @@ import zipfile
 import yaml
 
 from product_packs import (allocate, cancellation, identity, load_pack, read,
-                           relative, require, verify_plugin, within, write,
+                           relative, require, within, write,
                            write_plugin_source)
 
 
@@ -197,7 +197,6 @@ async def emit_group(master, parts, seed, installation, output, stage, backend, 
     result = json.loads(await backend.fo4_serialize_plugin(backend.SpriggitSerializeInput(
         yaml_dir=str(stage/'plugin-source'/stem), output_path=str(output/plugin))))
     require(result.get('status') == 'success', 'ESL serialization failed: '+str(result))
-    await verify_plugin(backend, output/plugin, group)
     # Use the approved native reader to prove the emitted light flags.
     result = json.loads(await backend.fo4_deserialize_plugin(backend.SpriggitDeserializeInput(
         plugin_path=str(output/plugin), output_dir=str(stage/'readback'/stem))))

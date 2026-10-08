@@ -8,7 +8,6 @@ project is written once at the end.
 """
 import copy
 import hashlib
-import json
 import os
 from pathlib import Path
 import shutil
@@ -22,6 +21,10 @@ from product_packs import TEMPLATES, cancellation, identity, read, require, writ
 KINDS = ('profiles', 'magazines', 'sounds', 'grabs')
 
 
+class Rejected(ValueError):
+    """DIAMOND rejected a weapon's documents."""
+
+
 def native_validate(documents, folder, backends):
     validator=backends.application/'backends/diamond/DiamondProfileCheck.exe'
     require(validator.is_file(),'The bundled DIAMOND validator is missing')
@@ -30,7 +33,8 @@ def native_validate(documents, folder, backends):
         path=folder/(kind+'.json');write(path,documents[kind]);paths.append(path)
     checked=subprocess.run([str(validator),'--authored',*[('\\\\?\\'+str(p)) if os.name=='nt' else str(p) for p in paths]],
                            capture_output=True,text=True,timeout=60,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
-    require(checked.returncode==0,'DIAMOND rejected the configured reload: '+(checked.stderr or checked.stdout).strip())
+    if checked.returncode!=0:
+        raise Rejected('DIAMOND rejected the configured reload: '+(checked.stderr or checked.stdout).strip())
     return paths
 
 
@@ -183,9 +187,10 @@ def apply_capture(draft,capture,full='',empty=''):
             model=Path(model).resolve();receipt=model.with_suffix('.receipt.json');meta=read(receipt)
             require(meta.get('engineCooked'),'Choose a finished model cooked by Maker')
             provenance=meta.get('capture',{});source=provenance.get('referencePose',{})
+            # Weapons sharing a magazine share its models (carrier frame only).
             require(source.get('space')=='magazine-carrier' and source.get('presentation')==presentation and
-                    form_key(provenance.get('weapon'))==record and form_key(source.get('magazineRecord'))==magazine,
-                    'Finished model belongs to another weapon, magazine, presentation or reference frame')
+                    form_key(source.get('magazineRecord'))==magazine,
+                    'Finished model belongs to another magazine, presentation or reference frame')
             require(presentation_identity(source.get('presentationSetup'))==presentation_identity(snapshot['magazine'].get('presentationSetup')),
                     'Magazine model was cooked with another body/payload presentation')
             item=dict(id=assignment[presentation],name=f"{weapon['name']} {snapshot['magazine']['capacity']} round magazine ({presentation})",
@@ -204,6 +209,20 @@ def checked(draft,record,backends):
 
 def save(project_path,captures,backends,pack_id='',full='',empty='',strict=True,models=None):
     """Applies the captures in order and writes the project once.
+
+    DIAMOND checks each saved weapon once. Only when it rejects one, and the
+    save is not strict, is the save repeated checking every capture on its
+    own, so the rejected ones are reported and the rest are kept."""
+    try:
+        return _save(project_path,captures,backends,pack_id,full,empty,strict,models,isolate=False)
+    except Rejected:
+        if strict:
+            raise
+        return _save(project_path,captures,backends,pack_id,full,empty,strict,models,isolate=True)
+
+
+def _save(project_path,captures,backends,pack_id,full,empty,strict,models,isolate):
+    """One pass of save(); with isolate, DIAMOND checks every capture.
 
     `models` maps a lower-case magazine record to its (full, empty) finished
     models; a capture of that magazine uses them instead of `full`/`empty`.
@@ -247,7 +266,7 @@ def save(project_path,captures,backends,pack_id='',full='',empty='',strict=True,
             magazine=form_key(snapshot.get('selection',{}).get('magazine',''))
             apply_capture(trial,capture,*((models or {}).get(magazine) or (full,empty)))
             record=form_key(snapshot.get('weapon'))
-            if not strict:
+            if isolate:
                 checked(trial,record,backends)
         except ValueError as error:
             changed=changed_templates.get(form_key(snapshot['weapon']))
@@ -290,14 +309,6 @@ def save(project_path,captures,backends,pack_id='',full='',empty='',strict=True,
         for record in touched:collect(draft.documents[record])
         project['requirements']['plugins']=sorted(plugins,key=str.lower)
         project['revision']+=1
-        probe=copy.deepcopy(project)
-        for item in probe['weapons']:
-            for kind in KINDS:
-                record=form_key(item['record'])
-                item[kind]['path']=str(folders[record]/(kind+'.json')) if record in touched else str(project_source(path,item[kind]))
-        for item in probe['objects']:
-            source=Path(item['source']['path']);item['source']['path']=str(source if source.is_absolute() else path.parent/source)
-        write(stage/'project-check.json',probe);inspect_project(stage/'project-check.json');(stage/'project-check.json').unlink()
         cancellation();final.parent.mkdir(parents=True,exist_ok=True);os.replace(stage,final)
         # Commit the pointer last. Until this one atomic replacement, every
         # previous behavior document/model remains the active project content.

@@ -70,9 +70,9 @@ namespace reloadmaker
 
     // UI edits and command edits share one generation, so clients read current
     // state instead of reusing selections from an earlier scene. Commands and
-    // the setters behind UI edits advance it; showing a value does not, and
-    // neither do timer-driven view refreshes (for example the highlighted
-    // sound cue during playback).
+    // the setters behind edits and selections advance it; display toggles
+    // (arms, loop, mute, search, pages, preview modes) and timer-driven view
+    // refreshes do not, because no edit depends on them.
     void ReloadMakerController::noteDocumentChange(const QString& source)
     {
         if (_viewRefresh) {

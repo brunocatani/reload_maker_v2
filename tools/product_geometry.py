@@ -23,7 +23,7 @@ def prepare_world_object(snapshot_path, output, backends):
     require(snapshot.get('format')=='reload-maker-visible-part' and snapshot.get('version')==1 and snapshot.get('units')=='game-units','Invalid visible-part snapshot')
     shapes=snapshot.get('meshes',[])
     require(isinstance(shapes,list) and 0<len(shapes)<=128,'Select one bounded rigid magazine/part')
-    require(not output.exists() and output.suffix.lower()=='.nif','Choose a new prepared NIF path')
+    require(output.suffix.lower()=='.nif','Choose a prepared NIF path')
     template=backends.application/'assets/empty-world.nif'
     require(template.is_file(),'The bundled geometry-free world template is missing')
     native=backends.adapter('nif')
@@ -99,7 +99,7 @@ def prepare_world_object(snapshot_path, output, backends):
         expected=sorted(s['material'].replace('\\','/').lower() for s in shapes)
         require(sorted(name.replace('\\','/').lower() for _,name in signature['materials'])==expected,'Native import changed material references')
         cancellation()
-        receipt=output.with_suffix('.prepared.json');require(not receipt.exists(),'Prepared receipt already exists')
+        receipt=output.with_suffix('.prepared.json')
         points=[[sum(source['localToRoot'][r*4+c]*v[c] for c in range(3))+source['localToRoot'][r*4+3]
                  for r in range(3)] for source in shapes for v in source['positions']]
         bounds=[math.floor(min(p[i] for p in points)) for i in range(3)]+[math.ceil(max(p[i] for p in points)) for i in range(3)]
@@ -109,10 +109,9 @@ def prepare_world_object(snapshot_path, output, backends):
         write(stage/'receipt.json',dict(format='reload-maker-prepared-object',version=1,
               weapon=snapshot['weapon'],target=snapshot['target'],referencePose=snapshot['referencePose'],
               capture=capture,bounds=bounds,shapes=len(shapes),vertices=vertices,triangles=triangles,materials=expected,engineCooked=False))
+        # Preparing again to the same output replaces the model and its receipt.
+        os.replace(prepared,output)
         os.replace(stage/'receipt.json',receipt)
-        try:os.replace(prepared,output)
-        except Exception:
-            receipt.unlink();raise
         return dict(ok=True,output=str(output),receipt=str(receipt),shapes=len(shapes),vertices=vertices,triangles=triangles,engineCooked=False,
                     target=snapshot['target'],configuration=snapshot['configuration'],referencePose=snapshot['referencePose'],
                     pieces=[source['source'] for source in shapes])

@@ -41,7 +41,7 @@ def cook_world_object(job_path, output, backends):
     require(job.get('format') == 'reload-maker-world-object-job' and job.get('version') == 1, 'Invalid world-object cook job')
     source, hulls = project_source(job_path, job['geometry']), project_source(job_path, job['collision'])
     require(source.suffix.lower() == '.nif', 'Choose a prepared rigid magazine NIF')
-    require(not output.exists() and output.suffix.lower() == '.nif', 'Choose a new finished NIF output')
+    require(output.suffix.lower() == '.nif', 'Choose a finished NIF output')
     collision = read(hulls)
     capture=collision.get('capture',{})
     prepared_report=None
@@ -95,15 +95,12 @@ def cook_world_object(job_path, output, backends):
             engineCooked=True, gameTested=False)
         if prepared_report:report.update(capture=capture,bounds=prepared_report['bounds'])
         cancellation()
-        # Both are immutable outputs; a cancelled cook never replaces a model
-        # already referenced by an authored pack project.
+        # Cooking again to the same output replaces the model and its
+        # receipt; a cancelled cook stops above and replaces nothing.
         receipt = output.with_suffix('.receipt.json')
-        require(not receipt.exists(), 'Choose a new output; its receipt already exists')
         write(stage/'receipt.json', report)
+        os.replace(cooked, output)
         os.replace(stage/'receipt.json', receipt)
-        try:os.replace(cooked, output)
-        except Exception:
-            receipt.unlink();raise
         return dict(ok=True, output=str(output), receipt=str(receipt), hulls=report['hulls'], supportPoints=count, engineCooked=True)
     finally:
         if stage.parent == output.parent and stage.name.startswith('.cook-'):shutil.rmtree(stage)

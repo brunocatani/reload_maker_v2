@@ -900,10 +900,11 @@ namespace reloadmaker
             const auto meta = QJsonDocument::fromJson(receipt.readAll()).object();
             const auto capture = meta["capture"].toObject();
             const auto reference = capture["referencePose"].toObject();
-            require(meta["engineCooked"].toBool() && capture["weapon"].toString().compare(weaponRecordKey(), Qt::CaseInsensitive) == 0 &&
-                        reference["magazineRecord"].toString().compare(magazine, Qt::CaseInsensitive) == 0 &&
+            // The model holds only the magazine's pieces in its own carrier
+            // frame, so weapons sharing the magazine share its models.
+            require(meta["engineCooked"].toBool() && reference["magazineRecord"].toString().compare(magazine, Qt::CaseInsensitive) == 0 &&
                         reference["presentation"].toString() == QLatin1String(presentation),
-                    QStringLiteral("The %1 model was cooked for another weapon, magazine or presentation").arg(presentation));
+                    QStringLiteral("The %1 model was cooked for another magazine or presentation").arg(presentation));
             models[QLatin1String(presentation)] = path;
         }
         _magazineModels[key] = models;

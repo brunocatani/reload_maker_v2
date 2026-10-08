@@ -111,7 +111,6 @@ namespace reloadmaker
             (void)applyPose(_playbackTime);
             updateMechanismControls();
         }
-        noteDocumentChange("mechanism hand shown on grab");
     }
 
     // The definition form's values: name, the selected step's fields and the

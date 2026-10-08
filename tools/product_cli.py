@@ -27,15 +27,6 @@ def main():
     prepare = commands.add_parser('prepare-object')
     prepare.add_argument('--job', required=True)
     prepare.add_argument('--output', required=True)
-    packs = commands.add_parser('packs').add_subparsers(dest='action', required=True)
-    validate = packs.add_parser('validate')
-    validate.add_argument('--pack', action='append', required=True)
-    inspect = packs.add_parser('inspect-project')
-    inspect.add_argument('--project', required=True)
-    export = packs.add_parser('freeze')
-    export.add_argument('--project', required=True)
-    export.add_argument('--output', required=True)
-    export.add_argument('--skip', action='append', default=[], help='Weapon record left out of this export')
     library = commands.add_parser('library').add_subparsers(dest='action', required=True)
     library.add_parser('list')
     state = library.add_parser('state')
@@ -90,21 +81,6 @@ def main():
             from product_grouped import export_library
             selections = [dict(zip(('plugin', 'save'), value.split('@', 1))) for value in args.select]
             result = asyncio.run(export_library(settings.workspace, selections, backends, args.archive, args.mo2))
-    else:
-        from product_packs import load_pack
-        if args.action == 'validate':
-            loaded = [load_pack(Path(p)) for p in args.pack]
-            result = dict(ok=True, packs=[dict(id=p['manifest']['id'], objects=len(p['objects'])) for p in loaded],
-                          runtimeCatalogValidated=False,
-                          message='Pack inputs checked. Exporting the ESP project also validates the complete DIAMOND catalog.')
-        elif args.action == 'inspect-project':
-            from product_export import inspect_project
-            project, weapons = inspect_project(Path(args.project).resolve())
-            result = dict(ok=True, id=project['id'], name=project.get('name', project['id']),
-                          revision=project['revision'], weapons=weapons, objects=len(project['objects']))
-        else:
-            from product_export import export_pack
-            result = export_pack(args.project, args.output, backends, args.skip)
     print(json.dumps(result, allow_nan=False))
 
 

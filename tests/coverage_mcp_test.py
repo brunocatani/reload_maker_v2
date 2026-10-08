@@ -1,23 +1,23 @@
-"""The native library refresh retains the selected source and authored state."""
+"""The library coverage refresh reads saved ESP projects and keeps the selected source and authoring."""
 import json
 from pathlib import Path
 import sys,uuid
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'tests'))
-from visible_geometry_mcp_test import ready,finish
+from visible_geometry_mcp_test import ready
 from server import command
 
 def run():
     work=ROOT/'local/coverage-mcp-tests'/uuid.uuid4().hex;work.mkdir(parents=True)
-    before=ready();project=Path(command('export',{'kind':'project'},ready()['revision'])['path']);original=project.read_bytes()
-    result=finish(command('pack_coverage',dict(refresh=True)))
-    assert result['scope']=='authored-workspace'
-    state=command('pack_coverage');after=ready()
-    assert state['scanned'] and len(state['projects'])>=12
+    before=ready()
+    state=command('pack_coverage',dict(refresh=True),before['revision'])
+    after=ready()
+    assert state['scope']=='esp-library' and state['scanned'] and state['projects'],state.get('scope')
     for key in ('project','weaponIndex','slots','magazineGrabGrips'):assert after[key]==before[key],key
-    assert project.read_bytes()==original
+    saved={w['record'].lower() for p in state['projects'] for w in p['weapons']}
     loaded=state['loadedWeapons'];assert loaded
     for weapon in loaded:
-        if any(w['record'].lower()==weapon['record'] for p in state['projects'] for w in p['weapons']):assert 'Authored' in weapon['coverage'] or 'Review' in weapon['coverage']
-    (work/'result.json').write_text(json.dumps(state,indent=2));print('PASS native coverage refresh and source/selection/authoring preservation:',work)
+        expected=('Saved','Unsaved edits') if weapon['record'] in saved else ('Not authored','Unsaved edits')
+        assert weapon['coverage'].startswith(expected),weapon
+    (work/'result.json').write_text(json.dumps(state,indent=2));print('PASS library coverage refresh and source/selection/authoring preservation:',work)
 
 if __name__=='__main__':run()

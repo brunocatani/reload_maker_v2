@@ -20,7 +20,6 @@ namespace reloadmaker
         _handEditorPage = page;
         showHandEditorPage();
         handEditorPageChanged();
-        noteDocumentChange("hand editor page");
         syncRail();
     }
 
@@ -134,7 +133,6 @@ namespace reloadmaker
         _handPoseFilter = text;
         showHandPoseFilter();
         refreshHandPoseList();
-        noteDocumentChange("hand pose search");
     }
 
     bool ReloadMakerController::handPoseMatchesFilter(const HandPose& pose) const

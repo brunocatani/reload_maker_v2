@@ -69,15 +69,17 @@ def run():
         try:edit('save_project',dict(note='again'))
         except RuntimeError as error:assert 'Nothing to save' in str(error),error
         else:raise AssertionError('an unchanged project saved another version')
-        # The bundled save reports a capture DIAMOND rejects and keeps the rest.
+        # The bundled save reports a capture DIAMOND rejects and keeps the rest:
+        # DIAMOND checks the saved weapon once, and only after a rejection
+        # checks each capture to name the rejected one.
         work=ROOT/'local/save-capture-tests'/uuid.uuid4().hex
         shutil.copytree(next(VERIFIED.glob('*/*/RU556/pack.project.json')).parent,work)
         project=work/'pack.project.json';variants=inspect_project(project)[1][0]['variants']
         capture=Path(edit('export',{'kind':'runtime_configuration'})['path'])
         bad=json.loads(capture.read_text(encoding='utf-8'));bad['magazine']['grip']['fingerLocalTransforms']=[]
         rejected=work/'rejected.json';rejected.write_text(json.dumps(bad),encoding='utf-8')
-        result=save_configurations(project,[rejected,capture],Backends(ROOT/'build-fast/dist/ReloadMakerV2',ROOT))
-        assert [r['status'] for r in result['rows']]==['failed','saved'] and result['rows'][0]['error'],result['rows']
+        result=save_configurations(project,[capture,rejected],Backends(ROOT/'build-fast/dist/ReloadMakerV2',ROOT))
+        assert [r['status'] for r in result['rows']]==['saved','failed'] and result['rows'][1]['error'],result['rows']
         assert inspect_project(project)[1][0]['variants']>=variants
         print('PASS Save captures:',report['saved'],'configurations saved,',report['failed'],'reported, selection restored, cancel writes nothing, rejected capture reported',flush=True)
     finally:
