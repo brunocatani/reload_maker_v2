@@ -161,7 +161,7 @@ namespace reloadmaker
         }
         const auto magazine = runtimeMagazine(anchor, weapon);
         const auto grabs = exportGrabLocations();
-        auto header = runtimeProfileHeader(weapon, receiver != nullptr, receiverKey, magazineKey, selection);
+        auto header = runtimeProfileHeader(weapon, receiverKey, magazineKey, selection);
         header["hkSlap"]=rig.hkSlap;
         header["lastShotHoldOpen"]=rig.lastShotHoldOpen;
         header["singleHandle"]=rig.singleHandle;
@@ -583,7 +583,7 @@ namespace reloadmaker
 
     // The pack header: format and mechanism, the standard receiver, and the
     // catalog slots with their records and attach points.
-    QJsonObject ReloadMakerController::runtimeProfileHeader(const QString& weapon, bool concreteReceiver, const QString& receiverKey, const QString& magazineKey,
+    QJsonObject ReloadMakerController::runtimeProfileHeader(const QString& weapon, const QString& receiverKey, const QString& magazineKey,
                                                             const QJsonObject& selection) const
     {
         const auto type = _simulationRig->mechanism;
@@ -591,7 +591,6 @@ namespace reloadmaker
         QJsonArray catalogSlots;
         if (type == WeaponMechanism::PistolSlide) {
             header["standardReceiver"] = receiverKey;
-            header["strictReceiver"] = true;
             for (const auto* mod : configuredObjectMods()) {
                 const auto key = poseRecordKey(mod->formId);
                 const auto* slot = configuration()->slot(configurationSlotKey(*mod));
@@ -603,7 +602,6 @@ namespace reloadmaker
         } else {
             header["mechanism"] = type == WeaponMechanism::Ar15 ? "ar15" : type == WeaponMechanism::M1A ? "m1a" : type == WeaponMechanism::BoltAction ? "manual-bolt-action" : "reciprocating-bolt";
             header["standardReceiver"] = receiverKey;
-            header["strictReceiver"] = concreteReceiver;
             for (const auto& pair : { qMakePair(QString("receiver"), QString("Receiver")), qMakePair(QString("magazine"), QString("Magazine")),
                                       qMakePair(QString("operatingPart"), QString("OperatingPart")) }) {
                 if (!selection.contains(pair.first)) {

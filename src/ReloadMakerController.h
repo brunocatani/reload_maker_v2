@@ -1431,7 +1431,7 @@ namespace reloadmaker
         void addRuntimeMagazineReference(QJsonObject& magazine, const HandPosePlacement& anchor) const;
         void addRuntimeMagazineParts(QJsonObject& magazine) const;
         void addRuntimeMagazineHiding(QJsonObject& magazine) const;
-        [[nodiscard]] QJsonObject runtimeProfileHeader(const QString& weapon, bool concreteReceiver, const QString& receiverKey,
+        [[nodiscard]] QJsonObject runtimeProfileHeader(const QString& weapon, const QString& receiverKey,
                                                        const QString& magazineKey, const QJsonObject& selection) const;
         // Scopes document (src/areas/scopes): the optics offered and the
         // selected one.
