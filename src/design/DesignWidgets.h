@@ -4,6 +4,7 @@
 
 #include <QAbstractButton>
 #include <QFrame>
+#include <QLabel>
 #include <QVector>
 #include <QWidget>
 
@@ -122,6 +123,25 @@ namespace reloadmaker::design
         QButtonGroup* _group;
         QHBoxLayout* _layout;
         QVector<IconTile*> _tiles;
+    };
+
+    // A one-line label that gives up width when its row is crowded, ending
+    // its text with an ellipsis; the full text stays in its tooltip.
+    class ElidedLabel final : public QLabel
+    {
+    public:
+        explicit ElidedLabel(QWidget* parent = nullptr);
+        void setFullText(const QString& text);
+        [[nodiscard]] QString fullText() const { return _full; }
+        [[nodiscard]] QSize sizeHint() const override;
+        [[nodiscard]] QSize minimumSizeHint() const override;
+
+    protected:
+        void resizeEvent(QResizeEvent* event) override;
+
+    private:
+        void elide();
+        QString _full;
     };
 
     [[nodiscard]] QLabel* sectionLabel(const QString& text, QWidget* parent = nullptr);

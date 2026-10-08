@@ -10,6 +10,8 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
 namespace reloadmaker::design
 {
     PanelHeader::PanelHeader(const QString& section, const QString& title, QWidget* parent) : QWidget(parent)
@@ -341,5 +343,46 @@ namespace reloadmaker::design
         label->setObjectName(QStringLiteral("Hint"));
         label->setWordWrap(true);
         return label;
+    }
+
+    ElidedLabel::ElidedLabel(QWidget* parent)
+        : QLabel(parent)
+    {
+        setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    }
+
+    void ElidedLabel::setFullText(const QString& text)
+    {
+        _full = text;
+        setToolTip(text);
+        updateGeometry();
+        elide();
+    }
+
+    // The width the whole text needs, with the label's own padding.
+    QSize ElidedLabel::sizeHint() const
+    {
+        const auto base = QLabel::sizeHint();
+        return { base.width() - fontMetrics().horizontalAdvance(text()) + fontMetrics().horizontalAdvance(_full), base.height() };
+    }
+
+    QSize ElidedLabel::minimumSizeHint() const
+    {
+        return { fontMetrics().horizontalAdvance(QStringLiteral("M…")) * 2, QLabel::minimumSizeHint().height() };
+    }
+
+    void ElidedLabel::resizeEvent(QResizeEvent* event)
+    {
+        QLabel::resizeEvent(event);
+        elide();
+    }
+
+    void ElidedLabel::elide()
+    {
+        const int padding = QLabel::sizeHint().width() - fontMetrics().horizontalAdvance(text());
+        const auto shown = fontMetrics().elidedText(_full, Qt::ElideRight, std::max(0, width() - padding));
+        if (shown != text()) {
+            QLabel::setText(shown);
+        }
     }
 }

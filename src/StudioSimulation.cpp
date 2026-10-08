@@ -55,7 +55,7 @@ void ReloadMakerController::createSimulationUi() {
         connect(b,&QAbstractButton::clicked,this,[this,action]{if(action!="fire")runSimulationAction(action);});return b;
     };
     section("Actions");
-    auto* actions=new QGridLayout;actions->setSpacing(8);
+    auto* actions=new QGridLayout;actions->setSpacing(8);_simulationActionGrid=actions;
     _simulationFire=button(design::Icon::Fire,"Fire","fire");_simulationFire->setPrimary(true);
     _simulationFire->setToolTip("Hold to keep the trigger pulled");
     connect(_simulationFire,&QPushButton::pressed,this,[this]{setSimulationTrigger(true);});
@@ -78,7 +78,7 @@ void ReloadMakerController::createSimulationUi() {
     layout->addWidget(design::hintLabel("Drag the slide or the magazine in the view to operate them by hand, as in VR.",panel));
 
     section("Options");
-    auto* options=new QGridLayout;options->setSpacing(8);
+    auto* options=new QGridLayout;options->setSpacing(8);_simulationOptionGrid=options;
     const auto option=[&](design::Icon icon,const QString& text,const QString& tip,bool checked) {
         auto* tile=new design::IconTile(icon,text,panel);tile->setCheckable(true);tile->setChecked(checked);tile->setToolTip(tip);return tile;
     };
@@ -117,8 +117,8 @@ void ReloadMakerController::createSimulationUi() {
     section("Details");
     _simulationSource=hint({},panel);layout->addWidget(_simulationSource);
     _simulationParts=hint({},panel);layout->addWidget(_simulationParts);
-    layout->addStretch(1);
     _simulationInstructions=hint({},panel);layout->addWidget(_simulationInstructions);
+    layout->addStretch(1);
     auto* scroll=new QScrollArea(_simulationDock);scroll->setWidgetResizable(true);scroll->setFrameShape(QFrame::NoFrame);scroll->setWidget(panel);
     _simulationDock->setWidget(scroll);_window->addDockWidget(Qt::RightDockWidgetArea,_simulationDock);_simulationDock->hide();
     _simulationTimer=new QTimer(this);_simulationTimer->setInterval(16);_simulationTimer->setTimerType(Qt::PreciseTimer);
@@ -141,6 +141,14 @@ void ReloadMakerController::createSimulationViewport() {
     _magazineViewport->railMove=[this](float d){moveMagazineRail(d);};
     _magazineViewport->cancel=[this]{cancelMagazine();};
 }
+namespace {
+void flowTiles(QGridLayout* grid,std::initializer_list<QWidget*> tiles) {
+    for(auto* tile:tiles)grid->removeWidget(tile);
+    int slot=0;
+    for(auto* tile:tiles)if(!tile->isHidden()){grid->addWidget(tile,slot/3,slot%3);++slot;}
+}
+}
+
 void ReloadMakerController::updateSimulationControls() {
     if(!_simulationStatus)return;
     _simulationDock->widget()->setEnabled(currentWeapon()!=nullptr);
@@ -169,6 +177,10 @@ void ReloadMakerController::updateSimulationControls() {
     _simulationNoExtender->setVisible(noExtender||_glockNoExtender);_simulationNoExtender->setEnabled(!busy&&!_loadThread&&!_reloadCapturing&&noExtender);
     {const QSignalBlocker block(_simulationNoExtender);_simulationNoExtender->setChecked(_glockNoExtender);}
     _simulationSource->setVisible(pistol||ar);
+    // Tiles a weapon does not use are hidden; the rest fill rows of three
+    // from the left, leaving no holes.
+    flowTiles(_simulationActionGrid,{_simulationFire,_simulationSlideRelease,_simulationReload,_magazineOut,_magazineIn,_magazineGrab,_simulationDrop,_simulationReset});
+    flowTiles(_simulationOptionGrid,{_simulationSpring,_simulationGhost,_simulationNoExtender});
     if((pistol||ar)&&_reloadRecipe) {
         const auto path=_reloadRecipe->source["animation"].toString();
         _simulationSource->setText("Reload source · "+animationSetRelativePath(path)+" · "+(bolt?"manual bolt action":_simulationAmmo.automatic?"automatic receiver":_simulationAmmo.repeatableSingleFire?"repeating single-fire receiver":"semi-automatic receiver"));

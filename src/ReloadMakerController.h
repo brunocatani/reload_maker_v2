@@ -53,6 +53,7 @@ class Scene;
 class StudioWindow;
 class QCheckBox;
 class QComboBox;
+class QGridLayout;
 class QDockWidget;
 class QLabel;
 class QLineEdit;
@@ -89,7 +90,7 @@ namespace reloadmaker
     class GripViewport;
     class MagazineViewport;
     class CollisionPanel;
-    namespace design { class PanelHeader; class ChecklistRow; class IconTile; class TileChoice; }
+    namespace design { class PanelHeader; class ChecklistRow; class IconTile; class TileChoice; class ElidedLabel; }
     struct PackageLoad;
     struct WeaponPreset;
     class ReloadMakerController final : public QObject
@@ -843,6 +844,8 @@ namespace reloadmaker
         design::IconTile* _magazineIn{nullptr};
         design::IconTile* _magazineGrab{nullptr};
         QDockWidget* _simulationDock{nullptr};
+        QGridLayout* _simulationActionGrid{nullptr};
+        QGridLayout* _simulationOptionGrid{nullptr};
         design::IconTile* _simulationFire{nullptr};
         design::IconTile* _simulationReload{nullptr};
         design::IconTile* _simulationDrop{nullptr};
@@ -871,8 +874,8 @@ namespace reloadmaker
         QButtonGroup* _builderStepButtons{nullptr};
         QWidget* _modeSwitch{nullptr};
         QPushButton* _weaponPill{nullptr};
-        QLabel* _headerSummary{nullptr};
-        QLabel* _presetChip{nullptr};
+        design::ElidedLabel* _headerSummary{nullptr};
+        design::ElidedLabel* _presetChip{nullptr};
         QFrame* _sourcePicker{nullptr};
         // Left panel: Checklist | Loadout tabs in Reload builder, else the loadout.
         QTabBar* _leftTabs{nullptr};

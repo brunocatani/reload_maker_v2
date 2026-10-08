@@ -112,7 +112,7 @@ void ReloadMakerController::refreshHeader() {
             }
         }
     }
-    _headerSummary->setText(summary.join(QStringLiteral(" · ")));
+    _headerSummary->setFullText(summary.join(QStringLiteral(" · ")));
     _headerSummary->setVisible(!summary.isEmpty());
     // A preset the author chose is confirmed; otherwise Maker's own guess
     // shows as detected, the checklist's two states.
@@ -120,12 +120,12 @@ void ReloadMakerController::refreshHeader() {
     const auto* chosen=weapon?checklistPreset():nullptr;
     const QString preset=chosen?chosen->label:QString();
     const bool detected=assigned.isEmpty();
-    _presetChip->setText(preset.isEmpty()?QStringLiteral("No behavior preset"):QStringLiteral("Preset: ")+preset+(detected?QStringLiteral(" · detected"):QString()));
+    _presetChip->setFullText(preset.isEmpty()?QStringLiteral("No behavior preset"):QStringLiteral("Preset: ")+preset+(detected?QStringLiteral(" · detected"):QString()));
     _presetChip->setProperty("tone",preset.isEmpty()?QStringLiteral("warning"):detected?QStringLiteral("detected"):QString());
-    _presetChip->setToolTip(!reloadPresetsError().isEmpty()?QStringLiteral("Behavior presets are unavailable: ")+reloadPresetsError()
+    _presetChip->setToolTip(_presetChip->fullText()+QStringLiteral("\n")+(!reloadPresetsError().isEmpty()?QStringLiteral("Behavior presets are unavailable: ")+reloadPresetsError()
         :preset.isEmpty()?QStringLiteral("Choose one in the Reload checklist. ")+presetProposal().problem
-        :detected?QStringLiteral("Maker proposes this preset: ")+presetProposal().evidence+QStringLiteral(" Confirm or change it in the Reload checklist.")
-        :QStringLiteral("Behavior preset chosen for this weapon."));
+        :detected?QStringLiteral("Maker proposes this preset: ")+presetProposal().evidence+QStringLiteral(" Use it or choose another in the Reload checklist.")
+        :QStringLiteral("Behavior preset chosen for this weapon.")));
     _presetChip->style()->unpolish(_presetChip);_presetChip->style()->polish(_presetChip);
     _presetChip->setVisible(weapon!=nullptr);
 }

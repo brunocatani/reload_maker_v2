@@ -74,34 +74,39 @@ void ReloadMakerController::createUi() {
     _window->setDockOptions(QMainWindow::AnimatedDocks);
 
     // ---- Header: wordmark, weapon, configuration, mode switch, menu ----
-    auto* header = new QToolBar("Header", _window);
-    header->setMovable(false);
-    header->setFloatable(false);
+    // A plain widget, not a tool bar: a tool bar never shrinks its widgets
+    // and hides whatever does not fit; here the weapon, configuration and
+    // preset give up width (with an ellipsis) so the pages, exports and menu
+    // stay visible at every window width.
+    auto* header = new QWidget(_window);
     header->setObjectName("AppHeader");
-    header->setContextMenuPolicy(Qt::PreventContextMenu);
-    _window->addToolBar(Qt::TopToolBarArea, header);
+    header->setAttribute(Qt::WA_StyledBackground);
+    auto* bar = new QHBoxLayout(header);
+    bar->setContentsMargins(14, 0, 14, 0);
+    bar->setSpacing(12);
+    _window->setMenuWidget(header);
     auto* wordmark = new QLabel("Reload Maker", header);
     wordmark->setObjectName("Wordmark");
-    header->addWidget(wordmark);
+    bar->addWidget(wordmark);
     _weaponPill = new QPushButton("Choose a weapon", header);
     _weaponPill->setObjectName("WeaponPill");
     _weaponPill->setIcon(icon(Icon::ChevronDown, color::textMuted));
     _weaponPill->setLayoutDirection(Qt::RightToLeft);
     _weaponPill->setToolTip("Source, plugin and weapon");
     _weaponPill->setCursor(Qt::PointingHandCursor);
-    header->addWidget(_weaponPill);
+    _weaponPill->setMinimumWidth(120);
+    _weaponPill->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    bar->addWidget(_weaponPill, 0);
     connect(_weaponPill, &QPushButton::clicked, this, &ReloadMakerController::showSourcePicker);
-    _headerSummary = new QLabel(header);
+    _headerSummary = new design::ElidedLabel(header);
     _headerSummary->setObjectName("HeaderSummary");
-    header->addWidget(_headerSummary);
-    _presetChip = new QLabel(header);
+    bar->addWidget(_headerSummary, 1);
+    _presetChip = new design::ElidedLabel(header);
     _presetChip->setObjectName("PresetChip");
     _presetChip->setFixedHeight(24);
     _presetChip->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
-    header->addWidget(_presetChip);
-    auto* spacer = new QWidget(header);
-    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    header->addWidget(spacer);
+    bar->addWidget(_presetChip, 1);
+    bar->addStretch(0);
     // The mode switch shows pages; each page or builder step opens a stable,
     // persisted workspace id (src/areas/shell/RailPages.cpp).
     auto* modes = new SegmentedControl("ModeSwitch", header);
@@ -112,18 +117,22 @@ void ReloadMakerController::createUi() {
     for (const auto& [title, page] : pages) {
         modes->addSegment(title, int(page));
     }
-    header->addWidget(modes);
+    bar->addWidget(modes);
+    auto* divider = new QFrame(header);
+    divider->setObjectName("HeaderDivider");
+    divider->setFixedSize(1, 24);
+    bar->addWidget(divider);
     // Exports are one click away: the open ESP's reloads, or everything the
     // loaded source has saved work for (reloads and scope profiles).
     auto* exportEsp = new QPushButton("Export ESP reloads", header);
     exportEsp->setObjectName("HeaderExportEsp");
     exportEsp->setToolTip("Export the reloads of the open ESP's latest saved version to MO2 or a ZIP / 7z");
-    header->addWidget(exportEsp);
+    bar->addWidget(exportEsp);
     connect(exportEsp, &QPushButton::clicked, this, [this] { showPackBuilder(ExportScope::OpenEsp); });
     auto* exportAll = new QPushButton("Export everything", header);
     exportAll->setObjectName("HeaderExportAll");
     exportAll->setToolTip("Export every saved reload and scope profile of the weapons in the loaded source to MO2 or a ZIP / 7z");
-    header->addWidget(exportAll);
+    bar->addWidget(exportAll);
     connect(exportAll, &QPushButton::clicked, this, [this] { showPackBuilder(ExportScope::Everything); });
     auto* menuButton = new QToolButton(header);
     menuButton->setObjectName("MenuButton");
@@ -135,7 +144,7 @@ void ReloadMakerController::createUi() {
     auto* mainMenu = new QMenu(menuButton);
     mainMenu->setObjectName("MainMenu");
     menuButton->setMenu(mainMenu);
-    header->addWidget(menuButton);
+    bar->addWidget(menuButton);
 
     _sourceMenu=mainMenu->addMenu("Source");_sourceMenu->setObjectName("SourceMenu");
     auto* dynamicSource=_sourceMenu->addAction("Dynamic source · MO2");dynamicSource->setCheckable(true);
@@ -251,6 +260,8 @@ void ReloadMakerController::createUi() {
     _partList->setMouseTracking(true);
     _partList->setObjectName("Loadout");
     _partList->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    _partList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    _partList->setResizeMode(QListView::Adjust);
     setupLayout->addWidget(_partList, 1);
     _pages->addTab(setup, "Loadout");
     _leftStack->addWidget(loadoutPanel);

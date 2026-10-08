@@ -88,7 +88,8 @@ QMainWindow, QDialog { background:@ground; }
 QDialog { background:@panel; }
 QMainWindow::separator { background:@border; width:1px; height:1px; }
 
-QToolBar#AppHeader { background:@header; border:0; border-bottom:1px solid @border; padding:0 14px; spacing:12px; min-height:52px; }
+QWidget#AppHeader { background:@header; border:0; border-bottom:1px solid @border; min-height:52px; max-height:52px; }
+QFrame#HeaderDivider { background:@border; border:0; }
 QLabel#Wordmark { font-size:16px; font-weight:600; padding-right:6px; }
 QPushButton#WeaponPill { background:@menu; border:1px solid @borderStrong; border-radius:6px; padding:0 12px; min-height:34px; text-align:left; }
 QPushButton#WeaponPill:hover { border-color:@inputBorder; background:@rowHover; }

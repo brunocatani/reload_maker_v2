@@ -88,11 +88,13 @@ void LoadoutDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
     painter->restore();
 }
 
-QSize LoadoutDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
+// Rows take the list's width and never ask for more: a wider hint made the
+// list scroll sideways and pushed the values under its scroll bar.
+QSize LoadoutDelegate::sizeHint(const QStyleOptionViewItem&, const QModelIndex& index) const {
     switch (index.data(kSectionRole).toInt()) {
-    case kCategoryHeader: return {option.rect.width(), 34};
-    case kSlotHeader: return {option.rect.width(), index.data(kFocusedRole).toBool() && (index.flags() & Qt::ItemIsEnabled) ? 56 : 42};
-    default: return {option.rect.width(), 36};
+    case kCategoryHeader: return {0, 34};
+    case kSlotHeader: return {0, index.data(kFocusedRole).toBool() && (index.flags() & Qt::ItemIsEnabled) ? 56 : 42};
+    default: return {0, 36};
     }
 }
 }
