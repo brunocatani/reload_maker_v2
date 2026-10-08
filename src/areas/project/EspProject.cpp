@@ -56,6 +56,27 @@ namespace reloadmaker
             }
             return combineWeaponProgress(configurations);
         }
+
+        // The saved progress is out of date, even when no authoring changed:
+        // a stored result comes from older checklist rules, or a
+        // configuration reads differently now than when it was saved.
+        bool progressOutdated(const QJsonObject& working, const QJsonObject& committed)
+        {
+            const auto saved = committed["configurations"].toObject();
+            for (const auto& value : saved) {
+                if (value.toObject()["rules"].toInt() != kChecklistRules) {
+                    return true;
+                }
+            }
+            const auto current = working["configurations"].toObject();
+            for (auto it = current.begin(); it != current.end(); ++it) {
+                const auto configuration = it.value().toObject();
+                if (configuration["evaluated"].toBool() && configuration["progress"] != saved[it.key()].toObject()["progress"]) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     QString ReloadMakerController::weaponRecordKey() const
@@ -371,6 +392,7 @@ namespace reloadmaker
         }
         const auto& s = view.summary;
         configurations[configuration] = QJsonObject{ { "progress", weaponProgressName(weaponProgress(s)) },
+                                                     { "rules", kChecklistRules },
                                                      { "evaluated", view.evaluated },
                                                      { "done", s.done },
                                                      { "total", s.total },
@@ -477,10 +499,13 @@ namespace reloadmaker
             }
             const bool templated = !it->record["reloadTemplates"].toObject()[it.key()].toString().isEmpty();
             const bool packless = !committed[it.key()].toObject().contains("pack");
-            changed |= it->dirty;
+            const bool stale = progressOutdated(it->status, committed[it.key()].toObject()["status"].toObject());
+            changed |= it->dirty || stale;
             // Edited weapons are captured so the version exports what was
-            // authored; so is a configured weapon that has no behavior yet.
-            if (templated && (it->dirty || packless)) {
+            // authored; so is a configured weapon that has no behavior yet,
+            // and one whose saved progress is out of date: the capture
+            // evaluates every configuration's checklist again.
+            if (templated && (it->dirty || packless || stale)) {
                 job.queue.append(it.key());
             }
         }
@@ -544,6 +569,10 @@ namespace reloadmaker
         for (const auto& slot : configuration()->entries()) {
             capture.original[slot.key] = configuration()->selected(slot.key);
         }
+        // The capture evaluates every configuration it prepares; results of
+        // configurations it no longer prepares are not carried over.
+        capture.status = _esp->weapons.value(weapon).status;
+        capture.status["configurations"] = QJsonObject{};
         if (!QDir().mkpath(capture.folder)) {
             job.exceptions[weapon].append(QJsonObject{ { "status", "failed" }, { "error", "Cannot create the capture folder" } });
             job.queue.removeFirst();
@@ -559,6 +588,9 @@ namespace reloadmaker
                 return;
             }
             auto& job = *_espSave;
+            if (_esp && _esp->weapons.contains(weapon) && !done.status["configurations"].toObject().isEmpty()) {
+                _esp->weapons[weapon].status = done.status;
+            }
             if (!done.exceptions.isEmpty()) {
                 job.exceptions[weapon] = done.exceptions;
             }

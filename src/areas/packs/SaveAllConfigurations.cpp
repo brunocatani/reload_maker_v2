@@ -129,6 +129,7 @@ namespace reloadmaker
         try {
             runSimulationAction(QStringLiteral("reset"));
             require(_simulationActive, _simulationError.isEmpty() ? QStringLiteral("Operate could not prepare this configuration") : _simulationError);
+            job.status = mergedWeaponStatus(job.status);
             const auto capture = exportRuntimeConfiguration();
             const auto selection = capture["selection"].toObject();
             QStringList key;

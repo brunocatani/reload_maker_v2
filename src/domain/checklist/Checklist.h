@@ -132,6 +132,11 @@ namespace reloadmaker
     // A weapon over its evaluated configurations: complete when one is
     // complete and none is a draft; a draft while any configuration is.
     [[nodiscard]] WeaponProgress combineWeaponProgress(const QVector<WeaponProgress>& configurations);
+    // The checklist rules a stored configuration result was evaluated with.
+    // Raise it whenever what an item requires changes: results from older
+    // rules make the next Save evaluate that weapon's configurations again.
+    // 2: items read from the weapon need no confirmation.
+    inline constexpr int kChecklistRules = 2;
     [[nodiscard]] QString weaponProgressName(WeaponProgress progress);
     [[nodiscard]] bool parseWeaponProgress(const QString& name, WeaponProgress& progress);
 }

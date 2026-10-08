@@ -1351,6 +1351,9 @@ namespace reloadmaker
             QSet<QString> captured;                 // selections already captured
             QHash<SlotKey, std::uint32_t> original; // the author's selection, restored at the end
             QJsonArray exceptions;
+            // The weapon's checklist progress, evaluated again on every
+            // configuration the save prepares.
+            QJsonObject status;
             int captures{ 0 };
             bool cancelled{ false };
             // The ESP save's continuation; without one the job reports alone.
