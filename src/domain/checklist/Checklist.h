@@ -136,7 +136,9 @@ namespace reloadmaker
     // Raise it whenever what an item requires changes: results from older
     // rules make the next Save evaluate that weapon's configurations again.
     // 2: items read from the weapon need no confirmation.
-    inline constexpr int kChecklistRules = 2;
+    // 3: fire modes are informational; fits, fingers and grab points fall back
+    //    to the weapon's or a sibling's anchor (AnchorsAndFallbacksPlan).
+    inline constexpr int kChecklistRules = 3;
     [[nodiscard]] QString weaponProgressName(WeaponProgress progress);
     [[nodiscard]] bool parseWeaponProgress(const QString& name, WeaponProgress& progress);
 }
