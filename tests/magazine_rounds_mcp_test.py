@@ -62,8 +62,8 @@ def run():
         edit('export', dict(kind='project',path=str(project)))  # nothing writes the project except Save (owner, 2026-10-05)
         persisted = json.loads(project.read_text(encoding='utf-8'))['magazineRounds']
         assert persisted == {state['key']: {bullet: False}}, persisted
-        # A confirmation stays until the author removes it (owner, 2026-10-05).
-        assert presentation_item()['state'] == confirmed, 'Changed rounds revoked the confirmation'
+        # The item stays done: its data still exists.
+        assert presentation_item()['state'] == confirmed, 'Changed rounds changed the item state'
 
         # The choice survives reopening the project.
         edit('import_project', dict(path=str(project)))
@@ -77,7 +77,7 @@ def run():
         refused(dict(operation='save', rounds=everything), 'at least one piece as the magazine body')
         refused(dict(operation='rename'), 'save or reset')
 
-        # Back to the detected rounds: output and confirmation as before.
+        # Back to the detected rounds: output and item state as before.
         result = edit('magazine_rounds', dict(operation='reset'))
         ready()
         assert not result['chosen'] and [p['name'] for p in result['pieces'] if p['round']] == ['Bullet:0']

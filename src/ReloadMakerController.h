@@ -527,7 +527,6 @@ namespace reloadmaker
     private:
         const WeaponPreset* checklistPreset() const;
         QHash<QString, ChecklistObservation> checklistObservations(const WeaponPreset& preset) const;
-        QJsonObject checklistConfirmations() const;
         void prepareChecklistEvidence();
         bool buildOperatingRig(QString& error);
         // The learned reload whose rig could not be built, and why; the
@@ -564,7 +563,7 @@ namespace reloadmaker
         QLabel* _checklistCardEvidence{nullptr};
         QLabel* _checklistCardMessage{nullptr};
         QComboBox* _checklistPresetChoice{nullptr};
-        QPushButton* _checklistConfirm{nullptr};
+        QPushButton* _checklistUsePreset{nullptr};
         QPushButton* _checklistSkip{nullptr};
         QPushButton* _checklistUndo{nullptr};
         QPushButton* _checklistOpen{nullptr};

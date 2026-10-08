@@ -121,11 +121,6 @@ namespace reloadmaker
         return { "weapon.preset", ChecklistSection::LearnedReload, ChecklistSubsystem::Weapon, ChecklistOwner::Auto, true, "Behavior preset", {} };
     }
 
-    QJsonObject checklistConfirmation(const QString& value, const QString& at)
-    {
-        return { { "state", "confirmed" }, { "value", value.left(200) }, { "at", at } };
-    }
-
     QJsonObject checklistSkip(const QString& at)
     {
         return { { "state", kChecklistNotApplicable }, { "at", at } };
@@ -133,7 +128,7 @@ namespace reloadmaker
 
     QVector<ChecklistItemStatus> evaluateChecklist(const QVector<ChecklistItem>& items,
                                                    const QHash<QString, ChecklistObservation>& observations,
-                                                   const QJsonObject& confirmations)
+                                                   const QJsonObject& saved)
     {
         QVector<ChecklistItemStatus> result;
         result.reserve(items.size());
@@ -143,43 +138,22 @@ namespace reloadmaker
             const auto observation = observations.value(item.id);
             status.value = observation.value;
             status.evidence = observation.evidence;
-            const auto saved = confirmations.value(item.id).toObject();
-            const bool confirmed = saved.value("state").toString() == QLatin1String("confirmed");
-            const bool skipped = saved.value("state").toString() == QLatin1String(kChecklistNotApplicable) && !item.mandatory;
-            status.confirmedAt = saved.value("at").toString();
-            status.canSkip = !item.mandatory;
-            if (!observation.available) {
-                status.rechecked = false;
-                status.canSkip = false;
-                status.message = observation.problem;
-                if (skipped) {
-                    status.state = ChecklistState::NotApplicable;
-                    status.byYou = true;
-                } else if (confirmed) {
-                    status.state = ChecklistState::Confirmed;
-                    status.value = saved.value("value").toString();
-                    status.byYou = true;
-                } else {
-                    status.state = ChecklistState::NeedsYou;
-                }
-            } else if (!observation.applicable) {
+            status.message = observation.problem;
+            const bool skipped = !item.mandatory && saved.value(item.id).toObject().value("state").toString() == QLatin1String(kChecklistNotApplicable);
+            if (!observation.applicable) {
                 status.state = ChecklistState::NotApplicable;
-                status.message = observation.problem;
-                status.canSkip = false;
             } else if (skipped) {
                 status.state = ChecklistState::NotApplicable;
                 status.message = QStringLiteral("Marked not applicable by you");
-                status.canSkip = false;
                 status.byYou = true;
-            } else if (!observation.detected) {
-                status.state = ChecklistState::NeedsYou;
-                status.message = observation.problem;
-            } else if (item.owner == ChecklistOwner::You || confirmed) {
-                status.state = ChecklistState::Confirmed;
-                status.byYou = true;
+            } else if (!observation.available) {
+                status.state = ChecklistState::NotChecked;
+            } else if (observation.detected) {
+                status.state = ChecklistState::Done;
+                status.byYou = item.owner == ChecklistOwner::You;
             } else {
-                status.state = ChecklistState::Detected;
-                status.canConfirm = true;
+                status.state = ChecklistState::Missing;
+                status.canSkip = !item.mandatory;
             }
             result.append(status);
         }
@@ -190,36 +164,36 @@ namespace reloadmaker
     {
         ChecklistSummary summary;
         for (const auto& status : items) {
-            const bool done = status.state == ChecklistState::Confirmed || status.state == ChecklistState::NotApplicable;
+            const bool done = status.state == ChecklistState::Done || status.state == ChecklistState::NotApplicable;
             ++summary.total;
             summary.done += done;
-            summary.needsYou += status.state == ChecklistState::NeedsYou;
-            summary.toConfirm += status.state == ChecklistState::Detected;
             if (status.item.mandatory) {
                 ++summary.mandatory;
                 summary.mandatoryDone += done;
+                summary.missing += status.state == ChecklistState::Missing;
+                summary.notChecked += status.state == ChecklistState::NotChecked;
             }
-            // A detector's "not applicable" is not work; a confirmation,
-            // an authored value or a skip is.
+            // Data read from the weapon's files is not work; an authored
+            // value, an assigned preset or a skip is.
             summary.started = summary.started || status.byYou;
         }
         summary.complete = summary.mandatory > 0 && summary.mandatoryDone == summary.mandatory;
         return summary;
     }
 
-    bool validChecklistConfirmations(const QJsonObject& confirmations)
+    bool validChecklistEntries(const QJsonObject& saved)
     {
         static const QRegularExpression id(QStringLiteral("^[a-z0-9][a-z0-9.\\-]{0,127}$"), QRegularExpression::CaseInsensitiveOption);
-        if (confirmations.size() > 256) {
+        if (saved.size() > 256) {
             return false;
         }
-        for (auto it = confirmations.begin(); it != confirmations.end(); ++it) {
-            const auto saved = it.value().toObject();
-            const auto state = saved.value("state").toString();
-            if (!id.match(it.key()).hasMatch() || !it.value().isObject() || saved.size() > 3 ||
+        for (auto it = saved.begin(); it != saved.end(); ++it) {
+            const auto entry = it.value().toObject();
+            const auto state = entry.value("state").toString();
+            if (!id.match(it.key()).hasMatch() || !it.value().isObject() || entry.size() > 3 ||
                 (state != QLatin1String("confirmed") && state != QLatin1String(kChecklistNotApplicable)) ||
-                (saved.contains("value") && (!saved.value("value").isString() || saved.value("value").toString().size() > 200)) ||
-                !saved.value("at").isString() || saved.value("at").toString().size() > 40) {
+                (entry.contains("value") && (!entry.value("value").isString() || entry.value("value").toString().size() > 200)) ||
+                !entry.value("at").isString() || entry.value("at").toString().size() > 40) {
                 return false;
             }
         }

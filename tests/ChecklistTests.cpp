@@ -1,8 +1,8 @@
 // The checklist follows the weapon model: each bundled preset yields the
 // items its behavior needs (a manual-cycle bolt gets "cycle between shots",
 // a driven bolt gets no grab points), and the item states, skips and
-// completion follow rework 02 §4. A confirmation stays until the author
-// removes it; a changed value never revokes it (owner, 2026-10-05).
+// completion follow rework 02 §4. An item is done when its data exists,
+// whoever made it; nothing waits for a confirmation.
 #include "domain/checklist/Checklist.h"
 #include "domain/presets/WeaponPresets.h"
 
@@ -98,54 +98,59 @@ namespace
         observed["feed.world"] = { true, false, false, {}, {}, "No loose magazine model" };
         auto evaluated = evaluateChecklist(items, observed, {});
         auto summary = summarizeChecklist(evaluated);
-        check(find(evaluated, "feed.fits").state == ChecklistState::NeedsYou && find(evaluated, "feed.fits").message == "Fit the left hand",
-              "Missing authored value needs you");
-        check(find(evaluated, "action.slide.grab").state == ChecklistState::Confirmed, "Authored value counts as confirmed by its author");
+        check(find(evaluated, "feed.fits").state == ChecklistState::Missing && find(evaluated, "feed.fits").message == "Fit the left hand",
+              "Missing authored value is missing");
+        check(find(evaluated, "action.slide.grab").state == ChecklistState::Done && find(evaluated, "action.slide.grab").byYou,
+              "Authored value is done");
+        check(find(evaluated, "feed.guide").state == ChecklistState::Done && !find(evaluated, "feed.guide").byYou,
+              "Value read from the weapon is done without a confirmation");
         check(find(evaluated, "feed.world").state == ChecklistState::NotApplicable && !find(evaluated, "feed.world").byYou, "Detector skip");
-        check(find(evaluated, "weapon.preset").state == ChecklistState::Detected && find(evaluated, "weapon.preset").canConfirm, "Detected value awaits confirmation");
-        check(summary.started && !summary.complete && summary.needsYou == 1, "Partial checklist summary");
+        check(summary.started && !summary.complete && summary.missing == 1, "Partial checklist summary");
 
-        QJsonObject confirmations;
-        for (const auto& status : evaluated) {
-            if (status.canConfirm) {
-                confirmations[status.item.id] = checklistConfirmation(status.value, "2026-10-04T14:02:00Z");
-            }
-        }
         observed["feed.fits"] = { true, true, true, "Left and right", {}, {} };
-        evaluated = evaluateChecklist(items, observed, confirmations);
+        evaluated = evaluateChecklist(items, observed, {});
         summary = summarizeChecklist(evaluated);
-        check(summary.complete && weaponProgress(summary) == WeaponProgress::Complete, "Every mandatory item confirmed completes the weapon");
+        check(summary.complete && summary.missing == 0 && weaponProgress(summary) == WeaponProgress::Complete,
+              "Every required item existing completes the weapon");
 
-        // A changed value keeps its confirmation and shows the new value.
+        // A changed value stays done and shows the new value.
         auto changed = observed;
         changed["feed.guide"].value = "4 degrees steeper";
-        evaluated = evaluateChecklist(items, changed, confirmations);
-        check(find(evaluated, "feed.guide").state == ChecklistState::Confirmed && find(evaluated, "feed.guide").value == "4 degrees steeper",
-              "A changed value revoked its confirmation");
-        check(summarizeChecklist(evaluated).complete, "A changed value blocked completion");
+        evaluated = evaluateChecklist(items, changed, {});
+        check(find(evaluated, "feed.guide").state == ChecklistState::Done && find(evaluated, "feed.guide").value == "4 degrees steeper",
+              "A changed value is not done");
 
-        // A detector that cannot run keeps the saved confirmation, not rechecked.
-        auto away = observed;
-        away["feed.presentation"] = { false, false, true, {}, {}, "Open Operate to recheck" };
-        evaluated = evaluateChecklist(items, away, confirmations);
-        const auto kept = find(evaluated, "feed.presentation");
-        check(kept.state == ChecklistState::Confirmed && !kept.rechecked && kept.value == "value" && kept.confirmedAt.startsWith("2026"),
-              "Unavailable detector lost the saved confirmation");
-        away["weapon.preset"] = { false, false, true, {}, {}, "Not loaded" };
-        check(find(evaluateChecklist(items, away, {}), "weapon.preset").state == ChecklistState::NeedsYou, "Unknown item reported done");
+        // Retired confirmations in older records are valid and ignored.
+        QJsonObject saved{ { "feed.fits", QJsonObject{ { "state", "confirmed" }, { "value", "old" }, { "at", "2026-10-04T14:02:00Z" } } } };
+        auto missingFit = observed;
+        missingFit["feed.fits"] = { true, false, true, {}, {}, "Fit the left hand" };
+        check(find(evaluateChecklist(items, missingFit, saved), "feed.fits").state == ChecklistState::Missing,
+              "A retired confirmation hid missing data");
 
-        // Optional items may be skipped; mandatory ones may not.
+        // While the weapon loads nothing is reported missing or done.
+        auto loading = observed;
+        loading["feed.presentation"] = { false, false, true, {}, {}, "Wait for the weapon" };
+        evaluated = evaluateChecklist(items, loading, {});
+        summary = summarizeChecklist(evaluated);
+        check(find(evaluated, "feed.presentation").state == ChecklistState::NotChecked && summary.notChecked == 1 && summary.missing == 0 &&
+                  !summary.complete,
+              "Loading item reported as missing or done");
+
+        // Missing optional items may be skipped; required ones may not.
         const auto skip = checklistSkip("2026-10-04T14:03:00Z");
-        confirmations["fire.sound"] = skip;
-        confirmations["feed.guide"] = skip;
-        evaluated = evaluateChecklist(items, observed, confirmations);
+        auto optional = observed;
+        optional["fire.sound"] = { true, false, true, {}, {}, "No fire sound" };
+        check(find(evaluateChecklist(items, optional, {}), "fire.sound").canSkip, "Missing optional item cannot be skipped");
+        saved = QJsonObject{ { "fire.sound", skip }, { "feed.guide", skip } };
+        evaluated = evaluateChecklist(items, optional, saved);
         check(find(evaluated, "fire.sound").state == ChecklistState::NotApplicable && find(evaluated, "fire.sound").byYou, "Optional skip");
-        check(find(evaluated, "feed.guide").state == ChecklistState::Detected, "Mandatory item skipped");
+        check(find(evaluated, "feed.guide").state == ChecklistState::Done, "Required item skipped");
 
-        check(validChecklistConfirmations(confirmations), "Saved confirmations rejected");
-        check(!validChecklistConfirmations({ { "feed.guide", QJsonObject{ { "state", "maybe" }, { "at", "" } } } }) &&
-                  !validChecklistConfirmations({ { "../x", skip } }) && !validChecklistConfirmations({ { "feed.guide", "n/a" } }),
-              "Invalid confirmations accepted");
+        saved["feed.fits"] = QJsonObject{ { "state", "confirmed" }, { "value", "old" }, { "at", "2026-10-04T14:02:00Z" } };
+        check(validChecklistEntries(saved), "Saved checklist entries rejected");
+        check(!validChecklistEntries({ { "feed.guide", QJsonObject{ { "state", "maybe" }, { "at", "" } } } }) &&
+                  !validChecklistEntries({ { "../x", skip } }) && !validChecklistEntries({ { "feed.guide", "n/a" } }),
+              "Invalid checklist entries accepted");
         check(weaponProgress(summarizeChecklist(evaluateChecklist(items, {}, {}))) == WeaponProgress::NotStarted, "Nothing done is not started");
         using P = WeaponProgress;
         check(combineWeaponProgress({ P::Complete, P::NotStarted }) == P::Complete && combineWeaponProgress({ P::Complete, P::Draft }) == P::Draft &&
@@ -164,7 +169,7 @@ int main(int argc, char** argv)
         presetItems(app.arguments()[1]);
         singleUnitFeed();
         states();
-        QTextStream(stdout) << "PASS checklist items per preset and feed, states, kept confirmations, skips, completion and weapon progress\n";
+        QTextStream(stdout) << "PASS checklist items per preset and feed, done/missing states without confirmations, skips, completion and weapon progress\n";
         return 0;
     } catch (const std::exception& e) {
         QTextStream(stderr) << "FAIL " << e.what() << '\n';

@@ -117,7 +117,7 @@ namespace reloadmaker
                         (plan.contains("operating") && !readOperatingSetup(plan["operating"].toObject(), setup, error)) ||
                         (plan.contains("magazineGuide") && !readMagazineGuide(plan["magazineGuide"].toObject(), guide, error)) ||
                         (plan.contains("magazineReference") && !readMagazineReference(plan["magazineReference"].toObject(), reference, error)) ||
-                        (plan.contains("checklist") && (!plan["checklist"].isObject() || !validChecklistConfirmations(plan["checklist"].toObject()))) ||
+                        (plan.contains("checklist") && (!plan["checklist"].isObject() || !validChecklistEntries(plan["checklist"].toObject()))) ||
                         (plan.contains("collisionDrafts") &&
                          (!plan["collisionDrafts"].isObject() || !validCollisionDrafts(plan["collisionDrafts"].toObject()))) ||
                         (plan.contains("magazineSetup") && !readMagazineSetup(plan["magazineSetup"].toObject(), magazine, error))) {

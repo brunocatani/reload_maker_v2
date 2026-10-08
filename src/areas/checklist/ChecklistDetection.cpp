@@ -1,18 +1,16 @@
-// Checklist detection and confirmation (rework 02 §4, P2-03). The items come
-// from the weapon's preset model; each one is observed from what Maker
+// Checklist detection (rework 02 §4). The items come from the weapon's
+// preset model; each one is done when its data exists, read from what Maker
 // already knows: the learned reload, the operating rig, the magazine, the
-// hands and the sounds (P2-04 turns these readings into standalone
-// detectors). A confirmation stays until the author removes it: no value is
-// compared with a hash (owner, 2026-10-05). Evidence that exists only while
-// Operate runs (the magazine rail) or after Operate prepared it once (the
-// sound profile) reports that it cannot run here, and the item shows its
-// saved confirmation.
+// hands and the sounds. Whoever made the data, by hand or by an assistant,
+// nothing needs a separate confirmation; the checklist lists what is actually
+// missing. Values Operate computes (the magazine rail, the bolt cycle) are
+// done when their source exists; when Operate then cannot use them, the item
+// shows what is missing.
 #include "ReloadMakerController.h"
 #include "ReloadBundle.h"
 #include "ReloadTemplates.h"
 
 #include <QDateTime>
-#include <QScopeGuard>
 #include <QTimer>
 #include <stdexcept>
 
@@ -113,17 +111,26 @@ namespace reloadmaker
     }
 
     // Builds the operating rig from the learned reload when it is missing,
-    // as Grab points does, without starting a capture or reporting status.
+    // as Grab points does, without starting a capture or reporting status,
+    // then the weapon's sounds, which need only the rig. A bolt action's
+    // sounds wait for Operate: their cycle cues come from the bolt-cycle clip
+    // Operate reads, and a profile made earlier would be kept without them.
     void ReloadMakerController::prepareChecklistEvidence()
     {
-        if (!currentWeapon() || !configuration() || _loadThread || _reloadCapturing || _reloadCaptureQueued || !_reloadRecipe || _simulationRig ||
-            _checklistRigRecipe == _reloadRecipe->id) {
+        if (!currentWeapon() || !configuration() || _loadThread || _reloadCapturing || _reloadCaptureQueued || !_reloadRecipe) {
             return;
         }
-        QString error;
-        if (!buildOperatingRig(error)) {
-            _checklistRigRecipe = _reloadRecipe->id;
-            _checklistRigError = error;
+        if (!_simulationRig && _checklistRigRecipe != _reloadRecipe->id) {
+            QString error;
+            if (!buildOperatingRig(error)) {
+                _checklistRigRecipe = _reloadRecipe->id;
+                _checklistRigError = error;
+            }
+        }
+        const bool prepared = _soundProfile.weapon.compare(poseRecordKey(currentWeapon()->formId), Qt::CaseInsensitive) == 0 &&
+                              _soundProfile.animation == _reloadRecipe->source["animation"].toString();
+        if (_simulationRig && !_simulationActive && !prepared && !isBoltActionConfiguration()) {
+            prepareSounds();
         }
     }
 
@@ -142,18 +149,25 @@ namespace reloadmaker
                             : _checklistRigRecipe == _reloadRecipe->id && !_checklistRigError.isEmpty()
                                 ? QStringLiteral("The operating parts could not be prepared: ") + _checklistRigError
                                 : QStringLiteral("The operating parts could not be prepared from the learned reload.");
+        // Until the weapon has loaded nothing can be read; after that, data
+        // no reading found does not exist.
         for (const auto& item : checklistItems(model)) {
-            o.insert(item.id, unavailable(why));
+            o.insert(item.id, busy || !loaded ? unavailable(why) : missing(why));
         }
         if (!loaded) {
             return o;
         }
         const auto saved = _authoringRecords.value(authoringRecordKey()).toObject();
 
-        // Learned reload.
-        o["weapon.preset"] = found(preset.label,
-                                   assignedTemplate().isEmpty() ? presetProposal().evidence + QStringLiteral(" Confirming assigns the preset to the weapon.")
-                                                                : QStringLiteral("Assigned to this weapon."));
+        // Learned reload. The preset is done once it is assigned to the weapon.
+        if (assignedTemplate().isEmpty()) {
+            auto proposed = missing(QStringLiteral("Proposed: ") + preset.label + QStringLiteral(". Use this preset to assign it."));
+            proposed.value = preset.label;
+            proposed.evidence = presetProposal().evidence;
+            o["weapon.preset"] = proposed;
+        } else {
+            o["weapon.preset"] = found(preset.label, QStringLiteral("Assigned to this weapon."));
+        }
         if (!captured) {
             o["weapon.reload"] = missing(learn);
         } else {
@@ -228,10 +242,14 @@ namespace reloadmaker
             }
             if (model.fire.afterShot == AfterShot::ManualCycle && model.fire.manualCycleMechanism == m.id) {
                 const bool cycle = !_boltCycle.opening.isEmpty() && _boltCycle.inputTravel > 0;
+                const auto clip = std::find_if(_animationActions.cbegin(), _animationActions.cend(),
+                                               [](const auto& action) { return action.family == ActionFamily::Cycle; });
                 o[prefix + ".cycle"] = cycle ? found(QStringLiteral("Lift, pull, push, lock · ejects at %1%").arg(qRound(_boltCycle.ejectProgress * 100)),
                                                      _boltCycleSource["animation"].toString())
-                                       : _simulationActive ? missing(QStringLiteral("No bolt cycle animation was found for this weapon."))
-                                                           : unavailable(QStringLiteral("Open Operate once to read the bolt cycle animation."));
+                                       : _simulationActive ? missing(_simulationError.isEmpty() ? QStringLiteral("No bolt cycle animation was found for this weapon.") : _simulationError)
+                                       : r.manualCycle      ? found(QStringLiteral("Your bolt cycle"), QStringLiteral("Authored cycle curves."))
+                                       : clip != _animationActions.cend() ? found(QStringLiteral("Bolt cycle animation"), clip->resourcePath)
+                                                                          : missing(QStringLiteral("No bolt cycle animation was found for this weapon."));
             }
         }
         if (o.contains("action.fingers")) {
@@ -266,8 +284,7 @@ namespace reloadmaker
         // The magazine rail exists while Operate runs.
         if (o.contains("feed.presentation")) {
             if (_simulationActive && _magazineRail && _magazineError.isEmpty()) {
-                // Round choices join the inputs only when the author made any,
-                // so confirmations without them stay valid.
+                // Round choices join the inputs only when the author made any.
                 auto presentation = magazinePresentationJson(saved.value("magazineSetup").toObject());
                 presentation["fullTrack"] = label(_magazineRail->fullTrack);
                 presentation["emptyTrack"] = label(_magazineRail->emptyTrack);
@@ -281,10 +298,18 @@ namespace reloadmaker
             } else if (_simulationActive) {
                 o["feed.presentation"] = missing(_magazineError);
                 o["feed.guide"] = missing(_magazineError);
+            } else if (r.magazine >= 0) {
+                // Operate fits the rail from this track; a fit that fails
+                // there shows here as missing.
+                o["feed.presentation"] = found(QStringLiteral("Magazine: %1").arg(label(r.magazine)),
+                                               saved.contains("magazineSetup") ? QStringLiteral("Your models and payload settings.")
+                                                                               : QStringLiteral("The learned reload's magazine."));
+                o["feed.guide"] = found(saved.contains("magazineGuide") ? QStringLiteral("Your insertion guide") : QStringLiteral("From the magazine's motion"),
+                                        saved.contains("magazineGuide") ? QStringLiteral("Saved for this configuration.")
+                                                                        : QStringLiteral("The learned reload's magazine track."));
             } else {
-                const auto away = QStringLiteral("Checked in Operate, where the magazine moves.");
-                o["feed.presentation"] = unavailable(away);
-                o["feed.guide"] = unavailable(away);
+                o["feed.presentation"] = missing(QStringLiteral("The learned reload has no magazine track."));
+                o["feed.guide"] = missing(QStringLiteral("The learned reload has no magazine track."));
             }
         }
 
@@ -292,10 +317,11 @@ namespace reloadmaker
         const bool sounds = _soundProfile.weapon.compare(poseRecordKey(currentWeapon()->formId), Qt::CaseInsensitive) == 0 &&
                             _soundProfile.animation == _reloadRecipe->source["animation"].toString();
         if (!sounds) {
-            const auto away = QStringLiteral("Read when Operate prepares the weapon's sounds.");
-            o["fire.dry"] = unavailable(away);
-            o["fire.sound"] = unavailable(away);
-            o["sounds.reload"] = unavailable(away);
+            // A bolt action's sounds are prepared with its cycle in Operate.
+            const auto open = QStringLiteral("Open Operate or Sounds to read this weapon's sounds.");
+            o["fire.dry"] = missing(open);
+            o["fire.sound"] = missing(open);
+            o["sounds.reload"] = missing(open);
             return o;
         }
         const SoundCue* dry = nullptr;
@@ -328,24 +354,6 @@ namespace reloadmaker
         return o;
     }
 
-    // Saved confirmations of this configuration. The preset's confirmation is
-    // its assignment to the weapon, which is saved on its own.
-    QJsonObject ReloadMakerController::checklistConfirmations() const
-    {
-        auto confirmations = _authoringRecords.value(authoringRecordKey()).toObject().value("checklist").toObject();
-        const QString assigned = assignedTemplate();
-        if (!assigned.isEmpty()) {
-            QString label = assigned;
-            for (const auto& preset : reloadPresets()) {
-                if (preset.id == assigned) {
-                    label = preset.label;
-                }
-            }
-            confirmations["weapon.preset"] = checklistConfirmation(label, {});
-        }
-        return confirmations;
-    }
-
     ReloadMakerController::ChecklistView ReloadMakerController::checklistView() const
     {
         ChecklistView view;
@@ -363,7 +371,8 @@ namespace reloadmaker
             }
             return view;
         }
-        view.items = evaluateChecklist(checklistItems(view.preset->model), checklistObservations(*view.preset), checklistConfirmations());
+        view.items = evaluateChecklist(checklistItems(view.preset->model), checklistObservations(*view.preset),
+                                       _authoringRecords.value(authoringRecordKey()).toObject().value("checklist").toObject());
         view.summary = summarizeChecklist(view.items);
         const bool busy = _loadThread || _reloadCapturing || _reloadCaptureQueued || (_rebuildTimer && _rebuildTimer->isActive());
         view.evaluated = configuration() && !busy && _reloadRecipe && _simulationRig && _simulationRig->recipeId == _reloadRecipe->id;
@@ -376,15 +385,13 @@ namespace reloadmaker
         static const char* sections[]{ "learned-reload", "part-grips", "mechanisms", "grab-points", "magazines", "fire" };
         static const char* subsystems[]{ "weapon", "feed", "action", "fire" };
         static const char* owners[]{ "auto", "preset", "you" };
-        static const char* states[]{ "needs-you", "detected", "confirmed", "not-applicable" };
+        static const char* states[]{ "missing", "done", "not-checked", "not-applicable" };
         QJsonArray items;
         for (const auto& status : view.items) {
             items.append(QJsonObject{ { "id", status.item.id }, { "section", sections[int(status.item.section)] }, { "subsystem", subsystems[int(status.item.subsystem)] },
                                       { "owner", owners[int(status.item.owner)] }, { "mandatory", status.item.mandatory }, { "title", status.item.title },
                                       { "state", states[int(status.state)] }, { "value", status.value }, { "evidence", status.evidence },
-                                      { "message", status.message }, { "rechecked", status.rechecked },
-                                      { "canConfirm", status.canConfirm }, { "canSkip", status.canSkip }, { "byYou", status.byYou },
-                                      { "confirmedAt", status.confirmedAt } });
+                                      { "message", status.message }, { "canSkip", status.canSkip }, { "byYou", status.byYou } });
         }
         const auto& s = view.summary;
         QJsonArray presets;
@@ -395,13 +402,11 @@ namespace reloadmaker
                  { "presetAssigned", !assignedTemplate().isEmpty() }, { "presets", presets }, { "authoringKey", authoringRecordKey() },
                  { "evaluated", view.evaluated }, { "problem", view.problem }, { "items", items },
                  { "summary", QJsonObject{ { "total", s.total }, { "done", s.done }, { "mandatory", s.mandatory }, { "mandatoryDone", s.mandatoryDone },
-                                           { "needsYou", s.needsYou }, { "toConfirm", s.toConfirm }, { "started", s.started }, { "complete", s.complete },
+                                           { "missing", s.missing }, { "notChecked", s.notChecked }, { "started", s.started }, { "complete", s.complete },
                                            { "progress", weaponProgressName(weaponProgress(s)) } } } };
     }
 
-    // confirm, unconfirm, skip and unskip one item by id; preset assigns a
-    // preset by id. Confirming an item whose detector runs only in Operate
-    // checks it there and returns to the current builder step.
+    // skip and unskip one optional item by id; preset assigns a preset by id.
     QJsonObject ReloadMakerController::checklistCommand(const QJsonObject& request)
     {
         const auto operation = request["operation"].toString("state");
@@ -417,55 +422,27 @@ namespace reloadmaker
             assignReloadPreset(id);
             return checklistState();
         }
-        auto view = checklistView();
+        const auto view = checklistView();
         const auto* status = findItem(view.items, id);
         if (!status) {
             throw std::runtime_error(("Unknown checklist item: " + id).toStdString());
         }
-        std::optional<BuilderStep> returnTo;
-        const auto restore = qScopeGuard([&] {
-            if (returnTo) {
-                showBuilderStep(*returnTo);
-            }
-        });
-        if (operation == QLatin1String("confirm") && !status->rechecked && _workspace != OperateWorkspace) {
-            returnTo = builderStep();
-            setWorkspace(OperateWorkspace);
-            view = checklistView();
-            status = findItem(view.items, id);
-            if (!status) {
-                throw std::runtime_error("The checklist changed while checking in Operate");
-            }
-            if (!status->rechecked) {
-                throw std::runtime_error(("Operate could not check it: " + status->message).toStdString());
-            }
-        }
         auto saved = _authoringRecords.value(key).toObject();
-        auto confirmations = saved.value("checklist").toObject();
-        const auto now = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-        if (operation == QLatin1String("confirm")) {
-            if (!status->canConfirm) {
-                throw std::runtime_error((status->message.isEmpty() ? QStringLiteral("Nothing to confirm for ") + status->item.title : status->message).toStdString());
-            }
-            if (id == QLatin1String("weapon.preset")) {
-                assignReloadPreset(view.preset->id);
-                return checklistState();
-            }
-            confirmations[id] = checklistConfirmation(status->value, now);
-        } else if (operation == QLatin1String("skip")) {
+        auto entries = saved.value("checklist").toObject();
+        if (operation == QLatin1String("skip")) {
             if (!status->canSkip) {
-                throw std::runtime_error("Only optional items can be marked not applicable");
+                throw std::runtime_error("Only a missing optional item can be marked not applicable");
             }
-            confirmations[id] = checklistSkip(now);
-        } else if (operation == QLatin1String("unconfirm") || operation == QLatin1String("unskip")) {
-            if (id == QLatin1String("weapon.preset")) {
-                throw std::runtime_error("Choose another preset instead");
+            entries[id] = checklistSkip(QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+        } else if (operation == QLatin1String("unskip")) {
+            if (entries.value(id).toObject().value("state").toString() != QLatin1String(kChecklistNotApplicable)) {
+                throw std::runtime_error("This item was not marked not applicable");
             }
-            confirmations.remove(id);
+            entries.remove(id);
         } else {
-            throw std::runtime_error("Unknown checklist operation");
+            throw std::runtime_error("Unknown checklist operation: use state, preset, skip or unskip");
         }
-        saved["checklist"] = confirmations;
+        saved["checklist"] = entries;
         _authoringRecords[key] = saved;
         noteDocumentChange(QStringLiteral("checklist"));
         return checklistState();

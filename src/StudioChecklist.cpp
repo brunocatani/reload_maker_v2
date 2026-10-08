@@ -1,8 +1,9 @@
 // The Reload builder's left Checklist (canvas Author board). One section per
 // builder step plus Fire and sounds; each section shows its done count, and
-// the open section lists its items with their state. The card under the list
-// shows the selected item's value and evidence with its actions. A complete
-// checklist says so and stays editable.
+// the open section lists its items with their state: done when the data
+// exists, missing when it does not. The card under the list shows the
+// selected item's value and where it came from. A complete checklist says so
+// and stays editable.
 #include "ReloadMakerController.h"
 #include "ReloadTemplates.h"
 #include "design/DesignWidgets.h"
@@ -49,10 +50,10 @@ namespace reloadmaker
         ChecklistRow::Marker markerFor(ChecklistState state)
         {
             switch (state) {
-            case ChecklistState::Confirmed: return ChecklistRow::Marker::Confirmed;
-            case ChecklistState::Detected: return ChecklistRow::Marker::Detected;
+            case ChecklistState::Done: return ChecklistRow::Marker::Confirmed;
+            case ChecklistState::NotChecked: return ChecklistRow::Marker::Open;
             case ChecklistState::NotApplicable: return ChecklistRow::Marker::NotApplicable;
-            case ChecklistState::NeedsYou: break;
+            case ChecklistState::Missing: break;
             }
             return ChecklistRow::Marker::NeedsYou;
         }
@@ -171,11 +172,11 @@ namespace reloadmaker
         card->addWidget(_checklistPresetChoice);
         auto* actions = new QHBoxLayout;
         actions->setSpacing(6);
-        _checklistConfirm = new QPushButton(QStringLiteral("Confirm"), _checklistCard);
-        _checklistConfirm->setObjectName(QStringLiteral("PrimaryButton"));
+        _checklistUsePreset = new QPushButton(QStringLiteral("Use this preset"), _checklistCard);
+        _checklistUsePreset->setObjectName(QStringLiteral("PrimaryButton"));
         _checklistSkip = new QPushButton(QStringLiteral("Not applicable"), _checklistCard);
         _checklistUndo = new QPushButton(QStringLiteral("Undo"), _checklistCard);
-        for (auto* button : { _checklistConfirm, _checklistSkip, _checklistUndo }) {
+        for (auto* button : { _checklistUsePreset, _checklistSkip, _checklistUndo }) {
             actions->addWidget(button);
         }
         card->addLayout(actions);
@@ -197,17 +198,11 @@ namespace reloadmaker
             }
             refreshChecklistUi();
         });
-        connect(_checklistConfirm, &QPushButton::clicked, this, [this] {
-            if (_selectedChecklistItem == QLatin1String("weapon.preset") && _checklistPresetChoice->isVisible()) {
-                runChecklistCommand({ { "operation", "preset" }, { "id", _checklistPresetChoice->currentData().toString() } });
-            } else {
-                runChecklistCommand({ { "operation", "confirm" }, { "id", _selectedChecklistItem } });
-            }
+        connect(_checklistUsePreset, &QPushButton::clicked, this, [this] {
+            runChecklistCommand({ { "operation", "preset" }, { "id", _checklistPresetChoice->currentData().toString() } });
         });
         connect(_checklistSkip, &QPushButton::clicked, this, [this] { runChecklistCommand({ { "operation", "skip" }, { "id", _selectedChecklistItem } }); });
-        connect(_checklistUndo, &QPushButton::clicked, this, [this] {
-            runChecklistCommand({ { "operation", _checklistUndo->property("skip").toBool() ? "unskip" : "unconfirm" }, { "id", _selectedChecklistItem } });
-        });
+        connect(_checklistUndo, &QPushButton::clicked, this, [this] { runChecklistCommand({ { "operation", "unskip" }, { "id", _selectedChecklistItem } }); });
         connect(_checklistOpen, &QPushButton::clicked, this, [this] {
             if (_checklistOpen->property("rounds").toBool()) {
                 showMagazineRounds();
@@ -298,16 +293,15 @@ namespace reloadmaker
         for (const auto& status : view.items) {
             const int section = int(status.item.section);
             ++total[section];
-            done[section] += status.state == ChecklistState::Confirmed || status.state == ChecklistState::NotApplicable;
+            done[section] += status.state == ChecklistState::Done || status.state == ChecklistState::NotApplicable;
             auto* row = _checklistItemRows.value(status.item.id);
             row->setMarker(markerFor(status.state));
-            // The tag says who acts next or that the state is the saved one.
-            const QString tag = !status.rechecked && status.state == ChecklistState::Confirmed ? QStringLiteral("saved")
-                                : status.item.owner == ChecklistOwner::You && status.state == ChecklistState::NeedsYou ? QStringLiteral("you")
-                                : !status.item.mandatory && status.state != ChecklistState::Confirmed ? QStringLiteral("optional")
-                                                                                                        : QString();
+            // Required missing data is the work left; optional items say so.
+            const QString tag = status.state == ChecklistState::Missing && status.item.mandatory ? QStringLiteral("to do")
+                                : !status.item.mandatory && status.state != ChecklistState::Done ? QStringLiteral("optional")
+                                                                                                 : QString();
             row->setTrailing(tag);
-            row->setTrailingColor(tag == QLatin1String("you") ? color::needsYou : color::textFaint);
+            row->setTrailingColor(tag == QLatin1String("to do") ? color::needsYou : color::textFaint);
             row->setToolTip(status.value.isEmpty() ? status.message : status.value);
             const bool isSelected = status.item.id == _selectedChecklistItem;
             {
@@ -347,20 +341,12 @@ namespace reloadmaker
             _checklistBanner->setText(view.problem);
             setTone(_checklistBanner, "attention");
         } else if (s.complete) {
-            _checklistBanner->setText(QStringLiteral("Complete. Every required item is confirmed for this configuration. Anything can still change; "
-                                                     "changed items come back for review."));
+            _checklistBanner->setText(QStringLiteral("Complete. Everything this configuration needs exists. Anything can still change."));
             setTone(_checklistBanner, "complete");
         } else {
-            QStringList parts;
-            const int required = s.mandatory - s.mandatoryDone;
-            parts << QStringLiteral("%1 required item(s) left").arg(required);
-            if (s.needsYou) {
-                parts << QStringLiteral("%1 need you").arg(s.needsYou);
-            }
-            if (s.toConfirm) {
-                parts << QStringLiteral("%1 to confirm").arg(s.toConfirm);
-            }
-            _checklistBanner->setText(parts.join(QStringLiteral(" · ")) + (view.preset ? QStringLiteral("\nPreset: ") + view.preset->label : QString()));
+            const QString left = s.missing ? (s.missing == 1 ? QStringLiteral("1 required item missing") : QStringLiteral("%1 required items missing").arg(s.missing))
+                                           : QStringLiteral("Reading the weapon…");
+            _checklistBanner->setText(left + (view.preset ? QStringLiteral("\nPreset: ") + view.preset->label : QString()));
             setTone(_checklistBanner, "attention");
         }
         _checklistBanner->setVisible(true);
@@ -368,12 +354,9 @@ namespace reloadmaker
         if (view.preset && s.complete) {
             footer << QStringLiteral("Checklist complete");
         } else if (view.preset) {
-            if (s.needsYou) {
+            if (s.missing) {
                 footer << QStringLiteral("<span style=\"color:%1\">%2</span>")
-                              .arg(hex(color::needsYou), s.needsYou == 1 ? QStringLiteral("1 item needs you") : QStringLiteral("%1 items need you").arg(s.needsYou));
-            }
-            if (s.toConfirm) {
-                footer << (s.toConfirm == 1 ? QStringLiteral("1 detected item to confirm") : QStringLiteral("%1 detected items to confirm").arg(s.toConfirm));
+                              .arg(hex(color::needsYou), s.missing == 1 ? QStringLiteral("1 item to do") : QStringLiteral("%1 items to do").arg(s.missing));
             }
         }
         _checklistFooter->setText(footer.join(QStringLiteral(" &nbsp;·&nbsp; ")));
@@ -388,13 +371,13 @@ namespace reloadmaker
         _checklistCardSection->setText(QString::fromLatin1(subsystems[int(item.item.subsystem)]).toUpper() + QStringLiteral(" · ") +
                                        QString::fromLatin1(kSections[int(item.item.section)].title).toUpper());
         _checklistCardTitle->setText(item.item.title);
-        static const char* stateNames[]{ "Needs you", "Detected", "Confirmed", "Not applicable" };
-        static const char* tones[]{ "needs", "detected", "confirmed", "na" };
+        static const char* stateNames[]{ "Missing", "Done", "Loading", "Not applicable" };
+        static const char* tones[]{ "needs", "confirmed", "detected", "na" };
         _checklistCardState->setText(QString::fromLatin1(stateNames[int(item.state)]));
         setTone(_checklistCardState, tones[int(item.state)]);
-        QString owner = item.item.owner == ChecklistOwner::You      ? QStringLiteral("You author it")
-                        : item.item.owner == ChecklistOwner::Preset ? QStringLiteral("From the preset; you confirm")
-                                                                    : QStringLiteral("Maker detects; you confirm");
+        QString owner = item.item.owner == ChecklistOwner::You      ? QStringLiteral("Authored")
+                        : item.item.owner == ChecklistOwner::Preset ? QStringLiteral("From the preset")
+                                                                    : QStringLiteral("From the weapon's files and reload");
         if (!item.item.mandatory) {
             owner += QStringLiteral(" · optional");
         }
@@ -402,17 +385,14 @@ namespace reloadmaker
         _checklistCardValue->setText(item.value);
         _checklistCardValue->setVisible(!item.value.isEmpty());
         _checklistCardEvidence->setText(item.evidence);
-        _checklistCardEvidence->setVisible(!item.evidence.isEmpty() && item.rechecked);
-        QString message = item.message;
-        if (item.state == ChecklistState::Confirmed && item.item.owner != ChecklistOwner::You && !item.confirmedAt.isEmpty()) {
-            const auto at = QDateTime::fromString(item.confirmedAt, Qt::ISODate).toLocalTime();
-            message = QStringLiteral("Confirmed by you · %1").arg(at.toString(QStringLiteral("d MMM HH:mm"))) + (message.isEmpty() ? QString() : "\n" + message);
-        }
+        _checklistCardEvidence->setVisible(!item.evidence.isEmpty());
+        // A done item's reading has no problem to report.
+        const QString message = item.state == ChecklistState::Done ? QString() : item.message;
         _checklistCardMessage->setText(message);
         _checklistCardMessage->setVisible(!message.isEmpty());
 
-        // The preset is confirmed by choosing it; without a proposal the
-        // author picks one from the list.
+        // The preset is done once one is assigned; the author may pick
+        // another one from the list at any time.
         const bool preset = item.item.id == QLatin1String("weapon.preset");
         _checklistPresetChoice->setVisible(preset);
         if (preset) {
@@ -425,17 +405,12 @@ namespace reloadmaker
             const int keep = _checklistPresetChoice->findData(!chosen.isEmpty() ? chosen : view.preset ? view.preset->id : QString());
             _checklistPresetChoice->setCurrentIndex(std::max(0, keep));
         }
-        const bool otherPreset = preset && (!view.preset || _checklistPresetChoice->currentData().toString() != view.preset->id);
-        _checklistConfirm->setVisible(item.canConfirm || otherPreset || (!item.rechecked && item.state != ChecklistState::NotApplicable));
-        _checklistConfirm->setText(otherPreset ? QStringLiteral("Use this preset")
-                                   : !item.rechecked ? QStringLiteral("Check in Operate")
-                                                : QStringLiteral("Confirm"));
+        const bool otherPreset = preset && (item.state != ChecklistState::Done || !view.preset ||
+                                            _checklistPresetChoice->currentData().toString() != view.preset->id);
+        _checklistUsePreset->setVisible(otherPreset);
         _checklistSkip->setVisible(item.canSkip);
-        const bool skippedByYou = item.state == ChecklistState::NotApplicable && item.byYou;
-        const bool undoable = !preset && item.item.owner != ChecklistOwner::You && item.byYou &&
-                              (item.state == ChecklistState::Confirmed || skippedByYou) && item.rechecked;
-        _checklistUndo->setVisible(undoable);
-        _checklistUndo->setProperty("skip", skippedByYou);
+        // Only a skip is undone here; authored data is changed where it is edited.
+        _checklistUndo->setVisible(item.state == ChecklistState::NotApplicable && item.byYou);
         // Fire behavior is tried in Operate; sounds are tuned on their page.
         const bool sound = item.item.id == QLatin1String("fire.sound") || item.item.id == QLatin1String("fire.dry") || item.item.id == QLatin1String("sounds.reload");
         const bool fire = item.item.section == ChecklistSection::Fire && !sound;

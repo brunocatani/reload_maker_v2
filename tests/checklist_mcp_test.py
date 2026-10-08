@@ -1,9 +1,8 @@
-"""Checklist confirmations follow authored data, persist, and ignore view-only changes.
+"""The checklist shows what exists and what is missing, with no confirmations.
 
-Replaces the retired roadmap suites (2026-10-04): preset assignment and the
-recorded source inputs, precise invalidation by the magazine guide and the
-collision hulls, camera and overlay independence, project reopen, and an
-authoring record the checklist creates by itself.
+Preset assignment, items done from the weapon's own data outside Operate,
+guide and collision edits, camera and overlay independence, optional skips,
+reopen, and parts outside the reload.
 """
 import json
 import sys
@@ -52,15 +51,8 @@ def states():
     return {key: item['state'] for key, item in items().items()}
 
 
-def confirm_all():
-    # Confirming one item can make another one confirmable.
-    for _ in range(4):
-        pending = [key for key, item in items().items() if item['canConfirm']]
-        if not pending:
-            return
-        for key in pending:
-            edit('checklist', dict(operation='confirm', id=key))
-    raise AssertionError(('Items stayed confirmable', pending))
+def missing_required():
+    return sorted(key for key, item in items().items() if item['state'] == 'missing' and item['mandatory'])
 
 
 def records(path):
@@ -84,61 +76,88 @@ def run():
             assert {preset['id'] for preset in state['presets']} >= {state['preset']}, state['presets']
             edit('checklist', dict(operation='preset', id=state['preset']))
             ready()
-            assert command('checklist_state')['presetAssigned']
-            confirm_all()
+            state = command('checklist_state')
+            assert state['presetAssigned'] and state['items'][0]['state'] == 'done', state['items'][0]
+            # No item waits for a confirmation; nothing confirms.
+            assert not {'detected', 'confirmed', 'needs-you'} & set(states().values()), states()
+            assert 'toConfirm' not in state['summary'] and state['summary']['missing'] == len(missing_required()), state['summary']
+            try:
+                edit('checklist', dict(operation='confirm', id='fire.motion'))
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError('The retired confirm operation was accepted')
+            done = states()
             draft = work / 'sources.project.json'
-            edit('export', dict(kind='project',path=str(draft)))
-            assert any('checklist' in v for v in records(draft).values()), 'Confirmations were not saved'
+            edit('export', dict(kind='project', path=str(draft)))
             assert not any('sources' in v for v in records(draft).values()), 'Source bytes were recorded'
             assert not any('step' in v or 'reviews' in v for v in records(draft).values()), 'Retired roadmap keys were saved'
-            confirmed = states()
 
-            # View-only changes keep every confirmation.
+            # Outside Operate the same data is done, not "checked in Operate".
+            edit('workspace', dict(index=2))
+            ready()
+            outside = states()
+            assert 'not-checked' not in outside.values(), outside
+            assert outside['feed.guide'] == done['feed.guide'] == 'done', (outside['feed.guide'], done['feed.guide'])
+            edit('workspace', dict(index=5))
+            ready()
+
+            # View-only changes keep every state.
             edit('view', dict(view='side', fit=True))
-            assert states() == confirmed, 'Camera changed the checklist'
+            assert states() == done, 'Camera changed the checklist'
 
-            # An edited guide keeps every confirmation (owner, 2026-10-05: no
-            # hash verification); the items show the new values.
+            # An edited guide stays done; the item shows the new value.
             guide = command('magazine_guide_state')['settings']
             guide['travel'] *= 1.2
             edit('magazine_guide', dict(operation='save', settings=guide))
             ready()
-            assert states() == confirmed, 'Editing the guide revoked confirmations'
+            assert states() == done, 'Editing the guide changed the checklist'
             edit('magazine_guide', dict(operation='reset'))
             ready()
-            assert states() == confirmed, 'Restoring the guide changed confirmations'
+            assert states() == done, 'Restoring the guide changed the checklist'
 
-            # Hull edits never ask for the world model again; the overlay changes nothing.
+            # Hulls: missing without them, done with them; the overlay changes nothing.
             for empty in (False, True):
                 edit('workspace', dict(index=5))
                 ready()
                 edit('capture_magazine_world', dict(empty=empty))
                 collisions_ready()
-            assert items()['feed.world']['canConfirm'], items()['feed.world']
-            edit('checklist', dict(operation='confirm', id='feed.world'))
+            assert states()['feed.world'] == 'done', items()['feed.world']
             world = states()
             edit('collisions', dict(operation='view', overlay=False))
             assert states() == world, 'Collision overlay changed the checklist'
+            # Hull edits never ask for the world model again.
             edit('collisions', dict(operation='hull', index=0, enabled=False))
-            assert states()['feed.world'] != 'detected', states()['feed.world']
+            assert states()['feed.world'] == 'done', states()['feed.world']
             edit('collisions', dict(operation='hull', index=0, enabled=True))
-            assert states()['feed.world'] == 'confirmed', states()['feed.world']
+            assert states()['feed.world'] == 'done', states()['feed.world']
+            # A missing optional item may be marked not applicable, and back;
+            # a required one may not.
+            optional = next((key for key, item in items().items() if item['state'] == 'missing' and not item['mandatory']), None)
+            if optional:
+                edit('checklist', dict(operation='skip', id=optional))
+                assert states()[optional] == 'not-applicable', states()[optional]
+                edit('checklist', dict(operation='unskip', id=optional))
+                assert states()[optional] == 'missing', states()[optional]
+            try:
+                edit('checklist', dict(operation='skip', id='feed.guide'))
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError('A required item was skipped')
 
-            # Confirmations survive a save and reopen; unconfirm returns an item for review.
+            # The states survive an export and import of the weapon's authoring.
             edit('workspace', dict(index=5))
             ready()
-            reviewed = work / 'confirmed.project.json'
-            edit('export', dict(kind='project',path=str(reviewed)))
+            reviewed = work / 'reviewed.project.json'
+            edit('export', dict(kind='project', path=str(reviewed)))
             before = states()
             edit('import_project', dict(path=str(reviewed)))
             ready()
-            assert states() == before, 'Reopening lost confirmations'
-            edit('checklist', dict(operation='unconfirm', id='fire.motion'))
-            assert states()['fire.motion'] == 'detected', states()['fire.motion']
-            edit('checklist', dict(operation='confirm', id='fire.motion'))
+            assert states() == before, 'Reopening changed the checklist'
 
             # Another sight is not a reload part: the same record and every
-            # confirmation apply, also after a reopen.
+            # state apply, also after a reopen.
             kept = states()
             sights = next(slot for slot in ready()['slots'] if slot['name'] == 'Sights')
             other = next(choice for choice in sights['choices'] if choice['id'] != sights['selected'])
@@ -149,7 +168,7 @@ def run():
             assert command('checklist_state')['evaluated'], command('checklist_state')['problem']
             assert states() == kept, 'Another sight changed the checklist'
             reopened = work / 'other-sight.project.json'
-            edit('export', dict(kind='project',path=str(reopened)))
+            edit('export', dict(kind='project', path=str(reopened)))
             edit('import_project', dict(path=str(reopened)))
             ready()
             edit('workspace', dict(index=5))
@@ -157,8 +176,8 @@ def run():
             assert states() == kept, 'Reopening with another sight changed the checklist'
 
             (work / 'result.json').write_text(json.dumps(dict(ok=True, states=before), indent=2))
-            print('PASS checklist preset, kept confirmations through guide/collision edits, view independence, '
-                  'reopen and parts outside the reload:', work, flush=True)
+            print('PASS checklist without confirmations: preset, done outside Operate, guide/collision edits, '
+                  'optional skip, view independence, reopen and parts outside the reload:', work, flush=True)
         finally:
             project.write_bytes(saved)
             command('import_project', dict(path=str(project)), command('revision')['revision'])

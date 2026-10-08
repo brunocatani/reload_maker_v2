@@ -527,26 +527,24 @@ def load_timings(since: int = 0) -> dict:
 def checklist_state() -> dict:
     """The weapon's checklist for the current configuration: items from its
     behavior preset (a manual bolt gets its cycle between shots, a bolt driven
-    by a charging handle only follows it), each with state needs-you,
-    detected, confirmed or not-applicable, its value, evidence and whether it
-    was rechecked here or kept from a saved confirmation. summary.progress is
-    not-started, draft or complete. evaluated is false until the weapon, its
-    learned reload and its operating parts are available. presets lists the
-    supported behavior presets; presetAssigned says whether one is assigned to
-    the weapon. Otherwise preset is the one Maker proposes from the records (a
-    bolt action, a pistol), or empty with only the weapon.preset item when the
-    records do not tell; assign one with checklist operation preset.
+    by a charging handle only follows it), each with state done (its data
+    exists, authored or read from the weapon's files and reload), missing,
+    not-applicable, or not-checked while the weapon is still loading, plus its
+    value and evidence. Nothing needs confirming. summary.missing counts the
+    required items still to do; summary.progress is not-started, draft or
+    complete. evaluated is false until the weapon, its learned reload and its
+    operating parts are available. presets lists the supported behavior
+    presets; weapon.preset is done once one is assigned (presetAssigned);
+    otherwise preset is the one Maker proposes from the records, or empty when
+    the records do not tell; assign one with checklist operation preset.
     """
     return command('checklist_state')
 
 @mcp.tool()
 def checklist(operation: str, id: str, expected_revision: int) -> dict:
-    """Confirm, unconfirm, skip or unskip one checklist item by id, or assign
-    a behavior preset with operation preset and a preset id. A confirmation
-    stays until it is removed; a later value change never revokes it. Items
-    checked only in Operate (magazine presentation and guide) are checked
-    there and the builder step is shown again. skip marks an optional item
-    not applicable. Confirmations save with the project.
+    """Assign a behavior preset (operation preset, id = preset id), or mark a
+    missing optional item not applicable (skip) and undo that (unskip). Skips
+    save with the project.
     """
     return command('checklist', dict(operation=operation, id=id), expected_revision)
 

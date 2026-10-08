@@ -13,7 +13,9 @@ namespace reloadmaker
     // from the weapon model, so the checklist follows the weapon's behavior:
     // a manual-cycle Fire adds "cycle between shots" to its mechanism, a
     // lock-open mechanism adds its catch, a part driven by another part needs
-    // no grab points. Detectors observe values; the author confirms them.
+    // no grab points. An item is done when its data exists, whoever made it;
+    // the checklist lists only what is actually missing. Nothing needs a
+    // separate confirmation.
 
     // The Reload builder step that edits an item, plus Fire; the left
     // Checklist groups items this way.
@@ -35,8 +37,8 @@ namespace reloadmaker
         Fire,
     };
 
-    // Who normally completes the item. Anyone may in the UI; a value a person
-    // authored (a hand fit, grab points) counts as confirmed by its author.
+    // Where the item's data normally comes from: read from the weapon's own
+    // files and reload, given by the behavior preset, or authored.
     enum class ChecklistOwner
     {
         Auto,
@@ -46,15 +48,15 @@ namespace reloadmaker
 
     enum class ChecklistState
     {
-        NeedsYou,
-        Detected,
-        Confirmed,
+        Missing,       // the data does not exist yet
+        Done,          // the data exists
+        NotChecked,    // can be checked only where it runs (Operate); not work
         NotApplicable,
     };
 
     struct ChecklistItem
     {
-        QString id; // stable: confirmations are saved under it
+        QString id; // stable: a skipped optional item is saved under it
         ChecklistSection section{ ChecklistSection::LearnedReload };
         ChecklistSubsystem subsystem{ ChecklistSubsystem::Weapon };
         ChecklistOwner owner{ ChecklistOwner::Auto };
@@ -82,47 +84,41 @@ namespace reloadmaker
     struct ChecklistItemStatus
     {
         ChecklistItem item;
-        ChecklistState state{ ChecklistState::NeedsYou };
+        ChecklistState state{ ChecklistState::Missing };
         QString value;
         QString evidence;
         QString message;
-        bool canConfirm{ false }; // a detected value awaits confirmation
-        bool canSkip{ false };    // an optional item may be marked not applicable
-        bool byYou{ false };      // confirmed, authored or skipped by a person
-        bool rechecked{ true };   // false: shown from its saved confirmation
-        QString confirmedAt;      // ISO time of the saved confirmation
+        bool canSkip{ false }; // a missing optional item may be marked not applicable
+        bool byYou{ false };   // authored, assigned or skipped by a person
     };
 
-    // A saved confirmation: {"state": "confirmed", "value": the value
-    // confirmed, "at": ISO time}, or {"state": "n/a", "at"} for a skipped
-    // optional item. A confirmation stays until the author removes it; a
-    // later value never revokes it (owner, 2026-10-05: no hash verification).
+    // A skipped optional item is saved as {"state": "n/a", "at": ISO time}.
+    // Older records also hold {"state": "confirmed", ...} entries from the
+    // retired confirmation step; they stay valid and are ignored.
     inline constexpr char kChecklistNotApplicable[] = "n/a";
-    [[nodiscard]] QJsonObject checklistConfirmation(const QString& value, const QString& at);
     [[nodiscard]] QJsonObject checklistSkip(const QString& at);
 
-    // `confirmations` maps item ids to saved confirmations; "n/a" is honored
-    // for optional items only. An item whose detector cannot run shows its
-    // saved confirmation, marked not rechecked.
+    // `saved` maps item ids to saved checklist entries; only skips of
+    // optional items take effect.
     [[nodiscard]] QVector<ChecklistItemStatus> evaluateChecklist(const QVector<ChecklistItem>& items,
                                                                  const QHash<QString, ChecklistObservation>& observations,
-                                                                 const QJsonObject& confirmations);
+                                                                 const QJsonObject& saved);
 
     struct ChecklistSummary
     {
         int total{ 0 };
-        int done{ 0 }; // confirmed or not applicable
+        int done{ 0 }; // done or not applicable
         int mandatory{ 0 };
         int mandatoryDone{ 0 };
-        int needsYou{ 0 };
-        int toConfirm{ 0 };
-        bool started{ false };  // something was confirmed, authored or skipped
-        bool complete{ false }; // every mandatory item is confirmed or not applicable
+        int missing{ 0 };      // required items whose data does not exist
+        int notChecked{ 0 };   // required items checked only in Operate
+        bool started{ false };  // something was authored, assigned or skipped
+        bool complete{ false }; // every required item is done or not applicable
     };
 
     [[nodiscard]] ChecklistSummary summarizeChecklist(const QVector<ChecklistItemStatus>& items);
 
-    [[nodiscard]] bool validChecklistConfirmations(const QJsonObject& confirmations);
+    [[nodiscard]] bool validChecklistEntries(const QJsonObject& saved);
 
     // How far a weapon's checklist got, as the weapon list shows it.
     enum class WeaponProgress
