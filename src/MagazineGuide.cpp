@@ -22,12 +22,16 @@ QJsonObject magazineGuideJson(const MagazineGuide& value) {
     return {{"version",2},{"recipeId",value.recipeId},{"outwardInConnection",QJsonArray{a.x(),a.y(),a.z()}},
         {"travel",value.travel},{"captureRadius",value.captureRadius},{"releaseMargin",value.releaseMargin}};
 }
-bool applyMagazineGuide(const MagazineGuide& guide,MagazineRail& rail,QString& error) {
+bool applyMagazineGuide(const MagazineGuide& guide,MagazineRail& rail,QString& error,bool linearMotion) {
     MagazineGuide checked;if(!readMagazineGuide(magazineGuideJson(guide),checked,error))return false;
     Transformf inverse;if(!invertUniformTransform(rail.connection,inverse)){error="Invalid magazine connection frame";return false;}
     // Preserve the full visible extraction before changing the player's input.
     // Even an originally straight visual path is now independent of this guide.
-    if(rail.motion.isEmpty()) {
+    if(linearMotion) {
+        // Explicit Linear presentation authors the physical path with its
+        // guide. Source/native/manual motion keeps its independent curves.
+        rail.motion.clear();rail.motionDistances.clear();
+    } else if(rail.motion.isEmpty()) {
         const auto delta=rail.outward*rail.travel;
         rail.motion={Transformf{},Transformf{{delta.x(),delta.y(),delta.z()}}};rail.motionDistances={0,rail.travel};
     }

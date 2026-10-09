@@ -9,5 +9,5 @@ struct MagazineGuide {
 };
 bool readMagazineGuide(const QJsonObject&,MagazineGuide&,QString&);
 QJsonObject magazineGuideJson(const MagazineGuide&);
-bool applyMagazineGuide(const MagazineGuide&,MagazineRail&,QString&);
+bool applyMagazineGuide(const MagazineGuide&,MagazineRail&,QString&,bool linearMotion=false);
 }

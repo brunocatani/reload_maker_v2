@@ -82,7 +82,7 @@ namespace reloadmaker
             _magazineError = "Magazine body geometry could not be resolved.";
             return;
         }
-        if (!guideJson.isEmpty() && !applyMagazineGuide(guide, rail, _magazineError)) {
+        if (!guideJson.isEmpty() && !applyMagazineGuide(guide, rail, _magazineError, _magazineSetup && _magazineSetup->motion == "linear")) {
             return;
         }
         _magazineRail = rail;

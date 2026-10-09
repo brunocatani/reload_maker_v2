@@ -335,7 +335,7 @@ namespace reloadmaker
         }
         auto rail = *_magazineRail;
         QString error;
-        if (!applyMagazineGuide(guide, rail, error)) {
+        if (!applyMagazineGuide(guide, rail, error, _magazineSetup && _magazineSetup->motion == "linear")) {
             setStatus(error, true);
             return;
         }

@@ -91,7 +91,7 @@ namespace reloadmaker
             guide.recipeId = _reloadRecipe->id;
             if (_magazineRail) {
                 auto checked = *_magazineRail;
-                if (!applyMagazineGuide(guide, checked, error)) {
+                if (!applyMagazineGuide(guide, checked, error, _magazineSetup && _magazineSetup->motion == "linear")) {
                     fail(error);
                 }
             }

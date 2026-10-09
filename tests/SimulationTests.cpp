@@ -91,6 +91,12 @@ void guideAuthoring() {
     for(float u:{0.f,.2f,.7f,1.f})check(reloadPoseDistance(magazineAnimationDelta(original,u*original.travel),magazineAnimationDelta(changed,u*changed.travel))<.0001f,"Guide flattened or displaced the original visual path");
     const auto curves=changed.motion;guide.travel=23;guide.outwardInConnection={0,1,0};check(applyMagazineGuide(guide,changed,error),error);
     for(int i=0;i<curves.size();++i)check(reloadPoseDistance(curves[i],changed.motion[i])<.0001f,"Repeated guide editing accumulated visual transforms");
+    auto linear=changed;check(applyMagazineGuide(guide,linear,error,true),error);
+    for(float u:{0.f,.25f,.75f,1.f}) {
+        const auto delta=magazineAnimationDelta(linear,u*linear.travel);
+        const auto expected=linear.outward*(u*linear.travel);
+        check(reloadPoseDistance(delta,Transformf{{expected.x(),expected.y(),expected.z()}})<.0001f,"Explicit linear presentation ignored its authored insertion axis");
+    }
     MagazineMotion mag;mag.phase=MagazinePhase::Free;mag.offset=changed.outward*11+QVector3D(0,0,3);mag.moveFree(changed,changed.outward*11-QVector3D(0,0,3));
     check(mag.phase==MagazinePhase::Rail&&std::abs(mag.distance-11)<.001f,"Custom guide did not capture at the swept entry depth");
     mag.moveRail(changed,0);check(mag.seated(),"Custom guide did not seat");
