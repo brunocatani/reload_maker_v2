@@ -117,6 +117,7 @@ namespace reloadmaker
         if (_nativeGhost && simulationTrackAuthored(rig, track)) {
             _ghostNatives.insert(_reloadTrackNodes[track], simulationNativeTrackPose(*_reloadRecipe, rig, track, progress));
         }
+        if(_simulation.action==SimulationAction::Held&&rig.grabCurves.contains(track))return simulationGrabPose(rig,track,progress);
         return simulationTrackPose(*_reloadRecipe, rig, track, progress);
     }
 

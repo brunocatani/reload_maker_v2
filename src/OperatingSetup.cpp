@@ -17,6 +17,9 @@ bool readOperatingSetup(const QJsonObject& json,OperatingSetup& output,QString& 
     const auto followers=json["followers"].toArray();if(!json["followers"].isArray()||followers.isEmpty()||followers.size()>16)return fail("Select one to sixteen operating followers");QSet<int> seen;
     for(const auto& item:followers){if(!integer(item,0,maximumReloadTracks-1)||seen.contains(item.toInt()))return fail("Follower tracks must be valid and unique");seen.insert(item.toInt());value.parts.followers.append(item.toInt());}
     if(!seen.contains(value.parts.operating))return fail("The operating part must be in its follower group");
+    if(json.contains("grabDeploySeconds")&&(!json["grabDeploySeconds"].isDouble()||!std::isfinite(json["grabDeploySeconds"].toDouble())||json["grabDeploySeconds"].toDouble() < -1||json["grabDeploySeconds"].toDouble()>120))return fail("Choose a valid deployment source time or -1 to disable it");
+    value.grabDeploySeconds=json["grabDeploySeconds"].toDouble(-1);
+    if(value.grabDeploySeconds>=0&&value.mode!="reload")return fail("Grab deployment uses a pose from the reload source");
     value.sourceTimes=json["version"]==2&&value.mode!="manual";
     if(value.sourceTimes) {
         if(json.contains("openFrame")||json.contains("closedFrame"))return fail("Native version 2 windows use source seconds, not frame indices");
@@ -76,6 +79,7 @@ QJsonObject operatingSetupJson(const OperatingSetup& value) {
         {"followers",followers},{"deriveHandle",value.deriveHandle},{"fireMode",value.fireMode},{"cycleMode",value.cycleMode},{"catchMode",value.catchMode},
         {"clip",value.clip},{"baseline",value.baseline},{"duration",value.duration},{"ejectSeconds",value.ejectSeconds},{"movements",movements},
         {"trackAnchors",value.trackAnchors}};
+    if(value.grabDeploySeconds>=0)result["grabDeploySeconds"]=value.grabDeploySeconds;
     if(value.sourceTimes){result["openSeconds"]=value.openSeconds;result["closedSeconds"]=value.closedSeconds;}
     else {result["openFrame"]=value.parts.openFrame;result["closedFrame"]=value.parts.closedFrame;}
     return result;

@@ -6,6 +6,7 @@ struct OperatingSetup {
     SimulationParts parts;
     bool deriveHandle{false};
     float duration{.2f},ejectSeconds{-1};
+    double grabDeploySeconds{-1}; // Reload source pose: deploy on grab, then pull by bolt distance.
     bool sourceTimes{false}; // Version 2 native windows; manual movements keep their existing sampling.
     double openSeconds{-1},closedSeconds{-1};
     QHash<int,QString> movements;

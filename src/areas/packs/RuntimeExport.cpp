@@ -280,6 +280,10 @@ namespace reloadmaker
                            { "sourcePath", a.anchorPath },
                            { "runtimePath", runtimeTrackPath(index) },
                            { "poses", runtimeCurve(poses, rig.openFrame, rig.closedFrame) } };
+        if(rig.grabCurves.contains(index)) {
+            QJsonArray poses;for(const auto& pose:rig.grabCurves[index])poses.append(runtimePose(pose));
+            track["grabPoses"]=poses;
+        }
         if (type == WeaponMechanism::Ar15 && index != rig.slide && rig.slideTracks.contains(index)) {
             track["boltFollower"] = true; // a part the bolt drives
         }

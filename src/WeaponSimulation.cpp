@@ -186,6 +186,45 @@ Transformf simulationTrackPose(const ReloadRecipe& r,const SimulationRig& rig,in
     const float frame=simulationFrame(rig,progress);
     const auto& curve=simulationTrackCurve(r,rig,track);const int a=int(frame),b=std::min(a+1,int(curve.size()-1));return interpolatedTransform(curve[a],curve[b],frame-a);
 }
+Transformf simulationGrabPose(const SimulationRig& rig,int track,float progress) {
+    const auto& curve=rig.grabCurves[track];
+    const float f=std::clamp(progress,0.f,1.f)*(curve.size()-1);
+    const int a=int(f),b=std::min(a+1,int(curve.size()-1));
+    return interpolatedTransform(curve[a],curve[b],f-a);
+}
+bool buildGrabDeployment(const ReloadRecipe& recipe,SimulationRig& rig,double sourceSeconds,QString& error) {
+    if(sourceSeconds<0)return true;
+    if(sourceSeconds>recipe.duration||rig.slide==rig.bolt){error="Deployment needs a separate operating handle and a pose inside the reload clip";return false;}
+    const auto closed=simulationTrackPose(recipe,rig,rig.bolt,0).translation;
+    const auto open=simulationTrackPose(recipe,rig,rig.bolt,1).translation;
+    const QVector3D axis(open.x-closed.x,open.y-closed.y,open.z-closed.z);
+    const float length=axis.lengthSquared();
+    if(length<1e-6f){error="The bolt has no measurable pull stroke";return false;}
+    const auto deploy=reloadTrackPose(recipe,rig.slide,float(sourceSeconds));
+    const auto reference=reloadTrackPose(recipe,rig.bolt,float(sourceSeconds)).translation;
+    rig.grabCurves.clear();
+    for(int i=0;i<=64;++i) {
+        const float u=float(i)/64;
+        float low=0,high=1;
+        for(int step=0;step<24;++step) {
+            const float p=(low+high)*.5f;
+            const auto b=simulationTrackPose(recipe,rig,rig.bolt,p).translation;
+            const float depth=QVector3D::dotProduct(QVector3D(b.x-closed.x,b.y-closed.y,b.z-closed.z),axis)/length;
+            if(depth<u)low=p;else high=p;
+        }
+        const float progress=i==0?0:i==64?1:(low+high)*.5f;
+        const auto bolt=simulationTrackPose(recipe,rig,rig.bolt,progress).translation;
+        for(int track:rig.slideTracks) {
+            auto pose=simulationTrackPose(recipe,rig,track,progress);
+            if(track==rig.slide) {
+                pose=deploy;
+                pose.translation.x+=bolt.x-reference.x;pose.translation.y+=bolt.y-reference.y;pose.translation.z+=bolt.z-reference.z;
+            }
+            rig.grabCurves[track].append(pose);
+        }
+    }
+    return true;
+}
 Vec3f simulationControllerStroke(const ReloadRecipe& r,const SimulationRig& rig,const Vec3f& contact) {
     const int track=rig.mechanism==WeaponMechanism::PistolSlide?rig.slide:rig.bolt;
     const auto a=simulationTrackPose(r,rig,track,0).translation,b=simulationTrackPose(r,rig,track,1).translation;

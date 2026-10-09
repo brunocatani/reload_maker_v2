@@ -24,6 +24,7 @@ namespace reloadmaker {
         QVector<Transformf> derivedBolt;
         QJsonObject mechanicalSource;
         QHash<int,QVector<Transformf>> authoredCurves;
+        QHash<int,QVector<Transformf>> grabCurves; // Closed-to-open, distance-driven, only while grabbed.
         QHash<int,QVector<Transformf>> nativeCurves; // Unchanged native tracks resampled to the independent operating clock.
         int motionFrames{0};
         float strokeSeconds{-1};
@@ -34,6 +35,8 @@ namespace reloadmaker {
         float motionDuration{0},manualEjectSeconds{-1};
         QJsonObject authoring;
     };
+    bool buildGrabDeployment(const ReloadRecipe&,SimulationRig&,double sourceSeconds,QString& error);
+    Transformf simulationGrabPose(const SimulationRig&,int track,float progress);
     enum class SimulationAction { Idle, Fire, Reload, Held, Returning };
     struct WeaponSimulation {
         SimulationAction action{SimulationAction::Idle};

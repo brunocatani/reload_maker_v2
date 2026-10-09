@@ -14,6 +14,23 @@
 using namespace reloadmaker;
 namespace {
 void check(bool valid,const QString& error){if(!valid)throw std::runtime_error(error.toStdString());}
+void grabDeployment() {
+    ReloadRecipe r;r.frames=5;r.duration=4;r.tracks.resize(2);
+    for(int i=0;i<5;++i) {
+        const float y=i<3?0.f:-5.f*(i-2);
+        r.tracks[0].poses.append(Transformf{{0,y,0}});
+        r.tracks[1].poses.append(Transformf{{2,y,0},i==0?Quaternionf{}:Quaternionf{0,0,.70710678f,.70710678f}});
+    }
+    SimulationRig rig;rig.bolt=0;rig.slide=1;rig.slideTracks={0,1};rig.closedFrame=0;rig.openFrame=4;
+    QString error;check(buildGrabDeployment(r,rig,2,error),error);
+    for(float u:{0.f,.25f,.5f,.75f,1.f}) {
+        const auto bolt=simulationGrabPose(rig,0,u),handle=simulationGrabPose(rig,1,u);
+        check(std::abs(bolt.translation.y+10*u)<.001f,"Source pause compressed the physical pull");
+        check(std::abs(handle.translation.y-bolt.translation.y)<.001f&&std::abs(handle.rotation.z-.70710678f)<.001f,"Deployed handle did not stay on the bolt");
+    }
+    check(simulationGrabPose(rig,0,0).translation.y==0,"Deployment moved the bolt rearward");
+    check(simulationTrackPose(r,rig,1,0).rotation.w==1,"Grab deployment changed the folded idle pose");
+}
 void nativeSourceTimes() {
     OperatingSetup setup;setup.mode="clip";setup.clip="source.hkx";setup.baseline="idle.hkx";
     setup.parts.operating=setup.parts.bolt=0;setup.parts.magazine=1;setup.parts.followers={0};
@@ -460,7 +477,7 @@ void m1aFixture(const QString& path) {
 }
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);guideAuthoring();carrierOwnership();nativeSourceTimes();
-    try {stateTransitions();ammunitionTransitions();nativeReloadEvents();ar15Transitions();boltActionTransitions();check(app.arguments().size()>=2,"Pass the Glock project fixture");fixture(app.arguments()[1]);if(app.arguments().size()>2)ar15Fixture(app.arguments()[2]);if(app.arguments().size()>3)m1aFixture(app.arguments()[3]);if(app.arguments().size()>4)boltCycleFixture(app.arguments()[4]);
+    try {grabDeployment();stateTransitions();ammunitionTransitions();nativeReloadEvents();ar15Transitions();boltActionTransitions();check(app.arguments().size()>=2,"Pass the Glock project fixture");fixture(app.arguments()[1]);if(app.arguments().size()>2)ar15Fixture(app.arguments()[2]);if(app.arguments().size()>3)m1aFixture(app.arguments()[3]);if(app.arguments().size()>4)boltCycleFixture(app.arguments()[4]);
         QTextStream(stdout)<<"PASS simulation state ownership, drop/fire persistence, regrab/cancel/return/reset, actual slide/barrel/cartridge curves and complete magazine ownership\n";return 0;
     }catch(const std::exception& e){QTextStream(stderr)<<"FAIL "<<e.what()<<'\n';return 1;}
 }
