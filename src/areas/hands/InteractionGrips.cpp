@@ -181,8 +181,8 @@ namespace reloadmaker
             setStatus(magazineHandRule(), true);
             return false;
         }
-        if (_simulation.action != SimulationAction::Idle || _simulation.magazine.carried()) {
-            setStatus("Release the part or finish magazine placement before switching hands.", true);
+        if (!_magazineFitPreview && (_simulation.action != SimulationAction::Idle || _simulation.magazine.carried())) {
+            setStatus("Release the held part before switching hands.", true);
             return false;
         }
         rememberMagazineGrip();

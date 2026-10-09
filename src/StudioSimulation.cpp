@@ -221,7 +221,7 @@ void ReloadMakerController::updateSimulationControls() {
     if(!_magazineGrabError.isEmpty())_simulationParts->setText(_simulationParts->text()+"\n\nMagazine hand: "+_magazineGrabError);
 }
 void ReloadMakerController::updateInteractionGripUi() {
-    const bool free=_simulation.action==SimulationAction::Idle&&!_simulation.magazine.carried();
+    const bool free=_magazineFitPreview||(_simulation.action==SimulationAction::Idle&&!_simulation.magazine.carried());
     for(auto* picker:{_interactionHandPicker,_magazineHandPicker,_operatingHandPicker})if(picker){const QSignalBlocker block(picker);picker->setCurrentIndex(int(_interactionHand));picker->setEnabled(magazineHandAllowed(PoseHand::Left)&&magazineHandAllowed(PoseHand::Right)&&free&&!_loadThread&&!_reloadCapturing);}
     const auto& fingers=_operatingFingers[int(_interactionHand)];
     if(_operatingGripStatus)_operatingGripStatus->setText(!_operatingFingerError.isEmpty()?_operatingFingerError:fingers?
