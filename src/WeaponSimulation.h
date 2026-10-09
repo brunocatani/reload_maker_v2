@@ -24,6 +24,10 @@ namespace reloadmaker {
         QVector<Transformf> derivedBolt;
         QJsonObject mechanicalSource;
         QHash<int,QVector<Transformf>> authoredCurves;
+        QHash<int,QVector<Transformf>> nativeCurves; // Unchanged native tracks resampled to the independent operating clock.
+        int motionFrames{0};
+        float strokeSeconds{-1};
+        QVector<float> nativeProgress; // Original recipe progress at each operating sample, including fractional endpoints.
         bool customSetup{false},manualCycle{false},fireFromStroke{false},presetFire{true};
         bool magazineBranchOnly{false}; // Explicit carrier inside a shared receiver model.
         bool hkSlap{false},lastShotHoldOpen{true},singleHandle{false},openBolt{false};
@@ -80,6 +84,9 @@ namespace reloadmaker {
     };
     bool buildSimulationRig(const ReloadRecipe& recipe, SimulationRig& rig, QString& error,WeaponMechanism profile=WeaponMechanism::PistolSlide,bool deriveHandleFromBolt=false,const QVector<Transformf>& boltOverride={},const SimulationParts* selected=nullptr);
     const QVector<Transformf>& simulationTrackCurve(const ReloadRecipe&,const SimulationRig&,int track);
+    int simulationFrameCount(const ReloadRecipe&,const SimulationRig&);
+    float simulationStrokeDuration(const ReloadRecipe&,const SimulationRig&);
+    float simulationNativeFrame(const ReloadRecipe&,const SimulationRig&,float frame);
     Transformf simulationTrackPose(const ReloadRecipe& recipe, const SimulationRig& rig, int track, float progress);
     // Straight controller stroke in weapon space; visual curves remain intact.
     Vec3f simulationControllerStroke(const ReloadRecipe&,const SimulationRig&,const Vec3f& contact);

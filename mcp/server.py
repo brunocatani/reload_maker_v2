@@ -490,8 +490,10 @@ def configure_magazine_guide(operation: str, expected_revision: int, settings: d
 def configure_operating_setup(operation: str, expected_revision: int, settings: dict | None = None) -> dict:
     """Save/reset this captured assembly's operating roles and movement source.
     Start from get_operating_setup.settings. Modes: preset, reload, clip (path and
-    baseline), manual (saved movement IDs per track). Explicit open/closed sample
-    order may reverse a native path. Manual spring parts use an opening path;
+    baseline), manual (saved movement IDs per track). Native settings use version
+    2 with openSeconds/closedSeconds in the source clip; the endpoint order may
+    reverse a native path. Manual settings retain version 1 openFrame/closedFrame
+    and saved movement IDs. Manual spring parts use an opening path;
     manual bolts use a full cycle. Both -1 endpoints request stroke detection.
     Fire mode is preset/native/stroke. Saved roles follow the reload's nodes, so
     other parts keep them; no wrist orientation is imposed by this setup. Test

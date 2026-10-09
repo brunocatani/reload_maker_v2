@@ -256,7 +256,6 @@ namespace reloadmaker
             });
         }
         const int strokeFrames = rig.closedFrame - rig.openFrame;
-        const float sourceDuration = rig.motionDuration > 0 ? rig.motionDuration : recipe.duration;
         QJsonObject result{
             { "format", "reload-maker-slide-profile" },
             { "version", 1 },
@@ -266,9 +265,9 @@ namespace reloadmaker
             { "space", "weapon-local" },
             { "sourceFirstFrame", rig.openFrame },
             { "sourceLastFrame", rig.closedFrame },
-            { "sourceFrames", recipe.frames },
+            { "sourceFrames", simulationFrameCount(recipe, rig) },
             { "frames", strokeFrames + 1 },
-            { "duration", sourceDuration * strokeFrames / (recipe.frames - 1) },
+            { "duration", simulationStrokeDuration(recipe, rig) },
             { "slideTrack", rig.slideTracks.indexOf(rig.slide) },
             { "openFrame", 0 },
             { "closedFrame", strokeFrames },

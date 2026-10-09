@@ -202,7 +202,7 @@ namespace reloadmaker
         const auto indices = runtimeOperatingTracks();
         QJsonObject profile{ { "recipeId", recipe.id },
                              { "animation", recipe.source["animation"] },
-                             { "duration", (rig.motionDuration > 0 ? rig.motionDuration : recipe.duration) * (rig.closedFrame - rig.openFrame) / (recipe.frames - 1) },
+                             { "duration", simulationStrokeDuration(recipe, rig) },
                              { "slideTrack", indices.indexOf(rig.slide) },
                              { "boltTrack", indices.indexOf(rig.bolt) } };
         QJsonArray tracks;
@@ -284,14 +284,21 @@ namespace reloadmaker
             track["boltFollower"] = true; // a part the bolt drives
         }
         if (_magazineSetup ? runtimePayloadTrack(index) : type == WeaponMechanism::M1A && a.anchorName.startsWith("WeaponMagazineChild")) {
-            const auto normalized = [&](int frame) {
+            const auto normalized = [&](float frame) {
+                frame = std::clamp(frame, 0.f, float(recipe.frames - 1));
+                const int first = int(frame), last = std::min(first + 1, recipe.frames - 1);
+                const float fraction = frame - first;
+                const auto& carrier = recipe.tracks[rail.fullTrack].poses;
+                const auto carrierPose = fraction == 0 ? carrier[first] : interpolatedTransform(carrier[first], carrier[last], fraction);
+                const auto partPose = fraction == 0 ? source.poses[first] : interpolatedTransform(source.poses[first], source.poses[last], fraction);
                 Transformf inverse;
-                require(invertUniformTransform(recipe.tracks[rail.fullTrack].poses[frame], inverse), "Invalid magazine payload frame");
-                return composed(composed(recipe.tracks[rail.fullTrack].poses[0], inverse), source.poses[frame]);
+                require(invertUniformTransform(carrierPose, inverse), "Invalid magazine payload frame");
+                return composed(composed(carrier[0], inverse), partPose);
             };
             QJsonArray payload;
             for (int frame = rig.openFrame; frame <= rig.closedFrame; ++frame) {
-                payload.append(runtimePose(normalized(frame)));
+                const float nativeFrame = simulationNativeFrame(recipe, rig, float(frame));
+                payload.append(runtimePose(normalized(nativeFrame)));
             }
             track["payload"] = true;
             track["poses"] = payload;

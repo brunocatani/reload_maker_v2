@@ -7,7 +7,7 @@
 namespace reloadmaker {
 bool readOperatingSetup(const QJsonObject& json,OperatingSetup& output,QString& error) {
     const auto fail=[&](const char* why){error=why;return false;};OperatingSetup value;
-    if(json["version"]!=1)return fail("Unsupported operating setup");
+    if(json["version"]!=1&&json["version"]!=2)return fail("Unsupported operating setup");
     if(json.contains("trackAnchors")&&(!json["trackAnchors"].isArray()||json["trackAnchors"].toArray().size()>maximumReloadTracks))return fail("Invalid operating track nodes");
     value.recipeId=json["recipeId"].toString();value.trackAnchors=json["trackAnchors"].toArray();value.mode=json["mode"].toString();
     if(value.mode!="preset"&&value.mode!="reload"&&value.mode!="clip"&&value.mode!="manual")return fail("Choose a supported movement source");
@@ -17,9 +17,17 @@ bool readOperatingSetup(const QJsonObject& json,OperatingSetup& output,QString& 
     const auto followers=json["followers"].toArray();if(!json["followers"].isArray()||followers.isEmpty()||followers.size()>16)return fail("Select one to sixteen operating followers");QSet<int> seen;
     for(const auto& item:followers){if(!integer(item,0,maximumReloadTracks-1)||seen.contains(item.toInt()))return fail("Follower tracks must be valid and unique");seen.insert(item.toInt());value.parts.followers.append(item.toInt());}
     if(!seen.contains(value.parts.operating))return fail("The operating part must be in its follower group");
-    for(const auto* key:{"openFrame","closedFrame"})if(!integer(json[key],-1,maximumReloadFrames-1))return fail("Invalid operating source window");
-    value.parts.openFrame=json["openFrame"].toInt();value.parts.closedFrame=json["closedFrame"].toInt();
-    if((value.parts.openFrame<0)!=(value.parts.closedFrame<0)||(value.parts.openFrame>=0&&value.parts.closedFrame==value.parts.openFrame))return fail("Choose automatic stroke detection or distinct open and closed samples");
+    value.sourceTimes=json["version"]==2&&value.mode!="manual";
+    if(value.sourceTimes) {
+        if(json.contains("openFrame")||json.contains("closedFrame"))return fail("Native version 2 windows use source seconds, not frame indices");
+        for(const auto* key:{"openSeconds","closedSeconds"})if(!json[key].isDouble()||!std::isfinite(json[key].toDouble())||(json[key].toDouble()<0&&json[key].toDouble()!=-1)||json[key].toDouble()>120)return fail("Invalid operating source time");
+        value.openSeconds=json["openSeconds"].toDouble();value.closedSeconds=json["closedSeconds"].toDouble();
+        if((value.openSeconds<0)!=(value.closedSeconds<0)||(value.openSeconds>=0&&value.openSeconds==value.closedSeconds))return fail("Choose automatic stroke detection or distinct open and closed source times");
+    } else {
+        for(const auto* key:{"openFrame","closedFrame"})if(!integer(json[key],-1,maximumReloadFrames-1))return fail("Invalid operating source window");
+        value.parts.openFrame=json["openFrame"].toInt();value.parts.closedFrame=json["closedFrame"].toInt();
+        if((value.parts.openFrame<0)!=(value.parts.closedFrame<0)||(value.parts.openFrame>=0&&value.parts.closedFrame==value.parts.openFrame))return fail("Choose automatic stroke detection or distinct open and closed samples");
+    }
     if(!json["deriveHandle"].isBool())return fail("Movement derivation choices must be explicit");
     value.deriveHandle=json["deriveHandle"].toBool();value.fireMode=json["fireMode"].toString();
     if(value.fireMode!="preset"&&value.fireMode!="native"&&value.fireMode!="stroke")return fail("Choose a firing movement source");
@@ -64,9 +72,26 @@ bool remapOperatingSetup(OperatingSetup& setup,const ReloadRecipe& recipe,QStrin
 QJsonObject operatingSetupJson(const OperatingSetup& value) {
     QJsonArray followers,movements;for(int track:value.parts.followers)followers.append(track);
     auto keys=value.movements.keys();std::sort(keys.begin(),keys.end());for(int track:keys)movements.append(QJsonObject{{"track",track},{"id",value.movements[track]}});
-    return {{"version",1},{"recipeId",value.recipeId},{"mode",value.mode},{"operating",value.parts.operating},{"bolt",value.parts.bolt},{"magazine",value.parts.magazine},
-        {"followers",followers},{"openFrame",value.parts.openFrame},{"closedFrame",value.parts.closedFrame},{"deriveHandle",value.deriveHandle},{"fireMode",value.fireMode},{"cycleMode",value.cycleMode},{"catchMode",value.catchMode},
+    QJsonObject result{{"version",value.sourceTimes?2:1},{"recipeId",value.recipeId},{"mode",value.mode},{"operating",value.parts.operating},{"bolt",value.parts.bolt},{"magazine",value.parts.magazine},
+        {"followers",followers},{"deriveHandle",value.deriveHandle},{"fireMode",value.fireMode},{"cycleMode",value.cycleMode},{"catchMode",value.catchMode},
         {"clip",value.clip},{"baseline",value.baseline},{"duration",value.duration},{"ejectSeconds",value.ejectSeconds},{"movements",movements},
         {"trackAnchors",value.trackAnchors}};
+    if(value.sourceTimes){result["openSeconds"]=value.openSeconds;result["closedSeconds"]=value.closedSeconds;}
+    else {result["openFrame"]=value.parts.openFrame;result["closedFrame"]=value.parts.closedFrame;}
+    return result;
+}
+bool operatingTimeSamples(const OperatingSetup& setup,float duration,int frames,SimulationParts& parts,QVector<float>& times,QString& error) {
+    if(!std::isfinite(duration)||duration<=0||frames<3||frames>maximumReloadFrames){error="Invalid native operating sample clock";return false;}
+    times.resize(frames);for(int f=0;f<frames;++f)times[f]=duration*f/(frames-1);
+    if(!setup.sourceTimes||setup.openSeconds<0)return true;
+    const double low=std::min(setup.openSeconds,setup.closedSeconds),high=std::max(setup.openSeconds,setup.closedSeconds);
+    if(high>duration+1e-6){error="The operating source time exceeds the selected clip";return false;}
+    const int first=std::clamp(int(std::floor(low/duration*(frames-1)+1e-5)),0,frames-2);
+    const int last=std::clamp(int(std::ceil(high/duration*(frames-1)-1e-5)),first+1,frames-1);
+    // Retain exact authored endpoints, including times between regular samples.
+    for(int f=first;f<=last;++f)times[f]=float(low+(high-low)*(f-first)/(last-first));
+    parts.openFrame=setup.openSeconds<setup.closedSeconds?first:last;
+    parts.closedFrame=setup.openSeconds<setup.closedSeconds?last:first;
+    return true;
 }
 }

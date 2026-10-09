@@ -914,6 +914,8 @@ namespace reloadmaker
             float duration{ 0 };
             float ejectSeconds{ -1 };
             QJsonObject provenance;
+            int frames{0};
+            QVector<float> nativeProgress;
         };
         bool sampleSetupClip(const OperatingSetup& setup, SimulationParts& parts, ConfiguredMotion& motion, QString& error);
         bool composeManualMovements(const OperatingSetup& setup, SimulationParts& parts, ConfiguredMotion& motion, QString& error);

@@ -14,6 +14,46 @@
 using namespace reloadmaker;
 namespace {
 void check(bool valid,const QString& error){if(!valid)throw std::runtime_error(error.toStdString());}
+void nativeSourceTimes() {
+    OperatingSetup setup;setup.mode="clip";setup.clip="source.hkx";setup.baseline="idle.hkx";
+    setup.parts.operating=setup.parts.bolt=0;setup.parts.magazine=1;setup.parts.followers={0};
+    setup.sourceTimes=true;setup.openSeconds=.15;setup.closedSeconds=0;
+    QString error;OperatingSetup decoded;
+    const auto document=operatingSetupJson(setup);
+    check(document["version"]==2&&!document.contains("openFrame"),"Native time settings retained frame authority");
+    check(readOperatingSetup(document,decoded,error),error);
+    check(operatingSetupJson(decoded)==document,"Source-time round trip changed the window");
+    for(int frames:{249,321,361,401,501}) {
+        auto parts=decoded.parts;QVector<float> times;
+        check(operatingTimeSamples(decoded,3,frames,parts,times,error),error);
+        check(std::abs(times[parts.openFrame]-.15)<1e-6&&times[parts.closedFrame]==0,"Capture size changed a source endpoint");
+        for(int i=1;i<times.size();++i)check(times[i]>=times[i-1],"Source window introduced a time reversal");
+        ReloadRecipe recipe;recipe.frames=frames;recipe.duration=4;
+        SimulationRig rig;rig.motionFrames=361;rig.motionDuration=3;rig.openFrame=342;rig.closedFrame=360;rig.strokeSeconds=.15f;
+        check(std::abs(simulationStrokeDuration(recipe,rig)-.15f)<1e-7,"Magazine clock changed operating duration");
+    }
+    decoded.openSeconds=.123456;decoded.closedSeconds=.287654;
+    auto parts=decoded.parts;QVector<float> times;
+    check(operatingTimeSamples(decoded,3,361,parts,times,error),error);
+    check(std::abs(times[parts.openFrame]-.123456)<1e-6&&std::abs(times[parts.closedFrame]-.287654)<1e-6,"Source times were rounded to frame boundaries");
+    decoded.closedSeconds=4;check(!operatingTimeSamples(decoded,3,361,parts,times,error),"Window outside the clip was sampled");
+    auto invalid=document;invalid["closedSeconds"]=-1;check(!readOperatingSetup(invalid,decoded,error),"Mixed automatic and explicit times accepted");
+    invalid=document;invalid["openSeconds"]=-.5;check(!readOperatingSetup(invalid,decoded,error),"Negative source time accepted");
+    invalid=document;invalid["openFrame"]=18;check(!readOperatingSetup(invalid,decoded,error),"Conflicting frame and time authorities accepted");
+    // Existing manual movement records keep their positions, assignments and clock.
+    setup.sourceTimes=false;setup.mode="manual";setup.parts.openFrame=18;setup.parts.closedFrame=0;setup.movements[0]="authored-movement";
+    const auto manual=operatingSetupJson(setup);check(readOperatingSetup(manual,decoded,error),error);
+    check(operatingSetupJson(decoded)==manual&&!decoded.sourceTimes,"Manual movement was converted to native source time");
+    parts=decoded.parts;check(operatingTimeSamples(decoded,3,361,parts,times,error),error);
+    check(parts.openFrame==18&&parts.closedFrame==0,"Manual window changed");
+    ReloadRecipe native;native.duration=1;native.frames=5;native.tracks.resize(1);
+    for(int i=0;i<5;++i)native.tracks[0].poses.append(Transformf{{float(i),0,0}});
+    SimulationRig independent;independent.motionFrames=9;independent.openFrame=8;independent.closedFrame=0;
+    check(std::abs(simulationNativeTrackPose(native,independent,0,1).translation.x-4)<1e-6,"Independent clock indexed outside native source");
+    independent.motionFrames=3;independent.openFrame=2;independent.nativeProgress={0,.1f,1};
+    check(std::abs(simulationNativeFrame(native,independent,1)-.4f)<1e-6,"Fractional source time lost its native reference frame");
+    check(std::abs(simulationNativeTrackPose(native,independent,0,.5f).translation.x-.4f)<1e-6,"Native reference pose ignored the source-time mapping");
+}
 void carrierOwnership() {
     ReloadRecipe recipe;recipe.frames=3;recipe.tracks.resize(3);
     for(int i=0;i<3;++i) {
@@ -406,7 +446,7 @@ void m1aFixture(const QString& path) {
 }
 }
 int main(int argc,char** argv) {
-    QCoreApplication app(argc,argv);guideAuthoring();carrierOwnership();
+    QCoreApplication app(argc,argv);guideAuthoring();carrierOwnership();nativeSourceTimes();
     try {stateTransitions();ammunitionTransitions();nativeReloadEvents();ar15Transitions();boltActionTransitions();check(app.arguments().size()>=2,"Pass the Glock project fixture");fixture(app.arguments()[1]);if(app.arguments().size()>2)ar15Fixture(app.arguments()[2]);if(app.arguments().size()>3)m1aFixture(app.arguments()[3]);if(app.arguments().size()>4)boltCycleFixture(app.arguments()[4]);
         QTextStream(stdout)<<"PASS simulation state ownership, drop/fire persistence, regrab/cancel/return/reset, actual slide/barrel/cartridge curves and complete magazine ownership\n";return 0;
     }catch(const std::exception& e){QTextStream(stderr)<<"FAIL "<<e.what()<<'\n';return 1;}

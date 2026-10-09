@@ -161,7 +161,16 @@ const QVector<Transformf>& simulationTrackCurve(const ReloadRecipe& r,const Simu
     if(track==rig.slide&&!rig.derivedHandle.isEmpty())return rig.derivedHandle;
     if(track==rig.bolt&&!rig.derivedBolt.isEmpty())return rig.derivedBolt;
     const auto authored=rig.authoredCurves.constFind(track);if(authored!=rig.authoredCurves.cend())return authored.value();
+    const auto native=rig.nativeCurves.constFind(track);if(native!=rig.nativeCurves.cend())return native.value();
     return r.tracks[track].poses;
+}
+int simulationFrameCount(const ReloadRecipe& r,const SimulationRig& rig){return rig.motionFrames>0?rig.motionFrames:r.frames;}
+float simulationStrokeDuration(const ReloadRecipe& r,const SimulationRig& rig){return rig.strokeSeconds>=0?rig.strokeSeconds:(rig.motionDuration>0?rig.motionDuration:r.duration)*(rig.closedFrame-rig.openFrame)/(simulationFrameCount(r,rig)-1);}
+float simulationNativeFrame(const ReloadRecipe& r,const SimulationRig& rig,float frame) {
+    if(rig.nativeProgress.isEmpty())return simulationFrameCount(r,rig)==r.frames?frame:frame*(r.frames-1)/(simulationFrameCount(r,rig)-1);
+    frame=std::clamp(frame,0.f,float(rig.nativeProgress.size()-1));
+    const int a=int(frame),b=std::min(a+1,int(rig.nativeProgress.size()-1));
+    return (rig.nativeProgress[a]+(rig.nativeProgress[b]-rig.nativeProgress[a])*(frame-a))*(r.frames-1);
 }
 namespace {
 float simulationFrame(const SimulationRig& rig,float progress){return rig.closedFrame+(rig.openFrame-rig.closedFrame)*std::clamp(progress,0.f,1.f);}
@@ -170,7 +179,7 @@ bool simulationTrackAuthored(const SimulationRig& rig,int track) {
     return rig.authoredCurves.contains(track)||(track==rig.slide&&!rig.derivedHandle.isEmpty())||(track==rig.bolt&&!rig.derivedBolt.isEmpty());
 }
 Transformf simulationNativeTrackPose(const ReloadRecipe& r,const SimulationRig& rig,int track,float progress) {
-    return reloadTrackPose(r,track,r.duration*simulationFrame(rig,progress)/(r.frames-1));
+    return reloadTrackPose(r,track,r.duration*simulationNativeFrame(r,rig,simulationFrame(rig,progress))/(r.frames-1));
 }
 Transformf simulationTrackPose(const ReloadRecipe& r,const SimulationRig& rig,int track,float progress) {
     if(!simulationTrackAuthored(rig,track))return simulationNativeTrackPose(r,rig,track,progress);
@@ -246,6 +255,8 @@ QJsonObject simulationRigJson(const ReloadRecipe& r,const SimulationRig& rig,boo
     QJsonObject result{{"format","reload-maker-simulation"},{"version",1},{"recipeId",rig.recipeId},
         {"slideTrack",rig.slide},{"magazineTrack",rig.magazine},{"openFrame",rig.openFrame},{"closedFrame",rig.closedFrame},
         {"springReturn",springReturn&&rig.mechanism!=WeaponMechanism::BoltAction},{"slideTracks",records(rig.slideTracks)},{"magazineTracks",records(rig.magazineTracks)}};
+    if(rig.motionFrames>0&&rig.motionFrames!=r.frames){result["motionFrames"]=rig.motionFrames;result["motionDuration"]=rig.motionDuration;}
+    if(!rig.nativeProgress.isEmpty()){QJsonArray values;for(float p:rig.nativeProgress)values.append(p);result["nativeProgress"]=values;}
     if(!rig.derivedHandle.isEmpty()){QJsonArray poses;QString error;for(const auto& p:rig.derivedHandle){QJsonObject value;if(!encodePoseTransform(p,value,error))return {};poses.append(value);}result["derivedHandleMotion"]=QJsonObject{{"method","native-bolt-translation"},{"sourceTrack",rig.bolt},{"track",rig.slide},{"poses",poses}};}
     if(!rig.derivedBolt.isEmpty()){QJsonArray poses;QString error;for(const auto& p:rig.derivedBolt){QJsonObject value;if(!encodePoseTransform(p,value,error))return {};poses.append(value);}result["derivedBoltMotion"]=QJsonObject{{"track",rig.bolt},{"source",rig.mechanicalSource},{"poses",poses}};}
     if(rig.customSetup){QJsonArray curves;auto indices=rig.authoredCurves.keys();std::sort(indices.begin(),indices.end());for(int index:indices){QJsonArray poses;QString error;for(const auto& p:rig.authoredCurves[index]){QJsonObject value;if(!encodePoseTransform(p,value,error))return {};poses.append(value);}curves.append(QJsonObject{{"track",index},{"poses",poses}});}result["operatingSetup"]=rig.authoring;result["authoredCurves"]=curves;result["motionSource"]=rig.mechanicalSource;}

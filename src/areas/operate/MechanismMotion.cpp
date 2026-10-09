@@ -468,7 +468,7 @@ namespace reloadmaker
             return false;
         }
         _boltCycle.duration = authoredCycle ? rig.motionDuration : clip.durationSeconds;
-        const int frames = authoredCycle ? _reloadRecipe->frames : sampleCount(clip.durationSeconds);
+        const int frames = authoredCycle ? simulationFrameCount(*_reloadRecipe, rig) : sampleCount(clip.durationSeconds);
         if (frames < 3 || frames > maximumReloadFrames) {
             _simulationError = "Native bolt cycle exceeds the sampling limit.";
             return false;

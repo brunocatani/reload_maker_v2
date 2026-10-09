@@ -232,10 +232,10 @@ namespace reloadmaker
             return holdOpen ? operatingTrackTarget(rig.bolt, 1) : reloadTrackPose(recipe, rig.bolt, _simulation.seconds);
         }
         if (_simulation.action == SimulationAction::Reload) {
-            const auto& handlePoses = recipe.tracks[rig.slide].poses;
             const auto handle = reloadTrackPose(recipe, rig.slide, _simulation.seconds);
-            const float travel = reloadPoseDistance(handlePoses[rig.closedFrame], handlePoses[rig.openFrame]);
-            const float progress = holdOpen ? 1.f : std::clamp(reloadPoseDistance(handlePoses[rig.closedFrame], handle) / travel, 0.f, 1.f);
+            const auto rest = simulationNativeTrackPose(recipe, rig, rig.slide, 0);
+            const float travel = reloadPoseDistance(rest, simulationNativeTrackPose(recipe, rig, rig.slide, 1));
+            const float progress = holdOpen ? 1.f : std::clamp(reloadPoseDistance(rest, handle) / travel, 0.f, 1.f);
             return rifleBoltPose(progress);
         }
         if (boltDrivesHandle) {

@@ -3,7 +3,7 @@
 // the moving parts' curves come from:
 //   preset  the verified source behavior (buildSourceSimulationRig),
 //   reload  the captured reload itself,
-//   clip    another native clip, sampled over the recipe's frames,
+//   clip    another native clip; explicit time windows own their sample clock,
 //   manual  saved Move / Rotate movements authored on the parts.
 #include "ReloadMakerController.h"
 #include "ReloadTemplates.h"
@@ -13,6 +13,7 @@
 #include <QJsonDocument>
 #include <QTimer>
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 namespace reloadmaker
@@ -34,7 +35,7 @@ namespace reloadmaker
             error = "The selected movement window exceeds this capture";
             return false;
         }
-        ConfiguredMotion motion{ recipe.duration, setup.ejectSeconds, {} };
+        ConfiguredMotion motion{ recipe.duration, setup.ejectSeconds, {}, recipe.frames, {} };
         SimulationRig preset;
         if (setup.mode == "preset") {
             if (!buildSourceSimulationRig(preset, error)) {
@@ -56,16 +57,54 @@ namespace reloadmaker
                 return false;
             }
         }
+        if (setup.mode != "clip" && setup.sourceTimes && setup.openSeconds >= 0) {
+            QVector<float> times;
+            if (!operatingTimeSamples(setup, motion.duration, motion.frames, parts, times, error)) return false;
+            for (float seconds : times) motion.nativeProgress.append(seconds / motion.duration);
+            auto selected = parts.followers;
+            if (!selected.contains(parts.bolt)) selected.append(parts.bolt);
+            for (int track : selected) {
+                if (!valid(track)) { error = "A follower is outside the current source tracks"; return false; }
+                const auto source = parts.curves.value(track, recipe.tracks[track].poses);
+                QVector<Transformf> sampled;
+                for (float seconds : times) {
+                    const float frame = std::clamp(seconds / motion.duration * (source.size() - 1), 0.f, float(source.size() - 1));
+                    const int a = int(frame), b = std::min(a + 1, int(source.size() - 1));
+                    sampled.append(interpolatedTransform(source[a], source[b], frame - a));
+                }
+                parts.curves[track] = std::move(sampled);
+            }
+        }
         // A window chosen closed-to-open is played backwards.
         const bool reversed = parts.openFrame >= 0 && parts.closedFrame < parts.openFrame;
         if (reversed && !reverseSetupWindow(parts, motion, error)) {
             return false;
         }
         if(const auto* preset=checklistPreset();preset&&preset->model.mechanisms.size()==1&&preset->model.mechanisms.front().kind==MechanismKind::HkSlap)parts.singleHandle=true;
-        if (!buildSimulationRig(recipe, rig, error, simulationMechanism(), setup.deriveHandle, {}, &parts)) {
+        // The operating clip owns its clock. The magazine recipe retains its
+        // own animation and poses; only the rig's working view is resampled.
+        ReloadRecipe motionRecipe = recipe;
+        if (motion.frames != recipe.frames || !motion.nativeProgress.isEmpty()) {
+            motionRecipe.frames = motion.frames;
+            for (int track = 0; track < recipe.tracks.size(); ++track) {
+                auto& poses = motionRecipe.tracks[track].poses;
+                poses.clear();
+                for (int f = 0; f < motion.frames; ++f)
+                    poses.append(reloadTrackPose(recipe, track, recipe.duration * (motion.nativeProgress.isEmpty() ? float(f) / (motion.frames - 1) : motion.nativeProgress[f])));
+            }
+        }
+        if (!buildSimulationRig(motionRecipe, rig, error, simulationMechanism(), setup.deriveHandle, {}, &parts)) {
             return false;
         }
-        if (setup.mode == "preset" && !reversed) {
+        rig.motionFrames = motion.frames;
+        rig.nativeProgress = motion.nativeProgress;
+        if (motion.frames != recipe.frames || !motion.nativeProgress.isEmpty()) {
+            for (int track = 0; track < recipe.tracks.size(); ++track)
+                if (!rig.authoredCurves.contains(track)) rig.nativeCurves[track] = motionRecipe.tracks[track].poses;
+        }
+        if (setup.sourceTimes && setup.openSeconds >= 0)
+            rig.strokeSeconds = float(std::abs(setup.closedSeconds - setup.openSeconds));
+        if (setup.mode == "preset" && !reversed && !(setup.sourceTimes && setup.openSeconds >= 0)) {
             if (rig.slide == preset.slide) {
                 rig.derivedHandle = preset.derivedHandle;
             }
@@ -81,12 +120,19 @@ namespace reloadmaker
         rig.manualEjectSeconds = motion.ejectSeconds;
         rig.motionDuration = motion.duration;
         rig.mechanicalSource = motion.provenance;
-        rig.authoring = operatingSetupJson(setup);
+        auto canonical = setup;
+        if (setup.mode != "manual" && !setup.sourceTimes) {
+            canonical.sourceTimes = true;
+            canonical.openSeconds = setup.parts.openFrame < 0 ? -1 : double(motion.duration) * setup.parts.openFrame / (recipe.frames - 1);
+            canonical.closedSeconds = setup.parts.closedFrame < 0 ? -1 : double(motion.duration) * setup.parts.closedFrame / (recipe.frames - 1);
+        }
+        rig.authoring = operatingSetupJson(canonical);
         return true;
     }
 
     // "clip" mode: the bolt and every follower sampled from another native
-    // clip, weapon-local, over the recipe's frames. The clip's ejection
+    // clip, weapon-local. Explicit windows use the clip's own clock rather
+    // than the magazine recipe's frame count. The clip's ejection
     // marker applies unless the setup gives an ejection time.
     bool ReloadMakerController::sampleSetupClip(const OperatingSetup& setup, SimulationParts& parts, ConfiguredMotion& motion, QString& error)
     {
@@ -98,6 +144,14 @@ namespace reloadmaker
         if (!clip.valid() || !base.valid()) {
             return false;
         }
+        // Explicit source times must not inherit another magazine's frame
+        // count. Automatic detection keeps its established sampling policy.
+        if (setup.sourceTimes && setup.openSeconds >= 0)
+            motion.frames = int(std::clamp(std::ceil(double(clip.durationSeconds) * 120.0) + 1.0, 3.0, double(maximumReloadFrames)));
+        QVector<float> times;
+        if (!operatingTimeSamples(setup, clip.durationSeconds, motion.frames, parts, times, error)) return false;
+        if (setup.sourceTimes && setup.openSeconds >= 0)
+            for (float seconds : times) motion.nativeProgress.append(seconds / clip.durationSeconds);
         QVector<int> selected = parts.followers;
         if (!selected.contains(parts.bolt)) {
             selected.append(parts.bolt);
@@ -112,8 +166,8 @@ namespace reloadmaker
         if (!sampler.setBaselineClip(base, _readyLocalPose, error)) {
             return false;
         }
-        for (int frame = 0; frame < recipe.frames; ++frame) {
-            const float seconds = clip.durationSeconds * frame / (recipe.frames - 1);
+        for (int frame = 0; frame < motion.frames; ++frame) {
+            const float seconds = times[frame];
             if (!sampler.sample(clip, seconds, error)) {
                 return false;
             }
@@ -250,8 +304,10 @@ namespace reloadmaker
             std::reverse(curve.begin(), curve.end());
             parts.curves[track] = std::move(curve);
         }
-        parts.openFrame = recipe.frames - 1 - parts.openFrame;
-        parts.closedFrame = recipe.frames - 1 - parts.closedFrame;
+        parts.openFrame = motion.frames - 1 - parts.openFrame;
+        parts.closedFrame = motion.frames - 1 - parts.closedFrame;
+        std::reverse(motion.nativeProgress.begin(), motion.nativeProgress.end());
+        for (auto& progress : motion.nativeProgress) progress = 1.f - progress;
         motion.provenance["reversedSourceWindow"] = true;
         return true;
     }
@@ -317,11 +373,26 @@ namespace reloadmaker
             }
         }
         setup.trackAnchors = recipeTrackAnchors(*_reloadRecipe);
+        // Present seconds in both the dialog and MCP. Existing frame-based
+        // records are interpreted in their currently prepared source before
+        // an explicit Save adopts the new representation.
+        QJsonObject settings = operatingSetupJson(setup);
+        if (setup.mode != "manual" && !setup.sourceTimes) {
+            if (saved && !source.authoring.isEmpty()) settings = source.authoring;
+            else {
+                setup.sourceTimes = true;
+                settings = operatingSetupJson(setup);
+            }
+        }
+        const float sourceDuration = source.motionDuration > 0 ? source.motionDuration : _reloadRecipe->duration;
+        const int sourceFrames = simulationFrameCount(*_reloadRecipe, source);
         return {
-            { "settings", operatingSetupJson(setup) },
+            { "settings", settings },
             { "saved", saved },
             { "source", authoringPlanSources()["operating"] },
             { "anchorNote", _operatingFallbackNote },
+            { "windowNote", setup.mode != "manual" && !setup.sourceTimes && setup.parts.openFrame >= 0
+                ? QStringLiteral("Older setup: check its open and closed poses before saving the source-time window.") : QString() },
             { "tracks", tracks },
             { "movements", movements },
             { "clips", clips },
@@ -329,6 +400,8 @@ namespace reloadmaker
             { "duration", _reloadRecipe->duration },
             { "suggestedOpenFrame", source.openFrame },
             { "suggestedClosedFrame", source.closedFrame },
+            { "suggestedOpenSeconds", sourceDuration * source.openFrame / (sourceFrames - 1) },
+            { "suggestedClosedSeconds", sourceDuration * source.closedFrame / (sourceFrames - 1) },
             { "error", error },
         };
     }
@@ -351,9 +424,7 @@ namespace reloadmaker
             if (!readOperatingSetup(request["settings"].toObject(), setup, error) || !matchOperatingSetup(setup, error) || !buildConfiguredSimulationRig(setup, checked, error)) {
                 throw std::runtime_error(error.toStdString());
             }
-            setup.recipeId = _reloadRecipe->id;
-            setup.trackAnchors = recipeTrackAnchors(*_reloadRecipe);
-            next = operatingSetupJson(setup);
+            next = checked.authoring;
         } else {
             throw std::runtime_error("Choose save or reset for the operating setup");
         }

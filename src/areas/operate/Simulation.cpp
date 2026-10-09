@@ -215,8 +215,8 @@ namespace reloadmaker
     bool ReloadMakerController::prepareMechanismMotion()
     {
         const auto& rig = *_simulationRig;
-        const auto frameSeconds = [this](int frame) {
-            return _reloadRecipe->duration * frame / (_reloadRecipe->frames - 1);
+        const auto frameSeconds = [this](float frame, int frames) {
+            return _reloadRecipe->duration * frame / (frames - 1);
         };
         _glockReloadRackAt = -1;
         _glockReloadFeedAt = -1;
@@ -228,17 +228,17 @@ namespace reloadmaker
             // feed never comes before the rack: fed first, the rack would
             // eject the round it just chambered.
             const auto& motion = _reloadRecipe->tracks[rig.slide].poses;
-            const auto& rest = motion[rig.closedFrame];
-            const float travel = reloadPoseDistance(rest, motion[rig.openFrame]);
+            const auto rest = simulationNativeTrackPose(*_reloadRecipe, rig, rig.slide, 0);
+            const float travel = reloadPoseDistance(rest, simulationNativeTrackPose(*_reloadRecipe, rig, rig.slide, 1));
             float strokeStart = -1;
             for (int frame = 0; frame < motion.size(); ++frame) {
                 if (reloadPoseDistance(rest, motion[frame]) >= travel * kRackTravelFraction) {
-                    _glockReloadRackAt = frameSeconds(frame);
+                    _glockReloadRackAt = frameSeconds(frame, motion.size());
                     int start = frame;
                     while (start > 0 && reloadPoseDistance(rest, motion[start - 1]) > travel * kRestTravelFraction) {
                         --start;
                     }
-                    strokeStart = frameSeconds(start);
+                    strokeStart = frameSeconds(start, motion.size());
                     break;
                 }
             }
@@ -259,21 +259,24 @@ namespace reloadmaker
             }
             // Racked when the handle nears full travel; fed when the action closes.
             const auto& handle = rig.derivedHandle.isEmpty() ? _reloadRecipe->tracks[rig.slide].poses : rig.derivedHandle;
-            const float travel = reloadPoseDistance(handle[rig.closedFrame], handle[rig.openFrame]);
+            const auto rest = rig.derivedHandle.isEmpty() ? simulationNativeTrackPose(*_reloadRecipe, rig, rig.slide, 0) : simulationTrackPose(*_reloadRecipe, rig, rig.slide, 0);
+            const auto open = rig.derivedHandle.isEmpty() ? simulationNativeTrackPose(*_reloadRecipe, rig, rig.slide, 1) : simulationTrackPose(*_reloadRecipe, rig, rig.slide, 1);
+            const float travel = reloadPoseDistance(rest, open);
             for (int frame = 0; frame < handle.size(); ++frame) {
-                if (reloadPoseDistance(handle[rig.closedFrame], handle[frame]) >= travel * kRackTravelFraction) {
-                    _glockReloadRackAt = frameSeconds(frame);
+                if (reloadPoseDistance(rest, handle[frame]) >= travel * kRackTravelFraction) {
+                    _glockReloadRackAt = rig.derivedHandle.isEmpty() ? frameSeconds(frame, handle.size())
+                        : frameSeconds(simulationNativeFrame(*_reloadRecipe, rig, float(frame)), _reloadRecipe->frames);
                     break;
                 }
             }
-            _glockReloadFeedAt = frameSeconds(rig.closedFrame);
+            _glockReloadFeedAt = frameSeconds(simulationNativeFrame(*_reloadRecipe, rig, float(rig.closedFrame)), _reloadRecipe->frames);
         }
         if (isBoltActionConfiguration()) {
             if (!prepareBoltActionMotion()) {
                 return false;
             }
-            _glockReloadRackAt = frameSeconds(rig.openFrame);
-            _glockReloadFeedAt = frameSeconds(rig.closedFrame);
+            _glockReloadRackAt = frameSeconds(simulationNativeFrame(*_reloadRecipe, rig, float(rig.openFrame)), _reloadRecipe->frames);
+            _glockReloadFeedAt = frameSeconds(simulationNativeFrame(*_reloadRecipe, rig, float(rig.closedFrame)), _reloadRecipe->frames);
         }
         return true;
     }

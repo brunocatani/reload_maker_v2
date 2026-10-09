@@ -36,10 +36,20 @@ void ReloadMakerController::showOperatingSetup() {
     auto* baseline=new QComboBox;baseline->setEditable(true);baseline->addItem(initial["baseline"].toString());form->addRow("Clip baseline",baseline);
     connect(clip,qOverload<int>(&QComboBox::activated),dialog,[clip,baseline](int){if(!clip->currentData().toString().isEmpty())baseline->setEditText(clip->currentData().toString());});
     auto* derive=new QCheckBox("Translate a static charging handle using the bolt's measured travel");derive->setChecked(initial["deriveHandle"].toBool());layout->addWidget(derive);
-    auto* automatic=new QCheckBox("Detect the final open-to-closed window");automatic->setChecked(initial["openFrame"].toInt(-1)<0);layout->addWidget(automatic);
-    auto* times=new QFormLayout;layout->addLayout(times);auto* open=new QSpinBox;auto* closed=new QSpinBox;
-    for(auto* field:{open,closed})field->setRange(0,state["frames"].toInt()-1);
-    open->setValue(automatic->isChecked()?state["suggestedOpenFrame"].toInt():initial["openFrame"].toInt());closed->setValue(automatic->isChecked()?state["suggestedClosedFrame"].toInt():initial["closedFrame"].toInt());times->addRow("Open sample",open);times->addRow("Closed sample",closed);
+    const bool initiallyManual=initial["mode"]=="manual";
+    auto* automatic=new QCheckBox("Detect the final open-to-closed window");automatic->setChecked(initiallyManual?initial["openFrame"].toInt(-1)<0:initial["openSeconds"].toDouble(-1)<0);layout->addWidget(automatic);
+    auto* times=new QFormLayout;layout->addLayout(times);auto* open=new QDoubleSpinBox;auto* closed=new QDoubleSpinBox;
+    for(auto* field:{open,closed}){field->setRange(0,120);field->setDecimals(6);field->setSingleStep(.01);field->setSuffix(" seconds");}
+    open->setValue(initial["openSeconds"].toDouble(-1)>=0?initial["openSeconds"].toDouble():state["suggestedOpenSeconds"].toDouble());
+    closed->setValue(initial["closedSeconds"].toDouble(-1)>=0?initial["closedSeconds"].toDouble():state["suggestedClosedSeconds"].toDouble());
+    times->addRow("Open source time",open);times->addRow("Closed source time",closed);
+    auto* manualOpen=new QSpinBox;auto* manualClosed=new QSpinBox;
+    for(auto* field:{manualOpen,manualClosed})field->setRange(0,state["frames"].toInt()-1);
+    manualOpen->setValue(initial["openFrame"].toInt(-1)>=0?initial["openFrame"].toInt():state["suggestedOpenFrame"].toInt());
+    manualClosed->setValue(initial["closedFrame"].toInt(-1)>=0?initial["closedFrame"].toInt():state["suggestedClosedFrame"].toInt());
+    times->addRow("Manual open sample",manualOpen);times->addRow("Manual closed sample",manualClosed);
+    auto* timeHelp=new QLabel("Times select poses inside the native source clip. They do not set how quickly you must move your controller.");timeHelp->setWordWrap(true);layout->addWidget(timeHelp);
+    if(!state["windowNote"].toString().isEmpty()){auto* note=new QLabel(state["windowNote"].toString());note->setWordWrap(true);layout->addWidget(note);}
     auto* duration=new QDoubleSpinBox;duration->setRange(.01,120);duration->setDecimals(3);duration->setValue(initial["duration"].toDouble(.2));duration->setSuffix(" seconds");times->addRow("Manual movement duration",duration);
     auto* eject=new QDoubleSpinBox;eject->setRange(-1,120);eject->setDecimals(3);eject->setSpecialValueText("Source marker / manual full opening");eject->setValue(initial["ejectSeconds"].toDouble(-1));times->addRow("Bolt-cycle ejection time",eject);
     auto* fire=new QComboBox;fire->addItem("Verified firing behavior","preset");fire->addItem("Native firing clip","native");fire->addItem("Replay measured bolt stroke at firing cadence","stroke");fire->setCurrentIndex(fire->findData(initial["fireMode"].toString()));times->addRow("Firing bolt movement",fire);
@@ -54,10 +64,18 @@ void ReloadMakerController::showOperatingSetup() {
         movements->addRow(track["name"].toString()+" movement",choices);assignments.append({track["index"].toInt(),choices});}
     auto* manualHelp=new QLabel("Create named movements with the existing Mechanism editor's Move/Rotate gizmos. Spring mechanisms use a closed-to-open path; manual bolts use the complete opening-and-closing sequence. Link rigid followers there, or assign independent movements here.");manualHelp->setWordWrap(true);layout->addWidget(manualHelp);
     auto* status=new QLabel(state["error"].toString());status->setWordWrap(true);outer->addWidget(status);
-    const auto enable=[=]{const auto mode=source->currentData().toString();clip->setEnabled(mode=="clip");baseline->setEnabled(mode=="clip");duration->setEnabled(mode=="manual");for(const auto& pair:assignments)pair.second->setEnabled(mode=="manual");manualHelp->setVisible(mode=="manual");open->setEnabled(!automatic->isChecked());closed->setEnabled(!automatic->isChecked());};
+    const auto enable=[=]{const auto mode=source->currentData().toString();const bool manual=mode=="manual";clip->setEnabled(mode=="clip");baseline->setEnabled(mode=="clip");duration->setEnabled(manual);for(const auto& pair:assignments)pair.second->setEnabled(manual);manualHelp->setVisible(manual);open->setEnabled(!automatic->isChecked());closed->setEnabled(!automatic->isChecked());manualOpen->setEnabled(!automatic->isChecked());manualClosed->setEnabled(!automatic->isChecked());times->setRowVisible(open,!manual);times->setRowVisible(closed,!manual);times->setRowVisible(manualOpen,manual);times->setRowVisible(manualClosed,manual);timeHelp->setVisible(!manual);};
+    // A different movement source has a different clock; do not carry an
+    // explicit native-time window into a newly selected manual movement.
+    connect(source,qOverload<int>(&QComboBox::currentIndexChanged),dialog,[automatic](int){automatic->setChecked(true);});
+    connect(clip,&QComboBox::currentTextChanged,dialog,[automatic](const QString&){automatic->setChecked(true);});
     connect(source,qOverload<int>(&QComboBox::currentIndexChanged),dialog,enable);connect(automatic,&QCheckBox::toggled,dialog,enable);enable();
     auto* actions=new QHBoxLayout;outer->addLayout(actions);auto* save=new QPushButton("Save and preview in Operate");auto* reset=new QPushButton("Restore source defaults");auto* author=new QPushButton("Open movement editor");actions->addWidget(save);actions->addWidget(reset);actions->addWidget(author);
-    connect(save,&QPushButton::clicked,dialog,[=,this]{try{auto value=initial;value["operating"]=operating->currentData().toInt();value["bolt"]=bolt->currentData().toInt();value["magazine"]=magazine->currentData().toInt();value["mode"]=source->currentData().toString();value["clip"]=clip->currentText();value["baseline"]=baseline->currentText();value["deriveHandle"]=derive->isChecked();value["fireMode"]=fire->currentData().toString();value["cycleMode"]=cycle->currentData().toString();value["catchMode"]=catchMode->currentData().toString();value["duration"]=duration->value();value["ejectSeconds"]=eject->value();value["openFrame"]=automatic->isChecked()?-1:open->value();value["closedFrame"]=automatic->isChecked()?-1:closed->value();
+    connect(save,&QPushButton::clicked,dialog,[=,this]{try{auto value=initial;value["operating"]=operating->currentData().toInt();value["bolt"]=bolt->currentData().toInt();value["magazine"]=magazine->currentData().toInt();value["mode"]=source->currentData().toString();value["clip"]=clip->currentText();value["baseline"]=baseline->currentText();value["deriveHandle"]=derive->isChecked();value["fireMode"]=fire->currentData().toString();value["cycleMode"]=cycle->currentData().toString();value["catchMode"]=catchMode->currentData().toString();value["duration"]=duration->value();value["ejectSeconds"]=eject->value();
+        const bool manual=source->currentData()=="manual";value["version"]=manual?1:2;
+        value.remove("openFrame");value.remove("closedFrame");value.remove("openSeconds");value.remove("closedSeconds");
+        if(manual){value["openFrame"]=automatic->isChecked()?-1:manualOpen->value();value["closedFrame"]=automatic->isChecked()?-1:manualClosed->value();}
+        else{value["openSeconds"]=automatic->isChecked()?-1:open->value();value["closedSeconds"]=automatic->isChecked()?-1:closed->value();}
         QJsonArray list,moves;for(int i=0;i<followers->count();++i){const auto* row=followers->item(i);if(row->checkState()==Qt::Checked)list.append(row->data(Qt::UserRole).toInt());}for(const auto& pair:assignments)if(!pair.second->currentData().toString().isEmpty())moves.append(QJsonObject{{"track",pair.first},{"id",pair.second->currentData().toString()}});value["followers"]=list;value["movements"]=moves;
         configureOperatingSetup({{"operation","save"},{"settings",value}});setWorkspace(OperateWorkspace);status->setText(_simulationError.isEmpty()?"Saved for this assembly. Test the complete stroke in the viewport.":_simulationError);
     }catch(const std::exception& e){status->setText(e.what());}});
