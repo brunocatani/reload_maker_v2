@@ -69,8 +69,23 @@ std::optional<PartGrip> magazineGripFor(const QString& weapon,const HandPosePlac
         error="The magazine fit is missing or belongs to another weapon";return {};
     }
     if(custom) {
-        if(!sameGripAnchor(found->pose.placement,anchor)){error="The assigned fit targets a different magazine model or frame";return {};}
-        return *found;
+        if(sameGripAnchor(found->pose.placement,anchor))return *found;
+        const auto& saved=found->pose.placement;
+        const auto path=[](QString value){return value.replace('\\','/').toLower();};
+        const auto from=path(saved.anchorPath),to=path(anchor.anchorPath);
+        const bool sameOwner=saved.ownerRecord.compare(anchor.ownerRecord,Qt::CaseInsensitive)==0&&
+            path(saved.ownerModel)==path(anchor.ownerModel)&&saved.anchorKind==anchor.anchorKind;
+        const bool root=saved.anchorKind=="installed-part"&&from==saved.anchorName.toLower()&&to==anchor.anchorName.toLower();
+        const bool descendant=saved.anchorName.compare(anchor.anchorName,Qt::CaseInsensitive)==0&&
+            from.contains('/')&&to.contains('/')&&from.section('/',1)==to.section('/',1);
+        if(!sameOwner||(!root&&!descendant)){error="The assigned fit targets a different magazine model or frame";return {};}
+        // The selected magazine owns this frame. Cosmetic NIF root names
+        // are not part of its saved wrist/finger placement contract.
+        PartGrip rebound=*found;
+        rebound.pose.placement=anchor;rebound.pose.placement.handInAnchor=saved.handInAnchor;
+        rebound.pose.placement.handInWeapon=saved.handInWeapon;
+        rebound.surfaceContact.reset();rebound.mechanismId.clear();
+        return rebound;
     }
     PartGrip fit=*found;
     fit.pose.id=QUuid::createUuidV5(QUuid(id),(key+"|"+anchor.ownerModel.toLower()+"|"+anchor.anchorPath).toUtf8()).toString(QUuid::WithoutBraces);

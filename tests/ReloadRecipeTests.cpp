@@ -15,6 +15,23 @@ namespace {
     void check(bool ok,const QString& why){if(!ok)throw std::runtime_error(why.toStdString());}
     float ramp(float time,float a,float b){return std::clamp((time-a)/(b-a),0.f,1.f);}
     Transformf pose(Vec3f t={},float degrees=0){const auto q=QQuaternion::fromAxisAndAngle(0,1,0,degrees);return {t,{q.x(),q.y(),q.z(),q.scalar()},{1.3f,1.3f,1.3f}};}
+    void replacementRoots(){
+        ReloadRecipe recipe;ReloadTrack track;track.anchor={"animated-part","WeaponBolt","WEAPON/WeaponBolt","Receiver.nif","Test.esp:123456",{}, {}};
+        recipe.tracks.append(track);const auto saved=recipeTrackAnchors(recipe);
+        recipe.tracks[0].anchor.anchorPath="Scene Root/WeaponBolt";
+        check(mapRecipeTrack(saved,recipe,0)==0,"Cosmetic mesh root broke the operating part");
+        recipe.tracks[0].anchor.ownerRecord="Test.esp:654321";
+        check(mapRecipeTrack(saved,recipe,0)==0,"Same-model receiver variant lost its renamed-root part");
+        recipe.tracks[0].anchor.ownerRecord="Test.esp:123456";
+        recipe.tracks[0].anchor.ownerModel="Replacement.nif";
+        check(mapRecipeTrack(saved,recipe,0)==0,"Replacement model lost its same-owner part");
+        recipe.tracks[0].anchor.ownerRecord="Other.esp:123456";
+        check(mapRecipeTrack(saved,recipe,0)==-1,"Root fallback crossed part ownership");
+        recipe.tracks[0].anchor.ownerRecord="Test.esp:123456";recipe.tracks.append(recipe.tracks[0]);
+        check(mapRecipeTrack(saved,recipe,0)==-1,"Ambiguous replacement parts accepted");
+        recipe.tracks.removeLast();recipe.tracks[0].anchor.anchorPath="Scene Root/OtherParent/WeaponBolt";
+        check(mapRecipeTrack(saved,recipe,0)==-1,"Changed part hierarchy treated as cosmetic");
+    }
     ReloadRecipe capture(){
         ReloadRecipe r;r.duration=4;r.frames=481;r.source={{"action","WPNReload"},{"weaponRecord","Test.esp:123456"},{"animation","wpnreload.hkx"}};
         for(const QString name:{"Bolt","Sight","Magazine","Round","Tilting barrel","Stationary"}){ReloadTrack t;t.anchor={"animated-part",name,"Root/"+name,"Weapons/Test.nif","Test.esp:123456",{}, {}};t.label=name;t.surface=true;r.tracks.append(t);}
@@ -123,6 +140,13 @@ namespace {
         auto assigned=bindings;assigned[handAssignmentKey(magazineGrabKey(grip.weaponRecord,drum.ownerRecord),grip.pose.hand)]=custom.pose.id;
         const auto resolved=magazineGripFor(grip.weaponRecord,drum,{grip,custom},assigned,defaults,error,grip.pose.hand);
         check(resolved&&resolved->pose.id==custom.pose.id,"Weapon default overwrote an individual fit");
+        auto rootFit=custom;rootFit.pose.placement.anchorKind="installed-part";
+        rootFit.pose.placement.anchorName="OriginalMagazine";rootFit.pose.placement.anchorPath="OriginalMagazine";
+        auto replacement=rootFit.pose.placement;replacement.anchorName="Scene Root";replacement.anchorPath="Scene Root";
+        const auto adapted=magazineGripFor(grip.weaponRecord,replacement,{rootFit},assigned,defaults,error,grip.pose.hand);
+        check(adapted&&sameGripAnchor(adapted->pose.placement,replacement)&&
+            reloadPoseDistance(adapted->pose.placement.handInAnchor,rootFit.pose.placement.handInAnchor)<.00001f,
+            "Cosmetic magazine root discarded its saved fit");
         auto wrong=drum;wrong.ownerModel="Different.nif";
         auto wrongAssigned=assigned;wrongAssigned[handAssignmentKey(magazineGrabKey(grip.weaponRecord,wrong.ownerRecord),grip.pose.hand)]=custom.pose.id;
         check(!magazineGripFor(grip.weaponRecord,wrong,{grip,custom},wrongAssigned,defaults,error,grip.pose.hand)&&!error.isEmpty(),"Mismatched custom fit silently fell back to default");
@@ -191,4 +215,4 @@ namespace {
             QTextStream(stdout)<<r.duration*s.first/(r.frames-1)<<".."<<r.duration*s.last/(r.frames-1)<<" "<<r.tracks[i].label<<'\n';
     }
 }
-int main(int argc,char** argv){QCoreApplication app(argc,argv);try{motion();encoding();curve();slowAndStatic();bundles();if(app.arguments().size()>=4)fixture(app.arguments());QTextStream(stdout)<<"PASS reload part motion spans, visibility gaps, slow/static motion, reload-only identity, recipe format 2, curved/reverse dragging and self-contained grip exports";return 0;}catch(const std::exception& e){QTextStream(stderr)<<"FAIL "<<e.what()<<'\n';return 1;}}
+int main(int argc,char** argv){QCoreApplication app(argc,argv);try{replacementRoots();motion();encoding();curve();slowAndStatic();bundles();if(app.arguments().size()>=4)fixture(app.arguments());QTextStream(stdout)<<"PASS reload part motion spans, visibility gaps, slow/static motion, reload-only identity, recipe format 2, curved/reverse dragging and self-contained grip exports";return 0;}catch(const std::exception& e){QTextStream(stderr)<<"FAIL "<<e.what()<<'\n';return 1;}}

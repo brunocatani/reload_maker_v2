@@ -477,7 +477,10 @@ namespace reloadmaker
         // not exist in the game; with no geometry below it, it is left out.
         for (int index = 0; index < recipe.tracks.size(); ++index) {
             const auto& track = recipe.tracks[index];
-            const bool magazinePart = _magazineSetup ? runtimeFullTrack(index) : track.anchor.anchorName.startsWith("WeaponMagazine");
+            // Membership follows the actual carrier, including receivers
+            // whose magazine rides WeaponExtraN. Names alone also include
+            // unrelated animation-only magazine/payload branches.
+            const bool magazinePart = runtimeFullTrack(index);
             const bool synthesized = index < _reloadTrackNodes.size() && _reloadTrackNodes[index] >= 0 &&
                                      _reloadTrackNodes[index] < _sceneNodes.size() && _synthesizedBones.contains(_sceneNodes[_reloadTrackNodes[index]]);
             if (!magazinePart || (synthesized && !track.surface)) {

@@ -229,6 +229,23 @@ namespace reloadmaker {
                 return found;
             }
         }
-        return -1;
+        // Mesh replacers often rename only their top-level NIF root. Match
+        // the same owner or shared model and remaining hierarchy, never a bare global name.
+        const auto belowRoot=[](QString path) {
+            path.replace('\\','/');
+            return path.contains('/')?path.section('/',1):path;
+        };
+        const auto path=belowRoot(saved["path"].toString());
+        int matches=0;
+        for(int i=0;i<recipe.tracks.size();++i) {
+            const auto& anchor=recipe.tracks[i].anchor;
+            const bool owner=!saved["record"].toString().isEmpty()&&same(anchor.ownerRecord,"record");
+            const bool sharedModel=!saved["model"].toString().isEmpty()&&same(anchor.ownerModel,"model");
+            if((owner||sharedModel)&&same(anchor.anchorKind,"kind")&&
+               same(anchor.anchorName,"name")&&!path.isEmpty()&&belowRoot(anchor.anchorPath).compare(path,Qt::CaseInsensitive)==0) {
+                found=i;++matches;
+            }
+        }
+        return matches==1?found:-1;
     }
 }
