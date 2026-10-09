@@ -895,6 +895,11 @@ namespace reloadmaker
         if (workspace == GripsWorkspace && record.contains("handsPage")) {
             setHandEditorPage(static_cast<HandEditorPage>(std::clamp(record["handsPage"].toInt(), 0, 3)));
         }
+        if (workspace == GripsWorkspace && _handEditorPage == HandEditorPage::PartGrip && _editingMagazine) {
+            // The fit page needs the isolated physical magazine, not the
+            // restored native clip with its parked/spare magazine copies.
+            showMagazineStep(MagazineStep::HandFit);
+        }
         if (record.contains("camera") && !_window->getGLView()->studioRestoreCamera(record["camera"].toObject())) {
             appendDiagnostic("PROJECT: invalid saved camera ignored.");
         }

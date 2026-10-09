@@ -75,7 +75,9 @@ namespace reloadmaker
     std::optional<ReloadMakerController::MagazineStep> ReloadMakerController::magazineStep() const
     {
         if (_workspace == MagazinesWorkspace) {
-            return _magazineStep == MagazineStep::Guide ? MagazineStep::Guide : MagazineStep::Pieces;
+            // Hand fit may be waiting here for the physical magazine to finish
+            // preparing. Keep that requested page through rail refreshes.
+            return _magazineStep;
         }
         if (_workspace == CollisionsWorkspace) {
             return MagazineStep::WorldModels;
@@ -101,11 +103,13 @@ namespace reloadmaker
         case MagazineStep::HandFit:
             // The fit is edited on the magazine this page prepares, held where
             // the hand grabs it.
-            if (magazineStep() != MagazineStep::HandFit) {
+            if (!_magazineFitPreview) {
                 if (!simulationWorkspace(_workspace)) {
                     setWorkspace(MagazinesWorkspace);
                 }
-                (void)editMagazineGrip();
+                if (_simulationActive && !_magazineFitPreview) {
+                    (void)editMagazineGrip();
+                }
             }
             break;
         case MagazineStep::WorldModels:
@@ -133,6 +137,10 @@ namespace reloadmaker
     void ReloadMakerController::presentMagazineStep()
     {
         if (_workspace != MagazinesWorkspace) {
+            return;
+        }
+        if (_magazineStep == MagazineStep::HandFit && _simulationActive) {
+            (void)editMagazineGrip();
             return;
         }
         if (_simulationDrive) {
