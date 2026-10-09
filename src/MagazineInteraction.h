@@ -14,6 +14,9 @@ namespace reloadmaker {
         float magazineMinProjection{0}, weaponMaxProjection{0}, clearance{0};
         QVector<Transformf> motion; // Visual motion, independent of the straight input axis.
         QVector<float> motionDistances;
+        // Untrimmed authoring source retained only for reversible guide edits.
+        QVector<Transformf> guideSourceMotion;
+        QVector<float> guideSourceDistances;
         QJsonObject inputSetup;
     };
     enum class MagazinePhase { Seated, Absent, Outgoing, OutsideEmpty, Incoming, Free, Rail };

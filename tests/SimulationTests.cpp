@@ -88,9 +88,9 @@ void guideAuthoring() {
     check(readMagazineGuide(magazineGuideJson(guide),decoded,error),error);
     auto changed=original;check(applyMagazineGuide(decoded,changed,error),error);
     check((changed.outward-QVector3D(0,1,0)).length()<.0001f,"Guide ignored the connection rotation");
-    for(float u:{0.f,.2f,.7f,1.f})check(reloadPoseDistance(magazineAnimationDelta(original,u*original.travel),magazineAnimationDelta(changed,u*changed.travel))<.0001f,"Guide flattened or displaced the original visual path");
-    const auto curves=changed.motion;guide.travel=23;guide.outwardInConnection={0,1,0};check(applyMagazineGuide(guide,changed,error),error);
-    for(int i=0;i<curves.size();++i)check(reloadPoseDistance(curves[i],changed.motion[i])<.0001f,"Repeated guide editing accumulated visual transforms");
+    check((magazineAnimationOffset(changed,changed.travel)-changed.outward*changed.travel).length()<.0001f,"Straight visual entry did not follow the guide");
+    guide.travel=23;guide.outwardInConnection={0,1,0};check(applyMagazineGuide(guide,changed,error),error);
+    check((magazineAnimationOffset(changed,changed.travel)-changed.outward*changed.travel).length()<.0001f,"Repeated straight guide edit retained the old endpoint");
     auto linear=changed;check(applyMagazineGuide(guide,linear,error,true),error);
     for(float u:{0.f,.25f,.75f,1.f}) {
         const auto delta=magazineAnimationDelta(linear,u*linear.travel);
@@ -425,12 +425,19 @@ void m1aFixture(const QString& path) {
         check(reloadPoseDistance(magazineAnimationDelta(rail,input),rail.motion[i])<.0005f,"Linear input lost a native motion sample");
     }
     check((magazineAnimationOffset(rail,rail.travel*.4f)-magazineInputOffset(rail,rail.travel*.4f)).length()>.1f,"Animation was flattened into the input line");
-    auto adjusted=rail;MagazineGuide authored{QString(64,'b'),QVector3D(0,0,-1),rail.travel*1.4f,rail.captureRadius,rail.releaseMargin};
+    auto adjusted=rail;
+    MagazineGuide authored{QString(64,'b'),rail.outward,rail.travel*.25f,rail.captureRadius*.2f,rail.releaseMargin*.2f};
+    // This fixture's connection is identity. Shortening clips the actual
+    // source approach; extending and shortening again cannot lose its keys.
     check(applyMagazineGuide(authored,adjusted,error),error);
-    for(int i=0;i<rail.motion.size();++i) {
-        const float fraction=rail.motionDistances[i]/rail.motionDistances.back();
-        check(reloadPoseDistance(magazineAnimationDelta(adjusted,adjusted.travel*fraction),rail.motion[i])<.0005f,"Edited hand guide lost M14 rocking samples");
-    }
+    const auto shortened=adjusted;
+    check(std::abs(QVector3D::dotProduct(magazineAnimationOffset(adjusted,adjusted.travel),adjusted.outward)-adjusted.travel)<.001f,"Short rail kept the old visual entrance");
+    check(reloadPoseDistance(magazineAnimationDelta(adjusted,0),{})<1e-5f,"Short rail moved its seated endpoint");
+    check(adjusted.motion.size()<rail.motion.size(),"Short rail kept the complete old visual curve");
+    authored.travel=rail.travel*1.4f;check(applyMagazineGuide(authored,adjusted,error),error);
+    authored.travel=shortened.travel;check(applyMagazineGuide(authored,adjusted,error),error);
+    check(adjusted.motion.size()==shortened.motion.size(),"Repeated length edits lost native curve keys");
+    for(int i=0;i<adjusted.motion.size();++i)check(reloadPoseDistance(adjusted.motion[i],shortened.motion[i])<.0005f,"Repeated length edits accumulated transforms");
     // A Barrett-style insertion rotates right up to its seated frame, so
     // there may be no rotation-aligned sample within the near-well interval.
     auto rocking=r;
