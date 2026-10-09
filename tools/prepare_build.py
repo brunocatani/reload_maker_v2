@@ -211,6 +211,7 @@ write('RockCollisionProvenance.h', '#pragma once\ninline constexpr const char* k
 app = project.as_posix()
 pro += '\n# Reload Maker V2: native engine only; independent application window.\n'
 pro += 'TARGET = ReloadMakerV2\nQMAKE_PRE_LINK =\n'
+pro += f'RESOURCES += {app}/assets/source-policies.qrc\n'
 pro += 'SOURCES -= ' + ' '.join(removed) + '\n'
 pro += 'HEADERS = ' + ' '.join(headers) + '\n'
 pro += 'FORMS = src/ui/checkablemessagebox.ui\n'

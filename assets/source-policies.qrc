@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/reloadmaker">
+    <file>source-policies.json</file>
+  </qresource>
+</RCC>

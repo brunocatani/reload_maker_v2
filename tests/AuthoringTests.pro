@@ -5,3 +5,4 @@ TEMPLATE = app
 TARGET = AuthoringTests
 INCLUDEPATH += ../src
 SOURCES += AuthoringTests.cpp ../src/CollisionDraftPolicy.cpp ../src/areas/project/EspLibrary.cpp ../src/StudioPaths.cpp ../src/SourcePolicy.cpp
+RESOURCES += ../assets/source-policies.qrc

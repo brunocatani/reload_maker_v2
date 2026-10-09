@@ -5,3 +5,4 @@ TEMPLATE = app
 TARGET = AmmunitionTests
 INCLUDEPATH += ../src
 SOURCES += AmmunitionTests.cpp ../src/WeaponAmmunition.cpp ../src/WeaponConfiguration.cpp ../src/EspReader.cpp ../src/SourcePolicy.cpp
+RESOURCES += ../assets/source-policies.qrc

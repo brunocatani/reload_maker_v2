@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "auxiliaryReloadModes": ["1CAS_ServiceRifle.esp:00c7c0", "1CAS_ServiceRifle.esp:00d847"],
   "policies": [
     {
       "id": "SA58 regular variants",

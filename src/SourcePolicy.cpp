@@ -2,10 +2,23 @@
 #include <QJsonArray>
 #include <QRegularExpression>
 #include <QSet>
+#include <QFile>
+#include <QJsonDocument>
+#include <stdexcept>
 namespace reloadmaker {
 bool auxiliaryReloadMode(const QString& record) {
-    return record.compare("1CAS_ServiceRifle.esp:00c7c0",Qt::CaseInsensitive)==0||
-        record.compare("1CAS_ServiceRifle.esp:00d847",Qt::CaseInsensitive)==0;
+    static const QSet<QString> selectors=[] {
+        QFile file(":/reloadmaker/source-policies.json");
+        if(!file.open(QIODevice::ReadOnly))throw std::runtime_error("Bundled source selectors are unavailable");
+        QJsonParseError error;
+        const auto document=QJsonDocument::fromJson(file.readAll(),&error).object();
+        if(error.error!=QJsonParseError::NoError||document["version"]!=1||!document["auxiliaryReloadModes"].isArray())
+            throw std::runtime_error("Bundled source selectors are invalid");
+        QSet<QString> result;
+        for(const auto& value:document["auxiliaryReloadModes"].toArray())result.insert(value.toString().toLower());
+        return result;
+    }();
+    return selectors.contains(record.toLower());
 }
 bool validSourcePolicy(const QJsonObject& policy,QString& error) {
     const auto key=[](const QJsonValue& value){return value.isString()&&value.toString().size()<=261&&QRegularExpression(R"(^[^:/\\\x00]+\.(?:esp|esm|esl):[0-9a-f]{6}$)",QRegularExpression::CaseInsensitiveOption).match(value.toString()).hasMatch()&&!value.toString().endsWith(":000000");};

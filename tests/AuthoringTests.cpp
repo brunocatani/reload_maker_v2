@@ -11,6 +11,8 @@ int main(int argc,char** argv) {
     QCoreApplication application(argc,argv);
     try {
         QString policyError;
+        check(auxiliaryReloadMode("1cas_servicerifle.ESP:00C7C0") && auxiliaryReloadMode("1CAS_ServiceRifle.esp:00d847"), "Bundled auxiliary selectors lost their regular reload fallback");
+        check(!auxiliaryReloadMode("Other.esp:00c7c0") && !auxiliaryReloadMode("1CAS_ServiceRifle.esp:000801"), "Auxiliary selector matched an unrelated part");
         const QJsonObject sourceRules{{"sourceOverride",QJsonObject{{"marker","Addon.esp:000800"},{"present",false}}},{"blockedMods",QJsonArray{"Example.esp:000801"}},{"magazineCollections",QJsonArray{"Example.esp:000802"}}};
         check(validSourcePolicy(sourceRules,policyError),"Valid add-on/blocked/group rules rejected");
         auto conflicting=sourceRules;conflicting["magazineCollections"]=QJsonArray{"example.ESP:000801"};check(!validSourcePolicy(conflicting,policyError),"One record accepted with incompatible roles");
