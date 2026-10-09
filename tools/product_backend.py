@@ -3,7 +3,6 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 
@@ -27,7 +26,7 @@ class Backends:
                           RELOAD_MAKER_WORKSPACE=str(self.workspace),
                           NIFSKOPE_CLI_EXE=str(self.application/'backends/nif/NifSkope.exe'),
                           BSA_BROWSER_CLI=str(self.application/'backends/archive/bsab.exe'),
-                          FO4_MCP_SPRIGGIT_CLI=str(self.application/'backends/plugin/Spriggit.CLI.exe'))
+                          FO4_MCP_SPRIGGIT_CLI=str(self.application/'backends/plugin/Translations/Spriggit.Yaml.Fallout4/0.40/Spriggit.Yaml.Fallout4.exe'))
         os.environ['PATH'] = str(self.application/'runtime/dotnet') + os.pathsep + os.environ.get('PATH', '')
         sys.pycache_prefix = str(self.workspace/'local/pycache')
         settings = self.workspace/'local/settings/installation.json'
@@ -53,26 +52,13 @@ class Backends:
             self.loaded[name] = module
         return self.loaded[name]
 
-    def prepare_serializer(self):
-        # Spriggit's installed translation is copied into its workspace-local
-        # cache. A finished-pack build never downloads missing serializers.
-        relative = Path('Translations/Spriggit.Yaml.Fallout4/0.40')
-        source = self.application/'backends/plugin'/relative
-        if not (self.application/'runtime/dotnet/dotnet.exe').is_file() or not (self.application/'runtime/dotnet/sdk').is_dir():
-            raise RuntimeError('Bundled .NET host/serializer discovery SDK is missing; install the complete tool bundle')
-        if not (source/'Spriggit.Yaml.Fallout4.exe').is_file():
-            raise RuntimeError('Bundled Fallout 4 plugin serializer is incomplete')
-        target = self.temporary/'Spriggit'/relative
-        shutil.copytree(source, target, dirs_exist_ok=True)
-
     def capabilities(self):
         paths = dict(nif=self.application/'backends/nif/NifSkope.exe',
                      archive=self.application/'backends/archive/bsab.exe',
                      content=self.application/'backends/diamond/DiamondProfileCheck.exe',
-                     plugin=self.application/'backends/plugin/Spriggit.CLI.exe')
+                     plugin=self.application/'backends/plugin/Translations/Spriggit.Yaml.Fallout4/0.40/Spriggit.Yaml.Fallout4.exe')
         result = {name: dict(available=path.is_file(), path=str(path)) for name, path in paths.items()}
-        result['plugin']['available'] &= (self.application/'runtime/dotnet/dotnet.exe').is_file() and (self.application/'runtime/dotnet/sdk').is_dir()
-        result['plugin']['available'] &= (self.application/'backends/plugin/Translations/Spriggit.Yaml.Fallout4/0.40/Spriggit.Yaml.Fallout4.exe').is_file()
+        result['plugin']['available'] &= (self.application/'runtime/dotnet/dotnet.exe').is_file()
         return result
 
     def content_validation(self, data=None):

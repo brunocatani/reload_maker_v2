@@ -316,7 +316,7 @@ async def export_library(workspace, selections, backends, archive=None, mo2=None
                 groups = partition(packs)
                 require(set(groups) <= set(chosen), 'A saved weapon does not belong to its ESP project')
                 native = backends.adapter('nif'); validated = set()
-                backends.prepare_serializer(); backend = backends.adapter('plugin')
+                backend = backends.adapter('plugin')
                 for master, parts in sorted(groups.items()):
                     cancellation()
                     folder = chosen[master]['folder']

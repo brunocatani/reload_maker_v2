@@ -198,12 +198,15 @@ def _find_spriggit_exe() -> Optional[str]:
 
 
 def _run_spriggit(args: list[str], cwd: Optional[str] = None) -> tuple[bool, str]:
-    """Run Spriggit CLI and return (success, output)."""
+    """Run the bundled Spriggit Fallout 4 serializer and return (success, output).
+
+    The serializer converts plugins itself and never touches the network; the
+    Spriggit.CLI dispatcher re-installed it from NuGet on every run."""
     exe = _find_spriggit_exe()
     if not exe:
         return False, (
-            f"Spriggit CLI executable not found. Set {SPRIGGIT_CLI_ENV_VAR} to "
-            "Spriggit.CLI.exe through the Reload Maker tool launcher."
+            f"Spriggit serializer not found. Set {SPRIGGIT_CLI_ENV_VAR} to "
+            "Spriggit.Yaml.Fallout4.exe through the Reload Maker tool launcher."
         )
     try:
         result = subprocess.run(

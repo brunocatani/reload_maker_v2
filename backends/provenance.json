@@ -33,8 +33,8 @@
     "BSA Browser CLI": {
       "license": "Bundled dependency notices; main CLI redistribution/source audit pending"
     },
-    "Spriggit CLI and Fallout4 serializer": {
-      "version": "CLI 0.40.1, serializer 0.40",
+    "Spriggit Fallout4 serializer": {
+      "version": "0.40",
       "license": "Installed package metadata; complete notice/source audit pending"
     },
     "Python": {

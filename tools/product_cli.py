@@ -62,8 +62,6 @@ def main():
             sys.argv = [str(backends.application/'mcp/server.py')]
             runpy.run_path(sys.argv[0], run_name='__main__')
         else:
-            if args.adapter == 'plugin':
-                backends.prepare_serializer()
             backends.adapter(args.adapter).mcp.run()
         return
     elif args.command == 'library':
