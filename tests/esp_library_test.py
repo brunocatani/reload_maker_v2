@@ -185,11 +185,26 @@ def shared_models(workspace):
         pair[presentation] = str(library.resolve(folder, references[presentation]).resolve())
         write(Path(pair[presentation]).with_suffix('.receipt.json'), dict(engineCooked=True))
     magazine = 'test_rifle.esp:000900'
-    pack = dict(weapons=[dict(record=FIRST, magazineObjects=[dict(record=magazine.upper(), full='full', empty='empty')])],
+    pack = dict(id='reload.test.models', weapons=[dict(record=FIRST, magazineObjects=[dict(record=magazine.upper(), full='full', empty='empty')])],
                 objects=[dict(id=p, source=dict(path=references[p])) for p in pair])
     reference = library.put_record(folder, pack)
     models = library.saved_magazine_models(folder, {FIRST: dict(pack=reference), SECOND: {}})
     assert models == {magazine: pair}, models
+    # Imported/current assignments beat both persisted and newly authored
+    # sibling defaults. Only this weapon's explicit assignment replaces them.
+    from unittest.mock import patch
+    captures = workspace/'captures'
+    write(captures/'0000.json', {})
+    request = dict(captures=str(captures), sharedModels={magazine: pair})
+    stage = workspace/'staged'
+    with patch('product_authoring.save', return_value=dict(saved=0, failed=0, rows=[])) as capture_save:
+        library.save_weapon_pack(folder, PLUGIN, FIRST, dict(pack=reference), request,
+                                 dict(packIds={}), stage, None, models)
+        assert capture_save.call_args.kwargs['models'] == {}, 'Sibling default replaced an existing custom assignment'
+        request['models'] = {magazine: pair}
+        library.save_weapon_pack(folder, PLUGIN, FIRST, dict(pack=reference), request,
+                                 dict(packIds={}), workspace/'staged-explicit', None, models)
+        assert capture_save.call_args.kwargs['models'] == {magazine: (pair['full'], pair['empty'])}, 'Explicit replacement lost precedence'
     # A missing pair cannot masquerade as usable cooked models.
     Path(pair['empty']).with_suffix('.receipt.json').unlink()
     assert library.saved_magazine_models(folder, {FIRST: dict(pack=reference)}) == {}

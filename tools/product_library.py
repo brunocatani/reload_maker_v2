@@ -474,7 +474,9 @@ def save_weapon_pack(folder, plugin, record, entry, request, identity_value, sta
         assigned = {weapon_key(item['record']) for weapon in existing['weapons'] for item in weapon.get('magazineObjects', [])}
     namespace = pack_namespace(plugin, record, identity_value, existing_id)
     models = {}
-    available = {key: pair for key, pair in (shared_models or {}).items() if key not in assigned}
+    available = dict(shared_models or {})
+    available.update(request.get('sharedModels') or {})
+    available = {key: pair for key, pair in available.items() if weapon_key(key) not in assigned}
     available.update(request.get('models') or {})
     for magazine, pair in available.items():
         full, empty = pair.get('full', ''), pair.get('empty', '')

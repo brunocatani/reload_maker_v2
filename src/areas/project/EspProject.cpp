@@ -738,11 +738,12 @@ namespace reloadmaker
                 // A cooked magazine model sits in the magazine's own carrier
                 // frame, so a same-ESP sibling's models of that magazine serve
                 // a weapon without its own (the SA58 variants share the SA58's).
+                QJsonObject sharedModels;
                 for (auto other = _esp->weapons.cbegin(); other != _esp->weapons.cend(); ++other) {
                     const auto shared = other->record["magazineModels"].toObject();
                     for (auto model = shared.begin(); model != shared.end(); ++model) {
-                        if (model.key().section('|', 0, 0).compare(other.key(), Qt::CaseInsensitive) == 0 && !models.contains(model.key().section('|', 1))) {
-                            models[model.key().section('|', 1)] = model.value();
+                        if (model.key().section('|', 0, 0).compare(other.key(), Qt::CaseInsensitive) == 0 && !sharedModels.contains(model.key().section('|', 1))) {
+                            sharedModels[model.key().section('|', 1)] = model.value();
                         }
                     }
                 }
@@ -751,6 +752,7 @@ namespace reloadmaker
                                     { "authoring", path },
                                     { "status", it->status },
                                     { "models", models },
+                                    { "sharedModels", sharedModels },
                                     { "captureExceptions", job.exceptions.value(it.key()) } };
                 if (captured) {
                     change["captures"] = job.captureFolders.value(it.key());
