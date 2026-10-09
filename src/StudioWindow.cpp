@@ -5,6 +5,7 @@
 #include <QJsonArray>
 #include <QPainter>
 #include <QScreen>
+#include <QGuiApplication>
 #include <QVBoxLayout>
 #include <algorithm>
 #include "gl/glshape.h"
@@ -12,6 +13,7 @@
 StudioWindow::StudioWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle("Reload Maker V2[*]");
     // Fit the available desktop instead of a fixed size that can exceed it.
+    if(auto* primary=QGuiApplication::primaryScreen())setScreen(primary);
     const QRect available = screen() ? screen()->availableGeometry() : QRect(0, 0, 1600, 980);
     resize(std::min(1600, available.width() - 40), std::min(980, available.height() - 60));
     setMinimumSize(std::min(1120, available.width() - 40), std::min(700, available.height() - 60));
@@ -70,4 +72,17 @@ QJsonObject GLView::studioDiagnostics() const {
         {"highlights",highlights},{"ghosts",ghosts},{"highlightGpuMs",reloadMakerHighlightMs},
         // Scene transform and draw of the latest measured frame; -1 before the first.
         {"sceneGpuMs",reloadMakerSceneGpuMs},{"sceneCpuMs",reloadMakerSceneCpuMs}};
+}
+
+void StudioWindow::showOnPrimaryScreen() {
+    // Windows otherwise chooses the active monitor, which may use a
+    // different origin and DPI. Establish the target before maximizing.
+    setWindowState(Qt::WindowNoState);
+    if(auto* primary=QGuiApplication::primaryScreen()) {
+        setScreen(primary);
+        const auto available=primary->availableGeometry();
+        resize(std::min(1600,available.width()-40),std::min(980,available.height()-60));
+        move(available.center()-rect().center());
+    }
+    showMaximized();
 }

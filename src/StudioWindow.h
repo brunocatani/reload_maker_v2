@@ -9,6 +9,7 @@ class StudioWindow final : public QMainWindow {
     Q_OBJECT
 public:
     explicit StudioWindow(QWidget* parent = nullptr);
+    void showOnPrimaryScreen();
     GLView* getGLView() const { return _view; }
     NifModel* model() const { return _model; }
     // The native GL window's container. Widgets cannot overlay it, so view

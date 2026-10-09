@@ -25,9 +25,7 @@ namespace reloadmaker
 
         _commands.add({ "focus", CommandAccess::Edit, CommandGate::Always,
                         [this](const QJsonObject&) -> std::optional<QJsonObject> {
-                            if (_window->isMinimized()) {
-                                _window->showNormal();
-                            }
+                            _window->showOnPrimaryScreen();
                             _window->raise();
                             _window->activateWindow();
                             return studioState();

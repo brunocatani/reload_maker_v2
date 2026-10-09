@@ -120,7 +120,7 @@ int main(int argc, char* argv[]) {
         delete window;
         return 1;
     }
-    window->show();
+    window->showOnPrimaryScreen();
     QTimer::singleShot(0, controller, [controller, &parser] {
         if(parser.positionalArguments().isEmpty()&&!parser.isSet("library")&&QSettings().value("home/role").toString()=="player") {controller->showHome();return;}
         if (!parser.isSet("no-restore") && parser.positionalArguments().isEmpty() && !parser.isSet("library") && QSettings().contains("session/last"))
