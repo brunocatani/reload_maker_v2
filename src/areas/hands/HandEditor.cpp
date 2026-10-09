@@ -17,6 +17,11 @@ namespace reloadmaker
         if (page == _handEditorPage) {
             return;
         }
+        // Hand fit freezes the detached physical magazine. Other hand pages
+        // must return to the source pose even though they share a workspace.
+        if (_magazineFitPreview && page != HandEditorPage::PartGrip) {
+            leaveMagazineGripEditing();
+        }
         _handEditorPage = page;
         showHandEditorPage();
         handEditorPageChanged();

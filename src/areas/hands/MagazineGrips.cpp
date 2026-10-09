@@ -117,6 +117,13 @@ namespace reloadmaker
             setStatus(error, true);
             return false;
         }
+        // A retained draft may still reference the incoming animation copy.
+        // Edit the physical magazine, using the same model-frame conversion
+        // as Save; otherwise the gizmo follows a hidden spare while the real
+        // magazine stays at the end of its insertion guide.
+        if (fit && !sameGripAnchor(fit->pose.placement, part) && !convertToMagazineFrame(*fit, anchor)) {
+            return false;
+        }
         // Reuse the existing detached-magazine presentation, frozen for hand editing.
         // The magazine's pose remains the reference; gizmos never drive its geometry.
         if ((_workspace == OperateWorkspace || _workspace == MagazinesWorkspace) && _simulationActive && _magazineRail) {
