@@ -921,6 +921,10 @@ namespace reloadmaker
         if (request.contains("import") && _esp) {
             auto& work = _esp->weapons[weaponRecordKey()];
             const auto baseline = work.committed;
+            // Opening the committed record queued a clean-state settle. An
+            // explicit import replaces it with unsaved edits; that earlier
+            // callback must not adopt the imported authoring as the baseline.
+            _openSettling = false;
             restoreWeaponRecord(request["import"].toObject(), baseline);
             work.imported = true;
             setStatus(documentDirty() ? QStringLiteral("Imported as unsaved edits. Save adds them to %1 as a new version; leaving discards them.").arg(_esp->plugin)
