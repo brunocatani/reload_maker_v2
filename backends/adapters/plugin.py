@@ -15,6 +15,9 @@ import os
 import re
 import struct
 import subprocess
+import sys
+import shutil
+import tempfile
 import zlib
 from pathlib import Path
 from typing import Any, Optional
@@ -208,17 +211,59 @@ def _run_spriggit(args: list[str], cwd: Optional[str] = None) -> tuple[bool, str
             f"Spriggit serializer not found. Set {SPRIGGIT_CLI_ENV_VAR} to "
             "Spriggit.Yaml.Fallout4.exe through the Reload Maker tool launcher."
         )
-    try:
-        result = subprocess.run(
-            [exe, *args],
-            capture_output=True, text=True, cwd=cwd, timeout=180,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-        )
-        if result.returncode != 0:
-            return False, result.stderr or result.stdout
+    def execute(command):
+        result = subprocess.run(command, capture_output=True, text=True, cwd=cwd, timeout=180,
+                                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+        if result.returncode:
+            detail = (result.stderr or result.stdout).strip()
+            return False, f"Spriggit exited with code 0x{result.returncode & 0xffffffff:08X}." + ("\n" + detail if detail else " No diagnostic output was produced.")
         return True, result.stdout
+
+    try:
+        hooked = False
+        if os.name == 'nt':
+            import ctypes
+            kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+            kernel.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
+            kernel.GetModuleHandleW.restype = ctypes.c_void_p
+            hooked = bool(kernel.GetModuleHandleW('usvfs_x64.dll'))
+        if not hooked:
+            return execute([exe, *args])
+        # Spriggit's bundled apphost crashes under usvfs before emitting text.
+        # Read through the VFS here, then give an isolated worker physical
+        # copies. Never disconnect the authoring process or change MO2's
+        # global executable blacklist/profile settings.
+        workspace = os.environ.get('RELOAD_MAKER_WORKSPACE')
+        if not workspace:
+            return False, 'MO2 plugin conversion needs the configured Reload Maker workspace.'
+        temporary = Path(workspace).resolve()/'local/tmp/serializer'
+        temporary.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='job-', dir=temporary) as job:
+            root = Path(job)
+            staged = list(args)
+            source_index = staged.index('--InputPath') + 1
+            output_index = staged.index('--OutputPath') + 1
+            source, destination = Path(staged[source_index]), Path(staged[output_index])
+            incoming, outgoing = root/'input'/source.name, root/'output'/destination.name
+            incoming.parent.mkdir(); outgoing.parent.mkdir()
+            if source.is_dir():
+                shutil.copytree(source, incoming)
+            else:
+                shutil.copy2(source, incoming)
+            staged[source_index], staged[output_index] = str(incoming), str(outgoing)
+            ok, output = execute([sys.executable, '-B', str(Path(__file__).with_name('spriggit_worker.py')), exe, *staged])
+            if not ok:
+                return False, output
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if outgoing.is_dir():
+                shutil.copytree(outgoing, destination, dirs_exist_ok=True)
+            else:
+                shutil.copy2(outgoing, destination)
+            return True, output
     except subprocess.TimeoutExpired:
         return False, "Spriggit timed out after 180 seconds."
+    except (OSError, ValueError) as error:
+        return False, f"Spriggit conversion failed: {error}"
 
 
 def _yaml_dir_for(plugin_path: str) -> str:
