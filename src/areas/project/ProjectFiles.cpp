@@ -435,6 +435,7 @@ namespace reloadmaker
         record["glockReloadNoExtender"] = _glockNoExtender;
         record["magazineGrabGrips"] = stringMapJson(_magazineGrabGrips);
         record["handsPage"] = int(_handEditorPage);
+        record["magazineHandFit"] = _workspace == GripsWorkspace && _handEditorPage == HandEditorPage::PartGrip && _editingMagazine;
         record["interactionHand"] = _interactionHand == PoseHand::Left ? "left" : "right";
         QJsonObject sounds;
         for (auto it = _savedSounds.cbegin(); it != _savedSounds.cend(); ++it) {
@@ -551,7 +552,7 @@ namespace reloadmaker
         // and hand. Kept automatically per weapon outside every version
         // (sessionFile); it never marks a weapon unsaved.
         constexpr const char* kSessionKeys[] = {
-            "body", "choices", "recordChoices", "browserPlugin", "camera", "workspace", "handsPage", "animation", "seconds",
+            "body", "choices", "recordChoices", "browserPlugin", "camera", "workspace", "handsPage", "magazineHandFit", "animation", "seconds",
             "motionMode", "transitions", "showArms", "hand", "fingerJoint", "selectedHandPose", "interactionHand", "scopeSelection"
         };
 
@@ -917,7 +918,10 @@ namespace reloadmaker
         if (workspace == GripsWorkspace && record.contains("handsPage")) {
             setHandEditorPage(static_cast<HandEditorPage>(std::clamp(record["handsPage"].toInt(), 0, 3)));
         }
-        if (workspace == GripsWorkspace && _handEditorPage == HandEditorPage::PartGrip && _editingMagazine) {
+        if (workspace == GripsWorkspace && _handEditorPage == HandEditorPage::PartGrip &&
+            (record["magazineHandFit"].toBool() || _editingMagazine)) {
+            // Saved fits have no unfinished gripDraft. The fitting page is
+            // session state and cannot be inferred from draft presence.
             // The fit page needs the isolated physical magazine, not the
             // restored native clip with its parked/spare magazine copies.
             showMagazineStep(MagazineStep::HandFit);
