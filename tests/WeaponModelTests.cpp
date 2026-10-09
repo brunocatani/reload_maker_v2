@@ -200,7 +200,11 @@ namespace
     // DIAMOND accepts exactly these template ids (ContentCatalog.cpp mechanism()).
     const QSet<QString> diamondTemplates{ "pistol.slide-detachable.v1", "rifle.ar15-detachable.v1",
                                           "rifle.operating-handle-rocking.v1", "rifle.reciprocating-detachable.v1",
-                                          "sniper.manual-bolt-detachable.v1" };
+                                          "sniper.manual-bolt-detachable.v1", "rifle.ar15-stroke-detachable.v1",
+                                          "rifle.aug-locking-handle.v1", "rifle.hk-slap-catch-detachable.v1",
+                                          "rifle.hk-slap-detachable.v1", "rifle.independent-handle-rocking.v1",
+                                          "rifle.open-bolt-handle-detachable.v1", "rifle.reciprocating-rocking.v1",
+                                          "rifle.rotary-handle-detachable.v1", "shotgun.self-loading-detachable.v1" };
 
     QVector<WeaponPreset> bundledPresets(const QString& directory)
     {
@@ -252,12 +256,12 @@ namespace
                 }
             }
         }
-        check(supported == 5, QStringLiteral("Expected the five DIAMOND actions to map, got %1").arg(supported));
+        check(supported == 7, QStringLiteral("Expected seven supported single-mechanism combinations, got %1").arg(supported));
     }
 
     void probeWeaponsMapToDiamondOrWait()
     {
-        const QSet<QString> runnable{ "Glock", "M1A", "P90" };
+        const QSet<QString> runnable{ "Glock", "M1A", "P90", "MP5", "AUG" };
         for (const Described& described : probeWeapons()) {
             const QString name = QString::fromLatin1(described.weapon).section(' ', 0, 0);
             const DiamondSupport support = diamondSupport(described.model);
@@ -299,14 +303,17 @@ namespace
         check(unknownInsertion != pistol && !decodeWeaponPreset(unknownInsertion, preset, error), "Unknown insertion path accepted");
     }
 
-    // The rocking-handle and bolt-action presets follow their clips' insertion
-    // curve; the others insert straight. Weapons may override it.
+    // Presets retain their explicit visual insertion choice; controller
+    // input remains independent. Weapons may override it.
     void insertionPathsAndOverrides(const QString& directory)
     {
         QVector<WeaponPreset> presets;
         QString error;
         check(loadWeaponPresets(directory, presets, error), error);
-        const QSet<QString> curved{ "rifle.operating-handle-rocking.v1", "sniper.manual-bolt-detachable.v1" };
+        const QSet<QString> curved{ "rifle.operating-handle-rocking.v1", "sniper.manual-bolt-detachable.v1",
+            "rifle.ar15-stroke-detachable.v1", "rifle.aug-locking-handle.v1", "rifle.hk-slap-catch-detachable.v1",
+            "rifle.hk-slap-detachable.v1", "rifle.independent-handle-rocking.v1", "rifle.open-bolt-handle-detachable.v1",
+            "rifle.reciprocating-rocking.v1", "rifle.rotary-handle-detachable.v1", "shotgun.self-loading-detachable.v1" };
         for (const WeaponPreset& preset : presets) {
             check((preset.model.feed.insertion == InsertionPath::NativeCurve) == curved.contains(preset.id), preset.id + ": insertion path");
         }

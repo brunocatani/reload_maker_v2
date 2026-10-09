@@ -9,6 +9,27 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tests'))
 from template_mcp_test import ready,edit
 from server import command
+sys.path.insert(0,str(ROOT/'tools'))
+import product_library as library
+
+def authored_loadout(project):
+    # A developer's last session may deliberately have its receiver or
+    # magazine removed. Exercise the saved authored loadout, then let the
+    # existing finally blocks restore that session unchanged.
+    record=json.loads(project.read_text())['weapon'].lower()
+    folder=ROOT/'workspace/library/plugins'/record.split(':')[0]
+    index=library.read_project(folder)
+    if not index:return
+    entry=library.read_snapshot(folder,index['latest'])['weapons'].get(record,{})
+    if not entry.get('authoring'):return
+    saved=library.get_record(folder,entry['authoring'])
+    choices=saved.get('recordChoices',{})
+    for value in choices.values():
+        if not value:continue
+        state=ready()
+        pair=next(((slot,choice) for slot in state['slots'] for choice in slot['choices'] if choice['record'].lower()==value.lower()),None)
+        if pair and pair[0]['selected']!=pair[1]['id']:
+            edit('configure',{'slot':pair[0]['key'],'mod':pair[1]['id']});ready()
 
 def simulation():
     value=json.loads(Path(edit('export',{'kind':'simulation'})['path']).read_text())
@@ -22,6 +43,7 @@ def run(names):
         for name in names:
             edit('testbed',{'name':name});ready();project=Path(command('export',{'kind':'project'},ready()['revision'])['path']);saved=project.read_bytes()
             try:
+                authored_loadout(project)
                 edit('workspace',{'index':5});ready();before=simulation();setup=command('operating_setup_state')['settings']
                 # A recipe id is provenance, never a gate (owner, 2026-10-05).
                 edit('operating_setup',dict(operation='save',settings=dict(setup,recipeId='0'*64)));ready()
