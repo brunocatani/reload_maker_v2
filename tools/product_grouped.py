@@ -18,6 +18,42 @@ from product_packs import (allocate, cancellation, identity, load_pack, read,
                            write_plugin_source)
 
 
+
+# Increment when the emitted format changes. These are disposable prepared
+# outputs, keyed by readable weapon/source identities, never admission gates.
+EXPORT_CACHE_VERSION = 1
+
+
+def restore_export(cache, inputs, destination):
+    state = cache/'state.json'
+    if not state.is_file():
+        return None
+    try:
+        value = read(state)
+        if value.get('version') != EXPORT_CACHE_VERSION or value.get('inputs') != inputs:
+            return None
+        for name, stamp in value['files'].items():
+            path = within(cache/'output', name)
+            if not path.is_file() or [path.stat().st_size, path.stat().st_mtime_ns] != stamp:
+                return None
+        for name in value['files']:
+            copy_file(within(cache/'output', name), within(destination, name))
+        return value['result']
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def remember_export(cache, inputs, output, result):
+    # Publish the marker last: an interrupted refresh is simply rebuilt.
+    cache.mkdir(parents=True, exist_ok=True)
+    (cache/'state.json').unlink(missing_ok=True)
+    shutil.rmtree(cache/'output', ignore_errors=True)
+    shutil.copytree(output, cache/'output')
+    files = {p.relative_to(cache/'output').as_posix(): [p.stat().st_size, p.stat().st_mtime_ns]
+             for p in (cache/'output').rglob('*') if p.is_file()}
+    write(cache/'state.json', dict(version=EXPORT_CACHE_VERSION, inputs=inputs, files=files, result=result))
+
+
 def plugin_name(master):
     require(isinstance(master, str) and re.fullmatch(r'[^:/\\\x00]+\.(esm|esp|esl)', master, re.I),
             'Invalid source plugin name')
@@ -274,9 +310,11 @@ async def export_library(workspace, selections, backends, archive=None, mo2=None
             require(capability.get('sourcePluginLightESP') is True, 'Update DIAMOND and its bundled validator for ESL-flagged ESP exports')
             limits = capability['limits']
             packs, skipped, warnings, optics = [], [], [], {}
+            reused_weapons = reused_groups = 0
             for key, item in sorted(chosen.items()):
                 snapshot = library.read_snapshot(item['folder'], item['save'])
                 item['weapons'] = []
+                item['exportInputs'] = {}
                 for record, entry in sorted(snapshot['weapons'].items()):
                     cancellation()
                     name = entry.get('name', record)
@@ -297,8 +335,15 @@ async def export_library(workspace, selections, backends, archive=None, mo2=None
                     try:
                         source = library.materialize_pack(item['folder'], entry['pack'], stage/'inputs'/key/record.split(':')[1]/'pack.project.json')
                         frozen = stage/'frozen'/str(len(packs))
-                        export_pack(str(source), str(frozen), backends)
+                        inputs = library.get_record(item['folder'], entry['pack'])
+                        cache = item['folder']/'export/cache/weapons'/record.split(':')[1]
+                        if restore_export(cache, inputs, frozen) is None:
+                            export_pack(str(source), str(frozen), backends)
+                            remember_export(cache, inputs, frozen, {})
+                        else:
+                            reused_weapons += 1
                         packs.append(load_pack(frozen))
+                        item['exportInputs'][record] = inputs
                     except ValueError as error:
                         skipped.append(dict(plugin=snapshot['plugin'], record=record, name=name, reason=str(error)))
                         continue
@@ -321,8 +366,24 @@ async def export_library(workspace, selections, backends, archive=None, mo2=None
                     cancellation()
                     folder = chosen[master]['folder']
                     value = library.read_identity(folder) or library.new_identity(master)
-                    group, row, objects = await emit_group(master, parts, value.get('group'), value['installation'],
-                                                           output, stage, backend, native, validated)
+                    cache = folder/'export/cache/group'
+                    inputs = dict(weapons=chosen[master]['exportInputs'], identity=value)
+                    prepared = stage/'groups'/master
+                    cached = restore_export(cache, inputs, prepared)
+                    if cached is None:
+                        group, row, objects = await emit_group(master, parts, value.get('group'), value['installation'],
+                                                               prepared, stage, backend, native, validated)
+                        value['group'] = group
+                        # Allocation is part of the reusable result. Compare the
+                        # next request against that resulting permanent identity.
+                        inputs['identity'] = value
+                        remember_export(cache, inputs, prepared, dict(group=group, row=row, objects=objects))
+                    else:
+                        group, row, objects = cached['group'], cached['row'], cached['objects']
+                        reused_groups += 1
+                    for path in prepared.rglob('*'):
+                        if path.is_file():
+                            copy_file(path, output/path.relative_to(prepared))
                     value['group'] = group
                     identities[master] = value
                     plugins.append(dict(row, save=chosen[master]['save']))
@@ -348,7 +409,7 @@ async def export_library(workspace, selections, backends, archive=None, mo2=None
                 published['publications'] = published['publications'][-200:]
                 write(folder/'export/published.json', published)
             return dict(ok=True, plugins=plugins, activeObjects=count, scopeProfiles=len(optics), skipped=skipped, warnings=warnings,
-                        runtimeCatalog=checked, **delivered)
+                        runtimeCatalog=checked, reusedWeapons=reused_weapons, reusedGroups=reused_groups, **delivered)
         finally:
             shutil.rmtree(stage, ignore_errors=True)
 
