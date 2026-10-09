@@ -9,6 +9,7 @@
 #include "ReloadMakerController.h"
 #include "OperatingGrabLocations.h"
 #include "areas/project/EspLibrary.h"
+#include "areas/project/CaptureInputs.h"
 #include "commands/CommandSupport.h"
 #include "domain/checklist/Checklist.h"
 #include "domain/presets/WeaponPresets.h"
@@ -58,26 +59,7 @@ namespace reloadmaker
             return combineWeaponProgress(configurations);
         }
 
-        // The saved progress is out of date, even when no authoring changed:
-        // a stored result comes from older checklist rules, or a
-        // configuration reads differently now than when it was saved.
-        bool progressOutdated(const QJsonObject& working, const QJsonObject& committed)
-        {
-            const auto saved = committed["configurations"].toObject();
-            for (const auto& value : saved) {
-                if (value.toObject()["rules"].toInt() != kChecklistRules) {
-                    return true;
-                }
-            }
-            const auto current = working["configurations"].toObject();
-            for (auto it = current.begin(); it != current.end(); ++it) {
-                const auto configuration = it.value().toObject();
-                if (configuration["evaluated"].toBool() && configuration["progress"] != saved[it.key()].toObject()["progress"]) {
-                    return true;
-                }
-            }
-            return false;
-        }
+
     }
 
     QString ReloadMakerController::weaponRecordKey() const
@@ -599,13 +581,10 @@ namespace reloadmaker
             const bool templated = !it->record["reloadTemplates"].toObject()[it.key()].toString().isEmpty();
             const bool packless = !committed[it.key()].toObject().contains("pack");
             const bool retry = committed[it.key()].toObject()["packReport"].toObject()["failed"].toInt() > 0;
-            const bool stale = progressOutdated(it->status, committed[it.key()].toObject()["status"].toObject());
-            changed |= it->dirty || stale || retry;
-            // Edited weapons are captured so the version exports what was
-            // authored; so is a configured weapon that has no behavior yet,
-            // and one whose saved progress is out of date: the capture
-            // evaluates every configuration's checklist again.
-            if (templated && (it->dirty || packless || stale || retry)) {
+            changed |= it->dirty || retry;
+            // Capture planning resolves the changes per physical part.
+            // Checklist metadata alone does not rebuild game behavior.
+            if (templated && (it->dirty || packless || retry)) {
                 job.queue.append(it.key());
             }
         }
@@ -621,8 +600,8 @@ namespace reloadmaker
         return _packJob;
     }
 
-    // One step: show the next edited weapon, capture all of its
-    // configurations, then return to the weapon the author was on.
+    // One step: capture changed dependencies of the next edited weapon,
+    // then return to the weapon the author was on.
     void ReloadMakerController::continueEspSave()
     {
         if (!_espSave || _espSave->committing) {
@@ -669,10 +648,40 @@ namespace reloadmaker
         for (const auto& slot : configuration()->entries()) {
             capture.original[slot.key] = configuration()->selected(slot.key);
         }
-        // The capture evaluates every configuration it prepares; results of
-        // configurations it no longer prepares are not carried over.
-        capture.status = _esp->weapons.value(weapon).status;
-        capture.status["configurations"] = QJsonObject{};
+        const auto& work = _esp->weapons.value(weapon);
+        const auto saved = _esp->snapshot["weapons"].toObject()[weapon].toObject();
+        const bool refreshAll = !saved.contains("pack") || saved["packReport"].toObject()["failed"].toInt() > 0 || work.committed.isEmpty();
+        const int total = capture.plan.size();
+        if (!refreshAll) {
+            const auto after = authoredPart(work.record);
+            capture.plan.erase(std::remove_if(capture.plan.begin(), capture.plan.end(), [&](const auto& combination) {
+                QString magazine = QStringLiteral("weapon");
+                QStringList moving;
+                for (const auto& choice : combination) {
+                    const auto record = poseRecordKey(choice.mod).toLower();
+                    if (choice.role == ConfigurationRole::Magazine) magazine = record;
+                    else moving.append(record);
+                }
+                if (moving.isEmpty()) moving.append(QStringLiteral("weapon"));
+                // A fixed/built-in magazine's owner is only known after
+                // assembly; keep that capture when its authoring changed.
+                if (magazine == QLatin1String("weapon")) return after == work.committed;
+                return captureInputs(work.committed, weapon, magazine, moving) == captureInputs(after, weapon, magazine, moving);
+            }), capture.plan.end());
+        }
+        _packJob["reusedConfigurations"] = total - capture.plan.size();
+        _packJob["configurations"] = capture.plan.size();
+        if (capture.plan.isEmpty()) {
+            job.queue.removeFirst();
+            _packJob["done"] = _packJob["done"].toInt() + 1;
+            emit packJobChanged();
+            QTimer::singleShot(0, this, [this] { continueEspSave(); });
+            return;
+        }
+        // Partial captures merge by selector into the existing pack; retain
+        // the status of configurations whose behavior was reused.
+        capture.status = work.status;
+        if (refreshAll) capture.status["configurations"] = QJsonObject{};
         if (!QDir().mkpath(capture.folder)) {
             job.exceptions[weapon].append(QJsonObject{ { "status", "failed" }, { "error", "Cannot create the capture folder" } });
             job.queue.removeFirst();

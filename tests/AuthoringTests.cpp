@@ -1,6 +1,7 @@
 #include "areas/project/EspLibrary.h"
 #include "CollisionDraftPolicy.h"
 #include "SourcePolicy.h"
+#include "areas/project/CaptureInputs.h"
 #include <QCoreApplication>
 #include <QJsonArray>
 #include <QTextStream>
@@ -10,6 +11,31 @@ void check(bool value,const char* message){if(!value)throw std::runtime_error(me
 int main(int argc,char** argv) {
     QCoreApplication application(argc,argv);
     try {
+        // Dependency changes select captures; saved drafts do not alter the
+        // game's active fits. An overridden default must stay independent.
+        const QString weapon="test.esp:000001", a="test.esp:000010", b="test.esp:000011";
+        const QStringList moving{"test.esp:000020"};
+        QJsonObject before{{"magazineGrabGrips",QJsonObject{{weapon+'|'+a+"|left","own-a"}}},
+            {"magazineGrabDefaults",QJsonObject{{weapon+"|left","default"}}}};
+        const auto inputs=[&](const QJsonObject& r,const QString& mag){return captureInputs(r,weapon,mag,moving);};
+        auto changed=before;
+        changed["magazineGrabGrips"]=QJsonObject{{weapon+'|'+a+"|left","edited-a"}};
+        check(inputs(before,a)!=inputs(changed,a)&&inputs(before,b)==inputs(changed,b),"Specific magazine fit refreshed unrelated magazines");
+        changed=before;changed["magazineGrabDefaults"]=QJsonObject{{weapon+"|left","new-default"}};
+        check(inputs(before,a)==inputs(changed,a)&&inputs(before,b)!=inputs(changed,b),"Default refresh ignored inheritance or overwrote explicit fit");
+        changed=before;changed["magazineGrabGrips"]=QJsonObject{};
+        check(inputs(before,a)!=inputs(changed,a),"Removing a fit did not refresh the fallback");
+        changed=before;changed["gripDraft"]=QJsonObject{{"name","unfinished"}};
+        check(inputs(before,a)==inputs(changed,a),"Unfinished draft recaptured active behavior");
+        const auto scope=weapon+"/@magazine:";
+        QJsonObject plans{{weapon+"/@anchors",QJsonObject{{"magazineScope",scope+a}}},
+            {scope+a,QJsonObject{{"magazineGuide",1}}},{scope+b,QJsonObject{{"magazineGuide",2}}}};
+        before["authoringRoadmaps"]=plans;changed=before;
+        plans[scope+a]=QJsonObject{{"magazineGuide",3}};changed["authoringRoadmaps"]=plans;
+        check(inputs(before,a)!=inputs(changed,a)&&inputs(before,b)==inputs(changed,b),"Guide refresh ignored per-magazine override");
+        check(inputs(before,"test.esp:000012")!=inputs(changed,"test.esp:000012"),"Anchor guide change missed a dependent magazine");
+        before=changed;plans[weapon+"/@moving:"+moving.front()]=QJsonObject{{"operating",1}};changed["authoringRoadmaps"]=plans;
+        check(inputs(before,a)!=inputs(changed,a)&&inputs(before,b)!=inputs(changed,b),"Operating part change missed its magazines");
         QString policyError;
         check(auxiliaryReloadMode("1cas_servicerifle.ESP:00C7C0") && auxiliaryReloadMode("1CAS_ServiceRifle.esp:00d847"), "Bundled auxiliary selectors lost their regular reload fallback");
         check(!auxiliaryReloadMode("Other.esp:00c7c0") && !auxiliaryReloadMode("1CAS_ServiceRifle.esp:000801"), "Auxiliary selector matched an unrelated part");
