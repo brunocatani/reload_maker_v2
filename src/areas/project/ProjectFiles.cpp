@@ -661,7 +661,7 @@ namespace reloadmaker
         int selected = -1;
         for (int i = 0; i < _weaponSelections.size(); ++i) {
             _selectedWeapon = i;
-            if (currentWeapon() && poseRecordKey(currentWeapon()->formId) == record["weapon"].toString() &&
+            if (currentWeapon() && poseRecordKey(currentWeapon()->formId).compare(record["weapon"].toString(), Qt::CaseInsensitive) == 0 &&
                 (plugin.isEmpty() || (_libraryMode && record["browserPlugin"] == kAllWeaponsSource) ||
                  selectionPlugins(i).contains(plugin, Qt::CaseInsensitive))) {
                 selected = i;
