@@ -493,6 +493,7 @@ namespace reloadmaker
         if (_loadThread) {
             return;
         }
+        const bool resumeMagazineFit = _magazineFitPreview && _workspace == GripsWorkspace;
         invalidateCollisions();
         invalidateReloadCapture();
         _rebuildTimer->stop();
@@ -559,6 +560,9 @@ namespace reloadmaker
         if (!ready) {
             setStatus(error, true);
             return;
+        }
+        if (resumeMagazineFit) {
+            showMagazineStep(MagazineStep::HandFit);
         }
         _loadTimings.add(reuseGeometry ? QStringLiteral("rebuild.total scene-reused") : QStringLiteral("rebuild.total"), rebuildClock.elapsed());
         _loadTimings.add(QStringLiteral("rebuild.decode"), _decodeMilliseconds);
