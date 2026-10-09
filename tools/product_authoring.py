@@ -84,12 +84,13 @@ def policy_identity(policy):
 
 def presentation_identity(setup):
     """What a magazine's cooked models depend on in its presentation setup.
-    recipeId and trackAnchors only name the reload capture the setup was saved
-    from and its tracks (for matching it onto other reloads); every receiver
-    has its own, yet they share the magazine's pieces and so its models.
-    Neither counts (no hash gating)."""
+    Motion and capture bookkeeping do not change the cooked body/payload.
+    Missing older metadata is unknown, not evidence of different geometry."""
     if isinstance(setup,dict):
-        return {key:value for key,value in setup.items() if key not in ('recipeId','trackAnchors')}
+        ignored={'recipeId','trackAnchors','motion','movementId','entrySeconds'}
+        if not setup.get('sampledPayload'):
+            ignored.update(('loadedFrame','emptyFrame'))
+        return {key:value for key,value in setup.items() if key not in ignored}
     return setup
 
 
@@ -168,7 +169,7 @@ def apply_capture(draft,capture,full='',empty=''):
             if form_key(key) not in {form_key(k) for k in records}:records.append(key)
     prior_magazine=next((m for m in documents['magazines']['magazines'] if form_key(m['record'])==magazine),None)
     before,after=presentation_identity(prior_magazine.get('presentationSetup')) if prior_magazine else None,presentation_identity(snapshot['magazine'].get('presentationSetup'))
-    if prior_magazine and before!=after:
+    if prior_magazine and before is not None and after is not None and before!=after:
         changed=sorted(k for k in set(before or {})|set(after or {}) if (before or {}).get(k)!=(after or {}).get(k)) if isinstance(before,dict) and isinstance(after,dict) else ['setup']
         require(full and empty,'Magazine presentation changed ('+', '.join(changed)+'); recapture and cook both world models before saving')
     replace_record(documents['magazines']['magazines'],snapshot['magazine'],lambda p:form_key(p['record']))
@@ -194,7 +195,9 @@ def apply_capture(draft,capture,full='',empty=''):
             require(source.get('space')=='magazine-carrier' and source.get('presentation')==presentation and
                     form_key(source.get('magazineRecord'))==magazine,
                     'Finished model belongs to another magazine, presentation or reference frame')
-            require(presentation_identity(source.get('presentationSetup'))==presentation_identity(snapshot['magazine'].get('presentationSetup')),
+            cooked=presentation_identity(source.get('presentationSetup'))
+            current=presentation_identity(snapshot['magazine'].get('presentationSetup'))
+            require(cooked is None or current is None or cooked==current,
                     'Magazine model was cooked with another body/payload presentation')
             item=dict(id=assignment[presentation],name=f"{weapon['name']} {snapshot['magazine']['capacity']} round magazine ({presentation})",
                       bounds=meta['bounds'],weight=meta['massKg'],value=0,source=dict(path=str(model)))

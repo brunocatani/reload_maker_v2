@@ -40,10 +40,18 @@ def run(captures,assets):
         written=project.read_bytes()
         presentation=read(capture);presentation['magazine']['presentationSetup']={'recipeId':presentation['magazine']['sourceRecipeId'],'pieces':[{'path':'changed','role':'cartridge'}]}
         changed=work/name/'presentation.json';write(changed,presentation)
-        try:save_configuration(project,changed,backends)
-        except ValueError as error:assert 'recapture and cook' in str(error)
-        else:raise AssertionError('Changed payload reused old cooked models')
-        assert project.read_bytes()==written
+        prior=next(m for m in new_docs['magazines']['magazines'] if m['record'].lower()==selected['magazine'].lower())
+        if prior.get('presentationSetup') is not None:
+            try:save_configuration(project,changed,backends)
+            except ValueError as error:assert 'recapture and cook' in str(error)
+            else:raise AssertionError('Known changed payload reused old cooked models')
+            assert project.read_bytes()==written
+        else:
+            save_configuration(project,changed,backends)
+            updated,_=inspect_project(project)
+            assert updated['objects']==old['objects'],'Adding previously absent metadata replaced existing models'
+            save_configuration(project,capture,backends)
+            written=project.read_bytes()
         bad=read(capture);bad['magazine']['grip']['fingerLocalTransforms']=[]
         write(work/name/'invalid.json',bad)
         try:save_configuration(project,work/name/'invalid.json',backends)
