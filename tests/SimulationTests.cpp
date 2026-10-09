@@ -14,6 +14,27 @@
 using namespace reloadmaker;
 namespace {
 void check(bool valid,const QString& error){if(!valid)throw std::runtime_error(error.toStdString());}
+void carrierOwnership() {
+    ReloadRecipe recipe;recipe.frames=3;recipe.tracks.resize(3);
+    for(int i=0;i<3;++i) {
+        auto& track=recipe.tracks[i];track.surface=true;track.parent=i-1;
+        track.anchor.anchorName=i==2?"WeaponMagazineChild2":"WeaponMagazine";
+        track.poses={Transformf{},Transformf{{0,1,0}},Transformf{{0,2,0}}};
+    }
+    check(magazineCarrier(recipe,1)==0,"Duplicate rigid magazine node was not reduced to its carrier");
+    check(magazineCarrier(recipe,2)==2,"Explicit inner magazine carrier was replaced by its parent");
+    recipe.tracks[1].poses[1].translation.x=1;
+    check(magazineCarrier(recipe,1)==1,"Independently moving magazine was attached to another carrier");
+    check(magazineCarrier(recipe,-1)==-1&&magazineCarrier(recipe,3)==3,"Invalid carrier index was dereferenced");
+    recipe.tracks.resize(1);
+    recipe.tracks[0].poses[1].rotation={.09983342f,0,0,.99500417f};
+    recipe.tracks[0].poses[2].rotation=recipe.tracks[0].poses[1].rotation;
+    const QVector<QVector3D> body{{-1,-1,-2},{1,1,2},{1,-1,2}};
+    const QVector<QVector3D> weapon{{-3,-1,-3},{3,3,3}};
+    MagazineRail rail;QString error;
+    check(buildMagazineRail(recipe,0,"Magazine",{},body,weapon,rail,error,false,0),error);
+    check((rail.outward-QVector3D(0,1,0)).length()<1e-5f,"Rotating extraction lost its measured near-well input direction");
+}
 void guideAuthoring() {
     HandPosePlacement anchor{"animated-part","CustomBox","Root/CustomBox","Model.nif","Mod.esp:001234"};
     MagazineReference reference{QString(64,'a'),magazineReferenceKey(anchor),"custom",Transformf{{1,2,3},{0,0,.70710678f,.70710678f}}};
@@ -126,8 +147,8 @@ void fixture(const QString& path) {
     const auto direction=rotated(rotatedFrame.rotation,{rail.outward.x(),rail.outward.y(),rail.outward.z()});
     check((rotatedRail.outward-QVector3D(direction.x,direction.y,direction.z)).length()<1e-4f&&std::abs(rail.travel-rotatedRail.travel)<1e-3f,"Connection frame covariance failed");
     MagazineMotion magazine;check(magazine.animateOut(),"Mag Out rejected seated magazine");
-    magazine.tick(rail,.3f);check(magazine.empty()&&magazine.distance>0&&magazine.distance<rail.travel,"Empty extraction did not animate");
-    magazine.tick(rail,.3f);check(magazine.phase==MagazinePhase::OutsideEmpty&&magazine.distance==rail.travel,"Mag Out did not clear the frame");
+    magazine.tick(rail,.03f);check(magazine.empty()&&magazine.distance>0&&magazine.distance<rail.travel*.1f,"Empty extraction did not animate");
+    magazine.tick(rail,.03f);check(magazine.phase==MagazinePhase::OutsideEmpty&&std::abs(magazine.distance-rail.travel*.1f)<1e-5f,"Mag Out did not finish the short release stroke");
     check(magazine.animateIn(rail)&&!magazine.empty(),"Mag In must use the full variant");magazine.tick(rail,.6f);check(magazine.seated(),"Mag In did not seat");
     magazine.drop();check(magazine.grab(rail),"Grab failed");const auto entrance=rail.outward*rail.travel;
     magazine.moveFree(rail,entrance+QVector3D(rail.captureRadius*5,0,0));check(magazine.phase==MagazinePhase::Free,"Captured outside the entrance volume");
@@ -385,7 +406,7 @@ void m1aFixture(const QString& path) {
 }
 }
 int main(int argc,char** argv) {
-    QCoreApplication app(argc,argv);guideAuthoring();
+    QCoreApplication app(argc,argv);guideAuthoring();carrierOwnership();
     try {stateTransitions();ammunitionTransitions();nativeReloadEvents();ar15Transitions();boltActionTransitions();check(app.arguments().size()>=2,"Pass the Glock project fixture");fixture(app.arguments()[1]);if(app.arguments().size()>2)ar15Fixture(app.arguments()[2]);if(app.arguments().size()>3)m1aFixture(app.arguments()[3]);if(app.arguments().size()>4)boltCycleFixture(app.arguments()[4]);
         QTextStream(stdout)<<"PASS simulation state ownership, drop/fire persistence, regrab/cancel/return/reset, actual slide/barrel/cartridge curves and complete magazine ownership\n";return 0;
     }catch(const std::exception& e){QTextStream(stderr)<<"FAIL "<<e.what()<<'\n';return 1;}

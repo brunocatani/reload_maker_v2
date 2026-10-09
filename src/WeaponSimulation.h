@@ -94,9 +94,9 @@ namespace reloadmaker {
     constexpr float kCompleteStroke = .15f;
     // The largest distance of a track from its last pose over the recipe.
     float reloadTrackStroke(const ReloadRecipe& recipe, int track);
-    // The magazine node that carries this track in the reload: the topmost
-    // WeaponMagazine surface ancestor it stays fixed to for every frame, else
-    // the track itself. A magazine model mounted on the receiver's animated
+    // The magazine node that carries a WeaponMagazine track in the reload: the
+    // topmost WeaponMagazine surface ancestor it stays fixed to for every
+    // frame, else the track itself (any other track is returned unchanged). A magazine model mounted on the receiver's animated
     // magazine node (1911 drum and extended magazines) only rides that node.
     int magazineCarrier(const ReloadRecipe& recipe, int track);
     // The reload's one magazine carrier among its WeaponMagazine surfaces,

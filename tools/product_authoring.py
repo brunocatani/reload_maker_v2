@@ -84,11 +84,12 @@ def policy_identity(policy):
 
 def presentation_identity(setup):
     """What a magazine's cooked models depend on in its presentation setup.
-    recipeId only names the reload capture the setup was saved from; every
-    receiver has its own, yet they share the magazine's pieces and so its
-    models. It never counts (owner, 2026-10-05: no hash gating)."""
+    recipeId and trackAnchors only name the reload capture the setup was saved
+    from and its tracks (for matching it onto other reloads); every receiver
+    has its own, yet they share the magazine's pieces and so its models.
+    Neither counts (no hash gating)."""
     if isinstance(setup,dict):
-        return {key:value for key,value in setup.items() if key!='recipeId'}
+        return {key:value for key,value in setup.items() if key not in ('recipeId','trackAnchors')}
     return setup
 
 
@@ -166,8 +167,10 @@ def apply_capture(draft,capture,full='',empty=''):
         for key in snapshot['profileHeader']['embeddedMagazineReceivers']:
             if form_key(key) not in {form_key(k) for k in records}:records.append(key)
     prior_magazine=next((m for m in documents['magazines']['magazines'] if form_key(m['record'])==magazine),None)
-    if prior_magazine and presentation_identity(prior_magazine.get('presentationSetup'))!=presentation_identity(snapshot['magazine'].get('presentationSetup')):
-        require(full and empty,'Magazine presentation changed; recapture and cook both world models before saving')
+    before,after=presentation_identity(prior_magazine.get('presentationSetup')) if prior_magazine else None,presentation_identity(snapshot['magazine'].get('presentationSetup'))
+    if prior_magazine and before!=after:
+        changed=sorted(k for k in set(before or {})|set(after or {}) if (before or {}).get(k)!=(after or {}).get(k)) if isinstance(before,dict) and isinstance(after,dict) else ['setup']
+        require(full and empty,'Magazine presentation changed ('+', '.join(changed)+'); recapture and cook both world models before saving')
     replace_record(documents['magazines']['magazines'],snapshot['magazine'],lambda p:form_key(p['record']))
     replace_record(documents['sounds']['profiles'],snapshot['sounds'],lambda p:(form_key(p['weapon']),form_key(p['magazine'])))
     if snapshot['grabs']:

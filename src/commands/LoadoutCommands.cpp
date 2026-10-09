@@ -117,7 +117,8 @@ namespace reloadmaker
         }
         if (params.contains("slot")) {
             auto* config = configuration();
-            require(config && config->select(slot, mod), "Invalid slot or modification");
+            require(config && config->slot(slot) &&
+                    (config->selected(slot) == mod || config->select(slot, mod)), "Invalid slot or modification");
             refreshAttachments();
         }
         rebuildWeapon();

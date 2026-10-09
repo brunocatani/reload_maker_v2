@@ -425,7 +425,34 @@ def authoring_record(document):
     return record, {k: document[k] for k in SOURCE_FIELDS if k in document}
 
 
-def save_weapon_pack(folder, plugin, record, entry, request, identity_value, stage, backends):
+def saved_magazine_models(folder, weapons):
+    """Existing carrier-space models, indexed by their physical magazine.
+
+    Imported packs already own cooked models even when the editor has never
+    assigned a replacement. Preserve their receipts; apply_capture validates
+    the magazine, presentation and carrier before another weapon can use them.
+    """
+    models = {}
+    for entry in weapons.values():
+        if not entry.get('pack'):
+            continue
+        pack = get_record(folder, entry['pack'])
+        objects = {item['id']: item for item in pack['objects']}
+        for weapon in pack['weapons']:
+            for assignment in weapon.get('magazineObjects', []):
+                pair = {}
+                for presentation in ('full', 'empty'):
+                    obj = objects.get(assignment.get(presentation))
+                    if obj:
+                        model = resolve(folder, obj['source']['path'])
+                        if model.is_file() and model.with_suffix('.receipt.json').is_file():
+                            pair[presentation] = str(model)
+                if len(pair) == 2:
+                    models.setdefault(weapon_key(assignment['record']), pair)
+    return models
+
+
+def save_weapon_pack(folder, plugin, record, entry, request, identity_value, stage, backends, shared_models=None):
     """Applies the weapon's captured configurations to its pack project. A
     configuration that cannot be saved keeps its previous behavior and is
     reported; it never blocks the other configurations or weapons."""
@@ -439,12 +466,17 @@ def save_weapon_pack(folder, plugin, record, entry, request, identity_value, sta
     work.mkdir(parents=True)
     project_path = work/'pack.project.json'
     existing_id = None
+    assigned = set()
     if entry.get('pack'):
         materialize_pack(folder, entry['pack'], project_path)
-        existing_id = read(project_path)['id']
+        existing = read(project_path)
+        existing_id = existing['id']
+        assigned = {weapon_key(item['record']) for weapon in existing['weapons'] for item in weapon.get('magazineObjects', [])}
     namespace = pack_namespace(plugin, record, identity_value, existing_id)
     models = {}
-    for magazine, pair in (request.get('models') or {}).items():
+    available = {key: pair for key, pair in (shared_models or {}).items() if key not in assigned}
+    available.update(request.get('models') or {})
+    for magazine, pair in available.items():
         full, empty = pair.get('full', ''), pair.get('empty', '')
         if full and empty and Path(full).is_file() and Path(empty).is_file():
             models[weapon_key(magazine)] = (full, empty)
@@ -476,6 +508,7 @@ def save_request(workspace, request_path, backends):
             snapshot = read_snapshot(folder, base)
             weapons = copy.deepcopy(snapshot['weapons'])
             library = copy.deepcopy(snapshot.get('libraryRecords', {}))
+        shared_models = saved_magazine_models(folder, weapons)
         identity_value = read_identity(folder) or new_identity(plugin)
         stage = Path(workspace).resolve()/'local/tmp/library'/uuid.uuid4().hex
         stage.mkdir(parents=True)
@@ -496,7 +529,7 @@ def save_request(workspace, request_path, backends):
                     entry['source'] = source
                 if isinstance(change.get('status'), dict):
                     entry['status'] = change['status']
-                pack, report = save_weapon_pack(folder, plugin, record, entry, change, identity_value, stage, backends)
+                pack, report = save_weapon_pack(folder, plugin, record, entry, change, identity_value, stage, backends, shared_models)
                 if pack:
                     entry['pack'] = pack
                 if report['saved'] or report['failed']:

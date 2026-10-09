@@ -55,10 +55,10 @@ bool buildMagazineRail(const ReloadRecipe& r,int full,const QString& name,const 
             if(dot>.9998f){rail.outward=delta.normalized();break;}
         }
     }
-    // A native visual approach can rock/rotate all the way into the well.
-    // Its final translation still defines a straight hand-input direction;
-    // buildMagazineAnimation retains the complete independent visual curve.
-    if(finalApproach&&rail.outward.isNull())rail.outward=approach;
+    // A native removal or insertion may rotate throughout the near-well
+    // segment. Its translation still defines straight controller input;
+    // the selected visual-motion policy remains independent of that input.
+    if(rail.outward.isNull())rail.outward=approach;
     if(rail.outward.lengthSquared()<.9f&&authoredOutward&&finite(*authoredOutward)&&std::abs(authoredOutward->lengthSquared()-1)<.001f)rail.outward=*authoredOutward;
     if(rail.outward.lengthSquared()<.9f){error="No aligned magazine extraction segment was found.";return false;}
     float magazineMin=std::numeric_limits<float>::max(),weaponMax=-magazineMin;

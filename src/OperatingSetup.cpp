@@ -53,7 +53,7 @@ bool remapOperatingSetup(OperatingSetup& setup,const ReloadRecipe& recipe,QStrin
     };
     if(!required(setup.parts.operating)||!required(setup.parts.bolt))return false;
     setup.parts.magazine=map(setup.parts.magazine);
-    if(setup.recipeId!=recipe.id)setup.parts.magazine=magazineCarrier(recipe,setup.parts.magazine);
+    setup.parts.magazine=magazineCarrier(recipe,setup.parts.magazine);
     QVector<int> followers;
     for(const int track:setup.parts.followers)if(const int mapped=map(track);mapped>=0&&!followers.contains(mapped))followers.append(mapped);
     setup.parts.followers=followers;

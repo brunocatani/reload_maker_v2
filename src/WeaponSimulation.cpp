@@ -37,7 +37,9 @@ bool magazineSurface(const ReloadTrack& t) {
 }
 }
 int magazineCarrier(const ReloadRecipe& r,int track) {
-    if(track<0||track>=r.tracks.size())return track;
+    // Only a second WeaponMagazine node is lifted; an inner node chosen as the
+    // carrier (the USP's WeaponMagazineChild2) stays the author's choice.
+    if(track<0||track>=r.tracks.size()||!magazineSurface(r.tracks[track]))return track;
     int carrier=track;
     for(int a=r.tracks[track].parent,count=0;a>=0&&a<r.tracks.size()&&count<r.tracks.size();a=r.tracks[a].parent,++count) {
         if(magazineSurface(r.tracks[a])&&ridesOn(r,track,a))carrier=a;

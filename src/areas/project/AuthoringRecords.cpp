@@ -121,12 +121,19 @@ namespace reloadmaker
         }
     }
 
-    // The magazine this configuration loads, read from the rig's magazine
-    // track or the learned reload (never from simulationMagazineAnchor, which
-    // itself reads the plan), else the configuration's magazine part; "weapon"
-    // for a magazine built into the weapon.
+    // The magazine part this configuration loads, from its configuration key.
+    // Its node may live in another part's model (the AMR, M16A2E3 and 1911
+    // drum magazines ride the receiver's WeaponMagazine), but authoring
+    // belongs to the magazine part. A magazine built into the weapon is the
+    // owner of the reload's magazine track, else "weapon". Never read through
+    // simulationMagazineAnchor, which itself reads the plan.
     QString ReloadMakerController::magazineScopeRecord() const
     {
+        for (const auto& part : authoringRecordKey().section('/', 1).split(';')) {
+            if (part.startsWith(QLatin1String("magazine=")) && part.section('=', 1) != QLatin1String("none")) {
+                return part.section('=', 1).toLower();
+            }
+        }
         if (_reloadRecipe && _simulationRig && _simulationRig->magazine >= 0 && _simulationRig->magazine < _reloadRecipe->tracks.size()) {
             const auto owner = _reloadRecipe->tracks[_simulationRig->magazine].anchor.ownerRecord;
             if (!owner.isEmpty()) {
@@ -146,11 +153,6 @@ namespace reloadmaker
             }
             if (!owner.isEmpty()) {
                 return owner.toLower();
-            }
-        }
-        for (const auto& part : authoringRecordKey().section('/', 1).split(';')) {
-            if (part.startsWith(QLatin1String("magazine=")) && part.section('=', 1) != QLatin1String("none")) {
-                return part.section('=', 1).toLower();
             }
         }
         return QStringLiteral("weapon");

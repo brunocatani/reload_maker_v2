@@ -166,9 +166,39 @@ def delivery(workspace):
     print('PASS MO2 delivery: identical files left in place, changed files replaced, unrelated files kept')
 
 
+def shared_models(workspace):
+    from product_authoring import presentation_identity
+    setup = dict(recipeId='old', trackAnchors=[dict(path='receiver/old')], pieces=[dict(path='mag/body', role='body')])
+    same = dict(setup, recipeId='new', trackAnchors=[dict(path='receiver/new')])
+    assert presentation_identity(setup) == presentation_identity(same), 'Capture bookkeeping invalidated magazine models'
+    changed = dict(same, pieces=[dict(path='mag/body', role='cartridge')])
+    assert presentation_identity(setup) != presentation_identity(changed), 'Physical payload changes lost their model validation'
+    folder = library.project_folder(workspace, PLUGIN)
+    pair, references = {}, {}
+    for presentation in ('full', 'empty'):
+        # Only file routing/receipt presence is under test; no model parser.
+        model = workspace/'inputs'/(presentation+'.bin')
+        model.parent.mkdir(parents=True, exist_ok=True)
+        model.write_bytes(('opaque '+presentation+' test asset').encode())
+        write(model.with_suffix('.receipt.json'), dict(engineCooked=True))
+        references[presentation] = library.put_asset(folder, model)
+        pair[presentation] = str(library.resolve(folder, references[presentation]).resolve())
+        write(Path(pair[presentation]).with_suffix('.receipt.json'), dict(engineCooked=True))
+    magazine = 'test_rifle.esp:000900'
+    pack = dict(weapons=[dict(record=FIRST, magazineObjects=[dict(record=magazine.upper(), full='full', empty='empty')])],
+                objects=[dict(id=p, source=dict(path=references[p])) for p in pair])
+    reference = library.put_record(folder, pack)
+    models = library.saved_magazine_models(folder, {FIRST: dict(pack=reference), SECOND: {}})
+    assert models == {magazine: pair}, models
+    # A missing pair cannot masquerade as usable cooked models.
+    Path(pair['empty']).with_suffix('.receipt.json').unlink()
+    assert library.saved_magazine_models(folder, {FIRST: dict(pack=reference)}) == {}
+    print('PASS sibling model lookup: imported pack assignments, canonical magazine IDs, complete receipt pairs')
+
+
 def run(scratch):
     scratch.mkdir(parents=True, exist_ok=True)
-    for test in (library_versions, migration, delivery):
+    for test in (library_versions, migration, delivery, shared_models):
         with tempfile.TemporaryDirectory(dir=scratch) as folder:
             test(Path(folder))
 

@@ -52,6 +52,10 @@ namespace reloadmaker
         if (_savedSounds.contains(key)) {
             _soundProfile = _savedSounds.value(key);
         }
+        // Cues are shared by animation, but the exported profile belongs to
+        // the currently selected magazine, including anchor fallbacks.
+        _soundProfile.weapon = weapon;
+        _soundProfile.magazine = magazine;
         // A bolt catch released by hand: profiles saved before this cue existed get it too.
         const bool boltRelease = std::any_of(_soundProfile.cues.cbegin(), _soundProfile.cues.cend(), [](const auto& c) { return c.id == "bolt-release"; });
         if (const auto release = defaults.sounds.value("bolt-release"); !release.isEmpty() && !boltRelease) {

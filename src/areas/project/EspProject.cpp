@@ -597,13 +597,14 @@ namespace reloadmaker
             }
             const bool templated = !it->record["reloadTemplates"].toObject()[it.key()].toString().isEmpty();
             const bool packless = !committed[it.key()].toObject().contains("pack");
+            const bool retry = committed[it.key()].toObject()["packReport"].toObject()["failed"].toInt() > 0;
             const bool stale = progressOutdated(it->status, committed[it.key()].toObject()["status"].toObject());
-            changed |= it->dirty || stale;
+            changed |= it->dirty || stale || retry;
             // Edited weapons are captured so the version exports what was
             // authored; so is a configured weapon that has no behavior yet,
             // and one whose saved progress is out of date: the capture
             // evaluates every configuration's checklist again.
-            if (templated && (it->dirty || packless || stale)) {
+            if (templated && (it->dirty || packless || stale || retry)) {
                 job.queue.append(it.key());
             }
         }
@@ -732,6 +733,17 @@ namespace reloadmaker
                 for (auto model = assigned.begin(); model != assigned.end(); ++model) {
                     if (model.key().section('|', 0, 0).compare(it.key(), Qt::CaseInsensitive) == 0) {
                         models[model.key().section('|', 1)] = model.value();
+                    }
+                }
+                // A cooked magazine model sits in the magazine's own carrier
+                // frame, so a same-ESP sibling's models of that magazine serve
+                // a weapon without its own (the SA58 variants share the SA58's).
+                for (auto other = _esp->weapons.cbegin(); other != _esp->weapons.cend(); ++other) {
+                    const auto shared = other->record["magazineModels"].toObject();
+                    for (auto model = shared.begin(); model != shared.end(); ++model) {
+                        if (model.key().section('|', 0, 0).compare(other.key(), Qt::CaseInsensitive) == 0 && !models.contains(model.key().section('|', 1))) {
+                            models[model.key().section('|', 1)] = model.value();
+                        }
                     }
                 }
                 QJsonObject change{ { "name", displayName(it->record, it.key()) },
