@@ -654,6 +654,16 @@ namespace reloadmaker
         const int total = capture.plan.size();
         if (!refreshAll) {
             const auto after = authoredPart(work.record);
+            // Prefer the author's current receiver/operating assembly for a
+            // shared magazine update, avoiding an unnecessary receiver swap.
+            const auto changes = [&](const auto& combination) {
+                int count = 0;
+                for (const auto& choice : combination)
+                    if (choice.role != ConfigurationRole::Magazine && capture.original.value(choice.slot) != choice.mod) ++count;
+                return count;
+            };
+            std::stable_sort(capture.plan.begin(), capture.plan.end(), [&](const auto& a,const auto& b) { return changes(a)<changes(b); });
+            QSet<QString> sharedMagazines;
             capture.plan.erase(std::remove_if(capture.plan.begin(), capture.plan.end(), [&](const auto& combination) {
                 QString magazine = QStringLiteral("weapon");
                 QStringList moving;
@@ -666,7 +676,14 @@ namespace reloadmaker
                 // A fixed/built-in magazine's owner is only known after
                 // assembly; keep that capture when its authoring changed.
                 if (magazine == QLatin1String("weapon")) return after == work.committed;
-                return captureInputs(work.committed, weapon, magazine, moving) == captureInputs(after, weapon, magazine, moving);
+                const auto oldInputs = captureInputs(work.committed, weapon, magazine, moving);
+                const auto newInputs = captureInputs(after, weapon, magazine, moving);
+                if (oldInputs == newInputs) return true;
+                if (magazineOnlyCaptureChange(oldInputs, newInputs)) {
+                    if (sharedMagazines.contains(magazine)) return true;
+                    sharedMagazines.insert(magazine);
+                }
+                return false;
             }), capture.plan.end());
         }
         _packJob["reusedConfigurations"] = total - capture.plan.size();

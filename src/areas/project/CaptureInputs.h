@@ -63,4 +63,17 @@ inline QJsonObject captureInputs(QJsonObject record, const QString& weapon,
     record["resolvedPlan"]=resolved;
     return record;
 }
+// The runtime stores these values once per magazine record, independently
+// of receiver profiles. One existing configuration updates that shared record.
+inline bool magazineOnlyCaptureChange(QJsonObject before,QJsonObject after) {
+    if(before==after)return false;
+    for(auto* record:{&before,&after}) {
+        record->remove("magazineFits");
+        auto plan=record->value("resolvedPlan").toObject();
+        plan.remove("magazineGuide");
+        (*record)["resolvedPlan"]=plan;
+    }
+    return before==after;
+}
+
 }

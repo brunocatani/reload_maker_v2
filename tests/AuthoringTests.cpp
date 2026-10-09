@@ -21,6 +21,7 @@ int main(int argc,char** argv) {
         auto changed=before;
         changed["magazineGrabGrips"]=QJsonObject{{weapon+'|'+a+"|left","edited-a"}};
         check(inputs(before,a)!=inputs(changed,a)&&inputs(before,b)==inputs(changed,b),"Specific magazine fit refreshed unrelated magazines");
+        check(magazineOnlyCaptureChange(inputs(before,a),inputs(changed,a)),"Magazine fit queued every receiver");
         changed=before;changed["magazineGrabDefaults"]=QJsonObject{{weapon+"|left","new-default"}};
         check(inputs(before,a)==inputs(changed,a)&&inputs(before,b)!=inputs(changed,b),"Default refresh ignored inheritance or overwrote explicit fit");
         changed=before;changed["magazineGrabGrips"]=QJsonObject{};
@@ -33,9 +34,11 @@ int main(int argc,char** argv) {
         before["authoringRoadmaps"]=plans;changed=before;
         plans[scope+a]=QJsonObject{{"magazineGuide",3}};changed["authoringRoadmaps"]=plans;
         check(inputs(before,a)!=inputs(changed,a)&&inputs(before,b)==inputs(changed,b),"Guide refresh ignored per-magazine override");
+        check(magazineOnlyCaptureChange(inputs(before,a),inputs(changed,a)),"Magazine guide queued every receiver");
         check(inputs(before,"test.esp:000012")!=inputs(changed,"test.esp:000012"),"Anchor guide change missed a dependent magazine");
         before=changed;plans[weapon+"/@moving:"+moving.front()]=QJsonObject{{"operating",1}};changed["authoringRoadmaps"]=plans;
         check(inputs(before,a)!=inputs(changed,a)&&inputs(before,b)!=inputs(changed,b),"Operating part change missed its magazines");
+        check(!magazineOnlyCaptureChange(inputs(before,a),inputs(changed,a)),"Moving-part change incorrectly collapsed receiver captures");
         QString policyError;
         check(auxiliaryReloadMode("1cas_servicerifle.ESP:00C7C0") && auxiliaryReloadMode("1CAS_ServiceRifle.esp:00d847"), "Bundled auxiliary selectors lost their regular reload fallback");
         check(!auxiliaryReloadMode("Other.esp:00c7c0") && !auxiliaryReloadMode("1CAS_ServiceRifle.esp:000801"), "Auxiliary selector matched an unrelated part");
