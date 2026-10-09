@@ -74,10 +74,14 @@ namespace {
         require(decodeHandPose(encoded,decoded,error),error);
         for(int i=0;i<15;++i) expect(pose.fingers[i],decoded.fingers[i]);
         expect(pose.placement.handInAnchor,decoded.placement.handInAnchor);
+        pose.name=QStringLiteral("UMP .40 insertion hold · Mag - right hand · left · right · left");
         HandPose mirrored,back;const auto mirrorAnchor=transform({0,4,-2},17);
         require(mirrorHandPose(skeleton,pose,mirrorAnchor,mirrored,error),error);
         require(mirrored.hand!=side,"Mirror kept original physical hand");
+        const auto named=[](PoseHand hand){return QStringLiteral("UMP .40 insertion hold · Mag")+(hand==PoseHand::Left?QStringLiteral(" · left"):QStringLiteral(" · right"));};
+        require(mirrored.name==named(mirrored.hand),"Mirror accumulated old hand labels");
         require(mirrorHandPose(skeleton,mirrored,mirrorAnchor,back,error),error);
+        require(back.name==named(side),"Repeated mirror accumulated hand labels");
         expect(pose.placement.handInAnchor,back.placement.handInAnchor);
         for(int i=0;i<15;++i)expect(pose.fingers[i],back.fingers[i]);
         // Finger-only conversion cannot inherit the captured wrist or anchor.

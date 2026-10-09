@@ -45,7 +45,7 @@ namespace reloadmaker {
         _magazineHandPicker=new design::TileChoice(page);
         _magazineHandPicker->addChoice(design::Icon::HandLeft,"Left reload hand");_magazineHandPicker->addChoice(design::Icon::HandRight,"Right reload hand");
         auto* mirrorMagazine=new design::IconTile(design::Icon::Mirror,"Mirror to other hand",page);
-        mirrorMagazine->setToolTip(QStringLiteral("Create the opposite hand's fit for this magazine by mirroring this one."));
+        mirrorMagazine->setToolTip(QStringLiteral("Copy this saved fit to the opposite hand, replacing that hand's fit. Use Left/Right reload hand to edit each side independently."));
         auto* handRow=new QHBoxLayout();handRow->setSpacing(8);handRow->addWidget(_magazineHandPicker,2);handRow->addWidget(mirrorMagazine,1);layout->addLayout(handRow);
         connect(_magazineHandPicker->group(),&QButtonGroup::idClicked,this,[this](int i){(void)setInteractionHand(PoseHand(i));updateInteractionGripUi();});
         connect(mirrorMagazine,&QAbstractButton::clicked,this,[this]{(void)mirrorMagazineGrip();});
@@ -236,7 +236,10 @@ namespace reloadmaker {
         for(auto* spin:_gripAngles) spin->setEnabled(editing);
         _gripSave->setEnabled(canSavePartGrip());
         const bool magazine=editing&&magazineGrabAnchor(_partGripDraft->pose.placement)>=0;
-        if(_useMagazineGrip)_useMagazineGrip->setEnabled(_gripSave->isEnabled()&&magazine);
+        if(_useMagazineGrip) {
+            _useMagazineGrip->setEnabled(_gripSave->isEnabled()&&magazine);
+            _useMagazineGrip->setText(QStringLiteral("Save %1 hand for this magazine").arg(_interactionHand==PoseHand::Left?"left":"right"));
+        }
         if(_saveAllMagazineGrips)_saveAllMagazineGrips->setEnabled(_useMagazineGrip->isEnabled());
         _gripSave->setVisible(!magazine&&!_editingMagazine);
         _gripEnd->setVisible(!_editingMagazine);
@@ -245,7 +248,7 @@ namespace reloadmaker {
         _gripLoad->setEnabled(canLoadPartGrip());
         if(editing) {
             _gripStatus->setText(_gripPreviewValid
-                ? QStringLiteral("%1 hand · elbow solved. Move and Rotate adjust the hand only. Save for this magazine updates its active fit and the project.").arg(_partGripDraft->pose.hand==PoseHand::Left?"Left":"Right")
+                ? QStringLiteral("%1 hand · elbow solved. Move and Rotate adjust the hand only. Saving updates this hand’s fit for the selected magazine. The other hand keeps its own fit.").arg(_partGripDraft->pose.hand==PoseHand::Left?"Left":"Right")
                 : QStringLiteral("Not applied: %1\nThe native animation is shown. Adjust the target; saving is disabled.").arg(_gripError));
         } else {
             _gripStatus->setText(frame?QStringLiteral("Choose a finger pose and reference part, then choose a starting placement. Saved grips include fingers, position and angle.")

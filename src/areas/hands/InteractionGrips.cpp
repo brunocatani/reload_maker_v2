@@ -231,7 +231,6 @@ namespace reloadmaker
             return false;
         }
         fit.pose = mirrored;
-        fit.pose.name = source->pose.name + " · " + (mirrored.hand == PoseHand::Left ? "left" : "right");
         fit.surfaceContact.reset();
         fit.mechanismId.clear();
         _interactionHand = mirrored.hand;

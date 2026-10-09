@@ -8,6 +8,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QQuaternion>
+#include <QRegularExpression>
 #include <QMatrix4x4>
 #include <QSaveFile>
 #include <QStandardPaths>
@@ -173,7 +174,13 @@ namespace reloadmaker {
             const auto hand=composed(anchorInWeapon,source.placement.handInAnchor);
             const auto mirroredHand=mirrored(hand,sourceHand,targetHand);
             Transformf inverse;require(invertUniformTransform(anchorInWeapon,inverse),"Invalid magazine frame");
-            HandPose result=source;result.hand=other;result.placement.handInAnchor=composed(inverse,mirroredHand);result.placement.handInWeapon=mirroredHand;
+            HandPose result=source;result.hand=other;
+            // A mirrored label describes the target hand, not the history of
+            // previous mirrors. Also collapse labels saved by older builds.
+            QString name=source.name.trimmed();
+            name.remove(QRegularExpression(QStringLiteral("(?:\\s*[·-]\\s*(?:left|right)(?: hand)?)+$"),QRegularExpression::CaseInsensitiveOption));
+            result.name=name.trimmed()+(other==PoseHand::Left?QStringLiteral(" · left"):QStringLiteral(" · right"));
+            result.placement.handInAnchor=composed(inverse,mirroredHand);result.placement.handInWeapon=mirroredHand;
             std::array<Transformf,15> original,converted;
             for(int i=0;i<15;++i) {
                 original[i]=composed(i%3?original[i-1]:hand,source.fingers[i]);
