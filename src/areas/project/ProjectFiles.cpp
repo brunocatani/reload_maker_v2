@@ -510,7 +510,9 @@ namespace reloadmaker
             record["handPreview"] = QJsonDocument::fromJson(bytes).object();
         }
         const auto& authoredGrip = simulationWorkspace(_workspace) ? _operateSuspendedGrip : _partGripDraft;
-        if (authoredGrip && partGripSnapshot(*authoredGrip) != _partGripOpened) {
+        const bool retainedMagazineDraft = authoredGrip && std::any_of(_magazineGripDrafts.cbegin(), _magazineGripDrafts.cend(),
+            [&](const auto& draft) { return sameGripFit(*authoredGrip, draft); });
+        if (authoredGrip && !retainedMagazineDraft && partGripSnapshot(*authoredGrip) != _partGripOpened) {
             const auto bytes = encodePartGrip(*authoredGrip, error);
             if (!error.isEmpty()) {
                 message = "Finish the grip before saving: " + error;
@@ -801,12 +803,9 @@ namespace reloadmaker
             if (!decodePartGrip(QJsonDocument(it.value().toObject()).toJson(), grip, error)) {
                 continue;
             }
-            // Opening the editor once stored the fit it showed as a draft;
-            // such a copy of a saved fit is not unsaved work.
-            const auto saved = std::find_if(_partGrips.cbegin(), _partGrips.cend(), [&](const auto& s) { return s.pose.id == grip.pose.id; });
-            if (saved == _partGrips.cend() || !sameGripFit(grip, *saved)) {
-                _magazineGripDrafts[handAssignmentKey(magazineGrabKey(grip.weaponRecord, grip.pose.placement.ownerRecord), grip.pose.hand)] = grip;
-            }
+            // Saved authoring is not cleaned up as a side effect of opening
+            // another loadout. The editor already avoids creating clean drafts.
+            _magazineGripDrafts[handAssignmentKey(magazineGrabKey(grip.weaponRecord, grip.pose.placement.ownerRecord), grip.pose.hand)] = grip;
         }
     }
 
@@ -853,6 +852,18 @@ namespace reloadmaker
         if (record.contains("gripDraft")) {
             PartGrip grip;
             if (decodePartGrip(QJsonDocument(record["gripDraft"].toObject()).toJson(), grip, error)) {
+                const bool retained = std::any_of(_magazineGripDrafts.cbegin(), _magazineGripDrafts.cend(),
+                    [&](const auto& draft) { return sameGripFit(grip, draft); });
+                if (retained) {
+                    // This magazine may not be installed in the restored
+                    // session. Its per-part draft remains authoritative; do
+                    // not apply it to a different magazine or duplicate it.
+                    _editingMagazine = true;
+                    if (record["workspace"].toInt() == GripsWorkspace) {
+                        setHandEditorPage(HandEditorPage::PartGrip);
+                    }
+                    return;
+                }
                 QVector<HandPosePlacement> anchors;
                 for (const auto& anchor : _handPoseAnchors) {
                     anchors.append(anchor.description);
@@ -860,6 +871,10 @@ namespace reloadmaker
                 const int anchor = resolveGripAnchor(grip, poseRecordKey(currentWeapon()->formId), anchors, error);
                 if (anchor >= 0 && preparePartGripFrame(anchor, error)) {
                     _partGripDraft = grip;
+                    // This record explicitly contains unfinished authoring,
+                    // not a freshly opened library fit. Do not compare it to
+                    // a previous page's opened snapshot and drop it as clean.
+                    _partGripOpened.clear();
                     setGripDraftName(grip.pose.name);
                     followGripInForm(grip.sourcePoseId, anchor);
                     _editingMagazine = magazineGrabAnchor(grip.pose.placement) >= 0;
@@ -882,6 +897,13 @@ namespace reloadmaker
         setSlideSpringReturn(record["simulationSpringReturn"].toBool(true));
         const int workspace = record["workspace"].toInt(OperateWorkspace);
         setWorkspace(validWorkspace(workspace) ? workspace : OperateWorkspace);
+        if (simulationWorkspace(_workspace) && _partGripDraft) {
+            // Restoring into an already-open Operate page has no workspace
+            // transition to park the draft; preserve it just as entering
+            // Operate from Hand fit does.
+            _operateSuspendedGrip = _partGripDraft;
+            _partGripDraft.reset();
+        }
         if (record.contains("scopeSelection")) {
             const auto model = record["scopeSelection"].toString();
             for (int i = 0; i < _scopeTargets.size(); ++i) {

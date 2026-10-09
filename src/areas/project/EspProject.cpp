@@ -344,10 +344,11 @@ namespace reloadmaker
     // or the restored state itself for a committed record.
     void ReloadMakerController::restoreWeaponRecord(const QJsonObject& record, const QJsonObject& baseline)
     {
-        const auto clean = qScopeGuard([this, &baseline] {
-            _savedAuthoring = baseline.isEmpty() ? authoredRecord() : baseline;
+        const bool committedRecord = baseline.isEmpty() || authoredPart(record) == baseline;
+        const auto clean = qScopeGuard([this, &baseline, committedRecord] {
+            _savedAuthoring = committedRecord ? authoredRecord() : baseline;
             refreshDocumentModified();
-            if (baseline.isEmpty()) {
+            if (committedRecord) {
                 // Opened from a saved version: the saved state is clean once
                 // the weapon newly shown has finished assembling.
                 _openSettling = true;
@@ -824,7 +825,10 @@ namespace reloadmaker
             work.dirty = !work.record.isEmpty() && authoredPart(work.record) != work.committed;
             work.imported = false;
             if (it.key() == displayed) {
-                _savedAuthoring = work.committed;
+                // The author cannot edit during the save. Captures restore
+                // that kept record, including matrix/quaternion decoding;
+                // its floating-point round trip is not a new authored edit.
+                _savedAuthoring = authoredRecord();
             }
         }
         refreshDocumentModified();
