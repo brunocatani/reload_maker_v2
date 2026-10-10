@@ -17,6 +17,53 @@ from product_packs import cancellation, read, require, write
 METRES=.9144/64
 
 
+
+def repair_tangents(source):
+    """Reconstruct invalid source tangents from the same triangles/UVs/normals.
+    Valid tangent entries and all geometry/material attributes stay unchanged.
+    Some source NIFs contain NaNs in their packed tangent basis (AXG magazine).
+    """
+    tangents=source['tangents']
+    bad={i for i,row in enumerate(tangents) if len(row)!=4 or
+         any(type(v) not in (int,float) or not math.isfinite(v) for v in row)}
+    if not bad:return 0
+    sums={i:([0.,0.,0.],[0.,0.,0.]) for i in bad}
+    positions,normals,uvs=source['positions'],source['normals'],source['uvs']
+    require(all(len(row)==width and all(type(v) in (int,float) and math.isfinite(v) for v in row)
+                for values,width in [(positions,3),(normals,3),(uvs,2)] for row in values),
+            'Cannot reconstruct tangents from invalid geometry, normals or UVs')
+    indices=source['indices']
+    for start in range(0,len(indices),3):
+        ids=indices[start:start+3]
+        if not bad.intersection(ids):continue
+        a,b,c=ids
+        e1=[positions[b][k]-positions[a][k] for k in range(3)]
+        e2=[positions[c][k]-positions[a][k] for k in range(3)]
+        u1,v1=[uvs[b][k]-uvs[a][k] for k in range(2)]
+        u2,v2=[uvs[c][k]-uvs[a][k] for k in range(2)]
+        determinant=u1*v2-u2*v1
+        if abs(determinant)<1e-12:continue
+        t=[(e1[k]*v2-e2[k]*v1)/determinant for k in range(3)]
+        bvec=[(e2[k]*u1-e1[k]*u2)/determinant for k in range(3)]
+        for i in ids:
+            if i in sums:
+                for k in range(3):sums[i][0][k]+=t[k];sums[i][1][k]+=bvec[k]
+    for i,(t,b) in sums.items():
+        n=normals[i];length=math.sqrt(sum(v*v for v in n))
+        require(length>1e-12,'Cannot reconstruct tangent for zero normal')
+        n=[v/length for v in n];dot=sum(n[k]*t[k] for k in range(3))
+        t=[t[k]-n[k]*dot for k in range(3)]
+        length=math.sqrt(sum(v*v for v in t))
+        if length<1e-12:
+            axis=min(range(3),key=lambda k:abs(n[k]))
+            t=[(1. if k==axis else 0.)-n[k]*n[axis] for k in range(3)]
+            length=math.sqrt(sum(v*v for v in t))
+        t=[v/length for v in t]
+        cross=[n[1]*t[2]-n[2]*t[1],n[2]*t[0]-n[0]*t[2],n[0]*t[1]-n[1]*t[0]]
+        tangents[i]=t+[-1. if sum(cross[k]*b[k] for k in range(3))<0 else 1.]
+    return len(bad)
+
+
 def prepare_world_object(snapshot_path, output, backends):
     snapshot_path, output=Path(snapshot_path).resolve(),Path(output).resolve()
     snapshot=read(snapshot_path)
@@ -55,6 +102,7 @@ def prepare_world_object(snapshot_path, output, backends):
             require(len(source[key])==count,'Incomplete normals/tangents/UVs in visible geometry')
         indices=source['indices'];require(indices and len(indices)%3==0 and all(type(i) is int and 0<=i<count for i in indices),'Invalid visible triangles')
         vertices+=count;triangles+=len(indices)//3;require(vertices<=500000 and triangles<=1000000,'Prepared object exceeds geometry budget')
+        repair_tangents(source)
         material=source.get('material','');require(isinstance(material,str) and material.lower().endswith(('.bgsm','.bgem')),'Visible shape has no source material')
         attributes=dict(POSITION=attribute([[v*METRES for v in p] for p in positions],3),
                         NORMAL=attribute(source['normals'],3),TANGENT=attribute(source['tangents'],4),
