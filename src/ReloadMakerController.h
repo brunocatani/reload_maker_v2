@@ -859,7 +859,7 @@ namespace reloadmaker
         };
         MagazineMountInfo magazineMount(const QModelIndex& carrier) const;
         bool magazineBuiltIn() const;
-        QString parkedMagazinePath() const;
+        QStringList parkedMagazinePaths() const;
         PieceRoleProposal magazinePieceProposal(const QModelIndex& shape) const;
         bool buildMagazineMotion(const QVector<QVector3D>& body, MagazineRail& rail);
         bool buildNativeMagazineMotion(const QVector<QVector3D>& body, MagazineRail& rail);

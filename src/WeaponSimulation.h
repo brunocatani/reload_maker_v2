@@ -35,7 +35,7 @@ namespace reloadmaker {
         float motionDuration{0},manualEjectSeconds{-1};
         QJsonObject authoring;
     };
-    bool buildGrabDeployment(const ReloadRecipe&,SimulationRig&,double sourceSeconds,QString& error);
+    bool buildGrabDeployment(const ReloadRecipe&,SimulationRig&,double sourceSeconds,QString& error,bool independentHandle=false);
     Transformf simulationGrabPose(const SimulationRig&,int track,float progress);
     enum class SimulationAction { Idle, Fire, Reload, Held, Returning };
     struct WeaponSimulation {

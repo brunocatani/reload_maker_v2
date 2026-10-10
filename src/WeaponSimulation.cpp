@@ -192,17 +192,33 @@ Transformf simulationGrabPose(const SimulationRig& rig,int track,float progress)
     const int a=int(f),b=std::min(a+1,int(curve.size()-1));
     return interpolatedTransform(curve[a],curve[b],f-a);
 }
-bool buildGrabDeployment(const ReloadRecipe& recipe,SimulationRig& rig,double sourceSeconds,QString& error) {
+bool buildGrabDeployment(const ReloadRecipe& recipe,SimulationRig& rig,double sourceSeconds,QString& error,bool independentHandle) {
     if(sourceSeconds<0)return true;
-    if(sourceSeconds>recipe.duration||rig.slide==rig.bolt){error="Deployment needs a separate operating handle and a pose inside the reload clip";return false;}
+    if(sourceSeconds>(rig.motionDuration>0?rig.motionDuration:recipe.duration)||rig.slide==rig.bolt){error="Deployment needs a separate operating handle and a pose inside the reload clip";return false;}
     const auto closed=simulationTrackPose(recipe,rig,rig.bolt,0).translation;
     const auto open=simulationTrackPose(recipe,rig,rig.bolt,1).translation;
     const QVector3D axis(open.x-closed.x,open.y-closed.y,open.z-closed.z);
     const float length=axis.lengthSquared();
     if(length<1e-6f){error="The bolt has no measurable pull stroke";return false;}
-    const auto deploy=reloadTrackPose(recipe,rig.slide,float(sourceSeconds));
-    const auto reference=reloadTrackPose(recipe,rig.bolt,float(sourceSeconds)).translation;
+    const auto sourcePose=[&](int track) {
+        if(!rig.authoredCurves.contains(track))return reloadTrackPose(recipe,track,float(sourceSeconds));
+        const auto& curve=rig.authoredCurves[track];
+        const float progress=float(sourceSeconds)/(rig.motionDuration>0?rig.motionDuration:recipe.duration);
+        float frame=progress*(curve.size()-1);
+        if(!rig.nativeProgress.isEmpty()) {
+            const auto it=std::lower_bound(rig.nativeProgress.cbegin(),rig.nativeProgress.cend(),progress);
+            const int b=std::clamp(int(it-rig.nativeProgress.cbegin()),1,int(rig.nativeProgress.size()-1)),a=b-1;
+            const float span=rig.nativeProgress[b]-rig.nativeProgress[a];
+            frame=a+(span>0?std::clamp((progress-rig.nativeProgress[a])/span,0.f,1.f):0.f);
+        }
+        const int a=std::clamp(int(frame),0,int(curve.size()-1)),b=std::min(a+1,int(curve.size()-1));
+        return interpolatedTransform(curve[a],curve[b],std::clamp(frame-a,0.f,1.f));
+    };
+    const auto deploy=sourcePose(rig.slide);
+    // Independent handles can unfold at their forward stop while the bolt is locked open.
+    const auto reference=independentHandle?closed:sourcePose(rig.bolt).translation;
     rig.grabCurves.clear();
+    auto heldTracks=rig.slideTracks;if(!heldTracks.contains(rig.bolt))heldTracks.append(rig.bolt);
     for(int i=0;i<=64;++i) {
         const float u=float(i)/64;
         float low=0,high=1;
@@ -214,10 +230,10 @@ bool buildGrabDeployment(const ReloadRecipe& recipe,SimulationRig& rig,double so
         }
         const float progress=i==0?0:i==64?1:(low+high)*.5f;
         const auto bolt=simulationTrackPose(recipe,rig,rig.bolt,progress).translation;
-        for(int track:rig.slideTracks) {
+        for(int track:heldTracks) {
             auto pose=simulationTrackPose(recipe,rig,track,progress);
-            if(track==rig.slide) {
-                pose=deploy;
+            if(track==rig.slide||(independentHandle&&track!=rig.bolt)) {
+                pose=track==rig.slide?deploy:sourcePose(track);
                 pose.translation.x+=bolt.x-reference.x;pose.translation.y+=bolt.y-reference.y;pose.translation.z+=bolt.z-reference.z;
             }
             rig.grabCurves[track].append(pose);

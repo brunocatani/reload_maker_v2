@@ -12,11 +12,10 @@ namespace reloadmaker
         return value.trimmed().toLower();
     }
 
-    // A receiver OMOD is recognized by its name; P2 replaces this with a detector.
+    // Receiver records may carry only stats; a separate installed part owns the moving mesh.
     [[nodiscard]] inline bool isReceiverObjectMod(const ObjectModRecord& record)
     {
-        return !record.modelPath.isEmpty() &&
-               (record.editorId.contains(QStringLiteral("receiver"), Qt::CaseInsensitive) ||
+        return (record.editorId.contains(QStringLiteral("receiver"), Qt::CaseInsensitive) ||
                 record.editorId.contains(QStringLiteral("reciever"), Qt::CaseInsensitive) ||
                 record.name.contains(QStringLiteral("receiver"), Qt::CaseInsensitive));
     }

@@ -126,7 +126,7 @@ namespace reloadmaker
             canonical.openSeconds = setup.parts.openFrame < 0 ? -1 : double(motion.duration) * setup.parts.openFrame / (recipe.frames - 1);
             canonical.closedSeconds = setup.parts.closedFrame < 0 ? -1 : double(motion.duration) * setup.parts.closedFrame / (recipe.frames - 1);
         }
-        if(!buildGrabDeployment(recipe,rig,setup.grabDeploySeconds,error))return false;
+        if(!buildGrabDeployment(recipe,rig,setup.grabDeploySeconds,error,setup.grabDeployIndependent))return false;
         rig.authoring = operatingSetupJson(canonical);
         return true;
     }

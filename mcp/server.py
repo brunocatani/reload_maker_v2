@@ -495,6 +495,9 @@ def configure_operating_setup(operation: str, expected_revision: int, settings: 
     reverse a native path. Manual settings retain version 1 openFrame/closedFrame
     and saved movement IDs. Manual spring parts use an opening path;
     manual bolts use a full cycle. Both -1 endpoints request stroke detection.
+    Native reload/clip modes support grabDeploySeconds for folding handles.
+    Set grabDeployIndependent=true when that pose has the handle forward while
+    the bolt is already open; followers must contain only its rigid handle assembly.
     Fire mode is preset/native/stroke. Saved roles follow the reload's nodes, so
     other parts keep them; no wrist orientation is imposed by this setup. Test
     Operate before runtime export.

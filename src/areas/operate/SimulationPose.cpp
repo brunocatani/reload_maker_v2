@@ -213,7 +213,7 @@ namespace reloadmaker
         const float bolt = _simulation.slideLocked ? 1.f : _simulation.slide;
         for (const int track : rig.slideTracks) {
             if (track != rig.slide) {
-                targets.insert(_reloadTrackNodes[track], operatingTrackTarget(track, bolt));
+                targets.insert(_reloadTrackNodes[track], operatingTrackTarget(track, rig.authoring["grabDeployIndependent"].toBool()?handle:bolt));
             }
         }
     }
@@ -239,7 +239,7 @@ namespace reloadmaker
             const float progress = holdOpen ? 1.f : std::clamp(reloadPoseDistance(rest, handle) / travel, 0.f, 1.f);
             return rifleBoltPose(progress);
         }
-        if (boltDrivesHandle) {
+        if (boltDrivesHandle || (_simulation.action==SimulationAction::Held&&rig.grabCurves.contains(rig.bolt))) {
             return operatingTrackTarget(rig.bolt, _simulation.slide);
         }
         return rifleBoltPose(_simulation.slide);

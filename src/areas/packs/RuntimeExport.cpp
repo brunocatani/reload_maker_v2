@@ -75,45 +75,30 @@ namespace reloadmaker
         return path.join('/');
     }
 
-    // The node holding every parked spare piece, as a runtime path: the
-    // deepest node above all of them, written as the reload track carrying it
-    // plus the node names below that track. Empty without a parked spare.
-    QString ReloadMakerController::parkedMagazinePath() const
+    // Spare branches need not share a parent (for example a retained magazine
+    // and a separate feed-round animation). Never hide their weapon ancestor.
+    QStringList ReloadMakerController::parkedMagazinePaths() const
     {
-        auto* model = activeModel();
-        QVector<QModelIndex> common; // ancestors shared by every piece, deepest first
-        bool first = true;
-        for (const auto& visual : _magazineVisuals) {
-            if (!visual.parked || !visual.node.isValid()) {
-                continue;
-            }
-            QVector<QModelIndex> ancestors;
-            for (auto node = model->getBlockIndex(model->getParent(visual.node)); node.isValid() && ancestors.size() < model->getBlockCount();
-                 node = model->getBlockIndex(model->getParent(node))) {
-                ancestors.append(node);
-            }
-            if (first) {
-                common = ancestors;
-                first = false;
-            } else {
-                common.erase(std::remove_if(common.begin(), common.end(), [&](const QModelIndex& node) { return !ancestors.contains(node); }), common.end());
-            }
-        }
-        if (first) {
-            return {};
-        }
-        QStringList below;
-        for (const auto& node : common) {
-            for (int track = 0; track < _reloadTrackNodes.size(); ++track) {
-                if (QModelIndex(_sceneNodes[_reloadTrackNodes[track]]) == node) {
-                    const auto path = runtimeTrackPath(track);
-                    return below.isEmpty() ? path : path + '/' + below.join('/');
+        auto* model=activeModel();QStringList paths;
+        for(const auto& visual:_magazineVisuals) {
+            if(!visual.parked||!visual.node.isValid())continue;
+            bool found=false;
+            for(auto node=model->getBlockIndex(model->getParent(visual.node));node.isValid()&&!found;node=model->getBlockIndex(model->getParent(node))) {
+                for(int track=0;track<_reloadTrackNodes.size();++track) {
+                    if(QModelIndex(_sceneNodes[_reloadTrackNodes[track]])!=node)continue;
+                    const auto path=runtimeTrackPath(track);
+                    if(!paths.contains(path))paths.append(path);
+                    found=true;break;
                 }
             }
-            below.prepend(model->get<QString>(node, "Name"));
+            require(found,"An animation-only magazine piece has no bound source branch");
         }
-        require(false, "The parked spare magazine is outside the weapon's animated bones");
-        return {};
+        QStringList roots;
+        for(const auto& path:paths) {
+            const bool covered=std::any_of(paths.cbegin(),paths.cend(),[&](const auto& other){return other!=path&&path.startsWith(other+'/');});
+            if(!covered)roots.append(path);
+        }
+        return roots;
     }
 
     // Requires a seated, idle Operate session with spring return (manual
@@ -284,7 +269,7 @@ namespace reloadmaker
             QJsonArray poses;for(const auto& pose:rig.grabCurves[index])poses.append(runtimePose(pose));
             track["grabPoses"]=poses;
         }
-        if (type == WeaponMechanism::Ar15 && index != rig.slide && rig.slideTracks.contains(index)) {
+        if (type == WeaponMechanism::Ar15 && index != rig.slide && rig.slideTracks.contains(index) && !rig.authoring["grabDeployIndependent"].toBool()) {
             track["boltFollower"] = true; // a part the bolt drives
         }
         if (_magazineSetup ? runtimePayloadTrack(index) : type == WeaponMechanism::M1A && a.anchorName.startsWith("WeaponMagazineChild")) {
@@ -372,8 +357,9 @@ namespace reloadmaker
         addRuntimeMagazineReference(magazine, anchor);
         addRuntimeMagazineParts(magazine);
         addRuntimeMagazineHiding(magazine);
-        if (const auto parked = parkedMagazinePath(); !parked.isEmpty()) {
-            magazine["parkedMagazinePath"] = parked;
+        if (const auto parked = parkedMagazinePaths(); !parked.isEmpty()) {
+            if(parked.size()==1)magazine["parkedMagazinePath"]=parked.front();
+            else magazine["parkedMagazinePaths"] = QJsonArray::fromStringList(parked);
         }
         return magazine;
     }

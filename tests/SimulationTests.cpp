@@ -30,6 +30,24 @@ void grabDeployment() {
     }
     check(simulationGrabPose(rig,0,0).translation.y==0,"Deployment moved the bolt rearward");
     check(simulationTrackPose(r,rig,1,0).rotation.w==1,"Grab deployment changed the folded idle pose");
+    // The bolt is already open when a non-reciprocating handle unfolds at its forward stop.
+    r.tracks.resize(3);r.tracks[2]=r.tracks[1];rig.slideTracks={1,2};
+    r.tracks[1].poses[4].translation.y=0;r.tracks[2].poses[4].translation.y=0;
+    check(buildGrabDeployment(r,rig,4,error,true),error);
+    for(float u:{0.f,.25f,.5f,.75f,1.f}) {
+        check(std::abs(simulationGrabPose(rig,0,u).translation.y+10*u)<.001f,"Independent handle omitted the held bolt curve");
+        for(int track:{1,2})check(std::abs(simulationGrabPose(rig,track,u).translation.y+10*u)<.001f,"Independent handle or carriage lost its forward reference");
+    }
+    OperatingSetup setup;setup.mode="reload";setup.parts.operating=1;setup.parts.bolt=0;setup.parts.magazine=2;setup.parts.followers={1};setup.grabDeploySeconds=2;setup.grabDeployIndependent=true;
+    OperatingSetup decoded;check(readOperatingSetup(operatingSetupJson(setup),decoded,error),error);
+    check(decoded.grabDeployIndependent,"Independent deployment selection did not round trip");
+    setup.mode="clip";setup.clip="handle.hkx";setup.baseline="ready.hkx";
+    check(readOperatingSetup(operatingSetupJson(setup),decoded,error),error);
+    rig.motionDuration=8;rig.nativeProgress={0,.2f,.5f,.7f,1};
+    rig.authoredCurves.insert(1,r.tracks[1].poses);rig.authoredCurves.insert(2,r.tracks[2].poses);
+    rig.authoredCurves[1][2].translation.x=9;rig.authoredCurves[2][2].translation.x=10;
+    check(buildGrabDeployment(r,rig,4,error,true),error);
+    check(std::abs(simulationGrabPose(rig,1,0).translation.x-9)<.001f&&std::abs(simulationGrabPose(rig,2,0).translation.x-10)<.001f,"Deployment sampled the magazine clock instead of the operating clip");
 }
 void nativeSourceTimes() {
     OperatingSetup setup;setup.mode="clip";setup.clip="source.hkx";setup.baseline="idle.hkx";
@@ -476,7 +494,9 @@ void m1aFixture(const QString& path) {
 }
 }
 int main(int argc,char** argv) {
-    QCoreApplication app(argc,argv);guideAuthoring();carrierOwnership();nativeSourceTimes();
+    QCoreApplication app(argc,argv);
+    if(app.arguments().contains("--grab-deployment")){try{grabDeployment();QTextStream(stdout)<<"PASS folding handle deployment, independent carriage and native clip clock\n";return 0;}catch(const std::exception& e){QTextStream(stderr)<<e.what()<<'\n';return 1;}}
+    guideAuthoring();carrierOwnership();nativeSourceTimes();
     try {grabDeployment();stateTransitions();ammunitionTransitions();nativeReloadEvents();ar15Transitions();boltActionTransitions();check(app.arguments().size()>=2,"Pass the Glock project fixture");fixture(app.arguments()[1]);if(app.arguments().size()>2)ar15Fixture(app.arguments()[2]);if(app.arguments().size()>3)m1aFixture(app.arguments()[3]);if(app.arguments().size()>4)boltCycleFixture(app.arguments()[4]);
         QTextStream(stdout)<<"PASS simulation state ownership, drop/fire persistence, regrab/cancel/return/reset, actual slide/barrel/cartridge curves and complete magazine ownership\n";return 0;
     }catch(const std::exception& e){QTextStream(stderr)<<"FAIL "<<e.what()<<'\n';return 1;}
