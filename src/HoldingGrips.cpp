@@ -63,18 +63,19 @@ bool ReloadMakerController::applyHoldingPreview(){
    if(!mirrorHandPose(_skeleton,source[1],{},firing,error)||!mirrorHandPose(_skeleton,source[0],{},support,error))throw std::runtime_error(error.toStdString());
    // The wrist and fingers share one geometric reflection. The controller
    // basis affects weapon aiming, never the authored hand-to-mesh contact.
-   auto left = hm::mirroredFiringSeat(mathPose(source[1].placement.handInWeapon));
+   auto left = hm::mirroredHandSeat(mathPose(source[1].placement.handInWeapon));
    const auto array=[](QJsonValue value,hm::V fallback){const auto a=value.toArray();if(a.size()==3)for(int i=0;i<3;++i)fallback[i]=float(a[i].toDouble());return fallback;};
    if(matchingCapture){
     const auto offsets=array(_holdingCapture.value("leftGripOffset"),{});
     left.t=hm::point(left,{offsets[0],offsets[1],-offsets[2]});
    }
    firing.placement.handInWeapon=firing.placement.handInAnchor=previewPose(left);
-   if(_holdingCapture.contains("rightBoneInWand")&&_holdingCapture.contains("leftBoneInWand")){
-    const auto br=mathPose(readPose(_holdingCapture.value("rightBoneInWand"))),bl=mathPose(readPose(_holdingCapture.value("leftBoneInWand")));
-    const auto rp=array(_holdingCapture.value("palmRight"),{6,-2,-.2f}),lp=array(_holdingCapture.value("palmLeft"),{6,-2,.2f});
-    auto sr=hm::rightSupport(mathPose(source[0].placement.handInWeapon),bl,br,lp,rp);const auto so=array(_holdingCapture.value("rightSupportOffset"),{});hm::V shift{so[0]-.9f,so[1],-so[2]};sr.t=hm::point(sr,shift);support.placement.handInWeapon=support.placement.handInAnchor=previewPose(sr);
+   auto rightSupport = hm::mirroredHandSeat(mathPose(source[0].placement.handInWeapon));
+   if(matchingCapture){
+    const auto offsets=array(_holdingCapture.value("rightSupportOffset"),{});
+    rightSupport.t=hm::point(rightSupport,{offsets[0],offsets[1],-offsets[2]});
    }
+   support.placement.handInWeapon=support.placement.handInAnchor=previewPose(rightSupport);
    for(int i=0;i<15;++i){firing.fingers[i]=previewPose(hm::finger(mathPose(source[1].fingers[i])));support.fingers[i]=previewPose(hm::finger(mathPose(source[0].fingers[i])));}
    _holdingSolved[0]=firing;_holdingSolved[1]=support;
   }
