@@ -36,6 +36,25 @@ void previewWaves(){
     check(!decodePreviewWave(QByteArray("RIFF"),out,error),"Truncated file accepted");
 }
 int main(int argc,char** argv){QCoreApplication app(argc,argv);try{
+    QHash<QString,SoundCue> defaults;
+    for(const char* record:{"fallout4.esm:01dacd","fallout4.esm:0c7d67","fallout4.esm:0c7d68"}){
+        SoundCue cue;cue.record=record;cue.editorId=record;cue.files={"sound/test.wav"};defaults.insert(record,cue);
+    }
+    SoundProfile empty;applyMissingSoundDefaults(empty,defaults);
+    check(empty.cues.size()==3,"Missing mechanical defaults");
+    applyMissingSoundDefaults(empty,defaults);check(empty.cues.size()==3,"Defaults duplicated on refresh");
+    empty.cues[0].record="native.esp:000001";empty.cues[0].enabled=false;
+    applyMissingSoundDefaults(empty,defaults);check(!empty.cues[0].enabled&&empty.cues[0].record=="native.esp:000001","Native mute replaced");
+    SoundCueGate fallbackGate;
+    check(fallbackGate.event(empty,"bolt_release")==QVector<int>{2},"Catch release has no forward fallback");
+    check(fallbackGate.cross(empty,"closing",1,.5f).isEmpty(),"Catch and travel double-played");
+    fallbackGate.cross(empty,"closing",.5f,1);
+    check(fallbackGate.cross(empty,"closing",1,.5f)==QVector<int>{2},"Closing did not rearm");
+    empty.cues[2].progress=0;fallbackGate.event(empty,"bolt_release");
+    check(fallbackGate.cross(empty,"closing",1,.5f).isEmpty()&&fallbackGate.cross(empty,"closing",.5f,0).isEmpty(),"Late closing cue doubled catch sound");
+    SoundProfile releaseOnly;SoundCue release;release.id="release";release.trigger="bolt_release";release.record="native.esp:000002";releaseOnly.cues.append(release);
+    applyMissingSoundDefaults(releaseOnly,defaults);
+    check(releaseOnly.cues.last().record==release.record,"Native release not reused for closing");
     previewWaves();
     SoundProfile p{"Test.esp:001000","reload.hkx","Test.esp:002000",{}};
     SoundCue open;open.id="pull";open.label="Pull";open.trigger="opening";open.record="Test.esp:003000";open.editorId="SoundPull";open.files={"Sound/FX/Pull.wav"};open.progress=.5f;p.cues.append(open);

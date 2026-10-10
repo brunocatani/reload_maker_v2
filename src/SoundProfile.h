@@ -74,6 +74,7 @@ inline constexpr char kPlayerSoundKeyword[]="fallout4.esm:051747";
 // none applies or two tie within one plugin.
 const SoundMapping* chooseSoundMapping(const QVector<SoundMapping>& mappings,const QSet<QString>& context,QString& error);
 QStringList soundTriggers();
+void applyMissingSoundDefaults(SoundProfile&,const QHash<QString,SoundCue>& catalog);
 QString soundTriggerLabel(const QString& trigger);
 QJsonObject soundProfileJson(const SoundProfile& profile);
 bool readSoundProfile(const QJsonObject& json,SoundProfile& profile,QString& error);
@@ -84,7 +85,7 @@ class SoundCueGate {
 public:
     void reset() { fired_.fill(false); }
     QVector<int> cross(const SoundProfile&,const QString& trigger,float before,float after);
-    QVector<int> event(const SoundProfile&,const QString& trigger) const;
+    QVector<int> event(const SoundProfile&,const QString& trigger);
 private:
     std::array<bool,64> fired_{};
 };

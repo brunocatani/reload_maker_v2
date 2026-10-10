@@ -50,7 +50,15 @@ namespace reloadmaker
         const auto defaults = defaultSoundCues(sources);
         addDefaultSoundCues(sources, defaults);
         if (_savedSounds.contains(key)) {
+            const auto detected = _soundProfile.cues;
             _soundProfile = _savedSounds.value(key);
+            // Repair blank legacy slots from this weapon's own source first.
+            // An assigned sound, including an explicit mute, remains authored.
+            for (const auto& cue : detected) {
+                if (cue.record.isEmpty()) continue;
+                auto slot = std::find_if(_soundProfile.cues.begin(), _soundProfile.cues.end(), [&](const auto& c) { return c.id == cue.id; });
+                if (slot != _soundProfile.cues.end() && slot->record.isEmpty()) *slot = cue;
+            }
         }
         // Cues are shared by animation, but the exported profile belongs to
         // the currently selected magazine, including anchor fallbacks.
@@ -61,6 +69,7 @@ namespace reloadmaker
         if (const auto release = defaults.sounds.value("bolt-release"); !release.isEmpty() && !boltRelease) {
             addSoundCue(sources, "bolt-release", "Bolt catch release", "bolt_release", 0, release);
         }
+        applyMissingSoundDefaults(_soundProfile, _soundCatalog);
         resolveSoundDescriptors();
         resolveFireSound();
         cacheSourceSounds(_reloadClip);

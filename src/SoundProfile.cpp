@@ -3,6 +3,7 @@
 #include <QRegularExpression>
 #include <QSet>
 #include <cmath>
+#include <algorithm>
 
 namespace reloadmaker {
 namespace {
@@ -115,12 +116,39 @@ QVector<int> SoundCueGate::cross(const SoundProfile& p,const QString& trigger,fl
     const bool descending=trigger=="closing";
     for(int i=0;i<p.cues.size()&&i<64;++i){const auto& c=p.cues[i];if(c.trigger!=trigger||!c.enabled)continue;
         const float a=descending?1-before:before,b=descending?1-after:after,t=descending?1-c.progress:c.progress;
-        if(b<t-.04f||(t<.04f&&b<=.0001f&&a>b))fired_[i]=false;
+        if(b<a&&(b<t-.04f||(t<.04f&&b<=.0001f)))fired_[i]=false;
         if(!fired_[i]&&b>a+.00001f&&a<=t&&b>=t){fired_[i]=true;result.append(i);}
     }
     return result;
 }
-QVector<int> SoundCueGate::event(const SoundProfile& p,const QString& trigger) const {
-    QVector<int> result;for(int i=0;i<p.cues.size();++i)if(p.cues[i].enabled&&p.cues[i].trigger==trigger)result.append(i);return result;
+QVector<int> SoundCueGate::event(const SoundProfile& p,const QString& trigger) {
+    QString selected=trigger;
+    if(trigger=="bolt_release"&&std::none_of(p.cues.cbegin(),p.cues.cend(),[](const auto& c){return c.trigger=="bolt_release"&&!c.record.isEmpty();}))selected="closing";
+    QVector<int> result;
+    for(int i=0;i<p.cues.size()&&i<64;++i)if(p.cues[i].enabled&&p.cues[i].trigger==selected){
+        result.append(i);
+        if(selected=="bolt_release"||selected=="closing")
+            for(int j=0;j<p.cues.size()&&j<64;++j)if(p.cues[j].trigger=="closing"&&p.cues[j].record==p.cues[i].record)fired_[j]=true;
+    }
+    return result;
+}
+void applyMissingSoundDefaults(SoundProfile& p,const QHash<QString,SoundCue>& catalog) {
+    const auto assigned=[&](const QString& trigger){return std::find_if(p.cues.begin(),p.cues.end(),[&](const auto& c){return c.trigger==trigger&&!c.record.isEmpty();});};
+    const auto fill=[&](const char* trigger,const char* id,const char* label,float progress,const char* record){
+        if(assigned(trigger)!=p.cues.end())return; // Includes an explicitly muted sound.
+        SoundCue cue=catalog.value(record);
+        cue.enabled=!cue.record.isEmpty()&&!cue.files.isEmpty();
+        if(QString(trigger)=="closing"){
+            const auto release=assigned("bolt_release");if(release!=p.cues.end())cue=*release;
+        }
+        cue.id=id;cue.label=label;cue.trigger=trigger;cue.progress=progress;
+        cue.sourceAnimation.clear();cue.sourceSeconds=-1;
+        const auto blank=std::find_if(p.cues.begin(),p.cues.end(),[&](const auto& c){return c.trigger==trigger&&c.record.isEmpty();});
+        if(blank!=p.cues.end()){cue.id=blank->id;*blank=cue;}
+        else if(p.cues.size()<64)p.cues.append(cue);
+    };
+    fill("dry_fire","default-dry","Dry fire",0,"fallout4.esm:01dacd");
+    fill("opening","default-pull","Bolt / handle pull",.035f,"fallout4.esm:0c7d67");
+    fill("closing","default-forward","Bolt release / forward return",.975f,"fallout4.esm:0c7d68");
 }
 }
