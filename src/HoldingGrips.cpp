@@ -61,16 +61,18 @@ bool ReloadMakerController::applyHoldingPreview(){
   if(_holdingHand==PoseHand::Left){
    HandPose firing,support;QString error;
    if(!mirrorHandPose(_skeleton,source[1],{},firing,error)||!mirrorHandPose(_skeleton,source[0],{},support,error))throw std::runtime_error(error.toStdString());
-   // Offline reference-basis preview remains available. Imported ROCK frames
-   // replace its wrist calculation; no guessed wand basis is called calibrated.
+   // The wrist and fingers share one geometric reflection. The controller
+   // basis affects weapon aiming, never the authored hand-to-mesh contact.
+   auto left = hm::mirroredFiringSeat(mathPose(source[1].placement.handInWeapon));
+   const auto array=[](QJsonValue value,hm::V fallback){const auto a=value.toArray();if(a.size()==3)for(int i=0;i<3;++i)fallback[i]=float(a[i].toDouble());return fallback;};
+   if(matchingCapture){
+    const auto offsets=array(_holdingCapture.value("leftGripOffset"),{});
+    left.t=hm::point(left,{offsets[0],offsets[1],-offsets[2]});
+   }
+   firing.placement.handInWeapon=firing.placement.handInAnchor=previewPose(left);
    if(_holdingCapture.contains("rightBoneInWand")&&_holdingCapture.contains("leftBoneInWand")){
     const auto br=mathPose(readPose(_holdingCapture.value("rightBoneInWand"))),bl=mathPose(readPose(_holdingCapture.value("leftBoneInWand")));
-    const auto array=[](QJsonValue value,hm::V fallback){const auto a=value.toArray();if(a.size()==3)for(int i=0;i<3;++i)fallback[i]=float(a[i].toDouble());return fallback;};
-    const auto rp=array(_holdingCapture.value("palmRight"),{6,-2,.2f}),lp=array(_holdingCapture.value("palmLeft"),{6,-2,-.2f});
-    const auto right=mathPose(source[1].placement.handInWeapon);const auto grip=hm::point(right,rp);
-    auto left=hm::leftFiring(right,br,bl,grip);
-    const auto offsets=array(_holdingCapture.value("leftGripOffset"),{});hm::V calibration{offsets[0],offsets[1]+float(_holdingCapture.value("leftGripBaselineY").toDouble(.6)),-offsets[2]};left.t=hm::add(left.t,hm::sub(hm::point(left,calibration),left.t));
-    firing.placement.handInWeapon=firing.placement.handInAnchor=previewPose(left);
+    const auto rp=array(_holdingCapture.value("palmRight"),{6,-2,-.2f}),lp=array(_holdingCapture.value("palmLeft"),{6,-2,.2f});
     auto sr=hm::rightSupport(mathPose(source[0].placement.handInWeapon),bl,br,lp,rp);const auto so=array(_holdingCapture.value("rightSupportOffset"),{});hm::V shift{so[0]-.9f,so[1],-so[2]};sr.t=hm::point(sr,shift);support.placement.handInWeapon=support.placement.handInAnchor=previewPose(sr);
    }
    for(int i=0;i<15;++i){firing.fingers[i]=previewPose(hm::finger(mathPose(source[1].fingers[i])));support.fingers[i]=previewPose(hm::finger(mathPose(source[0].fingers[i])));}
@@ -123,7 +125,7 @@ QJsonObject ReloadMakerController::holdingGripsCommand(const QJsonObject& p){
 }
 void ReloadMakerController::showHoldingGrips(){
  auto* d=new QDialog(_window);d->setAttribute(Qt::WA_DeleteOnClose);d->setWindowTitle("Holding hand and firing grips");auto* layout=new QVBoxLayout(d);auto* side=new QComboBox(d);side->addItem("Right firing hand","right");side->addItem("Left firing hand","left");side->setCurrentIndex(_holdingHand==PoseHand::Left?1:0);layout->addWidget(side);auto* enabled=new QCheckBox("Preview holding grip",d);enabled->setChecked(_holdingPreview);layout->addWidget(enabled);auto* support=new QCheckBox("Place the other hand on its support grip",d);support->setChecked(_holdingSupport);layout->addWidget(support);auto* specific=new QCheckBox("Use captured grip variant when available (off: weapon default)",d);specific->setChecked(_holdingSpecific);layout->addWidget(specific);auto* replay=new QCheckBox("Show captured runtime hands",d);replay->setToolTip("Uses the capture's holding hand. Turn this off to switch prediction sides.");replay->setChecked(_holdingReplay);layout->addWidget(replay);auto* status=new QLabel(d);status->setWordWrap(true);layout->addWidget(status);
- const auto refresh=[=,this]{side->setCurrentIndex(_holdingHand==PoseHand::Left?1:0);status->setText(!_holdingError.isEmpty()?_holdingError:!_holdingCapture.contains("rightBoneInWand")?"Offline skeleton preview. Import a ROCK capture to reproduce its controller calibration. Reload-hand selection remains independent.":"ROCK calibration loaded. Toggle captured runtime hands to compare with the prediction.");const auto state=holdingGripsState();if(state.contains("wristDifferenceGameUnits"))status->setText(status->text()+QString("\nWrist difference: %1 game units, %2 degrees.").arg(state["wristDifferenceGameUnits"].toDouble(),0,'f',3).arg(state["wristAngleDegrees"].toDouble(),0,'f',2));};
+ const auto refresh=[=,this]{side->setCurrentIndex(_holdingHand==PoseHand::Left?1:0);status->setText(!_holdingError.isEmpty()?_holdingError:!_holdingCapture.contains("rightBoneInWand")?"Source holding preview. Import a ROCK capture to compare its actual rendered hands. Reload-hand selection remains independent.":"ROCK capture loaded. Toggle captured runtime hands to compare the recorded pose with the current mirrored contact calculation.");const auto state=holdingGripsState();if(state.contains("wristDifferenceGameUnits"))status->setText(status->text()+QString("\nWrist difference: %1 game units, %2 degrees.").arg(state["wristDifferenceGameUnits"].toDouble(),0,'f',3).arg(state["wristAngleDegrees"].toDouble(),0,'f',2));};
  const auto invoke=[=,this](QJsonObject p){try{holdingGripsCommand(p);}catch(const std::exception& e){status->setText(e.what());return;}refresh();};
  const auto preview=[=,this]{invoke({{"operation","preview"},{"enabled",enabled->isChecked()},{"hand",side->currentData().toString()},{"support",support->isChecked()},{"replay",replay->isChecked()},{"specific",specific->isChecked()}});};
  connect(side,qOverload<int>(&QComboBox::activated),d,[=,this](int){preview();});connect(enabled,&QCheckBox::toggled,d,[=,this](bool){preview();});connect(support,&QCheckBox::toggled,d,[=,this](bool){preview();});connect(replay,&QCheckBox::toggled,d,[=,this](bool){preview();});connect(specific,&QCheckBox::toggled,d,[=,this](bool){preview();});
