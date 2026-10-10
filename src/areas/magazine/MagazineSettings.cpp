@@ -256,7 +256,16 @@ namespace reloadmaker
         QJsonArray tracks;
         for (int i = 0; i < _reloadRecipe->tracks.size(); ++i) {
             const auto& track = _reloadRecipe->tracks[i];
-            const bool hasBody = std::any_of(_magazineVisuals.cbegin(), _magazineVisuals.cend(), [&](const auto& v) { return v.track == i && !v.cartridge; });
+            // A carrier can own its body through animated children (SIG pistols).
+            // Candidate selection must use the same bounded ancestry as geometry collection.
+            const bool hasBody = std::any_of(_magazineVisuals.cbegin(), _magazineVisuals.cend(), [&](const auto& v) {
+                if (v.cartridge) return false;
+                for (int child = v.track, depth = 0; child >= 0 && child < _reloadRecipe->tracks.size() && depth < _reloadRecipe->tracks.size();
+                     child = _reloadRecipe->tracks[child].parent, ++depth) {
+                    if (child == i) return true;
+                }
+                return false;
+            });
             if (track.surface && hasBody) {
                 tracks.append(QJsonObject{ { "index", i }, { "name", track.anchor.anchorName }, { "model", track.anchor.ownerModel } });
             }

@@ -317,10 +317,9 @@ namespace
         for (const WeaponPreset& preset : presets) {
             check((preset.model.feed.insertion == InsertionPath::NativeCurve) == curved.contains(preset.id), preset.id + ": insertion path");
         }
-        // A pistol reloads with the off hand; the rocking-handle rifle starts right.
+        // Either physical hand may load a magazine; the rocking-handle rifle defaults right.
         for (const WeaponPreset& preset : presets) {
-            const QVector<Hand> expected = preset.id == QLatin1String("pistol.slide-detachable.v1") ? QVector<Hand>{ Hand::Left }
-                                           : preset.id == QLatin1String("rifle.operating-handle-rocking.v1") ? QVector<Hand>{ Hand::Right, Hand::Left }
+            const QVector<Hand> expected = preset.id == QLatin1String("rifle.operating-handle-rocking.v1") ? QVector<Hand>{ Hand::Right, Hand::Left }
                                                                                                               : QVector<Hand>{ Hand::Left, Hand::Right };
             check(preset.model.feed.hands == expected, preset.id + ": loading hands");
         }
