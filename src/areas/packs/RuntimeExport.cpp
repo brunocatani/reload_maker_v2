@@ -4,6 +4,7 @@
 // the source evidence the pack is checked against.
 #include "ReloadMakerController.h"
 #include "ReloadBundle.h"
+#include "RuntimeSourcePath.h"
 #include "ReloadTemplates.h"
 #include "areas/loadout/SceneTree.h"
 #include "commands/CommandSupport.h"
@@ -72,7 +73,7 @@ namespace reloadmaker
             bone = _skeleton.bones[bone].parentIndex;
         }
         require(bone == _weaponBoneIndex && path.size() > 1, "Part is outside the native Weapon hierarchy");
-        return path.join('/');
+        return runtimeSourcePath(path.join('/'),_reloadRecipe->tracks[track].anchor.anchorPath);
     }
 
     // Spare branches need not share a parent (for example a retained magazine

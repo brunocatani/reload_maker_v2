@@ -1,4 +1,5 @@
 #include "WeaponSimulation.h"
+#include "RuntimeSourcePath.h"
 #include "BoltCycle.h"
 #include "OperatingSetup.h"
 #include "MagazineGuide.h"
@@ -495,6 +496,13 @@ void m1aFixture(const QString& path) {
 }
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
+    if(app.arguments().contains("--source-helpers")) {
+        const auto actual=runtimeSourcePath("Weapon/WeaponMagazine/WeaponMagazineChild1","Mag/WeaponMagazine/WeaponMagazineHelper/WeaponMagazineChild1");
+        if(actual!="Weapon/WeaponMagazine/WeaponMagazineHelper/WeaponMagazineChild1")return 1;
+        if(runtimeSourcePath("Weapon/WeaponBolt","Scene Root/WeaponBolt")!="Weapon/WeaponBolt")return 1;
+        if(runtimeSourcePath("Weapon/Other/Child","Root/Parent/Helper/Child")!="Weapon/Other/Child")return 1;
+        QTextStream(stdout)<<"PASS native helper parents preserved in exported paths\n";return 0;
+    }
     if(app.arguments().contains("--grab-deployment")){try{grabDeployment();QTextStream(stdout)<<"PASS folding handle deployment, independent carriage and native clip clock\n";return 0;}catch(const std::exception& e){QTextStream(stderr)<<e.what()<<'\n';return 1;}}
     guideAuthoring();carrierOwnership();nativeSourceTimes();
     try {grabDeployment();stateTransitions();ammunitionTransitions();nativeReloadEvents();ar15Transitions();boltActionTransitions();check(app.arguments().size()>=2,"Pass the Glock project fixture");fixture(app.arguments()[1]);if(app.arguments().size()>2)ar15Fixture(app.arguments()[2]);if(app.arguments().size()>3)m1aFixture(app.arguments()[3]);if(app.arguments().size()>4)boltCycleFixture(app.arguments()[4]);
