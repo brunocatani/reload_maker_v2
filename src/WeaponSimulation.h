@@ -66,7 +66,7 @@ namespace reloadmaker {
         bool canFire()const{return ammoKnown()&&(cellFed()?(magazine.seated()&&magazineRounds>0&&slide<=.001f):openBolt?(magazine.seated()&&magazineRounds>0&&slideLocked):(chambered&&!slideLocked&&slide<=.001f))&&action==SimulationAction::Idle&&handle<=.001f&&!magazine.busy();}
         // Empty and unheld, including a caught-open action: the trigger only clicks.
         bool canDryFire()const{return action==SimulationAction::Idle&&!magazine.busy()&&((openBolt||cellFed())?(!magazine.seated()||magazineRounds==0):!chambered);}
-        bool willLockAfterShot()const{return !cellFed()&&!openBolt&&action==SimulationAction::Fire&&pistolLock&&magazine.seated()&&magazineRounds==0&&!chambered;}
+        bool willLockAfterShot()const{return !cellFed()&&!openBolt&&action==SimulationAction::Fire&&pistolLock&&magazineRounds==0&&!chambered;}
         bool feedCycleActive()const{return _cycleArmed;}
         void configureAmmunition(int magazineCapacity,bool lockPistol,WeaponMechanism profile=WeaponMechanism::PistolSlide);
         bool slideRelease();

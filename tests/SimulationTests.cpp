@@ -497,6 +497,22 @@ void m1aFixture(const QString& path) {
 }
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
+    if(app.arguments().contains("--last-shot")) {
+        try {
+            for(const auto mechanism:{WeaponMechanism::PistolSlide,WeaponMechanism::Ar15,WeaponMechanism::ReciprocatingBolt}) {
+                for(bool present:{false,true}) {
+                    WeaponSimulation sim;sim.configureAmmunition(1,false,mechanism);sim.pistolLock=true;sim.fireCycleSeconds=.1f;
+                    sim.chambered=true;sim.magazineRounds=0;if(!present)sim.magazine.phase=MagazinePhase::Absent;
+                    check(sim.fire(),"Retained round could not fire");sim.tick(1,1);
+                    check(sim.slideLocked&&sim.slide==1&&!sim.chambered,"Last live shot did not hold action open");
+                    check(sim.canDryFire(),"Locked empty action has no dry click");
+                }
+                WeaponSimulation empty;empty.configureAmmunition(0,false,mechanism);
+                check(empty.canDryFire()&&!empty.fire()&&!empty.slideLocked&&empty.slide==0,"Empty click moved the action");
+            }
+            QTextStream(stdout)<<"PASS last live round with/without magazine, empty click and locked dry fire\n";return 0;
+        }catch(const std::exception& e){QTextStream(stderr)<<e.what()<<'\n';return 1;}
+    }
     if(app.arguments().contains("--cell-lever")) {
         try {
             WeaponSimulation cell;cell.configureAmmunition(3,false,WeaponMechanism::CellLever);
