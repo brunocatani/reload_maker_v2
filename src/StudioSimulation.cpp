@@ -177,9 +177,9 @@ void ReloadMakerController::updateSimulationControls() {
     const bool cell=_simulation.cellFed();
     _simulationDrop->setVisible(!cell);_magazineOut->setVisible(!cell);
     if(cell){
-        _simulationSlideRelease->hide();_simulationSpring->hide();
-        _simulationInstructions->setText("Pull the cell lever fully to eject. Insert a fresh cell while open, then close the lever by hand. The reload button does not eject cells.");
-        _simulationDrive->setInstructions("Pull the lever to eject the cell · insert a new cell · close the lever · release holds position");
+        _simulationSlideRelease->setVisible(_simulation.slapClose);_simulationSlideRelease->setText("Slap closed");_simulationSpring->hide();
+        _simulationInstructions->setText("Pull the cell lever fully to eject. Insert a fresh cell while open, then close the lever. When enabled, Slap closed also closes it. The reload button does not eject cells.");
+        _simulationDrive->setInstructions(_simulation.slapClose?"Pull the lever to eject - insert a cell - grab or slap the lever closed":"Pull the lever to eject - insert a cell - close the lever by hand");
     }
     const bool noExtender=!noExtenderReloadPath().isEmpty(),pistol=simulationMechanism()==WeaponMechanism::PistolSlide;
     _simulationNoExtender->setVisible(noExtender||_glockNoExtender);_simulationNoExtender->setEnabled(!busy&&!_loadThread&&!_reloadCapturing&&noExtender);

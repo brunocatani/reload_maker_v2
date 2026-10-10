@@ -24,6 +24,9 @@ namespace reloadmaker {
         MagazinePhase phase{MagazinePhase::Seated};
         QVector3D offset; // Free: mating point offset. Guided: straight input offset.
         float distance{0}, elapsed{0};
+        float ejectionSpeed{0};
+        int ejectedRounds{0};
+        bool ejecting{false};
         bool seated()const{return phase==MagazinePhase::Seated;}
         bool visible()const{return phase!=MagazinePhase::Absent;}
         bool empty()const{return phase==MagazinePhase::Outgoing||phase==MagazinePhase::OutsideEmpty;}
@@ -34,6 +37,7 @@ namespace reloadmaker {
         bool animateIn(const MagazineRail& rail);
         bool grab(const MagazineRail& rail);
         void drop();
+        void eject(float speed,int rounds=0);
         void cancel();
         void reset();
         void moveFree(const MagazineRail& rail,const QVector3D& newOffset);

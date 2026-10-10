@@ -125,6 +125,7 @@ namespace reloadmaker
         auto profile = runtimeOperatingProfile();
         profile["receiver"] = receiverKey;
         profile["openBolt"] = rig.openBolt;
+        profile["slapClose"] = rig.slapClose;
         profile["lastShotHoldOpen"] = rig.lastShotHoldOpen;
         profile["magazine"] = magazineKey;
         if (rig.customSetup) {
@@ -145,7 +146,8 @@ namespace reloadmaker
         if (!fingers.isEmpty()) {
             profile["operatingFingers"] = fingers;
         }
-        const auto magazine = runtimeMagazine(anchor, weapon);
+        auto magazine = runtimeMagazine(anchor, weapon);
+        magazine["ejectionSpeed"] = rig.magazineEjectionSpeed;
         const auto grabs = exportGrabLocations();
         auto header = runtimeProfileHeader(weapon, receiverKey, magazineKey, selection);
         header["hkSlap"]=rig.hkSlap;

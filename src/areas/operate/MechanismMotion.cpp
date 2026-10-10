@@ -64,6 +64,7 @@ namespace reloadmaker
             rig.presetFire = false;
         }
         if(authored&&setup.catchMode!="preset")rig.lastShotHoldOpen=setup.catchMode=="hold-open";
+        rig.slapClose=setup.slapClose;rig.magazineEjectionSpeed=setup.magazineEjectionSpeed;
         rig.openBolt=authored&&setup.cycleMode!="preset"?setup.cycleMode=="open-bolt":preset&&preset->model.fire.afterShot==AfterShot::OpenBolt;
         if(rig.openBolt&&rig.hkSlap){error="Open-bolt sear and HK handle notch are distinct actions";return false;}
         if(rig.openBolt&&rig.mechanism!=WeaponMechanism::Ar15){error="Open-bolt firing requires an independent handle and bolt";return false;}

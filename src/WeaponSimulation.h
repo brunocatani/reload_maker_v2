@@ -31,6 +31,8 @@ namespace reloadmaker {
         QVector<float> nativeProgress; // Original recipe progress at each operating sample, including fractional endpoints.
         bool customSetup{false},manualCycle{false},fireFromStroke{false},presetFire{true};
         bool magazineBranchOnly{false}; // Explicit carrier inside a shared receiver model.
+        bool slapClose{false};
+        float magazineEjectionSpeed{0};
         bool hkSlap{false},lastShotHoldOpen{true},singleHandle{false},openBolt{false};
         float motionDuration{0},manualEjectSeconds{-1};
         QJsonObject authoring;
@@ -54,6 +56,8 @@ namespace reloadmaker {
         float inputProgress()const{return mechanism==WeaponMechanism::Ar15?handle:slide;}
         int capacity{0}, magazineRounds{0}, shotsFired{0}, roundsEjected{0};
         bool chambered{false}, slideLocked{false}, pistolLock{false};
+        bool slapClose{false};
+        float magazineEjectionSpeed{0};
         bool hkSlap{false},notchLatched{false},openBolt{false};
         bool reloadStartedLoaded{false}, reloadStartedOpen{false}, reloadCycled{false}, reloadFed{false};
         float reloadRackAt{-1}, reloadFeedAt{-1};
@@ -66,6 +70,7 @@ namespace reloadmaker {
         bool feedCycleActive()const{return _cycleArmed;}
         void configureAmmunition(int magazineCapacity,bool lockPistol,WeaponMechanism profile=WeaponMechanism::PistolSlide);
         bool slideRelease();
+        bool slap();
         bool magazineOut();
         bool magazineIn(const MagazineRail& rail);
         bool grabMagazine(const MagazineRail& rail);

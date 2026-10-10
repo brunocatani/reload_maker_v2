@@ -146,7 +146,8 @@ bool buildManualMagazineAnimation(const ReloadRecipe& recipe,const PartMechanism
 bool MagazineMotion::animateOut(){if(!seated())return false;phase=MagazinePhase::Outgoing;elapsed=0;distance=0;offset={};return true;}
 bool MagazineMotion::animateIn(const MagazineRail& rail){if(phase!=MagazinePhase::Absent&&phase!=MagazinePhase::OutsideEmpty)return false;phase=MagazinePhase::Incoming;elapsed=0;distance=rail.travel;offset=magazineInputOffset(rail,distance);return true;}
 bool MagazineMotion::grab(const MagazineRail& rail){if(phase!=MagazinePhase::Absent&&phase!=MagazinePhase::OutsideEmpty)return false;phase=MagazinePhase::Free;distance=rail.travel+rail.captureRadius*2;offset=magazineAnimationOffset(rail,distance);return true;}
-void MagazineMotion::drop(){phase=MagazinePhase::Absent;offset={};distance=0;elapsed=0;}
+void MagazineMotion::eject(float speed,int rounds){drop();phase=MagazinePhase::Outgoing;ejecting=true;ejectionSpeed=speed;ejectedRounds=rounds;}
+void MagazineMotion::drop(){ejecting=false;ejectionSpeed=0;phase=MagazinePhase::Absent;offset={};distance=0;elapsed=0;}
 void MagazineMotion::cancel(){if(carried())drop();}
 void MagazineMotion::reset(){*this={};}
 void MagazineMotion::moveFree(const MagazineRail& rail,const QVector3D& p) {
@@ -170,6 +171,7 @@ void MagazineMotion::moveRail(const MagazineRail& rail,float d) {
 }
 void MagazineMotion::tick(const MagazineRail& rail,float delta) {
     if(!animated()||!std::isfinite(delta)||delta<0)return;
+    if(ejecting){elapsed+=delta;distance=ejectionSpeed*elapsed;offset=rail.outward*distance+QVector3D(0,0,-343.f*elapsed*elapsed);if(elapsed>=.6f)drop();return;}
     const float duration=phase==MagazinePhase::Outgoing?.06f:.6f;elapsed=std::min(duration,elapsed+delta);const float t=elapsed/duration;const float smooth=t*t*(3-2*t);
     distance=rail.travel*(phase==MagazinePhase::Outgoing?.1f*smooth:1-smooth);offset=magazineInputOffset(rail,distance);
     if(elapsed>=duration){if(phase==MagazinePhase::Incoming)reset();else phase=MagazinePhase::OutsideEmpty;}

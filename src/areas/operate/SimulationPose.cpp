@@ -285,7 +285,7 @@ namespace reloadmaker
             return true;
         }
         const auto& root = _reloadRecipe->tracks[rig.magazine];
-        const bool loaded = _simulation.magazineRounds > 0;
+        const bool loaded = (_simulation.magazine.ejecting ? _simulation.magazine.ejectedRounds : _simulation.magazineRounds) > 0;
         const bool seated = _simulation.magazine.seated();
         // The last reload frame has already fed a round into the chamber.
         // A detached magazine needs its pre-feed round stack at magazine-in.
@@ -322,7 +322,9 @@ namespace reloadmaker
         const auto& rail = *_magazineRail;
         const auto& magazine = _simulation.magazine;
         auto delta = magazineAnimationDelta(rail, magazine.distance);
-        if (magazine.phase == MagazinePhase::Free) {
+        if (magazine.ejecting) {
+            delta=Transformf{{magazine.offset.x(),magazine.offset.y(),magazine.offset.z()}};
+        } else if (magazine.phase == MagazinePhase::Free) {
             // A free magazine keeps its rotation at the end of the line, and
             // its handle point moves by the hand offset.
             delta = magazineAnimationDelta(rail, rail.travel);
@@ -403,7 +405,7 @@ namespace reloadmaker
         if (_simulation.action == SimulationAction::Reload) {
             return _reloadRecipe && reloadTrackCulled(visual.track);
         }
-        const bool empty = _simulation.magazineRounds == 0;
+        const bool empty = (_simulation.magazine.ejecting ? _simulation.magazine.ejectedRounds : _simulation.magazineRounds) == 0;
         bool noRound = empty;
         if (!isRifleConfiguration() && !isBoltActionConfiguration() && _simulation.magazine.seated()) {
             // A pistol's seated magazine keeps its round shape while a round is chambered.

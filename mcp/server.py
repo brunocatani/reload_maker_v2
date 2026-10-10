@@ -498,6 +498,9 @@ def configure_operating_setup(operation: str, expected_revision: int, settings: 
     Native reload/clip modes support grabDeploySeconds for folding handles.
     Set grabDeployIndependent=true when that pose has the handle forward while
     the bolt is already open; followers must contain only its rigid handle assembly.
+    slapClose enables free-palm closure at saved operating grab points; normal
+    manual closure remains available. magazineEjectionSpeed is a launch speed in
+    game units/second (0 keeps ordinary dropping), preserving the cell's charge.
     Fire mode is preset/native/stroke. Saved roles follow the reload's nodes, so
     other parts keep them; no wrist orientation is imposed by this setup. Test
     Operate before runtime export.

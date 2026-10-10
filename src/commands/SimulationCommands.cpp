@@ -45,7 +45,7 @@ namespace reloadmaker
         require(_simulationActive,
                 _simulationError.isEmpty() ? "Wait until the Operate workspace is ready" : _simulationError);
         const auto operation = params["operation"].toString();
-        require(operation!="slap"||_simulation.hkSlap,"This weapon has no locking-handle slap action");
+        require(operation!="slap"||_simulation.hkSlap||_simulation.slapClose,"Enable slap closure for this operating part first");
         if (operation == "trigger_down" || operation == "trigger_up") {
             setSimulationTrigger(operation == "trigger_down");
         } else if (operation == "step") {

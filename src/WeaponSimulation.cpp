@@ -334,10 +334,10 @@ bool WeaponSimulation::reload(float rackAt,float feedAt) {
 bool WeaponSimulation::dropMagazine() {
     if(cellFed())return false; // Only the physical lever unlocks the cell.
     if(action==SimulationAction::Fire||action==SimulationAction::Reload||action==SimulationAction::Held||!magazine.visible()||magazine.busy())return false;
-    magazine.drop();magazineRounds=0;return true;
+    magazineEjectionSpeed>0?magazine.eject(magazineEjectionSpeed,magazineRounds):magazine.drop();magazineRounds=0;return true;
 }
 bool WeaponSimulation::grab() {
-    if((action!=SimulationAction::Idle&&action!=SimulationAction::Returning)||magazine.busy())return false;
+    if((action!=SimulationAction::Idle&&action!=SimulationAction::Returning)||(magazine.busy()&&!magazine.ejecting))return false;
     if(mechanism==WeaponMechanism::Ar15&&action==SimulationAction::Returning&&handle<=.001f)return false;
     grabStart=inputProgress();_pullFromLock=slideLocked;_pulledRearward=false;
     _pullSnapshot={chambered,slideLocked,_cycleArmed,magazineRounds,roundsEjected,slide,handle,spentCase,boltClosing,casesEjected,notchLatched};
@@ -348,7 +348,7 @@ void WeaponSimulation::drag(float value) {
     if(cellFed()) {
         slide=std::clamp(value,0.f,1.f);
         if(slide<=.001f)_cycleArmed=false;
-        if(!_cycleArmed&&slide>=.95f){_cycleArmed=true;if(magazine.seated()){magazine.drop();magazineRounds=0;}}
+        if(!_cycleArmed&&slide>=.95f){_cycleArmed=true;if(magazine.seated()){magazineEjectionSpeed>0?magazine.eject(magazineEjectionSpeed,magazineRounds):magazine.drop();magazineRounds=0;}}
         return;
     }
     if(mechanism==WeaponMechanism::BoltAction) {
@@ -475,7 +475,12 @@ void WeaponSimulation::finishClosing() {
     _cycleArmed=false;slideLocked=false;
 }
 void WeaponSimulation::configureAmmunition(int count,bool lockPistol,WeaponMechanism profile){capacity=std::clamp(count,0,65535);mechanism=profile;pistolLock=profile!=WeaponMechanism::BoltAction&&(lockPistol||profile!=WeaponMechanism::PistolSlide);reset();}
-void WeaponSimulation::reset(){const int count=capacity;const bool lock=pistolLock,hk=hkSlap,open=openBolt;const auto profile=mechanism;const float cycle=fireCycleSeconds,eject=boltEjectProgress;auto schedule=std::move(fireCycleSchedule);*this={};capacity=count;pistolLock=lock;hkSlap=hk;openBolt=open;mechanism=profile;fireCycleSeconds=cycle;fireCycleSchedule=std::move(schedule);boltEjectProgress=eject;chambered=!open&&!cellFed()&&count>0;magazineRounds=std::max(0,count-((open||cellFed())?0:1));if(open){slideLocked=count>0;slide=slideLocked?1.f:0.f;}}
+void WeaponSimulation::reset(){const int count=capacity;const bool lock=pistolLock,hk=hkSlap,open=openBolt,slap=slapClose;const float launch=magazineEjectionSpeed;const auto profile=mechanism;const float cycle=fireCycleSeconds,eject=boltEjectProgress;auto schedule=std::move(fireCycleSchedule);*this={};capacity=count;pistolLock=lock;hkSlap=hk;slapClose=slap;magazineEjectionSpeed=launch;openBolt=open;mechanism=profile;fireCycleSeconds=cycle;fireCycleSchedule=std::move(schedule);boltEjectProgress=eject;chambered=!open&&!cellFed()&&count>0;magazineRounds=std::max(0,count-((open||cellFed())?0:1));if(open){slideLocked=count>0;slide=slideLocked?1.f:0.f;}}
+bool WeaponSimulation::slap() {
+    if(hkSlap)return slideRelease();
+    if(!slapClose||action!=SimulationAction::Idle||slide<=.001f||(magazine.busy()&&!magazine.ejecting))return false;
+    slideLocked=false;boltClosing=mechanism==WeaponMechanism::BoltAction;action=SimulationAction::Returning;return true;
+}
 bool WeaponSimulation::slideRelease() {
     if(cellFed()||mechanism==WeaponMechanism::BoltAction||(openBolt&&magazine.seated()&&magazineRounds>0))return false;
     if(!ammoKnown()||action!=SimulationAction::Idle||magazine.busy()||(!slideLocked&&slide<=.001f))return false;
@@ -493,6 +498,7 @@ bool WeaponSimulation::grabMagazine(const MagazineRail& rail) {
 }
 void WeaponSimulation::cancelMagazine(){if(magazine.carried()){magazine.cancel();magazineRounds=0;}}
 QString WeaponSimulation::magazineDescription()const {
+    if(magazine.ejecting)return "Cell / magazine ejecting";
     if(magazine.seated())return magazineRounds==0?"Seated empty":magazineRounds==capacity?"Seated full":"Seated partial";
     if(magazine.phase==MagazinePhase::Outgoing)return magazineRounds==0?"Empty magazine out":"Loaded magazine out";
     if(magazine.phase==MagazinePhase::OutsideEmpty)return magazineRounds==0?"Empty magazine clear":"Loaded magazine clear";

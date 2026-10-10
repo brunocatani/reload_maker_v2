@@ -102,6 +102,7 @@ namespace reloadmaker
         }
         _simulation.configureAmmunition(_simulationAmmo.valid() ? _simulationAmmo.capacity : 0, _simulationAmmo.pistol, rig.mechanism);
         _simulation.hkSlap=rig.hkSlap;
+        _simulation.slapClose=rig.slapClose;_simulation.magazineEjectionSpeed=rig.magazineEjectionSpeed;
         _simulation.openBolt=rig.openBolt;
         _simulation.reset();
         _simulation.pistolLock=rig.lastShotHoldOpen;
@@ -341,8 +342,9 @@ namespace reloadmaker
             accepted = selectSimulationClip(false, false);
         } else if (action == "drop_magazine") {
             accepted = _simulation.dropMagazine();
+            if(accepted&&_simulation.magazine.ejecting)startSimulationClock();
         } else if (action == "slide_release" || action == "bolt_release" || action == "slap") {
-            accepted = _simulation.slideRelease();
+            accepted = (action=="slap"||(_simulation.cellFed()&&_simulation.slapClose)) ? _simulation.slap() : _simulation.slideRelease();
             if (accepted) {
                 startSimulationClock();
             }
@@ -637,6 +639,7 @@ namespace reloadmaker
             return;
         }
         _simulation.drag(progress);
+        if(_simulation.magazine.ejecting)startSimulationClock();
         if (!applyPose(0)) {
             _simulationError = _lastError;
             stopSimulation();
@@ -657,7 +660,7 @@ namespace reloadmaker
         if (cancel) {
             resetSoundTracking();
         }
-        if (_simulation.action == SimulationAction::Returning) {
+        if (_simulation.action == SimulationAction::Returning || _simulation.magazine.animated()) {
             startSimulationClock();
         }
         if (!applyPose(0)) {

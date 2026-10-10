@@ -104,6 +104,8 @@ namespace reloadmaker
         ammunition["handleLatched"] = _simulation.notchLatched;
         ammunition["openBolt"] = _simulation.openBolt;
         ammunition["slapRelease"] = _simulation.hkSlap;
+        ammunition["slapClose"] = _simulation.slapClose;
+        ammunition["magazineEjectionSpeed"] = _simulation.magazineEjectionSpeed;
         ammunition["shotsFired"] = _simulation.shotsFired;
         ammunition["roundsEjected"] = _simulation.roundsEjected;
         ammunition["canFire"] = _simulation.canFire();

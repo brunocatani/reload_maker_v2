@@ -512,6 +512,17 @@ int main(int argc,char** argv) {
             check(!cell.canFire(),"Absent cell left a phantom shot");
             cell.reset();cell.fireCycleSeconds=.1f;cell.fire();cell.triggerHeld=true;cell.tick(1,1);
             check(cell.shotsFired==3&&cell.magazineRounds==0&&!cell.slideLocked&&!cell.chambered,"Automatic cell firing/catch incorrect");
+            OperatingSetup options;options.parts.operating=options.parts.bolt=0;options.parts.magazine=1;options.parts.followers={0};options.slapClose=true;options.magazineEjectionSpeed=180;
+            OperatingSetup decoded;QString optionError;check(readOperatingSetup(operatingSetupJson(options),decoded,optionError),optionError);
+            check(decoded.slapClose&&decoded.magazineEjectionSpeed==180,"Interaction options did not survive save/load");
+            cell.reset();cell.slapClose=true;cell.magazineEjectionSpeed=180;
+            cell.grab();cell.drag(1);cell.release(false,false);
+            check(cell.magazine.ejecting&&!cell.chambered&&cell.magazineRounds==0,"Cell did not enter ejection flight");
+            MagazineRail rail;rail.outward={1,0,0};rail.travel=5;
+            cell.magazine.tick(rail,.1f);check(cell.magazine.offset.x()>17&&cell.magazine.offset.z()<0,"Cell impulse/gravity preview missing");
+            cell.magazine.tick(rail,1);check(!cell.magazine.visible(),"Preview flight did not finish");
+            check(cell.slap(),"Enabled slap did not close lever");cell.tick(.3f,1);check(cell.slide==0,"Slap did not complete closure");
+            cell.slapClose=false;cell.grab();cell.drag(1);cell.release(false,false);check(!cell.slap(),"Disabled slap closed lever");
             QTextStream(stdout)<<"PASS cell lever, button isolation, charge debit, cancellation and empty fire\n";return 0;
         }catch(const std::exception& e){QTextStream(stderr)<<e.what()<<'\n';return 1;}
     }
