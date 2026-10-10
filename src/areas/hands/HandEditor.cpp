@@ -178,7 +178,7 @@ namespace reloadmaker
     bool ReloadMakerController::handPoseFrameReady() const
     {
         return !_loadThread && !_rebuildTimer->isActive() && _clip.valid() && _renderedWeapon == _selectedWeapon && _renderedWeapon >= 0 &&
-               !_geometrySignature.isEmpty() && _globalPose.size() == _skeleton.bones.size();
+               _skeleton.valid() && !_nodeBindings.isEmpty() && _globalPose.size() == _skeleton.bones.size();
     }
 
     // A part grip previewed outside the finger poses page.

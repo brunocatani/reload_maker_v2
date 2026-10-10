@@ -169,8 +169,7 @@ namespace reloadmaker
     // A loaded weapon and clip with a valid scene at the shown frame.
     bool ReloadMakerController::partGripFrameReady() const
     {
-        return !_loadThread && !_rebuildTimer->isActive() && _clip.valid() && !_geometrySignature.isEmpty() && _renderedWeapon >= 0 &&
-               _renderedWeapon == _selectedWeapon;
+        return handPoseFrameReady();
     }
 
     bool ReloadMakerController::canStartPartGrip() const
