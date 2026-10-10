@@ -27,6 +27,7 @@ namespace reloadmaker
 
     void ReloadMakerController::registerHandCommands()
     {
+        _commands.add({"holding_geometry",CommandAccess::Read,CommandGate::WhenIdle,[this](const QJsonObject&)->std::optional<QJsonObject>{return holdingGripsCommand({{"operation","geometry"}});}});
         _commands.add({"holding_grips_state",CommandAccess::Read,CommandGate::Always,[this](const QJsonObject&)->std::optional<QJsonObject>{return holdingGripsState();}});
         _commands.add({"holding_grips",CommandAccess::Edit,CommandGate::WhenIdle,[this](const QJsonObject& p)->std::optional<QJsonObject>{return holdingGripsCommand(p);}});
         _commands.add({ "interaction_hand", CommandAccess::Edit, CommandGate::WhenIdle,

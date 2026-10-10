@@ -1,5 +1,7 @@
 #include "ReloadMakerController.h"
 #include "StudioWindow.h"
+#include "glview.h"
+#include "gl/glshape.h"
 #include "model/nifmodel.h"
 #include "physics-interaction/weapon/HoldingGripMath.h"
 #include <QQuaternion>
@@ -35,11 +37,35 @@ QString ReloadMakerController::holdingGripVariant() const {
 QString ReloadMakerController::holdingGripKey(PoseHand hand,bool specific) const {const auto weapon=currentWeapon()?poseRecordKey(currentWeapon()->formId).toLower():QString();const bool pa=_holdingCapture.value("weapon").toString().compare(weapon,Qt::CaseInsensitive)==0&&_holdingCapture.value("powerArmor").toBool();return weapon+'|'+(specific?holdingGripVariant():QString())+'|'+(pa?"pa|":"normal|")+(hand==PoseHand::Left?"left":"right");}
 QJsonObject ReloadMakerController::holdingGripsState() const {
  QJsonObject out{{"enabled",_holdingPreview},{"hand",_holdingHand==PoseHand::Left?"left":"right"},{"support",_holdingSupport},{"editing",_holdingEditing},{"replay",_holdingReplay},{"specific",_holdingSpecific},{"gripNode",holdingGripVariant()},{"error",_holdingError},{"calibrated",_holdingCapture.contains("rightBoneInWand")&&_holdingCapture.contains("leftBoneInWand")},{"capture",_holdingCapture},{"grips",_holdingGrips}};
+ out["sourceMirrorPlaneX"]=_holdingMirrorPlaneX;out["sourceMirrorPlaneAvailable"]=_holdingMirrorPlaneReady;
  QJsonObject drafts=_holdingWorking;if(_holdingEditing&&_partGripDraft){auto pose=_partGripDraft->pose;pose.placement.handInWeapon=pose.placement.handInAnchor;if(_fingerDrafts[int(pose.hand)])pose.fingers=_fingerDrafts[int(pose.hand)]->fingers;drafts[holdingGripKey(pose.hand,_holdingSpecific)]=poseRecord(pose);}out["drafts"]=drafts;
  if(_holdingPreview&&_holdingError.isEmpty()){
   const auto expected=_holdingCapture.value(_holdingHand==PoseHand::Left?"renderedLeft":"renderedRight").toObject();
   if(!_holdingReplay&&!expected.isEmpty()&&currentWeapon()&&_holdingCapture.value("weapon").toString().compare(poseRecordKey(currentWeapon()->formId),Qt::CaseInsensitive)==0&&_holdingCapture.value("holdingHand")==(_holdingHand==PoseHand::Left?"left":"right"))try{const auto a=mathPose(_holdingSolved[int(_holdingHand)].placement.handInWeapon),b=mathPose(readPose(expected["wrist"]));float distance=0,rotation=0;for(int i=0;i<3;++i)distance+=(a.t[i]-b.t[i])*(a.t[i]-b.t[i]);for(int i=0;i<9;++i)rotation=std::max(rotation,std::abs(a.r[i]-b.r[i]));out["wristDifferenceGameUnits"]=std::sqrt(distance);out["rotationMatrixDifference"]=rotation;float trace=0;for(int i=0;i<9;++i)trace+=a.r[i]*b.r[i];out["wristAngleDegrees"]=std::acos(std::clamp((trace-1)*.5f,-1.f,1.f))*57.295779513;}catch(const std::exception&){}
   out["left"]=poseRecord(_holdingSolved[0]);out["right"]=poseRecord(_holdingSolved[1]);}return out;
+}
+float ReloadMakerController::holdingMirrorPlaneX(){
+ if(_holdingMirrorPlaneReady)return _holdingMirrorPlaneX;
+ auto* model=activeModel();if(!model)return 0;
+ Transformf weapon;QString error;bool found=false;
+ for(const auto& binding:_nodeBindings)if(binding.boneIndex==_weaponBoneIndex){found=sceneNodeWorld(_sceneNodes[binding.nodeIndex],weapon,error);break;}
+ if(!found)return 0;
+ const auto inverse=hm::inverse(mathPose(weapon));
+ std::array<hm::PlaneEvidence,128> evidence{};std::size_t count=0;
+ for(int block=0;block<model->getBlockCount()&&count<evidence.size();++block){
+  const auto shape=model->getBlockIndex(block);
+  if(!model->blockInherits(shape,"BSTriShape")||model->getLink(shape,"Skin")>=0)continue;
+  QModelIndex owner;QStringList path;findShapeOwner(shape,_weaponRoot,owner,path);
+  if(!owner.isValid())continue;
+  const auto vertices=model->getIndex(shape,"Vertex Data");const int size=model->rowCount(vertices);if(!size)continue;
+  Transformf world;if(!sceneNodeWorld(shape,world,error))continue;
+  const auto transform=hm::compose(inverse,mathPose(world));hm::V low{},high{};bool first=true;
+  const int step=std::max(1,(size+8191)/8192);
+  for(int row=0;row<size;row+=step){const auto v=model->get<Vector3>(model->getIndex(vertices,row),"Vertex");const auto point=hm::point(transform,{v[0],v[1],v[2]});if(first){low=high=point;first=false;}else for(int a=0;a<3;++a){low[a]=std::min(low[a],point[a]);high[a]=std::max(high[a],point[a]);}}
+  evidence[count++]=hm::planeEvidence(low,high);
+ }
+ if(count){_holdingMirrorPlaneX=hm::geometryPlane(std::span(evidence.data(),count));_holdingMirrorPlaneReady=true;}
+ return _holdingMirrorPlaneX;
 }
 bool ReloadMakerController::applyHoldingPreview(){
  if(auto* b=_window->findChild<QPushButton*>("HoldingGripButton"))b->setText(_holdingPreview?(_holdingHand==PoseHand::Left?"Holding: Left":"Holding: Right"):"Holding grip");
@@ -57,20 +83,21 @@ bool ReloadMakerController::applyHoldingPreview(){
    source[1].placement.handInWeapon=source[1].placement.handInAnchor=readPose(_holdingCapture.value("nativeRight"));const auto f=_holdingCapture.value("nativeFingers").toArray();if(f.size()==15)for(int i=0;i<15;++i)source[1].fingers[i]=readPose(f[i]);
    if(_holdingCapture.contains("nativeSupport")){source[0].placement.handInWeapon=source[0].placement.handInAnchor=readPose(_holdingCapture.value("nativeSupport"));const auto sf=_holdingCapture.value("supportFingers").toArray();if(sf.size()==15)for(int i=0;i<15;++i)source[0].fingers[i]=readPose(sf[i]);}
   }
+  const float planeX=matchingCapture&&_holdingCapture.value("leftGripMirror")=="geometry-plane-hand-z"?float(_holdingCapture.value("mirrorPlaneX").toDouble()):holdingMirrorPlaneX();
   _holdingSolved=source;
   if(_holdingHand==PoseHand::Left){
    HandPose firing,support;QString error;
    if(!mirrorHandPose(_skeleton,source[1],{},firing,error)||!mirrorHandPose(_skeleton,source[0],{},support,error))throw std::runtime_error(error.toStdString());
    // The wrist and fingers share one geometric reflection. The controller
    // basis affects weapon aiming, never the authored hand-to-mesh contact.
-   auto left = hm::mirroredHandSeat(mathPose(source[1].placement.handInWeapon));
+   auto left = hm::mirroredHandSeat(mathPose(source[1].placement.handInWeapon),planeX);
    const auto array=[](QJsonValue value,hm::V fallback){const auto a=value.toArray();if(a.size()==3)for(int i=0;i<3;++i)fallback[i]=float(a[i].toDouble());return fallback;};
    if(matchingCapture){
     const auto offsets=array(_holdingCapture.value("leftGripOffset"),{});
     left.t=hm::point(left,{offsets[0],offsets[1],-offsets[2]});
    }
    firing.placement.handInWeapon=firing.placement.handInAnchor=previewPose(left);
-   auto rightSupport = hm::mirroredHandSeat(mathPose(source[0].placement.handInWeapon));
+   auto rightSupport = hm::mirroredHandSeat(mathPose(source[0].placement.handInWeapon),planeX);
    if(matchingCapture){
     const auto offsets=array(_holdingCapture.value("rightSupportOffset"),{});
     rightSupport.t=hm::point(rightSupport,{offsets[0],offsets[1],-offsets[2]});
@@ -98,6 +125,37 @@ bool ReloadMakerController::applyHoldingPreview(){
 QJsonObject ReloadMakerController::holdingGripsCommand(const QJsonObject& p){
  const auto op=p["operation"].toString("preview");
  const auto stash=[this]{if(_holdingEditing&&_partGripDraft){auto pose=_partGripDraft->pose;pose.placement.handInWeapon=pose.placement.handInAnchor;if(_fingerDrafts[int(pose.hand)])pose.fingers=_fingerDrafts[int(pose.hand)]->fingers;_holdingWorking[holdingGripKey(pose.hand,_holdingSpecific)]=poseRecord(pose);_partGripDraft.reset();_fingerDrafts[int(pose.hand)].reset();}_holdingEditing=false;};
+ if(op=="geometry"){
+  auto* view=_window->getGLView();auto* model=activeModel();
+  if(!model||!view->getScene()||_weaponBoneIndex<0)throw std::runtime_error("Load a weapon before capturing contact geometry");
+  (void)view->studioCaptureFrame();
+  const auto inverse=hm::inverse(mathPose(_globalPose[_weaponBoneIndex]));
+  QJsonArray meshes;
+  for(auto* shape:view->getScene()->shapes){
+   if(!shape||shape->isHidden())continue;
+   QJsonArray vertices,triangles,bones;
+   for(const int bone:shape->reloadMakerSkinBones())bones.append(model->get<QString>(model->getBlockIndex(bone),"Name"));
+   for(const auto& vertex:shape->reloadMakerCollisionVertices()){
+    const auto world=shape->worldTrans()*vertex;
+    const auto local=hm::point(inverse,{world[0],world[1],world[2]});
+    vertices.append(QJsonArray{local[0],local[1],local[2]});
+   }
+   const auto count=shape->reloadMakerCollisionTriangleCount();
+   for(qsizetype i=0;i<count;++i){const auto t=shape->triangles[i];triangles.append(QJsonArray{int(t[0]),int(t[1]),int(t[2])});}
+   meshes.append(QJsonObject{{"block",shape->id()},{"name",model->get<QString>(model->getBlockIndex(shape->id()),"Name")},{"skinBones",bones},{"vertices",vertices},{"triangles",triangles}});
+  }
+  QJsonArray anchors;
+  for(const auto name:{"C-Barrel","C-Muzzle","C-Grip","C-Receiver","C-Scope"}){
+   const auto target=findConnectTarget(name,nullptr,0,false);Transformf parent;QString error;
+   if(target.valid()&&sceneNodeWorld(target.parent,parent,error)){
+    Transformf local{target.translation,target.rotation,{target.scale,target.scale,target.scale}};
+    anchors.append(QJsonObject{{"name",name},{"pose",jsonPose(previewPose(hm::compose(inverse,mathPose(composed(parent,local)))))}});
+   }
+  }
+  QJsonArray nodes;
+  for(const auto& node:_sceneNodes){Transformf world;QString error;if(sceneNodeWorld(node,world,error))nodes.append(QJsonObject{{"name",model->get<QString>(node,"Name")},{"pose",jsonPose(previewPose(hm::compose(inverse,mathPose(world))))}});}
+  return {{"space","weapon-local"},{"meshes",meshes},{"anchors",anchors},{"nodes",nodes}};
+ }
  if(op=="open"){showHoldingGrips();return holdingGripsState();}
  if(_loadThread||_reloadCapturing||espBusy())throw std::runtime_error("Wait for the current source or capture operation before editing holding grips");
  if(op=="preview"){

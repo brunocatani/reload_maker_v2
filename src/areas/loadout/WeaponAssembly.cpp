@@ -375,6 +375,8 @@ namespace reloadmaker
 
     bool ReloadMakerController::buildNodeBindings(QString& error)
     {
+        _holdingMirrorPlaneReady=false;
+        _holdingMirrorPlaneX=0;
         _nodeBindings.clear();
         _sceneNodes.clear();
         _auxiliaryReloadNodes.clear();

@@ -676,6 +676,11 @@ def get_holding_grips() -> dict:
     """Read holding preview, independent firing fits, capture metadata and available comparison errors."""
     return command('holding_grips_state')
 
+@mcp.tool()
+def get_holding_geometry() -> dict:
+    """Read visible deformed surfaces in weapon space for contact diagnosis, including skin-bone names and attachment frames. This explicit snapshot includes vertex/triangle arrays; it does not change authoring."""
+    return command('holding_geometry')
+
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--command',help='One JSON request to the local application')

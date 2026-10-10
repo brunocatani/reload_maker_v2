@@ -1730,6 +1730,9 @@ namespace reloadmaker
         QJsonObject _holdingGrips,_holdingCapture,_holdingWorking;
         std::array<HandPose,2> _holdingSolved;
         QString _holdingError;
+        float _holdingMirrorPlaneX{};
+        bool _holdingMirrorPlaneReady{false};
+        float holdingMirrorPlaneX();
         bool applyHoldingPreview();
         void showHoldingGrips();
         QJsonObject holdingGripsCommand(const QJsonObject&);
