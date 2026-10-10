@@ -210,7 +210,7 @@ namespace reloadmaker
             profile["inputAxis"] = QJsonArray{ _boltCycle.inputAxis.x, _boltCycle.inputAxis.y, _boltCycle.inputAxis.z };
             profile["inputTravel"] = _boltCycle.inputTravel;
             profile["ejectProgress"] = _boltCycle.ejectProgress;
-        } else {
+        } else if (type != WeaponMechanism::CellLever) {
             require(!_rifleBoltCycle.isEmpty(), "Missing native firing bolt motion");
             profile["fireCycle"] = runtimeCurve(_rifleBoltCycle, 0, _rifleBoltCycle.size() - 1);
             profile["fireOpen"] = _rifleBoltOpen;
@@ -601,7 +601,7 @@ namespace reloadmaker
                 }
             }
         } else {
-            header["mechanism"] = type == WeaponMechanism::Ar15 ? "ar15" : type == WeaponMechanism::M1A ? "m1a" : type == WeaponMechanism::BoltAction ? "manual-bolt-action" : "reciprocating-bolt";
+            header["mechanism"] = type == WeaponMechanism::CellLever ? "cell-lever" : type == WeaponMechanism::Ar15 ? "ar15" : type == WeaponMechanism::M1A ? "m1a" : type == WeaponMechanism::BoltAction ? "manual-bolt-action" : "reciprocating-bolt";
             header["standardReceiver"] = receiverKey;
             for (const auto& pair : { qMakePair(QString("receiver"), QString("Receiver")), qMakePair(QString("magazine"), QString("Magazine")),
                                       qMakePair(QString("operatingPart"), QString("OperatingPart")) }) {

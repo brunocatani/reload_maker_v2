@@ -225,7 +225,7 @@ namespace reloadmaker
             fail("Prepare the operating roles and native magazine first");
         }
         const auto saved = authoringPlan().value("magazineSetup").toObject();
-        if (!_magazineRail && saved.isEmpty()) {
+        if (!_magazineRail && _magazineVisuals.isEmpty() && saved.isEmpty()) {
             fail(_magazineError.isEmpty() ? QString("The magazine source is not ready") : _magazineError);
         }
         MagazineSetup value;

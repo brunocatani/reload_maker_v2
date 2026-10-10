@@ -194,6 +194,15 @@ namespace reloadmaker
             track.anchor = _handPoseAnchors[anchor].description;
             track.label = _handPoseAnchors[anchor].label;
             track.surface = geometry.contains(model->getBlockNumber(_sceneNodes[binding.nodeIndex]));
+            // Equivalent named helper copies can remain in source NIFs. Keep
+            // the one that owns visible geometry; an unused duplicate must
+            // not manufacture a second physical part in the captured recipe.
+            int duplicate=-1;
+            for(int previous=0;previous<recipe.tracks.size();++previous)if(sameGripAnchor(track.anchor,recipe.tracks[previous].anchor)){duplicate=previous;break;}
+            if(duplicate>=0){
+                if(!track.surface)continue;
+                if(!recipe.tracks[duplicate].surface){recipe.tracks[duplicate]=track;_reloadTrackNodes[duplicate]=binding.nodeIndex;bindingIndices[duplicate]=i;continue;}
+            }
             track.poses.reserve(recipe.frames);
             recipe.tracks.append(std::move(track));
             _reloadTrackNodes.append(binding.nodeIndex);

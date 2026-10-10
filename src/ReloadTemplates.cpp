@@ -41,6 +41,8 @@ namespace reloadmaker
                 return WeaponMechanism::M1A;
             case MechanismKind::ReciprocatingBolt:
                 return WeaponMechanism::ReciprocatingBolt;
+            case MechanismKind::CellLever:
+                return WeaponMechanism::CellLever;
             case MechanismKind::TurnBolt:
                 return WeaponMechanism::BoltAction;
             default:

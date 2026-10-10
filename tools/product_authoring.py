@@ -191,10 +191,14 @@ def apply_capture(draft,capture,full='',empty=''):
             model=Path(model).resolve();receipt=model.with_suffix('.receipt.json');meta=read(receipt)
             require(meta.get('engineCooked'),'Choose a finished model cooked by Maker')
             provenance=meta.get('capture',{});source=provenance.get('referencePose',{})
-            # Weapons sharing a magazine share its models (carrier frame only).
-            require(source.get('space')=='magazine-carrier' and source.get('presentation')==presentation and
-                    form_key(source.get('magazineRecord'))==magazine,
-                    'Finished model belongs to another magazine, presentation or reference frame')
+            # Stat-only receiver records can contain the same physical cell.
+            # Its cooked carrier-space body is reusable across those records;
+            # presentation ownership below still distinguishes different pieces.
+            source_model=str(source.get('model','')).replace('\\','/').casefold()
+            current_model=str(snapshot['magazine'].get('model','')).replace('\\','/').casefold()
+            same_source=form_key(source.get('magazineRecord'))==magazine or bool(source_model and source_model==current_model)
+            require(source.get('space')=='magazine-carrier' and source.get('presentation')==presentation and same_source,
+                    'Finished model belongs to another magazine model, presentation or reference frame')
             cooked=presentation_identity(source.get('presentationSetup'))
             current=presentation_identity(snapshot['magazine'].get('presentationSetup'))
             require(cooked is None or current is None or cooked==current,

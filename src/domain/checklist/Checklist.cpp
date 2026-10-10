@@ -21,6 +21,7 @@ namespace reloadmaker
             case MechanismKind::Hammer: return QStringLiteral("hammer");
             case MechanismKind::Crane: return QStringLiteral("cylinder");
             case MechanismKind::Cover: return QStringLiteral("top cover");
+            case MechanismKind::CellLever: return QStringLiteral("cell ejection lever");
             case MechanismKind::Latch: return QStringLiteral("latch");
             }
             return QStringLiteral("part");

@@ -1,0 +1,41 @@
+{
+  "format": 1,
+  "id": "energy.cell-lever.v1",
+  "label": "Energy cell \u2014 manual ejection lever",
+  "category": "Energy",
+  "model": {
+    "feed": {
+      "container": "detachable",
+      "hands": [
+        "left",
+        "right"
+      ],
+      "loadingPoints": [
+        {
+          "id": "cell",
+          "unit": "container",
+          "destination": "container",
+          "requiresOpen": "lever"
+        }
+      ],
+      "insertion": "native-curve"
+    },
+    "mechanisms": [
+      {
+        "id": "lever",
+        "kind": "cell-lever",
+        "roles": [
+          "eject",
+          "open-access"
+        ],
+        "return": "stays"
+      }
+    ],
+    "fire": {
+      "motion": "native-clip",
+      "afterShot": "automatic-cycle",
+      "ejection": "none",
+      "lockOpen": ""
+    }
+  }
+}

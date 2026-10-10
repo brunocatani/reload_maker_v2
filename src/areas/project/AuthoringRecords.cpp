@@ -201,6 +201,28 @@ namespace reloadmaker
         if (auto own = resolveIn(_authoringRecords, weapon, field, magazine, moving, true); own.source != PlanSource::None) {
             return own;
         }
+        // Embedded cells can have many stat-only receiver records for one
+        // physical model. Reuse its authored presentation just as track
+        // remapping reuses that model's operating motion.
+        if (field == QLatin1String("magazineSetup") && _reloadRecipe) {
+            const int full = detectMagazineTrack(*_reloadRecipe);
+            if (full >= 0) {
+                const auto& current = _reloadRecipe->tracks[full].anchor;
+                const auto prefix = weapon + "/@magazine:";
+                for (auto it = _authoringRecords.begin(); it != _authoringRecords.end(); ++it) {
+                    if (!it.key().startsWith(prefix)) continue;
+                    const auto value = it.value().toObject()[field].toObject();
+                    const auto anchors = value["trackAnchors"].toArray();
+                    const int empty = value["emptyTrack"].toInt(-1);
+                    if (empty < 0 || empty >= anchors.size()) continue;
+                    const auto source = anchors[empty].toObject();
+                    auto model = source["model"].toString().replace('\\', '/');
+                    if (!model.isEmpty() && model.compare(QString(current.ownerModel).replace('\\', '/'), Qt::CaseInsensitive) == 0 &&
+                        mapRecipeTrack(anchors, *_reloadRecipe, empty) >= 0)
+                        return { value, PlanSource::Anchor, it.key() };
+                }
+            }
+        }
         for (const auto& [record, roadmaps] : _siblingRoadmaps) {
             if (auto shared = resolveIn(roadmaps, record, field, magazine, moving, false); shared.source != PlanSource::None) {
                 return shared;

@@ -174,6 +174,13 @@ void ReloadMakerController::updateSimulationControls() {
         ar?"Grab the "+part+" to rack · Bolt release closes the bolt · "+(automatic?"hold Fire for automatic fire":"background drag orbits"):"Grab the slide to rack it · linked parts follow · background drag orbits");
     if(_simulation.hkSlap)_simulationDrive->setInstructions("Pull straight back to latch the handle · release your grip · Slap handle springs it closed");
     if(_simulation.openBolt){_simulationInstructions->setText("Pull the charging handle to cock. The bolt stays back with an empty chamber; FIRE feeds and fires from the magazine. Replace the magazine while cocked, or rack after running empty. "+grabText);_simulationDrive->setInstructions("Open bolt · pull handle to cock · trigger feeds and fires · magazine carries every unfired round");}
+    const bool cell=_simulation.cellFed();
+    _simulationDrop->setVisible(!cell);_magazineOut->setVisible(!cell);
+    if(cell){
+        _simulationSlideRelease->hide();_simulationSpring->hide();
+        _simulationInstructions->setText("Pull the cell lever fully to eject. Insert a fresh cell while open, then close the lever by hand. The reload button does not eject cells.");
+        _simulationDrive->setInstructions("Pull the lever to eject the cell � insert a new cell � close the lever � release holds position");
+    }
     const bool noExtender=!noExtenderReloadPath().isEmpty(),pistol=simulationMechanism()==WeaponMechanism::PistolSlide;
     _simulationNoExtender->setVisible(noExtender||_glockNoExtender);_simulationNoExtender->setEnabled(!busy&&!_loadThread&&!_reloadCapturing&&noExtender);
     {const QSignalBlocker block(_simulationNoExtender);_simulationNoExtender->setChecked(_glockNoExtender);}

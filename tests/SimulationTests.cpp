@@ -497,6 +497,24 @@ void m1aFixture(const QString& path) {
 }
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
+    if(app.arguments().contains("--cell-lever")) {
+        try {
+            WeaponSimulation cell;cell.configureAmmunition(3,false,WeaponMechanism::CellLever);
+            check(!cell.chambered&&cell.magazineRounds==3&&cell.canFire(),"Cell reserved a chamber round");
+            check(!cell.dropMagazine()&&!cell.magazineOut()&&!cell.slideRelease(),"Button ejected a cell or operated the lever");
+            check(cell.fire(),"Cell did not fire");cell.tick(1,.2f);
+            check(cell.magazineRounds==2&&!cell.chambered&&cell.canFire(),"Shot did not debit cell exactly once");
+            check(cell.grab(),"Lever grab failed");cell.drag(.4f);
+            check(cell.magazinePresent()&&!cell.canFire(),"Partial lever pull ejected cell or allowed firing");
+            cell.drag(1);cell.release(true,true);cell.tick(10,1);
+            check(!cell.magazinePresent()&&cell.magazineRounds==0&&!cell.chambered&&cell.slide==1,"Ejection cancel/return recreated a cell or closed lever");
+            check(cell.grab(),"Open lever cannot be regrabbed");cell.drag(0);cell.release(false,true);
+            check(!cell.canFire(),"Absent cell left a phantom shot");
+            cell.reset();cell.fireCycleSeconds=.1f;cell.fire();cell.triggerHeld=true;cell.tick(1,1);
+            check(cell.shotsFired==3&&cell.magazineRounds==0&&!cell.slideLocked&&!cell.chambered,"Automatic cell firing/catch incorrect");
+            QTextStream(stdout)<<"PASS cell lever, button isolation, charge debit, cancellation and empty fire\n";return 0;
+        }catch(const std::exception& e){QTextStream(stderr)<<e.what()<<'\n';return 1;}
+    }
     if(app.arguments().contains("--holding-isolation")) {
         const QJsonObject baseline{{"weapon","rifle.esp:000123"},{"format","reload-maker-project"}};
         auto holding=baseline;holding["holdingGrips"]=QJsonObject{{"rifle.esp:000123|left",QJsonObject{{"wrist","edited"}}}};holding["holdingGripDrafts"]=QJsonObject{{"right","draft"}};

@@ -4,7 +4,7 @@
 #include <QHash>
 
 namespace reloadmaker {
-    enum class WeaponMechanism { PistolSlide, Ar15, M1A, BoltAction, ReciprocatingBolt };
+    enum class WeaponMechanism { PistolSlide, Ar15, M1A, BoltAction, ReciprocatingBolt, CellLever };
     struct SimulationParts {
         int operating{-1},bolt{-1},magazine{-1};
         QVector<int> followers;
@@ -58,10 +58,11 @@ namespace reloadmaker {
         bool reloadStartedLoaded{false}, reloadStartedOpen{false}, reloadCycled{false}, reloadFed{false};
         float reloadRackAt{-1}, reloadFeedAt{-1};
         bool ammoKnown()const{return capacity>0;}
-        bool canFire()const{return ammoKnown()&&(openBolt?(magazine.seated()&&magazineRounds>0&&slideLocked):(chambered&&!slideLocked&&slide<=.001f))&&action==SimulationAction::Idle&&handle<=.001f&&!magazine.busy();}
+        bool cellFed()const{return mechanism==WeaponMechanism::CellLever;}
+        bool canFire()const{return ammoKnown()&&(cellFed()?(magazine.seated()&&magazineRounds>0&&slide<=.001f):openBolt?(magazine.seated()&&magazineRounds>0&&slideLocked):(chambered&&!slideLocked&&slide<=.001f))&&action==SimulationAction::Idle&&handle<=.001f&&!magazine.busy();}
         // Empty chamber with the action closed and at rest: the trigger only clicks.
-        bool canDryFire()const{return action==SimulationAction::Idle&&inputProgress()<=.001f&&!magazine.busy()&&(openBolt?(!magazine.seated()||magazineRounds==0):(!chambered&&slide<=.001f));}
-        bool willLockAfterShot()const{return !openBolt&&action==SimulationAction::Fire&&pistolLock&&magazine.seated()&&magazineRounds==0&&!chambered;}
+        bool canDryFire()const{return action==SimulationAction::Idle&&inputProgress()<=.001f&&!magazine.busy()&&((openBolt||cellFed())?(!magazine.seated()||magazineRounds==0):(!chambered&&slide<=.001f));}
+        bool willLockAfterShot()const{return !cellFed()&&!openBolt&&action==SimulationAction::Fire&&pistolLock&&magazine.seated()&&magazineRounds==0&&!chambered;}
         bool feedCycleActive()const{return _cycleArmed;}
         void configureAmmunition(int magazineCapacity,bool lockPistol,WeaponMechanism profile=WeaponMechanism::PistolSlide);
         bool slideRelease();

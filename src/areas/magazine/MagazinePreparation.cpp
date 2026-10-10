@@ -67,9 +67,6 @@ namespace reloadmaker
             rail.connection = connection.frame;
             rail.handle = { connection.frame.translation.x, connection.frame.translation.y, connection.frame.translation.z };
         }
-        if (!buildMagazineMotion(body, rail)) {
-            return;
-        }
         bool emptyBody = false;
         bool fullBody = false;
         classifyMagazineShapes(shapes, rail, emptyBody, fullBody);
@@ -82,6 +79,9 @@ namespace reloadmaker
             _magazineError = "Magazine body geometry could not be resolved.";
             return;
         }
+        // Keep the discovered bodies editable even when automatic motion
+        // detection needs an author-selected source interval.
+        if (!buildMagazineMotion(body, rail)) return;
         if (!guideJson.isEmpty() && !applyMagazineGuide(guide, rail, _magazineError, _magazineSetup && _magazineSetup->motion == "linear")) {
             return;
         }
@@ -319,14 +319,16 @@ namespace reloadmaker
         const auto events = detectMagazineEvents(clipEvents(_reloadClip));
         const float entry = events.entrySeconds;
         const float empty = events.removalSeconds;
-        if (empty < 0) {
+        if (empty < 0 && sampledMagazinePayload()) {
             _magazineError = "Native empty-magazine frame is unavailable.";
             return false;
         }
         const auto frameAt = [this](float seconds) {
             return std::clamp(qRound(seconds / _reloadRecipe->duration * (_reloadRecipe->frames - 1)), 0, _reloadRecipe->frames - 1);
         };
-        _m1aEmptyMagazineFrame = frameAt(empty);
+        // A shared cell body has no visible cartridge payload and needs no
+        // separate empty animation event. Sampled cartridge feeds still do.
+        _m1aEmptyMagazineFrame = empty < 0 ? 0 : frameAt(empty);
         _m1aLoadedMagazineFrame = frameAt(entry);
         return buildMagazineAnimation(*_reloadRecipe, entry, body, rail, _magazineError);
     }

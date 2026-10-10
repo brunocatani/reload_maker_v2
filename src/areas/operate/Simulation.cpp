@@ -111,7 +111,7 @@ namespace reloadmaker
         }
         if (isRifleConfiguration()) {
             _simulation.fireCycleSeconds = _simulationAmmo.automatic ? _rifleFireInterval : _rifleSingleDuration;
-        } else if (rig.mechanism == WeaponMechanism::PistolSlide && _simulationAmmo.automatic) {
+        } else if ((rig.mechanism == WeaponMechanism::PistolSlide || rig.mechanism == WeaponMechanism::CellLever) && _simulationAmmo.automatic) {
             const auto single = std::find_if(_animationActions.cbegin(), _animationActions.cend(), [](const auto& action) {
                 return action.family == ActionFamily::Fire && !action.automatic;
             });
@@ -555,7 +555,9 @@ namespace reloadmaker
         }
         (void)applyPose(0);
         updateSimulationControls();
-        if (boltAction) {
+        if (_simulation.cellFed()) {
+            setStatus("Cell lever grabbed � pull to eject � close after inserting a new cell");
+        } else if (boltAction) {
             setStatus("Bolt grabbed · pull back to open, push forward to lock · release holds position");
         } else if (isRifleConfiguration()) {
             setStatus("Handle grabbed · pull fully to operate the bolt · Esc cancels");

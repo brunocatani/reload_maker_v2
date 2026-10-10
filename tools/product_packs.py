@@ -14,6 +14,7 @@ import re
 import yaml
 
 TEMPLATES = {
+    'energy.cell-lever.v1',
     'rifle.hk-slap-detachable.v1', 'rifle.hk-slap-catch-detachable.v1', 'rifle.aug-locking-handle.v1', 'rifle.open-bolt-handle-detachable.v1',
     'pistol.slide-detachable.v1',
     'rifle.ar15-detachable.v1',

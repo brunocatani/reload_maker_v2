@@ -355,7 +355,15 @@ namespace reloadmaker
         for (int block = firstBlock; block < lastBlock; ++block) {
             const auto index = model->getBlockIndex(block);
             if (model->blockInherits(index, "NiNode")) {
-                scope.nodes.append({block, model->get<QString>(index, "Name")});
+                const auto name=model->get<QString>(index,"Name");
+                const auto inert=[&](const QModelIndex& node){return model->get<int>(node,"Num Children")==0&&model->get<int>(node,"Num Extra Data List")==0&&model->getLink(node,"Controller")<0&&model->getLink(node,"Collision Object")<0;};
+                const auto frame=[&](const QModelIndex& node)->std::optional<std::array<float,10>>{Transformf t;if(!readNodeTransform(node,t))return std::nullopt;return std::array<float,10>{t.translation.x,t.translation.y,t.translation.z,t.rotation.x,t.rotation.y,t.rotation.z,t.rotation.w,t.scale.x,t.scale.y,t.scale.z};};
+                // Vanilla LaserReceiver_1 has two identical empty Optics2
+                // anchors. Equivalent siblings name one connection frame;
+                // different transforms/owners/contents remain ambiguous.
+                bool equivalent=false;
+                if(inert(index))for(const auto& previous:scope.nodes){const auto node=model->getBlockIndex(previous.node);if(previous.name==name&&inert(node)&&model->getParent(node)==model->getParent(index)&&model->get<int>(node,"Flags")==model->get<int>(index,"Flags")&&frame(node).has_value()&&frame(node)==frame(index)){equivalent=true;break;}}
+                if(!equivalent)scope.nodes.append({block,name});
             }
             if (model->itemName(index) != QStringLiteral("BSConnectPoint::Parents")) { continue; }
             const auto points = model->getIndex(index, "Connect Points");

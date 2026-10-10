@@ -43,7 +43,7 @@ namespace reloadmaker
             { "operating-handle", MechanismKind::OperatingHandle }, { "reciprocating-bolt", MechanismKind::ReciprocatingBolt },
             { "turn-bolt", MechanismKind::TurnBolt }, { "hk-slap", MechanismKind::HkSlap }, { "pump", MechanismKind::Pump },
             { "lever", MechanismKind::Lever }, { "hinge", MechanismKind::Hinge }, { "hammer", MechanismKind::Hammer },
-            { "crane", MechanismKind::Crane }, { "cover", MechanismKind::Cover }, { "latch", MechanismKind::Latch } };
+            { "crane", MechanismKind::Crane }, { "cover", MechanismKind::Cover }, { "latch", MechanismKind::Latch }, { "cell-lever", MechanismKind::CellLever } };
         constexpr std::pair<const char*, CycleRole> roleNames[] = {
             { "extract", CycleRole::Extract }, { "eject", CycleRole::Eject }, { "cock", CycleRole::Cock },
             { "chamber", CycleRole::Chamber }, { "open-access", CycleRole::OpenAccess },
@@ -157,6 +157,7 @@ namespace reloadmaker
             case MechanismKind::ReciprocatingBolt:
             case MechanismKind::TurnBolt:
             case MechanismKind::HkSlap:
+            case MechanismKind::CellLever:
                 return true;
             default:
                 return false;
@@ -178,7 +179,7 @@ namespace reloadmaker
         if (feed.container != ContainerKind::Detachable) {
             return refused(QStringLiteral("DIAMOND has no runtime yet for fixed feeds (single rounds, clips, cylinders)"));
         }
-        if (feed.loadingPoints.size() != 1 || !feed.loadingPoints[0].requiresOpen.isEmpty()) {
+        if (feed.loadingPoints.size() != 1) {
             return refused(QStringLiteral("DIAMOND supports one magazine well that is always reachable"));
         }
         const Mechanism* action = nullptr;
@@ -193,6 +194,13 @@ namespace reloadmaker
         }
         if (!action) {
             return refused(QStringLiteral("DIAMOND needs a hand-operated action"));
+        }
+        if (!feed.loadingPoints[0].requiresOpen.isEmpty() &&
+            (action->kind != MechanismKind::CellLever || feed.loadingPoints[0].requiresOpen != action->id)) {
+            return refused(QStringLiteral("This loading access mechanism has no runtime yet"));
+        }
+        if (action->kind == MechanismKind::CellLever && (model.fire.ejection != CaseEjection::None || model.fire.afterShot != AfterShot::AutomaticCycle)) {
+            return refused(QStringLiteral("A cell lever ejects its container, not a chambered cartridge"));
         }
         if (model.fire.afterShot == AfterShot::OpenBolt && action->kind != MechanismKind::ChargingHandle) {
             return refused(QStringLiteral("Open-bolt firing currently requires an independent charging handle"));

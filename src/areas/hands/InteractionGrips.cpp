@@ -152,6 +152,7 @@ namespace reloadmaker
         case WeaponMechanism::Ar15: return "charging_handle";
         case WeaponMechanism::BoltAction:
         case WeaponMechanism::ReciprocatingBolt: return "bolt";
+        case WeaponMechanism::CellLever: return "cell_lever";
         case WeaponMechanism::M1A: return "operating_handle";
         case WeaponMechanism::PistolSlide: break;
         }

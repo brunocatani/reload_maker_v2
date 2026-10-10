@@ -62,6 +62,7 @@ namespace reloadmaker
         Crane,
         Cover,
         Latch,
+        CellLever,
     };
 
     enum class CycleRole

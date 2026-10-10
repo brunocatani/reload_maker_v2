@@ -156,6 +156,7 @@ namespace reloadmaker
         case WeaponMechanism::PistolSlide: action = CueAction::Slide; break;
         case WeaponMechanism::Ar15: action = CueAction::ChargingHandle; break;
         case WeaponMechanism::ReciprocatingBolt: action = CueAction::ReciprocatingBolt; break;
+        case WeaponMechanism::CellLever:
         case WeaponMechanism::M1A: action = CueAction::OperatingHandle; break;
         case WeaponMechanism::BoltAction: action = CueAction::BoltAction; break;
         }

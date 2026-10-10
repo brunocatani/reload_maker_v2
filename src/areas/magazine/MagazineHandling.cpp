@@ -176,6 +176,7 @@ namespace reloadmaker
         if (!_simulationActive || !_magazineRail) {
             return;
         }
+        if(_simulation.cellFed()&&_simulation.slide<.95f){_simulation.magazine.offset=offset;updateMagazinePose();return;}
         _simulation.magazine.moveFree(*_magazineRail, offset);
         updateMagazinePose();
     }
@@ -185,6 +186,7 @@ namespace reloadmaker
         if (!_simulationActive || !_magazineRail) {
             return;
         }
+        if(_simulation.cellFed()&&_simulation.slide<.95f)return;
         const bool wasSeated = _simulation.magazine.seated();
         _simulation.magazine.moveRail(*_magazineRail, distance);
         updateMagazinePose();
