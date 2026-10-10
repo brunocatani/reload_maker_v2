@@ -508,6 +508,7 @@ void ReloadMakerController::createViewBar() {
     _showArmsCheck->setParent(bar);
     layout->addWidget(_showArmsCheck);
     layout->addWidget(_bodyCombo);
+    auto* holding=new QPushButton("Holding grip",_window);holding->setObjectName("HoldingGripButton");holding->setAccessibleName("Holding hand and firing grips");layout->addWidget(holding);connect(holding,&QPushButton::clicked,this,[this]{showHoldingGrips();});
     _window->setViewportBar(bar);
     // How to use the viewport stays in the footer, beside the status.
     auto* navigation = new QLabel("Click a part to select it · double-click to change it · right-click for actions · drag to orbit · middle-drag to pan · wheel to zoom", _window);

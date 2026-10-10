@@ -389,6 +389,7 @@ namespace reloadmaker
                             { "mo2Profile", _libraryMode ? _launchSnapshot.profileName : QString() },
                             { "weapon", poseRecordKey(weapon->formId) },
                             { "body", _armsBody },
+                            { "holdingPreview", QJsonObject{{"enabled",_holdingPreview},{"hand",_holdingHand==PoseHand::Left?"left":"right"},{"support",_holdingSupport},{"replay",_holdingReplay},{"specific",_holdingSpecific},{"capture",_holdingCapture}} },
                             { "animation", _activeAnimationPath },
                             { "seconds", _playbackTime },
                             { "motionMode", _weaponFixedMotion ? 0 : 1 },
@@ -398,6 +399,8 @@ namespace reloadmaker
                             { "hand", int(_editedHand) },
                             { "fingerJoint", _fingerJointIndex },
                             { "selectedHandPose", selectedHandPose() ? selectedHandPose()->id : QString() } };
+        if(!_holdingGrips.isEmpty())record["holdingGrips"]=_holdingGrips;
+        const auto holdingDrafts=holdingGripsState()["drafts"].toObject();if(!holdingDrafts.isEmpty())record["holdingGripDrafts"]=holdingDrafts;
         const auto sourcePlugins = selectionPlugins(_selectedWeapon);
         if (allWeaponsSelected()) {
             record["browserPlugin"] = kAllWeaponsSource;
@@ -513,7 +516,7 @@ namespace reloadmaker
         const auto& authoredGrip = simulationWorkspace(_workspace) ? _operateSuspendedGrip : _partGripDraft;
         const bool retainedMagazineDraft = authoredGrip && std::any_of(_magazineGripDrafts.cbegin(), _magazineGripDrafts.cend(),
             [&](const auto& draft) { return sameGripFit(*authoredGrip, draft); });
-        if (authoredGrip && !retainedMagazineDraft && partGripSnapshot(*authoredGrip) != _partGripOpened) {
+        if (!_holdingEditing && authoredGrip && !retainedMagazineDraft && partGripSnapshot(*authoredGrip) != _partGripOpened) {
             const auto bytes = encodePartGrip(*authoredGrip, error);
             if (!error.isEmpty()) {
                 message = "Finish the grip before saving: " + error;
@@ -545,14 +548,14 @@ namespace reloadmaker
             "format", "kind", "weapon", "weaponName", "weaponEditorId",
             "authoringRoadmaps", "reloadTemplates", "reloadAxes", "weaponProperties", "sourcePolicies", "annotations",
             "simulationSpringReturn", "glockReloadNoExtender", "soundProfiles", "grabLocations", "scopeProfiles",
-            "operatingGrips", "magazineGrabGrips", "magazineGrabDefaults", "magazineModels", "magazineRounds",
+            "holdingGrips", "holdingGripDrafts", "operatingGrips", "magazineGrabGrips", "magazineGrabDefaults", "magazineModels", "magazineRounds",
             "magazineGripDrafts", "fingerDrafts", "gripDraft", "mechanismDraft", "unfinishedDraft"
         };
         // Where the author left the weapon: loadout, arms, camera, page, clip
         // and hand. Kept automatically per weapon outside every version
         // (sessionFile); it never marks a weapon unsaved.
         constexpr const char* kSessionKeys[] = {
-            "body", "choices", "recordChoices", "browserPlugin", "camera", "workspace", "handsPage", "magazineHandFit", "animation", "seconds",
+            "holdingPreview", "body", "choices", "recordChoices", "browserPlugin", "camera", "workspace", "handsPage", "magazineHandFit", "animation", "seconds",
             "motionMode", "transitions", "showArms", "hand", "fingerJoint", "selectedHandPose", "interactionHand", "scopeSelection"
         };
 
@@ -687,6 +690,7 @@ namespace reloadmaker
     // projects) and the NoExtender reload.
     void ReloadMakerController::restoreProjectLoadout(const QJsonObject& record)
     {
+        _holdingGrips=record["holdingGrips"].toObject();_holdingWorking=record["holdingGripDrafts"].toObject();const auto holding=record["holdingPreview"].toObject();_holdingPreview=holding["enabled"].toBool();_holdingHand=holding["hand"]=="left"?PoseHand::Left:PoseHand::Right;_holdingSupport=holding["support"].toBool(true);_holdingCapture=holding["capture"].toObject();_holdingReplay=holding["replay"].toBool();_holdingSpecific=holding["specific"].toBool(true);_holdingEditing=false;
         _armsBody = isArmsBody(record["body"].toString()) ? record["body"].toString() : QStringLiteral("male");
         showArmsBody();
         refreshAttachments();

@@ -665,6 +665,17 @@ def connect_profile(expected_revision: int) -> dict:
     """Connect saved setup only through the matching active MO2 virtual profile."""
     return command('connect_profile', {}, expected_revision)
 
+
+@mcp.tool()
+def holding_grips(operation: str, expected_revision: int, values: dict | None = None) -> dict:
+    """Physical firing grips: preview(enabled, hand, support, replay), import-capture(path), edit, save, reset, export(path). Reload-hand selection stays independent. Export writes optional ROCK holding-grip records for the current weapon; it does not enable mods. Runtime captures include actual controller calibration and final hands."""
+    return command('holding_grips', dict(values or {}, operation=operation), expected_revision)
+
+@mcp.tool()
+def get_holding_grips() -> dict:
+    """Read holding preview, independent firing fits, capture metadata and available comparison errors."""
+    return command('holding_grips_state')
+
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--command',help='One JSON request to the local application')

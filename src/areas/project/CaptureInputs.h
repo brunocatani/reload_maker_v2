@@ -8,7 +8,7 @@ namespace reloadmaker {
 // a magazine that has its own fit. Unfinished edits are saved, not exported.
 inline QJsonObject captureInputs(QJsonObject record, const QString& weapon,
     const QString& magazine, const QStringList& moving) {
-    for(const auto* key:{"annotations","fingerDrafts","gripDraft","mechanismDraft","unfinishedDraft","magazineGripDrafts",
+    for(const auto* key:{"holdingGrips","holdingGripDrafts","annotations","fingerDrafts","gripDraft","mechanismDraft","unfinishedDraft","magazineGripDrafts",
         "weaponName","weaponEditorId","scopeProfiles"})record.remove(key);
     const auto fits=record.take("magazineGrabGrips").toObject();
     const auto defaults=record.take("magazineGrabDefaults").toObject();

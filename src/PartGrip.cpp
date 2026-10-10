@@ -160,7 +160,7 @@ namespace reloadmaker {
 
     bool solvePartGrip(const HkxSkeleton& skeleton, const QVector<Transformf>& nativeLocal,
         const QVector<Transformf>& framedGlobal, const HandPose& pose, const Transformf& handWorld,
-        QVector<Transformf>& solvedLocal, QVector<Transformf>& solvedGlobal, QString& error,GripReach reach) {
+        QVector<Transformf>& solvedLocal, QVector<Transformf>& solvedGlobal, QString& error,GripReach reach,bool allowHandScale) {
         error.clear();
         const QString prefix=pose.hand==PoseHand::Left?"LArm_":"RArm_";
         const int upper=skeleton.boneIndex(prefix+"UpperArm");
@@ -201,7 +201,7 @@ namespace reloadmaker {
             distance>a+b+.0001f || distance<std::abs(a-b)-.0001f) {
             error=QStringLiteral("Target is outside this arm's reach; move it closer or use the current wrist"); return false;
         }
-        if (std::abs(handWorld.scale.x-framedGlobal[hand].scale.x)>.001f) {
+        if (!allowHandScale && std::abs(handWorld.scale.x-framedGlobal[hand].scale.x)>.001f) {
             error=QStringLiteral("Reference-part scale differs; use the current wrist to preserve hand size"); return false;
         }
         if (!invertUniformTransform(framedGlobal[hand],inverse)) { error=QStringLiteral("Invalid wrist frame"); return false; }

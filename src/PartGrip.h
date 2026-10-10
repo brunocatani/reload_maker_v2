@@ -45,5 +45,5 @@ namespace reloadmaker {
         const QVector<Transformf>& nativeLocal, const QVector<Transformf>& framedGlobal,
         const HandPose& pose, const Transformf& handWorld,
         QVector<Transformf>& solvedLocal, QVector<Transformf>& solvedGlobal, QString& error,
-        GripReach reach=GripReach::FixedShoulder);
+        GripReach reach=GripReach::FixedShoulder,bool allowHandScale=false);
 }

@@ -1725,6 +1725,18 @@ namespace reloadmaker
         QComboBox* _clipCombo{nullptr};
         QLabel* _loadoutTitle{nullptr};
         QComboBox* _bodyCombo{ nullptr };
+        bool _holdingPreview{false},_holdingSupport{true},_holdingEditing{false},_holdingReplay{false},_holdingSpecific{true};
+        PoseHand _holdingHand{PoseHand::Right};
+        QJsonObject _holdingGrips,_holdingCapture,_holdingWorking;
+        std::array<HandPose,2> _holdingSolved;
+        QString _holdingError;
+        bool applyHoldingPreview();
+        void showHoldingGrips();
+        QJsonObject holdingGripsCommand(const QJsonObject&);
+        QJsonObject holdingGripsState() const;
+        QString holdingGripKey(PoseHand hand,bool specific=true) const;
+        QString holdingGripVariant() const;
+
         QTabWidget* _pages{ nullptr };
         QComboBox* _pluginFilter{nullptr};
         QLabel* _loadingLabel{nullptr};

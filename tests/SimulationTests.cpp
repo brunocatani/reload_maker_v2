@@ -1,5 +1,6 @@
 #include "WeaponSimulation.h"
 #include "RuntimeSourcePath.h"
+#include "areas/project/CaptureInputs.h"
 #include "BoltCycle.h"
 #include "OperatingSetup.h"
 #include "MagazineGuide.h"
@@ -496,6 +497,12 @@ void m1aFixture(const QString& path) {
 }
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
+    if(app.arguments().contains("--holding-isolation")) {
+        const QJsonObject baseline{{"weapon","rifle.esp:000123"},{"format","reload-maker-project"}};
+        auto holding=baseline;holding["holdingGrips"]=QJsonObject{{"rifle.esp:000123|left",QJsonObject{{"wrist","edited"}}}};holding["holdingGripDrafts"]=QJsonObject{{"right","draft"}};
+        if(captureInputs(baseline,"rifle.esp:000123","rifle.esp:000456",{})!=captureInputs(holding,"rifle.esp:000123","rifle.esp:000456",{}))return 1;
+        QTextStream(stdout)<<"PASS holding-grip edits leave reload capture dependencies unchanged\n";return 0;
+    }
     if(app.arguments().contains("--source-helpers")) {
         const auto actual=runtimeSourcePath("Weapon/WeaponMagazine/WeaponMagazineChild1","Mag/WeaponMagazine/WeaponMagazineHelper/WeaponMagazineChild1");
         if(actual!="Weapon/WeaponMagazine/WeaponMagazineHelper/WeaponMagazineChild1")return 1;

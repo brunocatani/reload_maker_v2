@@ -159,6 +159,10 @@ namespace {
         require(std::abs(distance(global[hand].translation,global[fore].translation)-distance(outGlobal[hand].translation,outGlobal[fore].translation))<.002f,"Free grab stretched forearm");
         require(buildPoseGlobals(s,outLocal,rebuilt,error),error);
         for(int i=0;i<s.bones.size();++i){expect(rebuilt[i],outGlobal[i]);if(!s.bones[i].name.startsWith(prefix))expect(global[i],outGlobal[i]);}
+        auto scaled=target;scaled.scale={target.scale.x*1.1f,target.scale.y*1.1f,target.scale.z*1.1f};
+        require(!solvePartGrip(s,local,global,p,scaled,outLocal,outGlobal,error,GripReach::FollowTarget),"Ordinary part grip unexpectedly changed hand size");
+        require(solvePartGrip(s,local,global,p,scaled,outLocal,outGlobal,error,GripReach::FollowTarget,true),error);
+        expect(outGlobal[hand],scaled);
     }
     QByteArray read(const QString& path) { QFile f(path); require(f.open(QIODevice::ReadOnly),path); return f.readAll(); }
     void storage() {

@@ -114,6 +114,7 @@ namespace reloadmaker
         if (!applySimulationPose()) {
             return false;
         }
+        if (!applyHoldingPreview()) { return false; }
         if (!applyMagazineGrabPose()) {
             return false;
         }
