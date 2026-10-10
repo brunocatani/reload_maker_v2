@@ -324,7 +324,7 @@ def simulate_weapon(operation: str, expected_revision: int, progress: float | No
 
 @mcp.tool()
 def set_interaction_hand(hand: str, expected_revision: int) -> dict:
-    """Choose left (right firing grip) or right (left support grip). Glock remains left-only. Finish the current grab first."""
+    """Choose the physical left or right operating/reload hand, including pistols. Finish the current grab first."""
     return command('interaction_hand',{'hand':hand},expected_revision)
 
 @mcp.tool()
