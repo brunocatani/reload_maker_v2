@@ -69,7 +69,7 @@ bool ReloadMakerController::applyHoldingPreview(){
     const auto rp=array(_holdingCapture.value("palmRight"),{6,-2,.2f}),lp=array(_holdingCapture.value("palmLeft"),{6,-2,-.2f});
     const auto right=mathPose(source[1].placement.handInWeapon);const auto grip=hm::point(right,rp);
     auto left=hm::leftFiring(right,br,bl,grip);
-    const auto offsets=array(_holdingCapture.value("leftGripOffset"),{});hm::V calibration{offsets[0],offsets[1]+.6f,-offsets[2]};left.t=hm::add(left.t,hm::sub(hm::point(left,calibration),left.t));
+    const auto offsets=array(_holdingCapture.value("leftGripOffset"),{});hm::V calibration{offsets[0],offsets[1]+float(_holdingCapture.value("leftGripBaselineY").toDouble(.6)),-offsets[2]};left.t=hm::add(left.t,hm::sub(hm::point(left,calibration),left.t));
     firing.placement.handInWeapon=firing.placement.handInAnchor=previewPose(left);
     auto sr=hm::rightSupport(mathPose(source[0].placement.handInWeapon),bl,br,lp,rp);const auto so=array(_holdingCapture.value("rightSupportOffset"),{});hm::V shift{so[0]-.9f,so[1],-so[2]};sr.t=hm::point(sr,shift);support.placement.handInWeapon=support.placement.handInAnchor=previewPose(sr);
    }
