@@ -128,7 +128,7 @@ namespace reloadmaker
         Right,
     };
 
-    enum class MagazineRelease { Button, Manual, Mechanism };
+    enum class MagazineRelease { Button, Manual, Mechanism, None };
     [[nodiscard]] QString magazineReleaseName(MagazineRelease mode);
     [[nodiscard]] std::optional<MagazineRelease> magazineReleaseFromName(const QString& name);
 

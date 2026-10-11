@@ -101,6 +101,7 @@ namespace reloadmaker
             updateSimulationControls();
             return;
         }
+        _simulation.unitLoading=unitLoadingConfiguration();
         _simulation.configureAmmunition(_simulationAmmo.valid() ? _simulationAmmo.capacity : 0, _simulationAmmo.pistol, rig.mechanism);
         _simulation.hkSlap=rig.hkSlap;
         _simulation.slapClose=rig.slapClose;_simulation.magazineEjectionSpeed=rig.magazineEjectionSpeed;
@@ -188,6 +189,8 @@ namespace reloadmaker
         const int magazineAnchor = currentMagazineAnchor();
         const bool installedMagazine = magazineAnchor >= 0 && _handPoseAnchors[magazineAnchor].description.anchorKind == "installed-part";
         if ((rig.magazineBranchOnly || magazineBuiltIn()) && model) {
+            if(config)for(auto it=_partRoots.cbegin();it!=_partRoots.cend();++it)
+                if(poseRecordKey(config->selected(it.key())).compare(owner.ownerRecord,Qt::CaseInsensitive)==0)_simulationMagazineSlot=it.key();
             const auto node = _sceneNodes[_reloadTrackNodes[rig.magazine]];
             _simulationVisibility.append({ node, model->get<int>(node, "Flags") });
         } else if (config && model) {

@@ -181,7 +181,8 @@ namespace reloadmaker
             return refused(QStringLiteral("The weapon description is inconsistent"));
         }
         const Feed& feed = model.feed;
-        if (feed.container != ContainerKind::Detachable) {
+        const bool unitLoading=feed.container==ContainerKind::Fixed&&feed.loadingPoints.size()==1&&feed.loadingPoints[0].unit==UnitKind::Round;
+        if (feed.container != ContainerKind::Detachable && !unitLoading) {
             return refused(QStringLiteral("DIAMOND has no runtime yet for fixed feeds (single rounds, clips, cylinders)"));
         }
         if (feed.loadingPoints.size() != 1) {
@@ -210,6 +211,7 @@ namespace reloadmaker
         if (model.fire.afterShot == AfterShot::OpenBolt && action->kind != MechanismKind::ChargingHandle) {
             return refused(QStringLiteral("Open-bolt firing currently requires an independent charging handle"));
         }
+        if(unitLoading&&action->kind!=MechanismKind::ReciprocatingBolt)return refused(QStringLiteral("Select a supported fixed-feed action"));
         const bool manual = model.fire.afterShot == AfterShot::ManualCycle;
         if (manual != (action->kind == MechanismKind::TurnBolt)) {
             return refused(QStringLiteral("DIAMOND cycles by hand after each shot only with a turn bolt"));

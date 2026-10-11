@@ -7,6 +7,7 @@ namespace reloadmaker {
     struct MagazineRail {
         QString connectionName;
         Transformf connection;
+        Transformf sourceToSeat; // Unit loading relocates the captured shell rest to its selected tube seat.
         int fullTrack{-1}, emptyTrack{-1};
         bool sharedBody()const{return fullTrack==emptyTrack;}
         QVector3D outward, handle;
@@ -14,9 +15,11 @@ namespace reloadmaker {
         float magazineMinProjection{0}, weaponMaxProjection{0}, clearance{0};
         QVector<Transformf> motion; // Visual motion, independent of the straight input axis.
         QVector<float> motionDistances;
+        QVector<float> motionSeconds; // Optional source times for loading followers.
         // Untrimmed authoring source retained only for reversible guide edits.
         QVector<Transformf> guideSourceMotion;
         QVector<float> guideSourceDistances;
+        QVector<float> guideSourceSeconds;
         QJsonObject inputSetup;
     };
     enum class MagazinePhase { Seated, Absent, Outgoing, OutsideEmpty, Incoming, Free, Rail };

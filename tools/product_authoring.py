@@ -203,7 +203,7 @@ def apply_capture(draft,capture,full='',empty=''):
             current=presentation_identity(snapshot['magazine'].get('presentationSetup'))
             require(cooked is None or current is None or cooked==current,
                     'Magazine model was cooked with another body/payload presentation')
-            item=dict(id=assignment[presentation],name=f"{weapon['name']} {snapshot['magazine']['capacity']} round magazine ({presentation})",
+            item=dict(id=assignment[presentation],name=(f"{weapon['name']} shell" if snapshot['magazine'].get('unitLoading') else f"{weapon['name']} {snapshot['magazine']['capacity']} round magazine ({presentation})"),
                       bounds=meta['bounds'],weight=meta['massKg'],value=0,source=dict(path=str(model)))
             replace_record(project['objects'],item,lambda p:p['id'])
     capture_records=weapon.setdefault('captures',[])

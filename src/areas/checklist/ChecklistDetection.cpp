@@ -272,7 +272,7 @@ namespace reloadmaker
         }
 
         // Magazine hand fits for every hand the preset loads with.
-        if (o.contains("feed.fits")) {
+        if (o.contains("feed.fits") || unitLoadingConfiguration()) {
             QStringList fitted;
             QString problem;
             for (const auto hand : { PoseHand::Left, PoseHand::Right }) {
@@ -289,7 +289,9 @@ namespace reloadmaker
                     problem = error.isEmpty() ? QStringLiteral("Fit the %1 hand on the magazine in Part grips.").arg(side.toLower()) : error;
                 }
             }
-            o["feed.fits"] = problem.isEmpty() ? found(fitted.join(", "), QStringLiteral("Saved hand fits for the selected magazine.")) : missing(problem);
+            const auto fitState=problem.isEmpty()?found(fitted.join(", "),QStringLiteral("Saved physical-hand fits for the selected loading object.")):missing(problem);
+            if(o.contains("feed.fits"))o["feed.fits"]=fitState;
+            if(unitLoadingConfiguration())for(const auto& point:model.feed.loadingPoints)o["feed."+point.id+".fit"]=fitState;
         }
 
         // The magazine rail exists while Operate runs.

@@ -45,7 +45,9 @@ namespace reloadmaker {
         SimulationAction action{SimulationAction::Idle};
         MagazineMotion magazine;
         MagazineRelease magazineRelease{MagazineRelease::Button};
-        bool magazinePresent()const{return magazine.seated();}
+        bool unitLoading{false};
+        bool magazinePresent()const{return unitLoading||magazine.seated();}
+        bool insertRound();
         float slide{0}, seconds{0}, grabStart{0};
         WeaponMechanism mechanism{WeaponMechanism::PistolSlide};
         float handle{0}, shotSeconds{0}, fireCycleSeconds{0};

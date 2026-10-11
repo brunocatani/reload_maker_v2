@@ -497,6 +497,33 @@ void m1aFixture(const QString& path) {
 }
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
+    if(app.arguments().contains("--tube")) {
+        MagazineRail timed;timed.motion={Transformf{},Transformf{{0,4,0}},Transformf{{0,10,0}}};timed.motionDistances={0,4,10};timed.motionSeconds={2,1.8f,1.5f};
+        MagazineGuide guide;guide.outwardInConnection={0,1,0};guide.travel=7;guide.captureRadius=1;guide.releaseMargin=1;QString timingError;
+        check(applyMagazineGuide(guide,timed,timingError),timingError);
+        check(std::abs(timed.motionSeconds.back()-1.65f)<1e-5f,"Shortened shell guide lost lifter source time");
+        guide.travel=12;check(applyMagazineGuide(guide,timed,timingError),timingError);
+        check(timed.motionSeconds.size()==4&&std::abs(timed.motionSeconds.back()-1.5f)<1e-5f,"Extended shell clearance advanced lifter beyond source");
+        guide.travel=4;check(applyMagazineGuide(guide,timed,timingError),timingError);
+        check(std::abs(timed.motionSeconds.back()-1.8f)<1e-5f,"Repeated guide edits lost original source clock");
+        try {
+            MagazineRail rail;rail.travel=4;rail.captureRadius=1;rail.outward={0,0,-1};
+            WeaponSimulation sim;sim.unitLoading=true;sim.configureAmmunition(4,true,WeaponMechanism::ReciprocatingBolt);sim.fireCycleSeconds=.1f;sim.magazineRounds=2;
+            check(sim.magazinePresent()&&!sim.magazine.visible(),"Tube must remain installed without a loose shell");
+            check(!sim.dropMagazine()&&!sim.grabMountedMagazine(),"Tube was treated as detachable");
+            check(sim.grab(),"Cannot grab bolt");sim.drag(1);sim.release(false,true);
+            check(!sim.chambered&&sim.slideLocked&&sim.magazineRounds==2&&sim.roundsEjected==1,"Opening did not eject and latch independently of tube rounds");
+            check(sim.grabMagazine(rail),"Cannot draw one shell");sim.magazine.phase=MagazinePhase::Seated;check(sim.insertRound(),"Shell did not enter tube");
+            check(sim.magazineRounds==3&&!sim.chambered&&sim.slideLocked,"Loading chambered or closed the bolt");
+            check(!sim.grabMagazine(rail),"Overfilled tube");
+            check(sim.grab(),"Cannot release catch by pulling");sim.drag(1.08f);sim.release(false,true);(void)sim.tick(1,.1f);
+            check(sim.chambered&&sim.magazineRounds==2&&!sim.slideLocked,"Bolt closure did not feed exactly one shell");
+            for(int shot=0;shot<3;++shot){check(sim.fire(),"Tube failed to feed a shot");(void)sim.tick(.2f,.1f);}
+            check(!sim.chambered&&sim.magazineRounds==0&&sim.slideLocked,"Last shot did not hold bolt open");
+            check(sim.grabMagazine(rail),"Cannot draw refill shell");sim.releaseMagazine();check(sim.magazineRounds==0&&sim.magazinePresent(),"Dropping shell changed internal feed");
+            QTextStream(stdout)<<"PASS fixed tube, single-shell loading, manual ejection/catch, closure feed and last-shot catch\n";return 0;
+        }catch(const std::exception& e){QTextStream(stderr)<<e.what()<<'\n';return 1;}
+    }
     if(app.arguments().contains("--magazine-release")) {
         try {
             MagazineRail rail;rail.travel=8;rail.captureRadius=1;rail.outward={0,0,-1};

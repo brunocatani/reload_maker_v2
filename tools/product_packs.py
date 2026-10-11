@@ -25,7 +25,7 @@ TEMPLATES = {
     'rifle.independent-handle-rocking.v1',
     'rifle.reciprocating-rocking.v1',
     'rifle.rotary-handle-detachable.v1',
-    'shotgun.self-loading-detachable.v1',
+    'shotgun.self-loading-detachable.v1', 'shotgun.self-loading-tube.v1',
 }
 
 

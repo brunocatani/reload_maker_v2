@@ -186,8 +186,14 @@ void ReloadMakerController::updateSimulationControls() {
         ar?"Grab the "+part+" to rack · Bolt release closes the bolt · "+(automatic?"hold Fire for automatic fire":"background drag orbits"):"Grab the slide to rack it · linked parts follow · background drag orbits");
     if(_simulation.hkSlap)_simulationDrive->setInstructions("Pull straight back to latch the handle · release your grip · Slap handle springs it closed");
     if(_simulation.openBolt){_simulationInstructions->setText("Pull the charging handle to cock. The bolt stays back with an empty chamber; FIRE feeds and fires from the magazine. Replace the magazine while cocked, or rack after running empty. "+grabText);_simulationDrive->setInstructions("Open bolt · pull handle to cock · trigger feeds and fires · magazine carries every unfired round");}
-    const bool cell=_simulation.cellFed();
-    _simulationDrop->setVisible(!cell);_magazineOut->setVisible(!cell);
+    const bool cell=_simulation.cellFed(),units=_simulation.unitLoading;
+    _simulationDrop->setVisible(!cell&&!units);_magazineOut->setVisible(!cell&&!units);
+    _magazineIn->setVisible(!units);_simulationReload->setVisible(!units);_magazineGrab->setText(units?"Grab shell":"Grab magazine");
+    if(units){
+        _simulationSlideRelease->hide();
+        _simulationInstructions->setText("Pull the bolt fully back to eject and hold it open. Grab shells and insert each through the bottom loading port. Pull the open bolt again and release to close and chamber a shell.");
+        _simulationDrive->setInstructions("Bottom-load shells · pull bolt to eject and hold open · pull again and release to chamber");
+    }
     if(cell){
         _simulationSlideRelease->setVisible(_simulation.slapClose);_simulationSlideRelease->setText("Slap closed");_simulationSpring->hide();
         _simulationInstructions->setText("Pull the cell lever fully to eject. Insert a fresh cell while open, then close the lever. When enabled, Slap closed also closes it. The reload button does not eject cells.");
@@ -213,7 +219,7 @@ void ReloadMakerController::updateSimulationControls() {
     const bool magazineReady=_simulationActive&&_magazineRail&&_simulation.action==SimulationAction::Idle&&!_simulation.magazine.busy();
     _magazineOut->setEnabled(magazineReady&&_simulation.magazineRelease==MagazineRelease::Button&&_simulation.magazine.seated());
     _magazineIn->setEnabled(magazineReady&&_simulation.ammoKnown()&&!_simulation.magazine.seated());
-    _magazineGrab->setEnabled(magazineReady&&_simulation.ammoKnown());
+    _magazineGrab->setEnabled(magazineReady&&_simulation.ammoKnown()&&(!units||_simulation.magazineRounds<_simulation.capacity));
     _simulationReset->setEnabled(_simulationActive);
     if(!_simulationActive) {
         const QString idle=!currentWeapon()?"Choose a plugin, then a weapon above.":_reloadCapturing?"Learning the native reload…":_clip.valid()&&simulationWorkspace(_workspace)&&_reloadRecipe?"Press any action to operate the weapon.":"Preparing native part motion…";
@@ -222,12 +228,12 @@ void ReloadMakerController::updateSimulationControls() {
     // Compact state card: the numbers the user acts on, then the phase text.
     const QString slide=_simulation.slideLocked?"<b>locked open</b>":QString::number(qRound(_simulation.slide*100))+"% open";
     _simulationStatus->setText(QString("<span style='font-size:15px;font-weight:600'>%1</span><br>"
-        "<table cellspacing=0 cellpadding=1><tr><td>Magazine&nbsp;</td><td><b>%2 / %3</b> %4</td></tr>"
+        "<table cellspacing=0 cellpadding=1><tr><td>%10&nbsp;</td><td><b>%2 / %3</b> %4</td></tr>"
         "<tr><td>Chamber&nbsp;</td><td><b>%5</b></td></tr><tr><td>%9&nbsp;</td><td>%6</td></tr>"
         "<tr><td>Shots&nbsp;</td><td>%7</td></tr></table><span style='color:#91a4ae'>%8</span>")
         .arg(simulationActionName(_simulation.action,ar,bolt)).arg(_simulation.magazineRounds).arg(_simulation.capacity).arg(_simulationAmmo.ammoName.toHtmlEscaped())
         .arg(_simulation.spentCase?"spent case":_simulation.chambered?"loaded":"empty").arg(slide).arg(_simulation.shotsFired)
-        .arg(_simulation.magazine.seated()?QString("Magazine seated"):_simulation.magazineDescription().toHtmlEscaped()).arg(ar?"Bolt":"Slide"));
+        .arg(_simulation.magazine.seated()?QString("Magazine seated"):_simulation.magazineDescription().toHtmlEscaped()).arg(ar?"Bolt":"Slide").arg(units?"Tube":"Magazine"));
     QStringList names;for(int i:_simulationRig->slideTracks)names.append(_reloadRecipe->tracks[i].anchor.anchorName);
     const QString weaponName=currentWeapon()->name.isEmpty()?currentWeapon()->editorId:currentWeapon()->name;
     const auto* preset=checklistPreset();

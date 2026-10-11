@@ -28,12 +28,12 @@ bool applyMagazineGuide(const MagazineGuide& guide,MagazineRail& rail,QString& e
     const auto rotatedAxis=rotated(rail.connection.rotation,{guide.outwardInConnection.x(),guide.outwardInConnection.y(),guide.outwardInConnection.z()});
     const QVector3D axis=QVector3D(rotatedAxis.x,rotatedAxis.y,rotatedAxis.z).normalized();
     if(linearMotion||(rail.motion.isEmpty()&&rail.guideSourceMotion.isEmpty())) {
-        rail.motion.clear();rail.motionDistances.clear();
+        rail.motion.clear();rail.motionDistances.clear();rail.motionSeconds.clear();
     } else {
         if(rail.guideSourceMotion.isEmpty()) {
-            rail.guideSourceMotion=rail.motion;rail.guideSourceDistances=rail.motionDistances;
+            rail.guideSourceMotion=rail.motion;rail.guideSourceDistances=rail.motionDistances;rail.guideSourceSeconds=rail.motionSeconds;
         }
-        rail.motion=rail.guideSourceMotion;rail.motionDistances=rail.guideSourceDistances;
+        rail.motion=rail.guideSourceMotion;rail.motionDistances=rail.guideSourceDistances;rail.motionSeconds=rail.guideSourceSeconds;
         const auto depth=[&](const Transformf& delta) {
             const auto point=composed(delta,Transformf{{rail.handle.x(),rail.handle.y(),rail.handle.z()}}).translation;
             return QVector3D::dotProduct(QVector3D(point.x,point.y,point.z)-rail.handle,axis);
@@ -53,6 +53,7 @@ bool applyMagazineGuide(const MagazineGuide& guide,MagazineRail& rail,QString& e
             const float u=(low+high)*.5f;
             const auto end=interpolatedTransform(a,b,u);
             const float distance=rail.motionDistances[i-1]+u*(rail.motionDistances[i]-rail.motionDistances[i-1]);
+            if(rail.motionSeconds.size()==rail.motion.size()){const float time=rail.motionSeconds[i-1]+u*(rail.motionSeconds[i]-rail.motionSeconds[i-1]);rail.motionSeconds.resize(i);rail.motionSeconds.append(time);}
             rail.motion.resize(i);rail.motionDistances.resize(i);
             rail.motion.append(end);rail.motionDistances.append(distance);clipped=true;break;
         }
@@ -62,6 +63,7 @@ bool applyMagazineGuide(const MagazineGuide& guide,MagazineRail& rail,QString& e
             const float extra=guide.travel-depth(rail.motion.back());
             if(extra>1e-5f) {
                 auto end=rail.motion.back();end.translation.x+=axis.x()*extra;end.translation.y+=axis.y()*extra;end.translation.z+=axis.z()*extra;
+                if(rail.motionSeconds.size()==rail.motion.size())rail.motionSeconds.append(rail.motionSeconds.back());
                 rail.motion.append(end);rail.motionDistances.append(rail.motionDistances.back()+extra);
             }
         }

@@ -86,6 +86,7 @@ namespace reloadmaker
             { "applied", _magazineGrabGrip && _simulation.magazine.carried() && _magazineGrabError.isEmpty() },
             { "error", _magazineGrabError },
         };
+        result["unitLoading"]=_simulation.unitLoading;
         result["magazineRelease"]=magazineReleaseName(_simulation.magazineRelease);
         const auto& offset = _simulation.magazine.offset;
         result["magazine"] = QJsonObject{
@@ -101,6 +102,7 @@ namespace reloadmaker
             result["magazineRail"] = magazineRailJson(*_magazineRail);
         }
         auto ammunition = _simulationAmmo.json();
+        if(_simulation.unitLoading)ammunition["capacity"]=_simulation.capacity;
         ammunition["magazineRounds"] = _simulation.magazineRounds;
         ammunition["chambered"] = _simulation.chambered;
         ammunition["slideLocked"] = _simulation.slideLocked;

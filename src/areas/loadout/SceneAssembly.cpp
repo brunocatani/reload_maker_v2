@@ -457,11 +457,16 @@ namespace reloadmaker
                 }
             }
         }
-        if (suppliesParent) {
+        QString ownerAnchorError;
+        const bool ownerHasAnchor=_attachmentConnections.anchor(match,-1,ownerAnchorError)>=0;
+        if (suppliesParent && ownerHasAnchor) {
             // An attachment may bring payload bones while its rigid body is
             // outside every animated branch (the 1911 extended magazine).
             // That body must stay attached to the parent's actual connect
             // bone. Moving its root up to the semantic parent strands it.
+            // When only the incoming model supplies the bone (fixed tubes),
+            // its outer body stays in the semantic frame; a synthesized rig
+            // reference would offset the entire tube and all loading shells.
             for (int block = 0; block < incoming->getBlockCount(); ++block) {
                 auto node = incoming->getBlockIndex(block);
                 if (!incoming->blockInherits(node, "BSTriShape") && !incoming->blockInherits(node, "NiTriBasedGeom")) {

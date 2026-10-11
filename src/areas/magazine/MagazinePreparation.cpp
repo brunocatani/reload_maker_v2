@@ -42,6 +42,39 @@ namespace reloadmaker
         if (!collectMagazineGeometry(body, frame, shapes)) {
             return;
         }
+        if(unitLoadingConfiguration()) {
+            const auto& recipe=*_reloadRecipe;const int track=_simulationRig->magazine;
+            MagazineRail rail;rail.fullTrack=rail.emptyTrack=track;
+            bool empty=false,full=false;classifyMagazineShapes(shapes,rail,empty,full);
+            for(auto& visual:_magazineVisuals)if(!visual.nativeOnly){visual.cartridge=false;visual.empty=false;}
+            if(!_magazineSetup||_magazineSetup->seatSeconds<=_magazineSetup->entrySeconds||_magazineSetup->seatSeconds>recipe.duration){
+                _magazineError="Choose the bottom-loading entry and seated source times for the shell.";return;
+            }
+            const float start=_magazineSetup->entrySeconds,end=_magazineSetup->seatSeconds;
+            const auto seat=reloadTrackPose(recipe,track,end),entry=reloadTrackPose(recipe,track,start);
+            Transformf inverseSeat,inverseRest;
+            if(!invertUniformTransform(seat,inverseSeat)||!invertUniformTransform(recipe.tracks[track].poses.front(),inverseRest)){
+                _magazineError="Select a visible shell at the tube opening.";return;
+            }
+            rail.sourceToSeat=composed(seat,inverseRest);rail.connection=seat;rail.connectionName="Tube loading port";
+            rail.handle={seat.translation.x,seat.translation.y,seat.translation.z};
+            const QVector3D delta(entry.translation.x-seat.translation.x,entry.translation.y-seat.translation.y,entry.translation.z-seat.translation.z);
+            rail.travel=delta.length();
+            if(rail.travel<.1f){_magazineError="The selected shell-loading stroke has no measurable travel.";return;}
+            rail.outward=delta.normalized();
+            QVector3D low=body.front(),high=low;
+            for(const auto& p:body)for(int axis=0;axis<3;++axis){low[axis]=std::min(low[axis],p[axis]);high[axis]=std::max(high[axis],p[axis]);}
+            rail.captureRadius=std::max(.35f,(high-low).length()*.18f);rail.releaseMargin=rail.captureRadius*.6f;
+            rail.motion={Transformf{}};rail.motionDistances={0};rail.motionSeconds={end};float distance=0;
+            for(int sample=1;sample<=64;++sample){
+                const auto pose=composed(reloadTrackPose(recipe,track,end-(end-start)*sample/64.f),inverseSeat);
+                distance+=reloadPoseDistance(rail.motion.back(),pose);rail.motion.append(pose);rail.motionDistances.append(distance);rail.motionSeconds.append(end-(end-start)*sample/64.f);
+            }
+            if(!applyMagazinePieceRoles(rail))return;
+            const auto guideJson=authoringPlan().value("magazineGuide").toObject();
+            if(!guideJson.isEmpty()){MagazineGuide guide;if(!readMagazineGuide(guideJson,guide,_magazineError)||!applyMagazineGuide(guide,rail,_magazineError,false))return;}
+            _magazineRail=rail;return;
+        }
         const auto guideJson = authoringPlan().value("magazineGuide").toObject();
         MagazineGuide guide;
         QVector3D authoredOutward;
@@ -108,6 +141,7 @@ namespace reloadmaker
             _magazineNote = "The saved magazine presentation does not fit this reload; the native presentation is used.";
             return true;
         }
+        QVector<int> followers;for(int track:setup.loadingFollowers){const int mapped=mapRecipeTrack(setup.trackAnchors,*_reloadRecipe,track);if(mapped>=0)followers.append(mapped);}setup.loadingFollowers=followers;
         setup.trackAnchors = recipeTrackAnchors(*_reloadRecipe);
         _magazineSetup = setup;
         return true;

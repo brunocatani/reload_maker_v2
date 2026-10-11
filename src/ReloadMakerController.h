@@ -673,6 +673,7 @@ namespace reloadmaker
         QVector<Transformf> _boltFiredPose;
         QJsonObject _boltCycleSource;
         bool isRifleConfiguration() const;
+        bool unitLoadingConfiguration() const;
         QString currentTestbed();
         bool prepareRifleMotion();
         bool prepareRifleMotionFromClips();

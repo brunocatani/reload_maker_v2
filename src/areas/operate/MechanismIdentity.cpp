@@ -45,6 +45,12 @@ namespace reloadmaker
         return WeaponMechanism::PistolSlide;
     }
 
+    bool ReloadMakerController::unitLoadingConfiguration() const
+    {
+        const auto* preset=checklistPreset();
+        return preset&&preset->model.feed.container==ContainerKind::Fixed&&preset->model.feed.loadingPoints.size()==1&&preset->model.feed.loadingPoints[0].unit==UnitKind::Round;
+    }
+
     bool ReloadMakerController::isRifleConfiguration() const
     {
         const auto mechanism = simulationMechanism();

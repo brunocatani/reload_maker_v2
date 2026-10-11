@@ -1,0 +1,14 @@
+{
+    "format": 1,
+    "id": "shotgun.self-loading-tube.v1",
+    "label": "Shotgun — self-loading, bottom-loaded tube",
+    "category": "Shotgun",
+    "model": {
+        "feed": {
+            "container": "fixed", "magazineRelease": "none",
+            "loadingPoints": [{"id": "tube-port", "unit": "round", "destination": "container"}]
+        },
+        "mechanisms": [{"id": "bolt", "kind": "reciprocating-bolt", "roles": ["extract", "eject", "cock", "chamber"], "return": "spring", "locksOpen": true}],
+        "fire": {"motion": "native-clip", "afterShot": "automatic-cycle", "ejection": "on-fire", "lockOpen": "bolt"}
+    }
+}

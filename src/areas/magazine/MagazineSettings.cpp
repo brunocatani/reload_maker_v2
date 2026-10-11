@@ -279,6 +279,7 @@ namespace reloadmaker
             settings = saved;
             if (readMagazineSetup(saved, current, error)) {
                 current.emptyTrack = mapRecipeTrack(current.trackAnchors, *_reloadRecipe, current.emptyTrack);
+                QVector<int> followers;for(int track:current.loadingFollowers){const int mapped=mapRecipeTrack(current.trackAnchors,*_reloadRecipe,track);if(mapped>=0)followers.append(mapped);}current.loadingFollowers=followers;
                 current.recipeId = _reloadRecipe->id;
                 current.trackAnchors = {};
                 settings = magazineSetupJson(current);
@@ -325,6 +326,7 @@ namespace reloadmaker
                 fail(error);
             }
             value.emptyTrack = mapRecipeTrack(value.trackAnchors, *_reloadRecipe, value.emptyTrack);
+            QVector<int> followers;for(int track:value.loadingFollowers){const int mapped=mapRecipeTrack(value.trackAnchors,*_reloadRecipe,track);if(mapped>=0)followers.append(mapped);}value.loadingFollowers=followers;
             checkMagazineSetup(value);
             value.recipeId = _reloadRecipe->id;
             value.trackAnchors = recipeTrackAnchors(*_reloadRecipe);

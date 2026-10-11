@@ -190,7 +190,10 @@ namespace reloadmaker
         if(_simulation.magazine.mountedHold||_simulation.magazine.extracting){_simulation.moveMountedMagazine(*_magazineRail,distance);updateMagazinePose();return;}
         const bool wasSeated = _simulation.magazine.seated();
         _simulation.magazine.moveRail(*_magazineRail, distance);
+        const bool insertedRound=!wasSeated&&_simulation.insertRound();
+        if(insertedRound)emitSoundEvent("magazine_seated");
         updateMagazinePose();
+        if(insertedRound)setStatus("Shell loaded into the tube. Load another or pull and release the bolt.");
         if (!wasSeated && _simulation.magazine.seated()) {
             setStatus("Full magazine seated.");
         }

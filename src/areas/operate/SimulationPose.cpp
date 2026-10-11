@@ -89,6 +89,18 @@ namespace reloadmaker
         if (!addMagazineRoundTargets(targets)) {
             return false;
         }
+        if(_simulation.unitLoading&&_magazineSetup&&_magazineRail){
+            const auto& rail=*_magazineRail;float seconds=0;
+            if(_simulation.magazine.phase==MagazinePhase::Rail){
+                const float arc=std::clamp(_simulation.magazine.distance/rail.travel,0.f,1.f)*rail.motionDistances.back();
+                const auto end=std::lower_bound(rail.motionDistances.cbegin(),rail.motionDistances.cend(),arc);
+                const int b=std::clamp(int(end-rail.motionDistances.cbegin()),1,int(rail.motionDistances.size()-1)),a=b-1;
+                const float span=rail.motionDistances[b]-rail.motionDistances[a];const float u=span>0?(arc-rail.motionDistances[a])/span:0;
+                seconds=rail.motionSeconds[a]+u*(rail.motionSeconds[b]-rail.motionSeconds[a]);
+            }
+            for(int track:_magazineSetup->loadingFollowers)if(track>=0&&track<_reloadTrackNodes.size())
+                targets.insert(_reloadTrackNodes[track],reloadTrackPose(*_reloadRecipe,track,seconds));
+        }
         QSet<int> sceneTargets;
         addDetachedMagazineTargets(targets, sceneTargets);
         if (!poseSimulationTargets(targets, sceneTargets, local, world)) {
@@ -339,7 +351,7 @@ namespace reloadmaker
         for (const int track : _simulationRig->magazineTracks) {
             const int node = _reloadTrackNodes[track];
             const auto pose = sampledPayload && targets.contains(node) ? targets.value(node) : _reloadRecipe->tracks[track].poses.front();
-            targets.insert(node, composed(delta, pose));
+            targets.insert(node, composed(delta, composed(rail.sourceToSeat,pose)));
             sceneTargets.insert(node);
         }
     }
@@ -405,7 +417,7 @@ namespace reloadmaker
         if (_simulation.action == SimulationAction::Reload) {
             return _reloadRecipe && reloadTrackCulled(visual.track);
         }
-        const bool empty = (_simulation.magazine.ejecting ? _simulation.magazine.ejectedRounds : _simulation.magazineRounds) == 0;
+        const bool empty = !_simulation.unitLoading && (_simulation.magazine.ejecting ? _simulation.magazine.ejectedRounds : _simulation.magazineRounds) == 0;
         bool noRound = empty;
         if (!isRifleConfiguration() && !isBoltActionConfiguration() && _simulation.magazine.seated()) {
             // A pistol's seated magazine keeps its round shape while a round is chambered.

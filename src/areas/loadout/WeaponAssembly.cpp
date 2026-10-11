@@ -411,13 +411,15 @@ namespace reloadmaker
         for(int block=0;block<model->getBlockCount();++block) {
             const auto node=model->getBlockIndex(block);
             if(!model->blockInherits(node,"NiNode")||model->get<QString>(node,"Name").compare("WeaponMagazine",Qt::CaseInsensitive)!=0)continue;
+            const int owner=ownerOf(node);
             bool surface=false;
             for(int shape=0;shape<model->getBlockCount()&&!surface;++shape) {
                 const auto geometry=model->getBlockIndex(shape);
-                surface=(model->blockInherits(geometry,"BSTriShape")||model->blockInherits(geometry,"NiGeometry"))&&isWithinBlock(*model,geometry,node);
+                surface=(model->blockInherits(geometry,"BSTriShape")||model->blockInherits(geometry,"NiGeometry"))&&
+                    ownerOf(geometry)==owner&&isWithinBlock(*model,geometry,node);
             }
             if(!surface)continue;
-            const int owner=ownerOf(node);magazineOwners.append(owner);primaryMagazine|=primary(owner);
+            magazineOwners.append(owner);primaryMagazine|=primary(owner);
         }
         QSet<int> auxiliaryOwners;
         if(primaryMagazine)for(const int owner:magazineOwners)if(!primary(owner))auxiliaryOwners.insert(owner);

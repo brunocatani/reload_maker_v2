@@ -111,7 +111,7 @@ namespace reloadmaker
     {
         require(_simulationActive && _simulationRig && _reloadRecipe && _magazineRail && currentWeapon() && configuration(), "Prepare this configuration in Operate first");
         require(_simulationError.isEmpty() && _magazineError.isEmpty() && _magazineGrabError.isEmpty(), "Resolve the current simulation/magazine errors before capture");
-        require(_simulation.action == SimulationAction::Idle && _simulation.magazine.seated(), "Reset Operate to a seated magazine before capturing runtime data");
+        require(_simulation.action == SimulationAction::Idle && (_simulation.magazine.seated()||(_simulation.unitLoading&&!_simulation.magazine.carried())), "Reset Operate to a seated magazine before capturing runtime data");
         const auto& recipe = *_reloadRecipe;
         const auto& rig = *_simulationRig;
         const auto anchor = simulationMagazineAnchor();
@@ -339,13 +339,14 @@ namespace reloadmaker
         const auto& full = recipe.tracks[rail.fullTrack];
         QJsonObject magazine{ { "record", anchor.ownerRecord },
                               { "model", anchor.ownerModel },
-                              { "capacity", _simulationAmmo.capacity },
+                              { "capacity", _simulation.unitLoading?_simulation.capacity:_simulationAmmo.capacity },
                               { "rail", magazineRailJson(rail) },
-                              { "seat", runtimePose(full.poses[0]) },
+                              { "seat", runtimePose(composed(rail.sourceToSeat,full.poses[0])) },
                               { "fullName", full.anchor.anchorName },
                               { "emptyName", recipe.tracks[rail.emptyTrack].anchor.anchorName },
                               { "sourceRecipeId", recipe.id },
                               { "emptyHidePrefix", "" } };
+        magazine["unitLoading"]=unitLoadingConfiguration();
         magazine["fullPath"] = runtimeTrackPath(rail.fullTrack);
         magazine["emptyPath"] = runtimeTrackPath(rail.emptyTrack);
         if (const auto presentation = magazinePresentationJson(_magazineSetup ? magazineSetupJson(*_magazineSetup) : QJsonObject{}); !presentation.isEmpty()) {
@@ -491,7 +492,7 @@ namespace reloadmaker
                 continue;
             }
             const int frame = sampledMagazinePayload() ? _m1aLoadedMagazineFrame : 0;
-            const auto pose = sampledMagazinePayload() ? normalizedPart(track, frame) : track.poses[0];
+            const auto pose = composed(rail.sourceToSeat,sampledMagazinePayload() ? normalizedPart(track, frame) : track.poses[0]);
             if (pose.scale.x > 1e-5f) {
                 parts.append(QJsonObject{ { "name", track.anchor.anchorName }, { "pose", runtimePose(pose) }, { "path", partPath(index) } });
             }
@@ -513,6 +514,18 @@ namespace reloadmaker
             motion.append(QJsonObject{ { "progress", rail.motionDistances[i] / rail.motionDistances.back() }, { "pose", runtimePose(rail.motion[i]) } });
         }
         magazine["motion"] = motion;
+        if(unitLoadingConfiguration()&&_magazineSetup){
+            QJsonArray followers;
+            for(int track:_magazineSetup->loadingFollowers){
+                QJsonArray keys;
+                for(int i=0;i<rail.motionDistances.size();++i){
+                    const float seconds=rail.motionSeconds[i];
+                    keys.append(QJsonObject{{"progress",rail.motionDistances[i]/rail.motionDistances.back()},{"pose",runtimePose(reloadTrackPose(recipe,track,seconds))}});
+                }
+                followers.append(QJsonObject{{"path",runtimeTrackPath(track)},{"motion",keys}});
+            }
+            magazine["loadingParts"]=followers;
+        }
     }
 
     // The payload groups hidden on an empty magazine (at most 16, each the
