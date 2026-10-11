@@ -12,6 +12,10 @@ namespace reloadmaker {
         bool sharedBody()const{return fullTrack==emptyTrack;}
         QVector3D outward, handle;
         float travel{0}, captureRadius{0}, releaseMargin{0};
+        float contactAssistRadius{0}; // Forgiving contact-assisted acquisition around the finite rail.
+        QVector<QVector3D> contactPoints; // Bounded weapon surface sample, prepared off the interaction path.
+        QVector3D contactBodyCenter;
+        float contactBodyRadius{0};
         float magazineMinProjection{0}, weaponMaxProjection{0}, clearance{0};
         QVector<Transformf> motion; // Visual motion, independent of the straight input axis.
         QVector<float> motionDistances;

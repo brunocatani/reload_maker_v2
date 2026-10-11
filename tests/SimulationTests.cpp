@@ -498,6 +498,13 @@ void m1aFixture(const QString& path) {
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
     if(app.arguments().contains("--tube")) {
+        MagazineRail assist;assist.travel=8;assist.captureRadius=.5f;assist.contactAssistRadius=2.5f;assist.releaseMargin=1;assist.outward={0,1,0};
+        assist.contactPoints={{2,0,0}};assist.contactBodyRadius=.5f;
+        MagazineMotion shell;shell.phase=MagazinePhase::Free;shell.offset={4,0,0};shell.moveFree(assist,{2,0,0});
+        check(shell.phase==MagazinePhase::Rail&&shell.distance==2,"Side contact did not acquire without instantly seating");
+        shell.moveRail(assist,0);check(shell.seated(),"Assisted shell could not seat with an inward push");
+        shell.phase=MagazinePhase::Free;shell.offset={4,0,0};shell.moveFree(assist,{4,0,0});check(shell.phase==MagazinePhase::Free,"Remote body contact acquired loading port");
+        assist.contactAssistRadius=0;shell.offset={4,0,0};shell.moveFree(assist,{2,0,0});check(shell.phase==MagazinePhase::Free,"Assist leaked into ordinary magazine rail");
         MagazineRail timed;timed.motion={Transformf{},Transformf{{0,4,0}},Transformf{{0,10,0}}};timed.motionDistances={0,4,10};timed.motionSeconds={2,1.8f,1.5f};
         MagazineGuide guide;guide.outwardInConnection={0,1,0};guide.travel=7;guide.captureRadius=1;guide.releaseMargin=1;QString timingError;
         check(applyMagazineGuide(guide,timed,timingError),timingError);

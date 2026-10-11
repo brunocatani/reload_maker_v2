@@ -160,8 +160,15 @@ void MagazineMotion::moveFree(const MagazineRail& rail,const QVector3D& p) {
     const float depth=std::clamp(start+fraction*along,0.f,rail.travel);
     if(squared>1e-10f)fraction=std::clamp((along*depth-QVector3D::dotProduct(step,offset))/squared,0.f,1.f);
     const auto nearest=offset+step*fraction,guide=rail.outward*depth;
+    bool contact=false;
+    const auto bodyCenter=rail.contactBodyCenter+p;
+    for(const auto& point:rail.contactPoints)if((point-bodyCenter).lengthSquared()<=rail.contactBodyRadius*rail.contactBodyRadius){contact=true;break;}
+    const bool assisted=contact&&rail.contactAssistRadius>0&&(nearest-guide).lengthSquared()<=rail.contactAssistRadius*rail.contactAssistRadius;
     offset=p;
-    if((nearest-guide).length()<=rail.captureRadius){phase=MagazinePhase::Rail;distance=depth;offset=guide;}
+    if(assisted){
+        // Side contact aligns the shell, but leaves a short deliberate push.
+        phase=MagazinePhase::Rail;distance=std::clamp(QVector3D::dotProduct(p,rail.outward),std::min(2.f,rail.travel*.25f),rail.travel);offset=rail.outward*distance;
+    }else if((nearest-guide).length()<=rail.captureRadius){phase=MagazinePhase::Rail;distance=depth;offset=guide;}
 }
 void MagazineMotion::moveRail(const MagazineRail& rail,float d) {
     if(phase!=MagazinePhase::Rail||!std::isfinite(d))return;
@@ -188,7 +195,7 @@ QJsonObject magazineRailJson(const MagazineRail& r) {
     if(invertUniformTransform(r.connection,inverse))localAxis=v(rotated(inverse.rotation,{r.outward.x(),r.outward.y(),r.outward.z()}));
     QJsonObject result{{"version",r.motion.isEmpty()?1:3},{"connectionName",r.connectionName},{"connection",connection},{"outwardInWeapon",array(r.outward)},
         {"outwardInConnection",array(localAxis)},{"handleInWeapon",array(r.handle)},{"travel",r.travel},{"captureRadius",r.captureRadius},
-        {"releaseMargin",r.releaseMargin},{"fullTrack",r.fullTrack},{"emptyTrack",r.emptyTrack},{"sharedBody",r.sharedBody()},{"animationSeconds",.6},{"inputReference","magazine-carrier"},
+        {"contactAssistRadius",r.contactAssistRadius},{"releaseMargin",r.releaseMargin},{"fullTrack",r.fullTrack},{"emptyTrack",r.emptyTrack},{"sharedBody",r.sharedBody()},{"animationSeconds",.6},{"inputReference","magazine-carrier"},
         {"magazineMinProjection",r.magazineMinProjection},{"weaponMaxProjection",r.weaponMaxProjection},{"clearance",r.clearance}};
     if(!r.motion.isEmpty()) {
         QJsonArray samples;

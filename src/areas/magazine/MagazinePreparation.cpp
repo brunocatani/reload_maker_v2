@@ -42,6 +42,17 @@ namespace reloadmaker
         if (!collectMagazineGeometry(body, frame, shapes)) {
             return;
         }
+        const auto prepareContact=[&](MagazineRail& rail){
+            QVector3D low=body.front(),high=low;
+            for(const auto& p:body)for(int i=0;i<3;++i){low[i]=std::min(low[i],p[i]);high[i]=std::max(high[i],p[i]);}
+            const auto middle=(low+high)*.5f;
+            const auto center=composed(rail.sourceToSeat,Transformf{{middle.x(),middle.y(),middle.z()}}).translation;
+            rail.contactBodyCenter={center.x,center.y,center.z};rail.contactBodyRadius=(high-low).length()*.5f;
+            rail.contactAssistRadius=std::max(2.5f,rail.captureRadius*3.f);
+            // Prepare a bounded surface proxy once; no mesh traversal while dragging.
+            const int stride=std::max(1,int((frame.size()+511)/512));
+            for(int i=0;i<frame.size();i+=stride)rail.contactPoints.append(frame[i]);
+        };
         if(unitLoadingConfiguration()) {
             const auto& recipe=*_reloadRecipe;const int track=_simulationRig->magazine;
             MagazineRail rail;rail.fullTrack=rail.emptyTrack=track;
@@ -73,7 +84,7 @@ namespace reloadmaker
             if(!applyMagazinePieceRoles(rail))return;
             const auto guideJson=authoringPlan().value("magazineGuide").toObject();
             if(!guideJson.isEmpty()){MagazineGuide guide;if(!readMagazineGuide(guideJson,guide,_magazineError)||!applyMagazineGuide(guide,rail,_magazineError,false))return;}
-            _magazineRail=rail;return;
+            prepareContact(rail);_magazineRail=rail;return;
         }
         const auto guideJson = authoringPlan().value("magazineGuide").toObject();
         MagazineGuide guide;
@@ -118,7 +129,7 @@ namespace reloadmaker
         if (!guideJson.isEmpty() && !applyMagazineGuide(guide, rail, _magazineError, _magazineSetup && _magazineSetup->motion == "linear")) {
             return;
         }
-        _magazineRail = rail;
+        prepareContact(rail);_magazineRail = rail;
     }
 
     // The saved magazine presentation, when there is one and it still matches
