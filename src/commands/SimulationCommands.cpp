@@ -82,7 +82,7 @@ namespace reloadmaker
             releaseSimulation(params["cancel"].toBool());
         } else if (operation == "move_magazine") {
             moveSimulatedMagazine(params);
-        } else if (operation == "cancel_magazine") {
+        } else if (operation == "cancel_magazine" || operation == "release_magazine") {
             require(_simulation.magazine.carried(), "No cursor-held magazine to cancel");
             cancelMagazine();
         } else if (operation == "spring") {
@@ -108,7 +108,7 @@ namespace reloadmaker
     {
         require(_magazineRail.has_value(), "Magazine rail is unavailable");
         if (params.contains("distance")) {
-            require(_simulation.magazine.phase == MagazinePhase::Rail, "The magazine is not on the rail");
+            require(_simulation.magazine.phase == MagazinePhase::Rail||_simulation.magazine.mountedHold, "Grab the magazine before moving it along the rail");
             moveMagazineRail(number(params["distance"]));
             return;
         }

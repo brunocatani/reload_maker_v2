@@ -164,10 +164,10 @@ namespace reloadmaker
             if (_magazineRail) {
                 const float a = std::clamp(old.magazine.distance / _magazineRail->travel, 0.f, 1.f);
                 const float b = std::clamp(_simulation.magazine.distance / _magazineRail->travel, 0.f, 1.f);
-                if (_simulation.magazine.phase == MagazinePhase::Outgoing || old.magazine.phase == MagazinePhase::Outgoing) {
+                if (_simulation.magazine.extracting || old.magazine.extracting || _simulation.magazine.phase == MagazinePhase::Outgoing || old.magazine.phase == MagazinePhase::Outgoing) {
                     cross("extraction", a, b);
                 }
-                if (_simulation.magazine.phase == MagazinePhase::Rail || _simulation.magazine.phase == MagazinePhase::Incoming || _simulation.magazine.seated()) {
+                if (!_simulation.magazine.extracting && !old.magazine.extracting && (_simulation.magazine.phase == MagazinePhase::Rail || _simulation.magazine.phase == MagazinePhase::Incoming || _simulation.magazine.seated())) {
                     cross("insertion", 1 - a, 1 - b);
                 }
             }

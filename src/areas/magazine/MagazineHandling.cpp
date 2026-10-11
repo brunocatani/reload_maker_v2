@@ -187,6 +187,7 @@ namespace reloadmaker
             return;
         }
         if(_simulation.cellFed()&&_simulation.slide<.95f)return;
+        if(_simulation.magazine.mountedHold||_simulation.magazine.extracting){_simulation.moveMountedMagazine(*_magazineRail,distance);updateMagazinePose();return;}
         const bool wasSeated = _simulation.magazine.seated();
         _simulation.magazine.moveRail(*_magazineRail, distance);
         updateMagazinePose();

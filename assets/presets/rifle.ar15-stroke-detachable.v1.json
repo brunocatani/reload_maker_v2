@@ -5,7 +5,7 @@
     "category": "Rifle",
     "model": {
         "feed": {
-            "container": "detachable",
+            "container": "detachable", "magazineRelease": "button",
             "loadingPoints": [
                 {
                     "id": "magwell",

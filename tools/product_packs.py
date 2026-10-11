@@ -19,7 +19,7 @@ TEMPLATES = {
     'pistol.slide-detachable.v1',
     'rifle.ar15-detachable.v1',
     'rifle.operating-handle-rocking.v1',
-    'rifle.reciprocating-detachable.v1',
+    'rifle.reciprocating-detachable.v1', 'rifle.reciprocating-manual-detachable.v1',
     'sniper.manual-bolt-detachable.v1',
     'rifle.ar15-stroke-detachable.v1',
     'rifle.independent-handle-rocking.v1',

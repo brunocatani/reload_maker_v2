@@ -147,7 +147,7 @@ bool MagazineMotion::animateOut(){if(!seated())return false;phase=MagazinePhase:
 bool MagazineMotion::animateIn(const MagazineRail& rail){if(phase!=MagazinePhase::Absent&&phase!=MagazinePhase::OutsideEmpty)return false;phase=MagazinePhase::Incoming;elapsed=0;distance=rail.travel;offset=magazineInputOffset(rail,distance);return true;}
 bool MagazineMotion::grab(const MagazineRail& rail){if(phase!=MagazinePhase::Absent&&phase!=MagazinePhase::OutsideEmpty)return false;phase=MagazinePhase::Free;distance=rail.travel+rail.captureRadius*2;offset=magazineAnimationOffset(rail,distance);return true;}
 void MagazineMotion::eject(float speed,int rounds){drop();phase=MagazinePhase::Outgoing;ejecting=true;ejectionSpeed=speed;ejectedRounds=rounds;}
-void MagazineMotion::drop(){ejecting=false;ejectionSpeed=0;phase=MagazinePhase::Absent;offset={};distance=0;elapsed=0;}
+void MagazineMotion::drop(){mountedHold=extracting=false;ejecting=false;ejectionSpeed=0;phase=MagazinePhase::Absent;offset={};distance=0;elapsed=0;}
 void MagazineMotion::cancel(){if(carried())drop();}
 void MagazineMotion::reset(){*this={};}
 void MagazineMotion::moveFree(const MagazineRail& rail,const QVector3D& p) {

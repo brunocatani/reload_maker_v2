@@ -1,0 +1,16 @@
+{
+    "format": 1,
+    "id": "rifle.reciprocating-manual-detachable.v1",
+    "label": "Rifle — reciprocating bolt, manual magazine removal",
+    "category": "Rifle / Sniper",
+    "model": {
+        "feed": {
+            "container": "detachable", "magazineRelease": "manual",
+            "loadingPoints": [ { "id": "magwell", "unit": "container", "destination": "container" } ]
+        },
+        "mechanisms": [
+            { "id": "bolt", "kind": "reciprocating-bolt", "roles": [ "extract", "eject", "cock", "chamber" ], "return": "spring", "locksOpen": true }
+        ],
+        "fire": { "motion": "native-clip", "afterShot": "automatic-cycle", "ejection": "on-fire", "lockOpen": "bolt" }
+    }
+}

@@ -5,7 +5,7 @@
     "category": "Shotgun",
     "model": {
         "feed": {
-            "container": "detachable",
+            "container": "detachable", "magazineRelease": "manual",
             "loadingPoints": [
                 {
                     "id": "magwell",

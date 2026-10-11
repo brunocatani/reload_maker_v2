@@ -27,11 +27,12 @@ namespace reloadmaker {
         float ejectionSpeed{0};
         int ejectedRounds{0};
         bool ejecting{false};
+        bool mountedHold{false},extracting{false};
         bool seated()const{return phase==MagazinePhase::Seated;}
         bool visible()const{return phase!=MagazinePhase::Absent;}
         bool empty()const{return phase==MagazinePhase::Outgoing||phase==MagazinePhase::OutsideEmpty;}
         bool animated()const{return phase==MagazinePhase::Outgoing||phase==MagazinePhase::Incoming;}
-        bool carried()const{return phase==MagazinePhase::Free||phase==MagazinePhase::Rail;}
+        bool carried()const{return mountedHold||phase==MagazinePhase::Free||phase==MagazinePhase::Rail;}
         bool busy()const{return animated()||carried();}
         bool animateOut();
         bool animateIn(const MagazineRail& rail);

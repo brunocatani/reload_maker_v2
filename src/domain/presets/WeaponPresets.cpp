@@ -131,6 +131,11 @@ namespace reloadmaker
                 }
                 model.feed.insertion = *insertion;
             }
+            if(feed.contains("magazineRelease")){
+                const auto mode=magazineReleaseFromName(feed["magazineRelease"].toString());
+                if(!mode)return false;
+                model.feed.magazineRelease=*mode;
+            }
             for (const QJsonValue& value : points) {
                 LoadingPoint point;
                 if (!decodeLoadingPoint(value.toObject(), point)) {

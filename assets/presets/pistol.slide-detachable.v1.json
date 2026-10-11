@@ -5,7 +5,7 @@
     "category": "Pistol",
     "model": {
         "feed": {
-            "container": "detachable",
+            "container": "detachable", "magazineRelease": "button",
             "hands": [ "left", "right" ],
             "loadingPoints": [ { "id": "magwell", "unit": "container", "destination": "container" } ]
         },

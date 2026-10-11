@@ -5,7 +5,7 @@
   "category": "Energy",
   "model": {
     "feed": {
-      "container": "detachable",
+      "container": "detachable", "magazineRelease": "mechanism",
       "hands": [
         "left",
         "right"

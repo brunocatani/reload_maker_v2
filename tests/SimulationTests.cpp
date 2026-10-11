@@ -497,6 +497,28 @@ void m1aFixture(const QString& path) {
 }
 int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
+    if(app.arguments().contains("--magazine-release")) {
+        try {
+            MagazineRail rail;rail.travel=8;rail.captureRadius=1;rail.outward={0,0,-1};
+            WeaponSimulation sim;sim.configureAmmunition(5,true);sim.magazineRelease=MagazineRelease::Manual;sim.reset();
+            check(!sim.dropMagazine()&&sim.magazine.seated(),"Manual template accepted button ejection");
+            check(sim.grabMountedMagazine(),"Mounted magazine cannot be acquired");
+            sim.moveMountedMagazine(rail,.2f);check(sim.magazine.seated()&&sim.magazineRounds==4,"Acquisition/small movement extracted magazine");
+            sim.releaseMagazine();check(sim.magazine.seated()&&!sim.magazine.carried(),"Release before withdrawal removed magazine");
+            check(sim.grabMountedMagazine(),"Cannot reacquire magazine");sim.moveMountedMagazine(rail,.6f);
+            check(sim.magazine.extracting&&!sim.magazinePresent()&&sim.chambered&&sim.magazineRounds==4,"Manual withdrawal lost retained ammunition");
+            sim.moveMountedMagazine(rail,8);check(sim.magazine.phase==MagazinePhase::Free&&sim.magazine.carried(),"Extraction did not retain loose hold");
+            sim.releaseMagazine();check(sim.magazine.phase==MagazinePhase::Absent&&sim.chambered,"Loose release lost chamber");
+            sim.magazineRelease=MagazineRelease::Button;sim.reset();check(sim.grabMountedMagazine(),"Button magazine cannot be held");
+            sim.moveMountedMagazine(rail,8);check(sim.magazine.seated(),"Pull bypassed button latch");
+            check(sim.dropMagazine()&&sim.magazine.extracting,"Button release did not retain hand");
+            sim.moveMountedMagazine(rail,8);check(sim.magazine.carried()&&sim.magazineRounds==4,"Button release lost held rounds");
+            sim.releaseMagazine();sim.magazineRelease=MagazineRelease::Mechanism;sim.reset();
+            check(!sim.dropMagazine()&&sim.grabMountedMagazine(),"Mechanism mode accepted button release");
+            sim.moveMountedMagazine(rail,8);check(sim.magazine.seated(),"Manual pull bypassed mechanism release");
+            QTextStream(stdout)<<"PASS manual, button and mechanism magazine release, held acquisition and ammunition preservation\n";return 0;
+        }catch(const std::exception& e){QTextStream(stderr)<<e.what()<<'\n';return 1;}
+    }
     if(app.arguments().contains("--last-shot")) {
         try {
             for(const auto mechanism:{WeaponMechanism::PistolSlide,WeaponMechanism::Ar15,WeaponMechanism::ReciprocatingBolt,WeaponMechanism::M1A}) {

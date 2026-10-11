@@ -8,6 +8,7 @@
 #include "ReloadBundle.h"
 #include "ReloadDriveViewport.h"
 #include "areas/operate/SimulationNames.h"
+#include "areas/loadout/SceneTree.h"
 #include "domain/presets/WeaponPresets.h"
 #include "viewport/PartPicker.h"
 #include "glview.h"
@@ -140,6 +141,17 @@ void ReloadMakerController::createSimulationViewport() {
     _magazineViewport->freeMove=[this](QVector3D p){moveFreeMagazine(p);};
     _magazineViewport->railMove=[this](float d){moveMagazineRail(d);};
     _magazineViewport->cancel=[this]{cancelMagazine();};
+    _magazineViewport->acquire=[this](QPointF point){
+        if(!_simulationActive||_simulation.action!=SimulationAction::Idle||!_simulation.magazine.seated())return false;
+        int picked=-1;Vec3f hit;QString surface,error;QVector<int> candidates;
+        if(!pickWeaponPart(point,picked,hit,surface,candidates,error))return false;
+        const int magazine=currentMagazineAnchor();
+        if(magazine<0||!std::any_of(candidates.cbegin(),candidates.cend(),[&](int anchor){
+            return isWithinBlock(*activeModel(),_handPoseAnchors[anchor].node,_handPoseAnchors[magazine].node);
+        }))return false;
+        if(!_simulation.grabMountedMagazine())return false;
+        updateMagazinePose();return true;
+    };
 }
 namespace {
 void flowTiles(QGridLayout* grid,std::initializer_list<QWidget*> tiles) {
@@ -197,11 +209,11 @@ void ReloadMakerController::updateSimulationControls() {
     _simulationFire->setEnabled(_simulationActive&&(_simulation.canFire()||(ar&&_simulation.action==SimulationAction::Fire)||_simulation.canDryFire()));
     _simulationSlideRelease->setEnabled(_simulationActive&&_simulation.ammoKnown()&&!busy&&_simulation.action==SimulationAction::Idle&&_simulation.slide>.001f);
     _simulationReload->setEnabled(_simulationActive&&_simulation.ammoKnown()&&!busy&&_simulation.action!=SimulationAction::Held);
-    _simulationDrop->setEnabled(_simulationActive&&!busy&&_simulation.action!=SimulationAction::Held&&_simulation.magazine.visible());
+    _simulationDrop->setEnabled(_simulationActive&&_simulation.magazineRelease==MagazineRelease::Button&&(!busy||_simulation.magazine.mountedHold)&&_simulation.action==SimulationAction::Idle&&_simulation.magazine.visible());
     const bool magazineReady=_simulationActive&&_magazineRail&&_simulation.action==SimulationAction::Idle&&!_simulation.magazine.busy();
-    _magazineOut->setEnabled(magazineReady&&_simulation.magazine.seated());
+    _magazineOut->setEnabled(magazineReady&&_simulation.magazineRelease==MagazineRelease::Button&&_simulation.magazine.seated());
     _magazineIn->setEnabled(magazineReady&&_simulation.ammoKnown()&&!_simulation.magazine.seated());
-    _magazineGrab->setEnabled(magazineReady&&_simulation.ammoKnown()&&!_simulation.magazine.seated());
+    _magazineGrab->setEnabled(magazineReady&&_simulation.ammoKnown());
     _simulationReset->setEnabled(_simulationActive);
     if(!_simulationActive) {
         const QString idle=!currentWeapon()?"Choose a plugin, then a weapon above.":_reloadCapturing?"Learning the native reload…":_clip.valid()&&simulationWorkspace(_workspace)&&_reloadRecipe?"Press any action to operate the weapon.":"Preparing native part motion…";

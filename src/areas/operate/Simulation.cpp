@@ -2,6 +2,7 @@
 // and MCP actions, the live clock, and dragging operating parts. Poses come
 // from SimulationPose.cpp; the mechanism motion from MechanismMotion.cpp.
 #include "ReloadMakerController.h"
+#include "domain/presets/WeaponPresets.h"
 #include "MagazineViewport.h"
 #include "ReloadDriveViewport.h"
 #include "areas/loadout/SceneTree.h"
@@ -106,6 +107,7 @@ namespace reloadmaker
         _simulation.openBolt=rig.openBolt;
         _simulation.reset();
         _simulation.pistolLock=rig.lastShotHoldOpen;
+        if(const auto* preset=checklistPreset())_simulation.magazineRelease=preset->model.feed.magazineRelease;
         _simulation.fireCycleSeconds = 0;
         if (isBoltActionConfiguration()) {
             _simulation.boltEjectProgress = _boltCycle.ejectProgress;
@@ -342,6 +344,7 @@ namespace reloadmaker
             accepted = selectSimulationClip(false, false);
         } else if (action == "drop_magazine") {
             accepted = _simulation.dropMagazine();
+            if(accepted&&_simulation.magazine.extracting)_magazineViewport->beginCarry();
             if(accepted&&_simulation.magazine.ejecting)startSimulationClock();
         } else if (action == "slide_release" || action == "bolt_release" || action == "slap") {
             accepted = (action=="slap"||(_simulation.cellFed()&&_simulation.slapClose)) ? _simulation.slap() : _simulation.slideRelease();
@@ -381,7 +384,7 @@ namespace reloadmaker
         updateSimulationControls();
         ++_revision;
         if (action == "drop_magazine") {
-            setStatus("Magazine removed. Grab a fresh magazine and guide it into the well.");
+            setStatus(_simulation.magazine.extracting?"Magazine unlocked. Pull it out, then release to drop it.":"Magazine removed. Grab a fresh magazine and guide it into the well.");
         } else {
             setStatus(simulationActionName(_simulation.action, isRifleConfiguration(), isBoltActionConfiguration()));
         }
@@ -438,6 +441,9 @@ namespace reloadmaker
 
     QString ReloadMakerController::simulationRejection(const QString& action) const
     {
+        if((action=="drop_magazine"||action=="mag_out")&&_simulation.magazineRelease!=MagazineRelease::Button){
+            return _simulation.magazineRelease==MagazineRelease::Manual?"Grab the magazine and pull it out by hand.":"Operate the ejection lever to release the cell.";
+        }
         if (!_simulationAmmo.valid()) {
             return _simulationAmmo.error;
         }

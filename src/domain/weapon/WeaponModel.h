@@ -128,11 +128,16 @@ namespace reloadmaker
         Right,
     };
 
+    enum class MagazineRelease { Button, Manual, Mechanism };
+    [[nodiscard]] QString magazineReleaseName(MagazineRelease mode);
+    [[nodiscard]] std::optional<MagazineRelease> magazineReleaseFromName(const QString& name);
+
     struct Feed
     {
         ContainerKind container{ ContainerKind::None };
         QVector<LoadingPoint> loadingPoints; // in loading order
         InsertionPath insertion{ InsertionPath::Straight };
+        MagazineRelease magazineRelease{MagazineRelease::Button};
         // The hands that may load the feed, the default first. A pistol
         // reloads with its off hand while the firing hand keeps the grip.
         QVector<Hand> hands{ Hand::Left, Hand::Right };

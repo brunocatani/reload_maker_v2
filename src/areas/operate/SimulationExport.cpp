@@ -86,12 +86,15 @@ namespace reloadmaker
             { "applied", _magazineGrabGrip && _simulation.magazine.carried() && _magazineGrabError.isEmpty() },
             { "error", _magazineGrabError },
         };
+        result["magazineRelease"]=magazineReleaseName(_simulation.magazineRelease);
         const auto& offset = _simulation.magazine.offset;
         result["magazine"] = QJsonObject{
             { "phase", _simulation.magazineDescription() },
             { "empty", _simulation.magazineRounds == 0 },
             { "offset", QJsonArray{ offset.x(), offset.y(), offset.z() } },
             { "distance", _simulation.magazine.distance },
+            { "mountedHold", _simulation.magazine.mountedHold },
+            { "extracting", _simulation.magazine.extracting },
             { "error", _magazineError },
         };
         if (_magazineRail) {

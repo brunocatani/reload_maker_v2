@@ -1,6 +1,7 @@
 #pragma once
 #include "ReloadRecipe.h"
 #include "MagazineInteraction.h"
+#include "domain/weapon/WeaponModel.h"
 #include <QHash>
 
 namespace reloadmaker {
@@ -43,6 +44,7 @@ namespace reloadmaker {
     struct WeaponSimulation {
         SimulationAction action{SimulationAction::Idle};
         MagazineMotion magazine;
+        MagazineRelease magazineRelease{MagazineRelease::Button};
         bool magazinePresent()const{return magazine.seated();}
         float slide{0}, seconds{0}, grabStart{0};
         WeaponMechanism mechanism{WeaponMechanism::PistolSlide};
@@ -67,6 +69,9 @@ namespace reloadmaker {
         // Empty and unheld, including a caught-open action: the trigger only clicks.
         bool canDryFire()const{return action==SimulationAction::Idle&&!magazine.busy()&&((openBolt||cellFed())?(!magazine.seated()||magazineRounds==0):!chambered);}
         bool willLockAfterShot()const{return !cellFed()&&!openBolt&&action==SimulationAction::Fire&&pistolLock&&magazineRounds==0&&!chambered;}
+        bool grabMountedMagazine();
+        void moveMountedMagazine(const MagazineRail&,float distance);
+        void releaseMagazine();
         bool feedCycleActive()const{return _cycleArmed;}
         void configureAmmunition(int magazineCapacity,bool lockPistol,WeaponMechanism profile=WeaponMechanism::PistolSlide);
         bool slideRelease();

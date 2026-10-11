@@ -195,6 +195,13 @@ namespace reloadmaker
         return nullptr;
     }
 
+    QString magazineReleaseName(MagazineRelease mode) {
+        switch(mode){case MagazineRelease::Manual:return "manual";case MagazineRelease::Mechanism:return "mechanism";default:return "button";}
+    }
+    std::optional<MagazineRelease> magazineReleaseFromName(const QString& name) {
+        for(auto mode:{MagazineRelease::Button,MagazineRelease::Manual,MagazineRelease::Mechanism})if(magazineReleaseName(mode)==name)return mode;
+        return std::nullopt;
+    }
     QString insertionPathName(InsertionPath path)
     {
         return path == InsertionPath::NativeCurve ? QStringLiteral("native-curve") : QStringLiteral("straight");

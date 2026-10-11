@@ -3,6 +3,7 @@
 // object with its hand fits and presentation, the grab points, sounds, and
 // the source evidence the pack is checked against.
 #include "ReloadMakerController.h"
+#include "domain/presets/WeaponPresets.h"
 #include "ReloadBundle.h"
 #include "RuntimeSourcePath.h"
 #include "ReloadTemplates.h"
@@ -127,6 +128,7 @@ namespace reloadmaker
         profile["openBolt"] = rig.openBolt;
         profile["slapClose"] = rig.slapClose;
         profile["lastShotHoldOpen"] = rig.lastShotHoldOpen;
+        if(const auto* preset=checklistPreset())profile["magazineRelease"]=magazineReleaseName(preset->model.feed.magazineRelease);
         profile["magazine"] = magazineKey;
         if (rig.customSetup) {
             profile["operatingSetup"] = rig.authoring;
@@ -152,6 +154,7 @@ namespace reloadmaker
         auto header = runtimeProfileHeader(weapon, receiverKey, magazineKey, selection);
         header["hkSlap"]=rig.hkSlap;
         header["lastShotHoldOpen"]=rig.lastShotHoldOpen;
+        if(const auto* preset=checklistPreset())header["magazineRelease"]=magazineReleaseName(preset->model.feed.magazineRelease);
         header["singleHandle"]=rig.singleHandle;
         const auto compatibility = sourcePolicyState();
         const auto policy = compatibility["policy"].toObject();
