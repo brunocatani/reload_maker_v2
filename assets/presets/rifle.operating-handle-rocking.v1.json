@@ -11,8 +11,8 @@
             "loadingPoints": [ { "id": "magwell", "unit": "container", "destination": "container" } ]
         },
         "mechanisms": [
-            { "id": "handle", "kind": "operating-handle", "roles": [ "extract", "eject", "cock", "chamber" ], "return": "spring" }
+            { "id": "handle", "kind": "operating-handle", "roles": [ "extract", "eject", "cock", "chamber" ], "return": "spring", "locksOpen": true }
         ],
-        "fire": { "motion": "native-clip", "afterShot": "automatic-cycle", "ejection": "on-fire" }
+        "fire": { "motion": "native-clip", "afterShot": "automatic-cycle", "ejection": "on-fire", "lockOpen": "handle" }
     }
 }

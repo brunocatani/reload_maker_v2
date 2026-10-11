@@ -25,13 +25,15 @@
                     "cock",
                     "chamber"
                 ],
-                "return": "spring"
+                "return": "spring",
+                "locksOpen": true
             }
         ],
         "fire": {
             "motion": "native-clip",
             "afterShot": "automatic-cycle",
-            "ejection": "on-fire"
+            "ejection": "on-fire",
+            "lockOpen": "bolt"
         }
     }
 }

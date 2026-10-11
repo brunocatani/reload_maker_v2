@@ -499,7 +499,7 @@ int main(int argc,char** argv) {
     QCoreApplication app(argc,argv);
     if(app.arguments().contains("--last-shot")) {
         try {
-            for(const auto mechanism:{WeaponMechanism::PistolSlide,WeaponMechanism::Ar15,WeaponMechanism::ReciprocatingBolt}) {
+            for(const auto mechanism:{WeaponMechanism::PistolSlide,WeaponMechanism::Ar15,WeaponMechanism::ReciprocatingBolt,WeaponMechanism::M1A}) {
                 for(bool present:{false,true}) {
                     WeaponSimulation sim;sim.configureAmmunition(1,false,mechanism);sim.pistolLock=true;sim.fireCycleSeconds=.1f;
                     sim.chambered=true;sim.magazineRounds=0;if(!present)sim.magazine.phase=MagazinePhase::Absent;
